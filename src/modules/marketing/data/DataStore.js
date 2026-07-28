@@ -12,4 +12,7 @@
  วันย้าย Supabase: เขียน supabaseStore.js ที่มี 5 เมธอดนี้ แล้วสลับบรรทัดล่าง
  บรรทัดเดียว — ไม่ต้องแตะ UI แม้แต่ไฟล์เดียว (ดู INTEGRATION.md หัวข้อ seam ข้อมูล)
  ============================================================ */
-export { store } from "./localStore.js";
+/* เดโม localStorage: export { store } from "./localStore.js";
+   ตอนนี้ต่อ Supabase จริงแล้ว (โหมดไม่ล็อกอิน — ดู SUPABASE.md)
+   ไม่ได้ใส่คีย์ใน .env → supabaseStore จะคืนข้อมูลเดโมในหน่วยความจำให้เอง ไม่พัง */
+export { store } from "./supabaseStore.js";

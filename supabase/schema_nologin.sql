@@ -259,12 +259,13 @@ create or replace function mkt_save_state(payload jsonb)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   -- ลบเรียงตามสายอ้างอิง (ลูกก่อนแม่)
-  delete from mkt_attachment;      delete from mkt_reference_link;
-  delete from mkt_card_note;       delete from mkt_review_action;
-  delete from mkt_status_history;  delete from mkt_channel_run;
-  delete from mkt_card;            delete from mkt_channel;
-  delete from mkt_brand;           delete from mkt_profile;
-  delete from mkt_option_list;
+  -- "where true" จำเป็น: Supabase เปิด pg_safeupdate ไว้ ห้าม DELETE ที่ไม่มี WHERE
+  delete from mkt_attachment      where true;   delete from mkt_reference_link where true;
+  delete from mkt_card_note       where true;   delete from mkt_review_action  where true;
+  delete from mkt_status_history  where true;   delete from mkt_channel_run    where true;
+  delete from mkt_card            where true;   delete from mkt_channel        where true;
+  delete from mkt_brand           where true;   delete from mkt_profile        where true;
+  delete from mkt_option_list     where true;
 
   insert into mkt_profile (id, display_name, role, active)
   select x->>'id', x->>'display_name', coalesce(x->>'role','content_owner'), coalesce((x->>'active')::boolean, true)

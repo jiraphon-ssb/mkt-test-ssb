@@ -139,9 +139,14 @@ function SupabaseAuthProvider({ children }) {
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 
-/** เลือกทางเอง: มี .env → auth จริงของแพลตฟอร์ม · ไม่มี → โหมดเดโม */
+/* เลือกทางด้วยธง VITE_AUTH_MODE — ไม่ผูกกับ "มีคีย์ Supabase ไหม" อีกแล้ว
+   เพราะโปรเจกต์นี้ใช้ Supabase เก็บข้อมูล แต่ยัง "ไม่ต้องล็อกอิน" (สลับ user ได้จาก topbar)
+     ไม่ตั้งค่า / อะไรก็ตาม = โหมดเดโม ไม่มีหน้าล็อกอิน  ← ค่าเริ่มต้น
+     VITE_AUTH_MODE=supabase   = auth จริงของแพลตฟอร์ม (email/password + user_role) */
+const useRealAuth = import.meta.env.VITE_AUTH_MODE === "supabase" && isSupabaseConfigured;
+
 export function AuthProvider({ profiles, children }) {
-  return isSupabaseConfigured
+  return useRealAuth
     ? <SupabaseAuthProvider>{children}</SupabaseAuthProvider>
     : <DemoAuthProvider profiles={profiles}>{children}</DemoAuthProvider>;
 }
