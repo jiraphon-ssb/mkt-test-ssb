@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+/* ============================================================
+   theme.css — ยกมาจาก ssbgroup-platform/src/index.css แบบคำต่อคำ
+   ห้ามแก้ค่าสีที่นี่ ถ้าที่นั่นเปลี่ยนให้ copy ทับใหม่ทั้งไฟล์
+   ระบบสีของ SSB GROUP:
+     ธีมมืด  = zinc + emerald (เขียว)
+     ธีมสว่าง = ครีม + emerald ที่ถูก remap เป็น "ส้ม TEAMDEE #F26B21"
+   กติกาจับคู่ของเขา: พื้นทึบ bg-<สี>-400/500 คู่กับตัวหนังสือ text-zinc-900
+   → ธีมมืดได้ ink เข้มบนพื้นสว่าง · ธีมสว่างได้ขาวบนพื้นเข้ม (พลิกเองอัตโนมัติ)
+   ============================================================ */
+
+/* SSB Finance — dark theme tokens (zinc/emerald) per design reference.
+   Thai-friendly sans + monospace for financial figures (tabular-nums). */
+@theme {
+  --font-sans: "Noto Sans Thai", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* `light:` utility variant (rarely needed — prefer the var remap below). */
+@custom-variant light (&:where(.light, .light *));
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-zinc-950); /* #09090b dark · #F6F5F2 light */
+  color: var(--color-zinc-100);
+}
+
+/* ═══════════════ LIGHT THEME — ธีมสว่าง (จาก SSB_Knowledge_Hub_Vision) ═══════
+   Tailwind v4 compiles every color utility to var(--color-*), so re-declaring
+   the vars under `.light` flips the whole app at once. Design:
+     · neutrals  → warm cream/white/ink  (bg #F6F5F2 · card #fff · ink #1C232E)
+     · emerald   → TEAMDEE orange #F26B21 (accent — active nav, primary buttons)
+     · amber     → warm gold #B7791F   · rose → danger #C0392B
+     · sky/blue  → #2C5E8F             · violet → restricted #5B4B8A
+   Shades keep their ROLE, not their lightness: 200–400 = readable text,
+   500–700 = solid fills, 800–950 = soft tint backgrounds. Paired utilities
+   (bg-amber-400 + text-zinc-900 …) invert together and stay legible.
+   The sidebar opts OUT via .ssb-side (stays dark navy, per the vision doc). */
+.light {
+  color-scheme: light;
+
+  /* neutrals — warm (zinc → cream/ink) */
+  --color-zinc-950: #f6f5f2;
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: #e7e4dd;
+  --color-zinc-700: #d3cfc6;
+  --color-zinc-600: #9aa2ae;
+  --color-zinc-500: #7a8391;
+  --color-zinc-400: #5a6472;
+  --color-zinc-300: #454e5b;
+  --color-zinc-200: #333b47;
+  --color-zinc-100: #1c232e;
+  --color-zinc-50: #151b24;
+
+  /* emerald → TEAMDEE orange (accent) */
+  --color-emerald-50: #7a3006;
+  --color-emerald-100: #8f3807;
+  --color-emerald-200: #a63f08;
+  --color-emerald-300: #c64c0c;
+  --color-emerald-400: #d85510;
+  --color-emerald-500: #f26b21;
+  --color-emerald-600: #df5a15;
+  --color-emerald-700: #c24e0f;
+  --color-emerald-800: #f5c9a9;
+  --color-emerald-900: #f9dcc8;
+  --color-emerald-950: #fdede3;
+
+  /* amber → warm gold */
+  --color-amber-100: #5c3d0e;
+  --color-amber-200: #75500f;
+  --color-amber-300: #9a6617;
+  --color-amber-400: #b7791f;
+  --color-amber-500: #c98a25;
+  --color-amber-600: #a56d1b;
+  --color-amber-700: #8a5b17;
+  --color-amber-800: #f3e3c0;
+  --color-amber-900: #f7eacd;
+  --color-amber-950: #fbf0da;
+
+  /* rose → danger */
+  --color-rose-200: #9e2f23;
+  --color-rose-300: #b03427;
+  --color-rose-400: #c0392b;
+  --color-rose-500: #d64837;
+  --color-rose-800: #f2c7c1;
+  --color-rose-900: #f5d4cf;
+  --color-rose-950: #fbeae8;
+
+  /* sky / blue → info blue (700=solid/border · 800-950=soft tints) */
+  --color-sky-100: #24507a;
+  --color-sky-200: #2c5e8f;
+  --color-sky-300: #2c5e8f;
+  --color-sky-400: #376fa6;
+  --color-sky-500: #3d7bb8;
+  --color-sky-600: #33689c;
+  --color-sky-700: #24608f;
+  --color-sky-800: #c7d9ea;
+  --color-sky-900: #dbe7f2;
+  --color-sky-950: #e9f1f8;
+  --color-blue-300: #2c5e8f;
+  --color-blue-400: #376fa6;
+  --color-blue-500: #2f5fc0;
+
+  /* orange (non-accent uses, e.g. cost figures) */
+  --color-orange-300: #c2540e;
+  --color-orange-400: #b34a08;
+
+  /* violet → restricted purple */
+  --color-violet-300: #5b4b8a;
+  --color-violet-500: #6c59a8;
+  --color-violet-600: #5b4b8a;
+}
+
+/* ── App design tokens (--ssb-*) — module palette values that have no exact
+   Tailwind step. Dark values are BIT-IDENTICAL to the modules' original hexes
+   (AR gold #facc15 · OEM/รายงาน blue #6f8cf5 · translucent soft tints);
+   .light overrides them with the readable light-palette equivalents. ───────── */
+:root {
+  --ssb-gold: #facc15;
+  --ssb-gold-dim: #d4a72c;
+  --ssb-gold-soft: rgba(250, 199, 117, 0.12);
+  --ssb-emerald-soft: rgba(52, 211, 153, 0.12);
+  --ssb-rose-soft: rgba(251, 113, 133, 0.12);
+  --ssb-blue: #6f8cf5;
+  --ssb-fb: #4d9bff; /* messenger-link blue */
+  --ssb-border2: rgba(255, 255, 255, 0.12);
+  /* CRM tier palette (dark = SSB_CRM_Demo hexes bit-identical) + violet (care) */
+  --ssb-violet: #a78bfa;
+  --ssb-violet-soft: rgba(167, 139, 250, 0.1);
+  --ssb-tier-platinum: #f3d47f;
+  --ssb-tier-platinum-soft: rgba(243, 212, 127, 0.12);
+  --ssb-tier-gold: #e0a63d;
+  --ssb-tier-gold-soft: rgba(224, 166, 61, 0.12);
+  --ssb-tier-silver: #b8bcc4;
+  --ssb-tier-silver-soft: rgba(184, 188, 196, 0.1);
+  --ssb-tier-bronze: #c47f4a;
+  --ssb-tier-bronze-soft: rgba(196, 127, 74, 0.12);
+  --ssb-tier-frozen: #7fb3e8;
+  --ssb-tier-frozen-soft: rgba(127, 179, 232, 0.1);
+}
+.light {
+  --ssb-gold: #b7791f;
+  --ssb-gold-dim: #a56d1b;
+  --ssb-gold-soft: #fbf0da;
+  --ssb-emerald-soft: #fdede3; /* emerald text turns orange in light → orange tint */
+  --ssb-rose-soft: #fbeae8;
+  --ssb-blue: #376fa6;
+  --ssb-fb: #2c5e8f;
+  --ssb-border2: #d3cfc6;
+  /* CRM tier palette — darkened for contrast on cream */
+  --ssb-violet: #7c5cd6;
+  --ssb-violet-soft: #efe9fb;
+  --ssb-tier-platinum: #9c7c1a;
+  --ssb-tier-platinum-soft: #f7edd2;
+  --ssb-tier-gold: #a56d1b;
+  --ssb-tier-gold-soft: #fbf0da;
+  --ssb-tier-silver: #6b7280;
+  --ssb-tier-silver-soft: #e9eaee;
+  --ssb-tier-bronze: #9a5b2d;
+  --ssb-tier-bronze-soft: #f6e7db;
+  --ssb-tier-frozen: #2f6ea5;
+  --ssb-tier-frozen-soft: #e3eefa;
+}
+
+/* Sidebar stays dark in the light theme (navy, per the vision doc) — re-invert
+   the neutral scale inside its scope. Accent vars stay orange from `.light`,
+   which lands exactly on the doc's orange-on-navy active state. */
+.light .ssb-side {
+  color-scheme: dark;
+
+  --color-zinc-950: #1a2230;
+  --color-zinc-900: #20293a;
+  --color-zinc-800: #2c3850;
+  --color-zinc-700: #38455f;
+  --color-zinc-600: #6e7a8d;
+  --color-zinc-500: #8792a3;
+  --color-zinc-400: #c7ceda;
+  --color-zinc-300: #d5dbe5;
+  --color-zinc-200: #e2e7ee;
+  --color-zinc-100: #ffffff;
+
+  /* orange text accents need the bright end on navy */
+  --color-emerald-400: #f2823f;
+  --color-emerald-950: rgba(242, 107, 33, 0.14);
+}
