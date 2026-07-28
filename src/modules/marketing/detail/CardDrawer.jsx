@@ -27,9 +27,10 @@ function SizePicker({ value, presets, onChange, disabled, ratioOnly = false }) {
   const set = (nw, nh) => onChange(nw > 0 && nh > 0 ? sizeText(nw, nh) : "");
   return (<>
    <div className="size-presets">
-    {presets.map((sp) => {
+    {presets.map((sp, i) => {
       const val = ratioOnly ? sp.ratio : sizeText(sp.w, sp.h);
-      return (<button key={sp.id ?? sp.ratio} className={value === val ? "on" : ""} disabled={disabled}
+      /* ลำดับเป็น key สำรอง — ขนาดที่ผู้ใช้เพิ่มเองอาจไม่มี id/ratio */
+      return (<button key={sp.id ?? sp.ratio ?? i} className={value === val ? "on" : ""} disabled={disabled}
         onClick={() => onChange(value === val ? "" : val)} title={sp.note}>
         <b>{sp.ratio}</b>
         {!ratioOnly && <span className="mono">{sp.w}×{sp.h}</span>}
