@@ -1,16 +1,16 @@
 import React from "react";
 import { pctDelta } from "../mktAnalytics.js";
-import { fmtCompact, fmtInt, fmtMoney, fmtPct } from "./charts/theme.js";
+import { fmtCompact, fmtInt, fmtMoney, fmtPct, SERIES } from "./charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
 
 export function KpiRow({ cur, prev, rangeLabel }) {
   const tiles = [
-    { label: "งานที่วัดผลแล้ว", value: fmtInt(cur.produced), delta: pctDelta(cur.produced, prev.produced), hint: rangeLabel, icon: "check", color: "#10b981" },
-    { label: "Reach รวม", value: fmtCompact(cur.reach), delta: pctDelta(cur.reach, prev.reach), icon: "eye", color: "#3b82f6" },
-    { label: "Engagement Rate", value: fmtPct(cur.er), delta: pctDelta(cur.er, prev.er), hint: "engagement ÷ reach", icon: "sparkles", color: "#8b5cf6" },
-    { label: "Leads", value: fmtInt(cur.leads), delta: pctDelta(cur.leads, prev.leads), hint: "attribute ได้", icon: "user", color: "#f59e0b" },
-    { label: "งบ ads", value: cur.spend > 0 ? fmtMoney(cur.spend) : "—", delta: pctDelta(cur.spend, prev.spend), icon: "wallet", color: "#ec4899" },
-    { label: "CPL", value: cur.cpl != null ? fmtMoney(cur.cpl) : "—", delta: pctDelta(cur.cpl, prev.cpl), inverse: true, hint: "ยิ่งต่ำยิ่งดี", icon: "target", color: "#14b8a6" },
+    { label: "งานที่วัดผลแล้ว", value: fmtInt(cur.produced), delta: pctDelta(cur.produced, prev.produced), hint: rangeLabel, icon: "check", color: SERIES.green },
+    { label: "Reach รวม", value: fmtCompact(cur.reach), delta: pctDelta(cur.reach, prev.reach), icon: "eye", color: SERIES.blue },
+    { label: "Engagement Rate", value: fmtPct(cur.er), delta: pctDelta(cur.er, prev.er), hint: "engagement ÷ reach", icon: "sparkles", color: "var(--violet)" },
+    { label: "Leads", value: fmtInt(cur.leads), delta: pctDelta(cur.leads, prev.leads), hint: "attribute ได้", icon: "user", color: SERIES.gold },
+    { label: "งบ ads", value: cur.spend > 0 ? fmtMoney(cur.spend) : "—", delta: pctDelta(cur.spend, prev.spend), icon: "wallet", color: SERIES.orange },
+    { label: "CPL", value: cur.cpl != null ? fmtMoney(cur.cpl) : "—", delta: pctDelta(cur.cpl, prev.cpl), inverse: true, hint: "ยิ่งต่ำยิ่งดี", icon: "target", color: SERIES.red },
   ];
 
   return (
