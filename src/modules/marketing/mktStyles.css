@@ -2275,12 +2275,14 @@
 
   /* Linear Card Shell */
   .dash-card {
+    position: relative;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--r);
     padding: 16px;
     box-shadow: var(--shadow);
     min-width: 0;
+    overflow: clip;                       /* กัน ring/กราฟ/legend หลุดกรอบไปทับการ์ดอื่น */
     transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
   }
   .dash-card:hover {
@@ -2288,6 +2290,8 @@
     border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
     box-shadow: var(--shadow-lg);
   }
+  /* การ์ดที่มีกราฟ/วงแหวน: กัน SVG/canvas สั่นตอนยก (retina repaint) */
+  .dash-card:has(canvas), .dash-card:has(svg) { backface-visibility: hidden; }
   .dash-card > .stat-section {
     border: none;
     box-shadow: none;
@@ -2391,12 +2395,12 @@
   /* ---- hero (พื้น ink) ---- */
   .hero {
     background: var(--surface); border: 1px solid var(--line); color: var(--ink);
-    border-radius: var(--r); box-shadow: var(--shadow);
+    border-radius: var(--r); box-shadow: var(--shadow); overflow: clip;
     padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3);
   }
   .hero-k { font-size: var(--fs-xs); color: var(--ink-soft); margin-bottom: 2px; }
   .hero-ring { position: relative; display: grid; place-items: center; padding: var(--sp-1) 0; }
-  .hero-ring svg { width: 100%; max-width: 172px; transform: rotate(-90deg); }
+  .hero-ring svg { width: 100%; max-width: 172px; height: auto; transform: rotate(-90deg); }
   .ring-track { fill: none; stroke: var(--surface-2); stroke-width: 13; }
   .ring-seg { fill: none; stroke-width: 13; stroke-linecap: round; }
   .ring-mid { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 1px; }
