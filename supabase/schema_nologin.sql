@@ -181,12 +181,15 @@ create table mkt_settings (
 );
 insert into mkt_settings (id) values (1);
 
--- ลิสต์ตัวเลือกที่แก้ได้ในหน้าตั้งค่า (ขนาดภาพ / ชนิดช็อต / เครื่องมือตั้งเวลา / ความยาวคลิป)
+-- ลิสต์ตัวเลือกที่แก้ได้ในหน้าตั้งค่า (ขนาดภาพ / มุมกล้อง / เครื่องมือตั้งเวลา / ความยาวคลิป)
+-- item เป็น jsonb เพราะแต่ละลิสต์หน้าตาไม่เหมือนกัน:
+--   size_presets  {id, ratio, w, h, note}   · shot_types    {id, name, note}
+--   video_lengths {id, seconds, note}       · scheduler_tools "ข้อความ"
 create table mkt_option_list (
-  list   text not null check (list in ('size_presets','shot_types','scheduler_tools','video_lengths')),
-  value  text not null,
-  sort_order int not null default 0,
-  primary key (list, value)
+  list  text not null check (list in ('size_presets','shot_types','scheduler_tools','video_lengths')),
+  idx   int  not null,
+  item  jsonb not null,
+  primary key (list, idx)
 );
 
 -- ยอดของการ์ด = ผลรวมทุกช่องทาง (สูตรเดียวกับ mktRules.rollupCardMetrics — ห้ามคิดซ้ำสองที่)
@@ -248,10 +251,10 @@ returns jsonb language sql stable as $$
     'attachments',     coalesce((select jsonb_agg(to_jsonb(a) order by a.sort_order) from mkt_attachment a), '[]'::jsonb),
     'reference_links', coalesce((select jsonb_agg(to_jsonb(l) order by l.created_at) from mkt_reference_link l), '[]'::jsonb),
     'settings',        coalesce((select to_jsonb(s) - 'id' from mkt_settings s where s.id = 1), '{}'::jsonb),
-    'size_presets',    coalesce((select jsonb_agg(value order by sort_order) from mkt_option_list where list = 'size_presets'), '[]'::jsonb),
-    'shot_types',      coalesce((select jsonb_agg(value order by sort_order) from mkt_option_list where list = 'shot_types'), '[]'::jsonb),
-    'scheduler_tools', coalesce((select jsonb_agg(value order by sort_order) from mkt_option_list where list = 'scheduler_tools'), '[]'::jsonb),
-    'video_lengths',   coalesce((select jsonb_agg(value order by sort_order) from mkt_option_list where list = 'video_lengths'), '[]'::jsonb)
+    'size_presets',    coalesce((select jsonb_agg(item order by idx) from mkt_option_list where list = 'size_presets'), '[]'::jsonb),
+    'shot_types',      coalesce((select jsonb_agg(item order by idx) from mkt_option_list where list = 'shot_types'), '[]'::jsonb),
+    'scheduler_tools', coalesce((select jsonb_agg(item order by idx) from mkt_option_list where list = 'scheduler_tools'), '[]'::jsonb),
+    'video_lengths',   coalesce((select jsonb_agg(item order by idx) from mkt_option_list where list = 'video_lengths'), '[]'::jsonb)
   );
 $$;
 
@@ -343,11 +346,11 @@ begin
   from jsonb_array_elements(coalesce(payload->'reference_links','[]'::jsonb)) x
   where exists (select 1 from mkt_card c where c.id = x->>'card_id');
 
-  insert into mkt_option_list (list, value, sort_order)
-  select k, v.value, (v.ord - 1)::int
+  -- jsonb_array_elements (ไม่ใช่ _text) — เก็บทั้งออบเจกต์ไว้ทั้งก้อน
+  insert into mkt_option_list (list, idx, item)
+  select lists.k, (v.ord - 1)::int, v.item
   from (values ('size_presets'),('shot_types'),('scheduler_tools'),('video_lengths')) as lists(k),
-       lateral jsonb_array_elements_text(coalesce(payload->lists.k, '[]'::jsonb)) with ordinality as v(value, ord)
-  on conflict do nothing;
+       lateral jsonb_array_elements(coalesce(payload->lists.k, '[]'::jsonb)) with ordinality as v(item, ord);
 
   update mkt_settings set
     sla_hours               = coalesce((payload->'settings'->>'sla_hours')::int, sla_hours),
