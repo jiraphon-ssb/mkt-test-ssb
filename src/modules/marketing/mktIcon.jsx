@@ -66,6 +66,17 @@ const PATHS = {
   chart: (<>
    <path d="M4 20V9M10 20V4M16 20v-7M22 20H3"/>
   </>),
+  grid: (<>
+   <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+   <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+  </>),
+  columns: (<>
+   <rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/>
+  </>),
+  trophy: (<>
+   <path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/>
+   <path d="M9 20h6M10 16v4M14 16v4"/>
+  </>),
   check: (<>
    <path d="M5 12.5l4.5 4.5L19 7.5"/>
   </>),

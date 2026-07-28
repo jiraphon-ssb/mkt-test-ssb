@@ -798,8 +798,8 @@ export function hoursWaitingInReview(card, nowClock = nowISO()) {
 * ใช้ status_history เป็นหลัก เพราะ updated_at ถูกรีเซ็ตทุกครั้งที่แก้การ์ด
 * (แก้ typo ในบรีฟก็จะดูเหมือนงานเพิ่งขยับ ทั้งที่ยังค้างขั้นเดิม)
 */
-export function stuckSince(card, history = []) {
-  const arrived = history
+export function stuckSince(card, history) {
+  const arrived = (Array.isArray(history) ? history : [])
     .filter((h) => h.card_id === card.id && h.to_status === card.status)
     .map((h) => h.moved_at)
     .sort();

@@ -164,7 +164,7 @@ function DayPanel({ card, onOpen }) {
   const tl = card.brief.format === "video" ? timelineSummary(card.brief) : { count: 0, scenes: [] };
   const posted = channelRuns(card).filter((r) => r.post_url);
   const pct = gatePercent(card, refs);
-  const history = data.status_history
+  const history = (data.status_history ?? [])
     .filter((h) => h.card_id === card.id)
     .slice(-3)
     .reverse();

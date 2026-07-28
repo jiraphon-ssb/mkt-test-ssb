@@ -30,9 +30,14 @@ export default function MarketingModule({ view = "work" }) {
   // การ์ดที่เปิดอยู่ต้อง sync กับ data ล่าสุด (หลัง mutate)
   const liveCard = openCard ? data.cards.find((c) => c.id === openCard.id) ?? null : null;
 
-  /** ปุ่มใน insight ที่พาไปที่อื่น — "results" เป็นแท็บใน Dashboard ที่เหลือเป็นมุมมองในหน้างาน */
+  /** ปุ่มใน insight ที่พาไปที่อื่น — "results", "analytics", "pipeline" เป็นแท็บใน Dashboard ที่เหลือเป็นมุมมองในหน้างาน */
   const jump = (to) => {
-    if (to === "results") { setDashTab("results"); navigate("/mkt/dashboard"); return; }
+    if (["results", "analytics", "pipeline", "overview"].includes(to)) {
+      setDashTab(to);
+      navigate("/mkt/dashboard");
+      return;
+    }
+    if (to === "dashboard") { setDashTab("overview"); navigate("/mkt/dashboard"); return; }
     setWorkView(to);
     navigate("/mkt/work");
   };

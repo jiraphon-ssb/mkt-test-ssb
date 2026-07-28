@@ -342,7 +342,7 @@ export function CardSheet({ card, onClose }) {
   /* วันแรกที่การ์ดเข้าแต่ละขั้น — โชว์ข้างจุด stepper ให้เห็นจังหวะงานทั้งเส้น */
   const stageDates = useMemo(() => {
     const m = {};
-    for (const h of data.status_history)
+    for (const h of (data.status_history ?? []))
       if (h.card_id === card.id && h.to_status && m[h.to_status] == null) m[h.to_status] = h.moved_at;
     return m;
   }, [data.status_history, card.id]);
@@ -366,7 +366,7 @@ export function CardSheet({ card, onClose }) {
      ย้ายขั้น · ปิดงาน · Approve · ตีกลับ(+เหตุผลเต็ม) · โน้ต · บทเรียน */
   const historyRows = useMemo(() => {
     const nameOf = (id) => data.profiles.find((p) => p.id === id)?.display_name ?? "—";
-    const hist = data.status_history.filter((h) => h.card_id === card.id).map((h) => ({
+    const hist = (data.status_history ?? []).filter((h) => h.card_id === card.id).map((h) => ({
       id: h.id, at: h.moved_at, who: nameOf(h.moved_by),
       kind: h.from_status === h.to_status ? "close" : "move",
       title: h.from_status === h.to_status

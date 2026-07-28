@@ -11,7 +11,7 @@
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { useApp } from "../useMkt.jsx";
 import { CONTENT_STAGES } from "../mktEngine.js";
-import { analyticsCards, kpiSummary, lastCompletedWeeks, measuredInRange, previousRange, rollupBy, weeklySeries, weeksRange, } from "../mktAnalytics.js";
+import { analyticsCards, kpiSummary, lastCompletedWeeks, measuredInRange, previousRange, rollupBy, weeklySeries, weeksRange, stageFlows, ideaToPublishedCycle, publishHeatmap } from "../mktAnalytics.js";
 import { computeInsights } from "../mktInsights.js";
 import { HeroTile } from "./HeroTile.jsx";
 import { KpiRow } from "./KpiRow.jsx";
@@ -20,13 +20,20 @@ import { FirstPassTile } from "./FirstPassTile.jsx";
 import { StageWipTile } from "./StageWipTile.jsx";
 import { RiskSection } from "./RiskSection.jsx";
 import { ArchiveKnowTile } from "./ArchiveKnowTile.jsx";
+import { DnaHealthTile } from "./DnaHealthTile.jsx";
 import { Panel } from "../mktCard.jsx";
+import { Icon } from "../mktIcon.jsx";
 const TrendSection = lazy(() => import("./TrendSection.jsx").then((m) => ({ default: m.TrendSection })));
 const PillarDonut = lazy(() => import("./PillarDonut.jsx").then((m) => ({ default: m.PillarDonut })));
+const FunnelSection = lazy(() => import("./FunnelSection.jsx").then((m) => ({ default: m.FunnelSection })));
+const TimingHeatmap = lazy(() => import("./TimingHeatmap.jsx").then((m) => ({ default: m.TimingHeatmap })));
 const ResultsPanel = lazy(() => import("../results/ResultsPanel.jsx").then((m) => ({ default: m.ResultsPanel })));
 
 /* ช่วงเวลา — ครอบคลุมตั้งแต่รอบเดือนถึงรายปี · label เป็นภาษาที่ทีมใช้พูดกันจริง
    ทุกค่านับเฉพาะ "สัปดาห์ที่จบแล้ว" เพื่อไม่ให้สัปดาห์ปัจจุบันที่ยังไม่ครบมากดค่าเฉลี่ย */
+import { AnalyticsTab } from "./AnalyticsTab.jsx";
+import { PipelineTab } from "./PipelineTab.jsx";
+
 const RANGES = [
   { w: 4, label: "1 เดือน" },
   { w: 8, label: "2 เดือน" },
@@ -34,14 +41,22 @@ const RANGES = [
   { w: 26, label: "ครึ่งปี" },
   { w: 52, label: "1 ปี" },
 ];
-const TABS = [
-  { id: "overview", label: "ภาพรวม" },
-  { id: "results", label: "ผลตอบรับ" },
+
+/* แท็บของ Dashboard — ภาพรวมเห็นทั้งหมด · อีก 3 แท็บเจาะลึกทีละมุม */
+const DASH_TABS = [
+  { id: "overview", label: "ภาพรวม", icon: "grid" },
+  { id: "pipeline", label: "สายผลิต", icon: "columns" },
+  { id: "analytics", label: "วิเคราะห์", icon: "chart" },
+  { id: "results", label: "ผลตอบรับ", icon: "trophy" },
 ];
 
 export function Dashboard({ tab = "overview", onTabChange, onOpenCard, onJump }) {
-  const { data, currentUser, inBrandScope } = useApp();
+  const { data, currentUser, inBrandScope, brandFilter } = useApp();
   const [rangeWeeks, setRangeWeeks] = useState(4);
+  /* ควบคุมแท็บเองได้ถ้า shell ไม่ได้ส่ง onTabChange มา (เผื่อ standalone) */
+  const [localTab, setLocalTab] = useState(tab);
+  const activeTab = onTabChange ? tab : localTab;
+  const setTab = onTabChange ?? setLocalTab;
 
   const v = useMemo(() => {
     const all = analyticsCards(data.cards);
@@ -55,10 +70,18 @@ export function Dashboard({ tab = "overview", onTabChange, onOpenCard, onJump })
       measured: measuredInRange(scoped, range),
       series: weeklySeries(scoped, weeks),
       pillarRows: rollupBy(scoped, data.cards, "pillar", range),
+      brandRows: rollupBy(scoped, data.cards, "brand", range),
+      channelRows: rollupBy(scoped, data.cards, "channel", range, data.channels),
+      ownerRows: rollupBy(scoped, data.cards, "owner", range),
+      kindRows: rollupBy(scoped, data.cards, "kind", range),
+      flows: stageFlows(scoped, data.status_history ?? [], range),
+      cycle: ideaToPublishedCycle(scoped, data.status_history ?? [], range),
+      heatmap: publishHeatmap(scoped, range),
       perStage: CONTENT_STAGES.map((s) => ({
         id: s.id, name: s.name,
         n: all.filter((c) => !c.archived && c.status === s.id).length,
       })),
+      range,
     };
   }, [data, inBrandScope, rangeWeeks]);
 
@@ -68,76 +91,166 @@ export function Dashboard({ tab = "overview", onTabChange, onOpenCard, onJump })
       onJump(i.action.screen, i.action.brandId);
   }, [onJump]);
 
-  return (<>
-   {/* แถบช่วงเวลา — จุดเดียวที่คุมช่วงของทุกไทล์ในหน้า (ส่งออก CSV อยู่ที่ตั้งค่า → ข้อมูล) */}
-   <div className="dash-bar">
-    <div className="dash-range">
-     {RANGES.map((r) => (<button key={r.w} className={rangeWeeks === r.w ? "on" : ""} onClick={() => setRangeWeeks(r.w)}>
-       {r.label}
-      </button>))}
+  /* ป้าย scope — ตรงกับตัวสลับบริบทของ shell จริง (ทั้งกลุ่ม/แบรนด์เดียว/หลายแบรนด์) */
+  const currentBrandName = brandFilter === "all" ? "ทุกแบรนด์"
+    : brandFilter === "multi" ? `${v.scoped.length ? new Set(v.scoped.map((c) => c.brand_id)).size : 0} แบรนด์`
+    : data.brands.find((b) => b.id === brandFilter)?.name ?? "ทุกแบรนด์";
+
+  return (
+    <div className="dash-linear-shell">
+      {/* ── Top Bar / Header Command ── */}
+      <header className="dash-linear-header">
+        <div className="dash-header-title">
+          <div className="dash-status-dot" title="ระบบกำลังทำงานปกติ" />
+          <h1 className="dash-title-text">Marketing Overview</h1>
+          <span className="dash-scope-pill">{currentBrandName}</span>
+          <span className="dash-count-tag mono">{v.scoped.length} cards</span>
+        </div>
+        <div className="dash-range-switch">
+          {RANGES.map((r) => (
+            <button
+              key={r.w}
+              className={`dash-range-btn ${rangeWeeks === r.w ? "active" : ""}`}
+              onClick={() => setRangeWeeks(r.w)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {/* ── แท็บ: ภาพรวมเห็นทั้งหมด · อีก 3 แท็บเจาะลึกทีละมุม ── */}
+      <nav className="dash-tabs" role="tablist">
+        {DASH_TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={activeTab === t.id}
+            className={`dash-tab ${activeTab === t.id ? "active" : ""}`}
+            onClick={() => setTab(t.id)}
+          >
+            <Icon name={t.icon} size={15} /> {t.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* ── KPI Bar — เห็นทุกแท็บ (ตัวเลขหลักของช่วงเวลาที่เลือก) ── */}
+      <section className="dash-card dash-kpi-bar-card">
+        <KpiRow cur={v.cur} prev={v.prevKpi} rangeLabel={RANGES.find((r) => r.w === rangeWeeks)?.label} />
+      </section>
+
+      {activeTab === "pipeline" && (
+        <PipelineTab data={data} scopedCards={v.scoped} onOpenCard={onOpenCard} />
+      )}
+
+      {activeTab === "analytics" && (
+        <AnalyticsTab
+          data={data} scopedCards={v.scoped}
+          brandRows={v.brandRows} channelRows={v.channelRows}
+          ownerRows={v.ownerRows} kindRows={v.kindRows}
+        />
+      )}
+
+      {activeTab === "results" && (
+        <section className="dash-card">
+          <Suspense fallback={<div className="empty">กำลังโหลดผลตอบรับ…</div>}>
+            <ResultsPanel rangeWeeks={rangeWeeks} measured={v.measured} onOpenCard={onOpenCard} />
+          </Suspense>
+        </section>
+      )}
+
+      {activeTab === "overview" && (<>
+
+      {/* ── Section 2: Asymmetric Core Analytics & Actions (65% / 35%) ── */}
+      <section className="dash-asym-grid">
+        <div className="dash-col-main">
+          {/* Trend Chart Card */}
+          <div className="dash-card">
+            <Panel title="แนวโน้ม Engagement & Content Volume" info={{ label: "แนวโน้ม", text: "แสดงจำนวนงานที่วัดผลแล้ว (แท่ง) และ Engagement Rate (เส้น) ย้อนหลังตามช่วงเวลา" }}>
+              <Suspense fallback={<div className="empty-row">กำลังโหลดกราฟ…</div>}>
+                <TrendSection series={v.series} />
+              </Suspense>
+            </Panel>
+          </div>
+
+          {/* Dual Grid: Pillars & Process Funnel */}
+          <div className="dash-grid-2col">
+            <div className="dash-card">
+              <Panel title="สัดส่วน Content Pillar" info={{ label: "Pillar", text: "สัดส่วนคอนเทนต์แบ่งตาม Pillar ประจำแบรนด์" }}>
+                <Suspense fallback={<div className="empty-row">กำลังโหลดกราฟ…</div>}>
+                  <PillarDonut rows={v.pillarRows} />
+                </Suspense>
+              </Panel>
+            </div>
+
+            <div className="dash-card">
+              <Panel title="ระยะเวลาในสายผลิต (Cycle Time)" info={{ label: "Funnel", text: "ระยะเวลาเฉลี่ยตั้งแต่ไอเดียจนถึงตีพิมพ์และวัดผล" }}>
+                <Suspense fallback={<div className="empty-row">กำลังโหลด Funnel…</div>}>
+                  <FunnelSection flows={v.flows} cycle={v.cycle} />
+                </Suspense>
+              </Panel>
+            </div>
+          </div>
+        </div>
+
+        {/* Sidebar Column: Strategic Actions & Performance Circle */}
+        <div className="dash-col-side">
+          <div className="dash-card">
+            <InsightCta items={insights} onAct={actOn} />
+          </div>
+
+          <div className="dash-card">
+            <HeroTile measured={v.measured} allCards={data.cards} onSeeResults={() => {}} />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Section 3: Operations & Quality Triplet ── */}
+      <section className="dash-grid-3col">
+        <div className="dash-card">
+          <Panel title="อัตราผ่านตรวจรอบแรก (First Pass)" info={{ label: "First Pass", text: "สัดส่วนงานที่ไม่ถูกตีกลับในรอบการตรวจครั้งแรก" }}>
+            <FirstPassTile data={data} viewer={currentUser} />
+          </Panel>
+        </div>
+
+        <div className="dash-card">
+          <Panel title="ดัชนี Content DNA Quality" info={{ label: "DNA", text: "ความครบถ้วนของข้อมูลในสายการผลิต" }}>
+            <DnaHealthTile cards={data.cards} brandId={data.brands[0]?.id} />
+          </Panel>
+        </div>
+
+        <div className="dash-card">
+          <Panel title="งานค้างในสายผลิต (WIP)" info={{ label: "WIP", text: "จำนวนงานคงค้างแยกรายสถานะปัจจุบัน" }}>
+            <StageWipTile perStage={v.perStage} />
+          </Panel>
+        </div>
+      </section>
+
+      {/* ── Section 4: Operational Risks & Knowledge Base (50% / 50%) ── */}
+      <section className="dash-grid-2col">
+        <div className="dash-card">
+          <Panel title="เรื่องที่ต้องเร่งจัดการ (Action Queue)" info={{ label: "ต้องเคลียร์", text: "การ์ดที่ค้าง เกิน SLA หรือถูกตีกลับ" }}>
+            <RiskSection data={data} onOpenCard={onOpenCard} onJump={onJump} />
+          </Panel>
+        </div>
+
+        <div className="dash-card">
+          <Panel title="ช่วงเวลาโพสต์ที่ดีที่สุด (Timing Heatmap)" info={{ label: "Heatmap", text: "ช่วงวัน-เวลาที่มีอัตรา Engagement สูงสุด" }}>
+            <Suspense fallback={<div className="empty-row">กำลังโหลด Heatmap…</div>}>
+              <TimingHeatmap cells={v.heatmap} teamER={v.cur.er} />
+            </Suspense>
+          </Panel>
+        </div>
+      </section>
+
+      {/* ── Section 5: Formula Recipes ── */}
+      <section className="dash-card">
+        <Panel title="สูตรสำเร็จจากคลังผลงาน (Content Recipes)" icon="clipboard" info={{ label: "สูตรสำเร็จ", text: "คลังไอเดียที่ทำ Engagement ชนะค่าเฉลี่ยแบรนด์" }} tools={<button className="risk-jump" onClick={() => onJump("archive")}>ไปหน้าคลัง</button>}>
+          <ArchiveKnowTile data={data} onOpenCard={onOpenCard} onJump={onJump} />
+        </Panel>
+      </section>
+      </>)}
     </div>
-   </div>
-
-   {/* ---- แถบบน: ตัวเลขดิบ (ที่เดียว) + ป้ายผล + เรื่องด่วน — เห็นทุกแท็บ ---- */}
-   <div className="tile-body rs-kpi">
-    <KpiRow cur={v.cur} prev={v.prevKpi} rangeLabel={RANGES.find((r) => r.w === rangeWeeks)?.label}/>
-   </div>
-   <div className="dash-top">
-    <HeroTile measured={v.measured} allCards={data.cards} onSeeResults={() => onTabChange("results")}/>
-    <div className="dash-topright">
-     <InsightCta items={insights} onAct={actOn}/>
-    </div>
-   </div>
-
-   {/* ---- แท็บเนื้อหา ---- */}
-   <div className="dash-tabs">
-    {TABS.map((t) => (<button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => onTabChange(t.id)}>
-      {t.label}
-     </button>))}
-   </div>
-
-   {tab === "overview" && (<>
-    <div className="dash-2up">
-     <Panel title="แนวโน้ม" info={{ label: "แนวโน้ม", text: "แท่ง = จำนวนงานที่วัดผลแล้ว · เส้น = ER (engagement ÷ reach) · นับตามวันโพสต์ ไม่รวมสัปดาห์ที่ยังไม่จบ" }}>
-      <Suspense fallback={<div className="empty-row">กำลังโหลดกราฟ…</div>}>
-       <TrendSection series={v.series}/>
-      </Suspense>
-     </Panel>
-
-     <Panel title="สัดส่วนงานตาม Pillar" info={{ label: "Pillar", text: "นับจากงานที่วัดผลแล้วในช่วง · SOP ให้กระจายครบ 4 pillar ตาม Monthly Plan ไม่กระจุกตัวเดียว" }}>
-      <Suspense fallback={<div className="empty-row">กำลังโหลดกราฟ…</div>}>
-       <PillarDonut rows={v.pillarRows}/>
-      </Suspense>
-     </Panel>
-    </div>
-
-    <div className="dash-3up">
-     <Panel title="ผ่านรอบแรก" info={{ label: "ผ่านรอบแรก", text: "สัดส่วนงานที่ Team Lead อนุมัติรอบแรกโดยไม่ตีกลับ · จุดเขียว = สัปดาห์ที่ถึงเป้า ครบ 4 จุดติดกันได้ปลดตรวจรายชิ้น" }}>
-      <FirstPassTile data={data} viewer={currentUser}/>
-     </Panel>
-
-     <Panel title="งานค้างในสาย" info={{ label: "งานค้างในสาย", text: "จำนวนการ์ดที่ยังไม่จบ แยกตามขั้นที่ค้างอยู่ตอนนี้" }}>
-      <StageWipTile perStage={v.perStage}/>
-     </Panel>
-
-     <Panel title="ต้องเคลียร์" info={{ label: "ต้องเคลียร์", text: "สถานะสดตอนนี้ ไม่ขึ้นกับช่วงเวลาด้านบน · กดที่รายการเพื่อเปิดการ์ด" }}>
-      <RiskSection data={data} onOpenCard={onOpenCard} onJump={onJump}/>
-     </Panel>
-    </div>
-
-    {/* ความรู้จากคลัง — สูตรที่เวิร์ค + บทเรียน โผล่หน้าแรกให้ทีมเห็นโดยไม่ต้องไปขุด */}
-    <Panel title="จากคลังผลงาน" icon="clipboard"
-     info={{ label: "จากคลังผลงาน", text: "สกัดจากงานที่ปิดแล้ว: สูตรที่เวิร์ค (กลุ่มที่ ER ชนะค่าเฉลี่ยแบรนด์ ≥3 งาน) กดไปหน้าคลัง · บทเรียนที่ทีมจดตอนปิดงาน กดเปิดการ์ดต้นเรื่อง" }}
-     tools={<button className="risk-jump" onClick={() => onJump("archive")}>ไปหน้าคลัง</button>}>
-     <ArchiveKnowTile data={data} onOpenCard={onOpenCard} onJump={onJump}/>
-    </Panel>
-   </>)}
-
-   {tab === "results" && (
-    <Suspense fallback={<div className="empty">กำลังโหลดผลตอบรับ…</div>}>
-     <ResultsPanel rangeWeeks={rangeWeeks} measured={v.measured} onOpenCard={onOpenCard}/>
-    </Suspense>
-   )}
-
-  </>);
+  );
 }
+

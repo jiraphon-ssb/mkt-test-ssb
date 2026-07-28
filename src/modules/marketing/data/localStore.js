@@ -46,6 +46,8 @@ function withDefaults(data) {
     if (out[key] == null || (Array.isArray(seed[key]) && !Array.isArray(out[key])))
       out[key] = seed[key];
   }
+  if (!Array.isArray(out.status_history)) out.status_history = seed.status_history || [];
+  if (!Array.isArray(out.review_actions)) out.review_actions = seed.review_actions || [];
   return out;
 }
 

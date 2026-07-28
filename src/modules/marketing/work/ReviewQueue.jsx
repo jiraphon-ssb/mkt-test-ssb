@@ -141,7 +141,7 @@ function ReviewSheet({ card, isLead, onClose, onReject, onOpenCard }) {
   /* ช่องที่กติกายังไม่ผ่าน — คิดจากเกณฑ์เดียวกับที่ใช้กันการ์ดไม่ให้เดินขั้น */
   const refs = briefRefCounts(card.id, data.attachments, data.reference_links, data.channels);
   const briefGaps = gateChecklist({ ...card, status: "brief" }, refs).filter((g) => !g.done);
-  const history = data.status_history
+  const history = (data.status_history ?? [])
     .filter((h) => h.card_id === card.id)
     .sort((a, b) => b.moved_at.localeCompare(a.moved_at))
     .slice(0, 5);

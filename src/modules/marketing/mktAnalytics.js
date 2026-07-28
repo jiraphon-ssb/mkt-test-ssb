@@ -224,6 +224,7 @@ const median = (xs) => {
 function movesByCard(cards, history) {
   const ids = new Set(analyticsCards(cards).map((c) => c.id));
   const by = new Map();
+  if (!Array.isArray(history)) return by;
   for (const h of history) {
     if (!ids.has(h.card_id))
       continue;

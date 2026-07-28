@@ -1697,17 +1697,18 @@
   .dash-more { font-size: var(--fs-sm); font-weight: 600; color: var(--link); margin-top: 10px; }
   .dash-more:hover { text-decoration: underline; }
   /* ---------- KPI ---------- */
-  .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin-bottom: 13px; }
-  .kpi-tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 13px; box-shadow: var(--shadow); min-width: 0; }
-  .kpi-label { font-size: var(--fs-xs); color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; }
-  .kpi-value { font-size: var(--fs-xl); font-weight: 700; letter-spacing: -.03em; line-height: 1.2; }
-  .kpi-foot { display: flex; align-items: center; gap: 7px; margin-top: 4px; flex-wrap: wrap; }
-  .kpi-delta { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); font-weight: 700; }
-  .kpi-delta.up { color: var(--ok); }
+  .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 0; }
+  .kpi-tile { background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.2) 100%), var(--surface); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 14px 16px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05); transition: border-color 0.2s ease, transform 0.2s ease; min-width: 0; }
+  .kpi-tile:hover { border-color: rgba(16, 185, 129, 0.35); transform: translateY(-1px); }
+  .kpi-label { font-size: 11px; color: var(--ink-soft); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .kpi-value { font-size: 24px; font-weight: 800; letter-spacing: -.03em; line-height: 1.2; color: var(--ink); }
+  .kpi-foot { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .kpi-delta { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; border-radius: 99px; padding: 2px 8px; }
+  .kpi-delta.up { background: rgba(52, 211, 153, 0.12); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
   .kpi-delta.up svg { transform: rotate(180deg); }
-  .kpi-delta.down { color: var(--bad); }
-  .kpi-delta.none { color: var(--ink-faint); font-weight: 500; }
-  .kpi-hint { font-size: var(--fs-xs); color: var(--ink-faint); }
+  .kpi-delta.down { background: rgba(251, 113, 133, 0.12); color: #fb7185; border: 1px solid rgba(251, 113, 133, 0.2); }
+  .kpi-delta.none { background: rgba(255, 255, 255, 0.05); color: var(--ink-faint); font-weight: 500; }
+  .kpi-hint { font-size: 11px; color: var(--ink-faint); }
   /* ---------- แผงคำแนะนำ ---------- */
   .ins-counts { margin-left: auto; display: flex; gap: 5px; flex-wrap: wrap; }
   .ins-count { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 5px; }
@@ -2171,6 +2172,210 @@
   /* ============================================================
      Dashboard — hero + สถิติย่อ + เรื่องด่วน + แถวการ์ด
      ============================================================ */
+  /* ============================================================
+     Linear / Raycast Style Executive SaaS Dashboard System
+     ============================================================ */
+  .dash-linear-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 24px;
+  }
+
+  /* Header Bar */
+  .dash-linear-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .dash-header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .dash-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+  }
+  .dash-title-text {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin: 0;
+  }
+  .dash-scope-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--ink-soft);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .dash-count-tag {
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+  .dash-range-switch {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 2px;
+    border-radius: 8px;
+  }
+  .dash-range-btn {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: transparent;
+    transition: all 0.15s ease;
+  }
+  .dash-range-btn:hover {
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .dash-range-btn.active {
+    background: var(--accent);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  /* แถบแท็บ Dashboard — ขีดเส้นใต้แท็บที่เลือก (อ่านเป็น "หน้า" ไม่ใช่ปุ่มกด) */
+  .dash-tabs {
+    display: flex; gap: 2px; align-items: stretch;
+    border-bottom: 1px solid var(--line); margin-bottom: var(--sp-4);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .dash-tabs::-webkit-scrollbar { display: none; }
+  .dash-tab {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    font-size: var(--fs-md); font-weight: 600; color: var(--ink-faint);
+    padding: 9px 15px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color .12s, border-color .12s;
+  }
+  .dash-tab svg { color: currentColor; opacity: .85; }
+  .dash-tab:hover { color: var(--ink-soft); }
+  .dash-tab.active { color: var(--accent-text); border-bottom-color: var(--accent); }
+
+  /* Linear Card Shell */
+  .dash-card {
+    background: var(--surface);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    min-width: 0;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .dash-card:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  .dash-card > .stat-section {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* Integrated KPI Bar */
+  .dash-kpi-bar-card {
+    padding: 12px 16px;
+  }
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  @media (min-width: 768px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (min-width: 1100px) {
+    .kpi-row { grid-template-columns: repeat(6, 1fr); }
+  }
+  .kpi-tile {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 10px 12px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .kpi-tile:hover {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* Asymmetric Layout Grids */
+  .dash-asym-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 1080px) {
+    .dash-asym-grid {
+      grid-template-columns: minmax(0, 65%) minmax(0, 35%);
+    }
+  }
+  .dash-col-main {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+  .dash-col-side {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  /* Multi-column grids */
+  .dash-grid-2col {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 860px) {
+    .dash-grid-2col { grid-template-columns: 1fr 1fr; }
+  }
+
+  .dash-grid-3col {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 860px) {
+    .dash-grid-3col { grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  .kpi-tile .kpi-value {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .kpi-tile .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+  }
   .dash-bar { display: flex; align-items: center; justify-content: flex-end; margin-bottom: var(--sp-3); }
   .dash-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); margin-bottom: var(--sp-3); }
   @media (min-width: 1100px) { .dash-top { grid-template-columns: 300px minmax(0, 1fr); } }

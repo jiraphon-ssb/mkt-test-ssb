@@ -73,7 +73,7 @@ export function AppProvider({ children }) {
     window.setTimeout(() => setToastState((t) => (t && t.msg === msg ? null : t)), 2800);
   }, []);
   const appendHistory = (d, cardId, from, to) => [
-    ...d.status_history,
+    ...(Array.isArray(d.status_history) ? d.status_history : []),
     {
       id: genId("h"),
       card_id: cardId,
@@ -210,12 +210,8 @@ export function AppProvider({ children }) {
       ...data,
       cards: data.cards.map((c) => c.id === card.id ? { ...card, archived: true, updated_at: now } : c),
       status_history: [
-        ...data.status_history,
-        {
-          id: genId("h"), card_id: card.id,
-          from_status: card.status, to_status: card.status,
-          moved_by: currentUser.id, moved_at: now,
-        },
+        ...(Array.isArray(data.status_history) ? data.status_history : []),
+        { id: genId("h"), card_id: card.id, from_status: card.status, to_status: card.status, moved_by: currentUser.id, moved_at: now },
       ],
     };
     persist(next);
