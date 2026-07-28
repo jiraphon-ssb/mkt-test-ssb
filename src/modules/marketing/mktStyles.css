@@ -51,6 +51,8 @@
   --link: var(--ssb-blue);
   --rt: var(--color-amber-400);
   --rt-soft: var(--ssb-gold-soft);
+  --rt-tint: color-mix(in srgb, var(--color-amber-400) 7%, var(--surface));   /* พื้นการ์ดเรียลไทม์ */
+  --rt-chip: color-mix(in srgb, var(--color-amber-400) 17%, var(--surface));  /* พื้นชิป "เรียลไทม์" */
   /* type scale 6 ระดับ */
   /* type scale — ตรงกับ ssbgroup-platform (cashflow.css + คลาส text-* ที่เขาใช้จริง)
      11 = ป้ายจิ๋ว (text-[11px]) · 12 = text-xs · 13 = ปุ่ม/ตาราง
@@ -235,7 +237,7 @@
     border-left-color: var(--brand, var(--line));
   }
   /* realtime = สีต่างจากงานปกติแต่ไม่จ้า: แถบซ้าย amber + พื้น tint บาง + ชิปใน identity */
-  .wcard.rt { border-left-color: var(--rt); background: color-mix(in srgb, var(--rt-soft) 45%, var(--surface)); }
+  .wcard.rt { border-left-color: var(--rt); background: var(--rt-tint); }
 
   /* รูปหน้าปก — เต็มกว้าง สูงไม่เกิน 1:1 เกินแล้วครอบตัด ไม่บีบภาพ */
   .wcard-cover {
@@ -264,8 +266,8 @@
   .wcard-rt-chip {
     margin-left: auto; flex-shrink: 0;
     font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .02em;
-    background: var(--rt-soft); color: var(--rt);
-    border: 1px solid color-mix(in srgb, var(--rt) 30%, transparent);
+    background: var(--rt-chip); color: var(--warn);
+    border: 1px solid color-mix(in srgb, var(--color-amber-400) 38%, var(--surface));
     padding: 1px 7px; border-radius: 99px;
   }
 
@@ -2052,7 +2054,7 @@
     border-left: 3px solid var(--line);
     padding: var(--sp-4); align-self: start; min-width: 0;
   }
-  .calpanel.rt { border-left-color: var(--rt); background: color-mix(in srgb, var(--rt-soft) 45%, var(--surface)); }
+  .calpanel.rt { border-left-color: var(--rt); background: var(--rt-tint); }
   .cp-cover {
     margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-3); overflow: hidden;
     background: var(--surface-2); border-radius: var(--r) var(--r) 0 0; line-height: 0; max-height: 220px;
@@ -2296,6 +2298,9 @@
   /* ป้ายเล็กบนพื้น tint — shade 400 จางบนครีม ขยับเป็น 200/300 ที่เข้มกว่า */
   --warn: var(--color-amber-200);
   --rt: var(--color-amber-200);
+  /* พื้นครีมของธีมสว่างขาวจัด ต้องผสมเข้มกว่าธีมมืดถึงจะเห็นว่า "ใบนี้ต่าง" */
+  --rt-tint: color-mix(in srgb, var(--color-amber-400) 14%, var(--surface));
+  --rt-chip: color-mix(in srgb, var(--color-amber-400) 30%, var(--surface));
   --violet: var(--color-violet-300);
   --accent-deep: var(--color-emerald-200);
 
