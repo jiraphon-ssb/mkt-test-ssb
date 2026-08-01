@@ -8,7 +8,6 @@ import { useApp } from "../useMkt.jsx";
 import { IMAGE_CATEGORIES, LINK_TYPE_LABEL, ATTACHMENT_TYPE_LABEL } from "../mktEngine.js";
 import { checkFile, detectLinkType, extOf, formatBytes, hostLabel, isValidUrl, normalizeUrl, DOC_EXT, IMAGE_EXT, } from "../mktAttachments.js";
 import { genId, nowISO } from "../mktRules.js";
-import { profileOf } from "../mktParts.jsx";
 import { Icon } from "../mktIcon.jsx";
 import { MktSelect } from "../mktSelect.jsx";
 /** object URL ราย session — ไม่ persist (สเปคห้ามเก็บ base64 ใน DB) */
@@ -37,78 +36,221 @@ export function makeNoteImages(files, cardId, noteId, userId) {
 export function attachmentUrl(a) {
   return blobUrls.get(a.id) || a.file_url || undefined;
 }
-function fmtThaiShort(iso) {
-  const d = new Date(iso);
-  const M = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-  return `${d.getDate()} ${M[d.getMonth()]} ${String(d.getFullYear() + 543).slice(2)}`;
+/* ============================================================
+ กล่องแนบรวม (AttachBox) — จุดแนบเดียวรับทุกอย่าง
+ ลากรูป/ไฟล์มาวาง หรือวางลิ้งแล้ว Enter — ระบบแยกชนิดเอง ผู้ใช้ไม่ต้องเลือกก่อน
+ หลังบ้านเก็บแยก 2 ตารางเหมือนเดิม (attachments / reference_links) ไม่แตะ schema
+ gate เดิมใช้ได้ต่อ: รูปที่มีคำอธิบาย = นับ ref · ลิ้งทุกอันนับเข้า refLinks
+ ============================================================ */
+
+/** สร้าง attachment จากไฟล์ — แยกชนิดจาก mime/นามสกุลเอง: รูป → imageType, เอกสาร → brief_file */
+export function makeAttachment(f, cardId, userId, order = 0, imageType = "reference") {
+  const isImg = (f.type || "").startsWith("image/") || IMAGE_EXT.includes(extOf(f.name));
+  const check = checkFile(f, isImg ? "image" : "doc");
+  if (!check.ok) return { ok: false, name: f.name, error: check.error };
+  const id = genId("att");
+  blobUrls.set(id, URL.createObjectURL(f));
+  return { ok: true, item: {
+    id, card_id: cardId, attachment_type: isImg ? imageType : "brief_file",
+    file_name: f.name, file_url: "", mime_type: f.type || (isImg ? "image/*" : `application/${extOf(f.name)}`),
+    file_size: f.size, sort_order: order, uploaded_by: userId, created_at: nowISO(),
+  } };
 }
-/** ลิงก์ที่เป็น "คลิปให้ดู" — แยกออกมาให้คนตรวจกดดูของจริงได้ทันที ไม่ปนกับลิงก์เอกสาร */
-const CLIP_LINK_TYPES = ["tiktok", "youtube", "facebook"];
-const isClipLink = (l) => CLIP_LINK_TYPES.includes(l.link_type);
+/** สร้าง link record จาก URL — detect ประเภท (Canva/Drive/TikTok…) อัตโนมัติ · คืน null ถ้า URL ไม่ถูก */
+export function makeLink(url, cardId, userId) {
+  const norm = normalizeUrl(url);
+  if (!isValidUrl(norm)) return null;
+  return { id: genId("lnk"), card_id: cardId, title: hostLabel(norm), url: norm,
+    link_type: detectLinkType(norm), note: "", created_by: userId, created_at: nowISO() };
+}
 
-/**
- * ไฟล์และของอ้างอิงของการ์ด — แยก 2 หน้าที่ให้ชัด
- *   บรีฟ  = ของที่ "ต้องทำตาม" (โจทย์ เอกสาร CI ภาพที่สั่งให้ใช้)
- *   เรฟ   = ของที่ "อ้างเป็นแนวทาง" (ภาพ/คลิปที่ชอบ — อ้างแค่บางแง่)
- * คำและกลุ่มเปลี่ยนตามชนิดงาน: คลิปได้กลุ่ม "คลิปอ้างอิง" เพิ่มมา ภาพนิ่งไม่มี
- * @param {"image"|"video"|""} format
- */
-export function Attachments({ cardId, editable, format = "image" }) {
-  const { data } = useApp();
-  const isVideo = format === "video";
-  const all = data.attachments.filter((a) => a.card_id === cardId);
-  const docs = all.filter((a) => !a.mime_type.startsWith("image/"));
-  const images = all
-    .filter((a) => a.mime_type.startsWith("image/"))
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  const links = data.reference_links.filter((l) => l.card_id === cardId);
-  const clipLinks = links.filter(isClipLink);
-  const otherLinks = links.filter((l) => !isClipLink(l));
-  /* ภาพ "บรีฟ/CI" คือของที่ต้องทำตาม · ที่เหลือคือเรฟ (ใช้เฉพาะงานภาพนิ่ง) */
-  const briefImages = images.filter((a) => a.attachment_type === "brief_image" || a.attachment_type === "brand_guideline");
-  const refImages = images.filter((a) => !briefImages.includes(a));
-
-  /* คลิปกับภาพนิ่งไม่ใช้ของอ้างอิงชุดเดียวกัน — แสดงคนละชุดไปเลย ไม่เอามาปนกัน
-     คลิป: ไฟล์บรีฟ → คลิปอ้างอิง (สำคัญสุด อยู่บน) → ภาพประกอบกองถ่าย 1 กล่อง → ลิงก์เอกสาร
-     ภาพนิ่ง: ไฟล์บรีฟ → ภาพบรีฟ/CI (ต้องทำตาม) → ภาพอ้างอิง (แนวทาง) → ลิงก์อ้างอิง */
-  if (isVideo) {
-    return (<div className="stack-lg">
-     <DocFiles cardId={cardId} items={docs} editable={editable}/>
-
-     <LinkList
-       cardId={cardId} items={clipLinks} editable={editable}
-       title="คลิปอ้างอิง" note="ลิงก์ TikTok / YouTube / Facebook ที่อ้าง pacing หรือวิธีเล่า — กดดูของจริงได้เลย"
-       defaultType="tiktok"/>
-
-     <ImageFiles
-       cardId={cardId} items={images} editable={editable} group="brief"
-       title="ภาพประกอบกองถ่าย"
-       note="สตอรี่บอร์ด · คีย์วิชวล · ภาพโลเคชัน — ของที่คนถ่ายต้องเห็นก่อนออกกอง"/>
-
-     <LinkList
-       cardId={cardId} items={otherLinks} editable={editable}
-       title="ลิงก์เอกสาร / CI" note="เพิ่มได้หลายรายการ"/>
-    </div>);
-  }
-
-  return (<div className="stack-lg">
-   <DocFiles cardId={cardId} items={docs} editable={editable}/>
-
-   <ImageFiles
-     cardId={cardId} items={briefImages} editable={editable} group="brief"
-     title="ภาพบรีฟ / CI"
-     note="ของที่ต้องทำตาม — เลย์เอาต์ที่สั่ง โลโก้ ตัวอย่างจาก CI"/>
-
-   <ImageFiles
-     cardId={cardId} items={refImages} editable={editable} group="ref"
-     title="ภาพอ้างอิง (Reference)"
-     note="ของที่อ้างเป็นแนวทาง — ต้องเขียนในช่อง Ref AW ด้วยว่าอ้างแง่ไหน ไม่ใช่ลอกทั้งภาพ"/>
-
-   <LinkList
-     cardId={cardId} items={links} editable={editable}
-     title="ลิงก์อ้างอิง" note="เพิ่มได้หลายรายการ"/>
+/** ทางเข้าเดียว: dropzone (ไฟล์+รูป) + แถบวางลิ้ง — ใช้ทั้งใน CardSheet และ IdeaModal */
+export function AttachEntry({ onFiles, onLink, compact = false }) {
+  const inputRef = useRef(null);
+  const [over, setOver] = useState(false);
+  const [url, setUrl] = useState("");
+  const [linkErr, setLinkErr] = useState(false);
+  const commitLink = () => {
+    const t = url.trim();
+    if (!t) return;
+    if (onLink(t)) { setUrl(""); setLinkErr(false); }
+    else setLinkErr(true);
+  };
+  const accept = [...IMAGE_EXT, ...DOC_EXT].map((e) => `.${e}`).join(",");
+  return (<div className={`attach-entry ${compact ? "compact" : ""}`}>
+   <div className={`dropzone ${over ? "over" : ""}`}
+    onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+    onDragLeave={() => setOver(false)}
+    onDrop={(e) => { e.preventDefault(); setOver(false); onFiles(e.dataTransfer.files); }}
+    onClick={() => inputRef.current?.click()}>
+    <Icon name="upload" size={compact ? 15 : 18}/>
+    <span>ลากรูปหรือไฟล์มาวาง หรือคลิกเลือก</span>
+    <input ref={inputRef} type="file" multiple hidden accept={accept}
+     onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }}/>
+   </div>
+   <div className={`attach-linkbar ${linkErr ? "invalid" : ""}`}>
+    <Icon name="link" size={14}/>
+    <input placeholder="หรือวางลิ้งตรงนี้ (Canva · Drive · TikTok …) แล้วกด Enter"
+     value={url}
+     onChange={(e) => { setUrl(e.target.value); setLinkErr(false); }}
+     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitLink(); } }}/>
+    <button type="button" className="btn ghost small" disabled={!url.trim()} onClick={commitLink}>
+     เพิ่มลิ้ง
+    </button>
+   </div>
+   {linkErr && <div className="field-error"><Icon name="alert" size={13}/> URL ไม่ถูกต้อง</div>}
   </div>);
 }
+
+/**
+ * หน้ากากแสดงของแนบทั้งหมดในกล่องเดียว — ไม่ผูก store
+ * live (CardSheet) กับ buffer (IdeaModal) ส่ง list + callbacks มาเอง
+ * actions: { files, link, moveImage?, updateAtt?, removeAtt, editLink?, removeLink }
+ */
+export function AttachSurface({ images, docs, links, editable, actions, errors = [], compact = false }) {
+  const [lightbox, setLightbox] = useState(null);
+  const empty = images.length === 0 && docs.length === 0 && links.length === 0;
+  return (<>
+   {editable && <AttachEntry onFiles={actions.files} onLink={actions.link} compact={compact}/>}
+
+   {errors.map((e) => (<div className="upload-error" key={e.name}>
+     <Icon name="alert" size={14}/>
+     <span><b>{e.name}</b> — {e.error}</span>
+    </div>))}
+
+   {empty && !editable && <EmptyRow text="ยังไม่มีของแนบ"/>}
+
+   {images.length > 0 && (<div className="img-grid">
+     {images.map((a, i) => {
+        const url = attachmentUrl(a);
+        return (<figure className="img-cell" key={a.id}>
+        <div className="img-frame">
+         <button className="img-thumb" onClick={() => url && setLightbox(a)} title={url ? "ดูภาพใหญ่" : "demo: ไม่มีไฟล์จริง"}>
+          {url ? <img src={url} alt={a.caption || a.file_name}/> : (<span className="img-placeholder"><Icon name="image" size={20}/></span>)}
+         </button>
+         {editable && (<div className="img-overlay">
+           {actions.moveImage && (<>
+            <button className="ov-btn" disabled={i === 0} onClick={() => actions.moveImage(a, -1)} title="เลื่อนซ้าย">
+             <Icon name="chevron" size={13} style={{ transform: "rotate(90deg)" }}/>
+            </button>
+            <button className="ov-btn" disabled={i === images.length - 1} onClick={() => actions.moveImage(a, 1)} title="เลื่อนขวา">
+             <Icon name="chevron" size={13} style={{ transform: "rotate(-90deg)" }}/>
+            </button>
+           </>)}
+           <button className="ov-btn danger" onClick={() => actions.removeAtt(a.id)} title="ลบรูป">
+            <Icon name="trash" size={13}/>
+           </button>
+          </div>)}
+        </div>
+        {!compact && actions.updateAtt && (
+         <MktSelect compact className="img-cat" value={a.attachment_type} disabled={!editable}
+          onChange={(v) => actions.updateAtt(a.id, { attachment_type: v })}
+          options={IMAGE_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}/>)}
+        {actions.updateAtt && (
+         <input className="img-caption" placeholder="อ้างแง่ไหน เช่น ชอบ layout แบบนี้" value={a.caption ?? ""} disabled={!editable}
+          onChange={(e) => actions.updateAtt(a.id, { caption: e.target.value })}/>)}
+       </figure>);
+      })}
+    </div>)}
+
+   {docs.length > 0 && (<div className="file-list">
+     {docs.map((a) => {
+        const url = attachmentUrl(a);
+        return (<div className="file-row" key={a.id}>
+        <span className="file-ext mono">{extOf(a.file_name) || "?"}</span>
+        <div className="file-main">
+         <div className="file-name">{a.file_name}</div>
+         <div className="file-meta">{formatBytes(a.file_size)} · {ATTACHMENT_TYPE_LABEL[a.attachment_type] ?? "ไฟล์"}</div>
+        </div>
+        <div className="file-acts">
+         {url ? (<>
+           <a className="icon-btn" href={url} target="_blank" rel="noreferrer" title="เปิด"><Icon name="external"/></a>
+           <a className="icon-btn" href={url} download={a.file_name} title="ดาวน์โหลด"><Icon name="download"/></a>
+          </>) : (<span className="file-note" title="demo: ไม่มีไฟล์จริง — เก็บเฉพาะข้อมูลไฟล์">metadata</span>)}
+         {editable && (<button className="icon-btn danger" onClick={() => actions.removeAtt(a.id)} title="ลบ"><Icon name="trash"/></button>)}
+        </div>
+       </div>);
+      })}
+    </div>)}
+
+   {links.length > 0 && (<div className="file-list">
+     {links.map((l) => (<div className="file-row" key={l.id}>
+       <span className="link-type">{LINK_TYPE_LABEL[l.link_type]}</span>
+       <div className="file-main">
+        <div className="file-name">{l.title || hostLabel(l.url)}</div>
+        <div className="file-meta"><span className="link-url">{l.url}</span>{l.note && <> · {l.note}</>}</div>
+       </div>
+       <div className="file-acts">
+        <a className="icon-btn" href={l.url} target="_blank" rel="noreferrer" title="เปิดลิงก์"><Icon name="external"/></a>
+        {editable && actions.editLink && (<button className="icon-btn" onClick={() => actions.editLink(l)} title="แก้ไข"><Icon name="pencil"/></button>)}
+        {editable && (<button className="icon-btn danger" onClick={() => actions.removeLink(l.id)} title="ลบ"><Icon name="trash"/></button>)}
+       </div>
+      </div>))}
+    </div>)}
+
+   {lightbox && (<div className="lightbox" onClick={() => setLightbox(null)}>
+     <img src={attachmentUrl(lightbox)} alt={lightbox.caption || lightbox.file_name}/>
+     <div className="lightbox-cap">{lightbox.caption || lightbox.file_name}</div>
+    </div>)}
+  </>);
+}
+
+/**
+ * กล่องแนบรวมแบบ live — ผูกกับการ์ดจริงผ่าน useApp
+ * ไม่รวมของที่มีบ้านของตัวเอง: งานจริง (ขั้น Draft) · แคปหลักฐาน (ขั้น 5-7) · รูปในโน้ต
+ * @param {"image"|"video"|""} format — เปลี่ยนแค่คำแนะนำ ไม่เปลี่ยนโครง
+ */
+export function AttachBox({ cardId, editable, format = "image", title = "ของแนบ (รูป · ไฟล์ · ลิ้ง)" }) {
+  const { data, currentUser, addAttachments, updateAttachment, removeAttachment, upsertLink, removeLink } = useApp();
+  const [errors, setErrors] = useState([]);
+  const [editingLink, setEditingLink] = useState(null);
+  const OWN_HOME = ["draft_work", "schedule_proof", "live_proof", "insight_proof", "note_image"];
+  const all = data.attachments.filter((a) => a.card_id === cardId && !OWN_HOME.includes(a.attachment_type));
+  const images = all.filter((a) => a.mime_type.startsWith("image/"))
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const docs = all.filter((a) => !a.mime_type.startsWith("image/"));
+  const links = data.reference_links.filter((l) => l.card_id === cardId);
+
+  const onFiles = (files) => {
+    if (!files?.length) return;
+    const ok = [], bad = [];
+    let order = images.length;
+    for (const f of Array.from(files)) {
+      const r = makeAttachment(f, cardId, currentUser.id, order);
+      if (r.ok) { ok.push(r.item); order++; }
+      else bad.push(r);
+    }
+    if (ok.length) addAttachments(ok);
+    setErrors(bad);
+  };
+  const onLink = (url) => {
+    const l = makeLink(url, cardId, currentUser.id);
+    if (!l) return false;
+    upsertLink(l);
+    return true;
+  };
+  const moveImage = (a, dir) => {
+    const idx = images.findIndex((x) => x.id === a.id);
+    const swap = images[idx + dir];
+    if (!swap) return;
+    updateAttachment(a.id, { sort_order: swap.sort_order ?? idx + dir });
+    updateAttachment(swap.id, { sort_order: a.sort_order ?? idx });
+  };
+  return (<section className="attach-box">
+   <SectionLabel icon="paperclip" title={title}
+    hint={format === "video" ? "คลิปอ้างอิงวางเป็นลิ้ง TikTok/YouTube ได้เลย" : "โยนใส่ช่องเดียวจบ — ระบบแยกชนิดให้เอง"}/>
+   <div className="sec-note">
+    รูปที่อ้างเป็นแนวทาง ใส่คำอธิบายใต้รูปว่าอ้างแง่ไหน (layout / สี / pacing) — นับผ่านเงื่อนไข Ref ให้เลย
+   </div>
+   <AttachSurface images={images} docs={docs} links={links} editable={editable} errors={errors}
+    actions={{ files: onFiles, link: onLink, moveImage, updateAtt: updateAttachment,
+      removeAtt: removeAttachment, editLink: setEditingLink, removeLink }}/>
+   {editingLink && (<LinkForm value={editingLink} onChange={setEditingLink}
+     onSave={() => { upsertLink(editingLink); setEditingLink(null); }}
+     onCancel={() => setEditingLink(null)}/>)}
+  </section>);
+}
+
 
 /**
  * แคปหน้าจอหลักฐานของ "ช่องทางหนึ่ง ในขั้นหนึ่ง"
@@ -169,87 +311,6 @@ export function RunProof({ cardId, channel, type, label, editable }) {
   </div>);
 }
 
-/* ================= 1. ไฟล์บรีฟ ================= */
-function DocFiles({ cardId, items, editable, }) {
-  const { data, currentUser, addAttachments, removeAttachment } = useApp();
-  const inputRef = useRef(null);
-  const [errors, setErrors] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const onPick = (files) => {
-    if (!files?.length)
-      return;
-    setBusy(true);
-    const okItems = [];
-    const bad = [];
-    for (const f of Array.from(files)) {
-      const check = checkFile(f, "doc");
-      if (!check.ok) {
-        bad.push({ name: f.name, error: check.error });
-        continue;
-      }
-      const id = genId("att");
-      blobUrls.set(id, URL.createObjectURL(f));
-      okItems.push({
-        id, card_id: cardId, attachment_type: "brief_file",
-        file_name: f.name, file_url: "", mime_type: f.type || `application/${extOf(f.name)}`,
-        file_size: f.size, uploaded_by: currentUser.id, created_at: nowISO(),
-      });
-    }
-    if (okItems.length)
-      addAttachments(okItems);
-    setErrors(bad);
-    setBusy(false);
-    if (inputRef.current)
-      inputRef.current.value = "";
-  };
-  return (<section>
-   <SectionLabel icon="file" title="ไฟล์บรีฟ" hint={DOC_EXT.join(", ").toUpperCase()}/>
-
-   {items.length === 0 ? (<EmptyRow text="ยังไม่มีไฟล์แนบ"/>) : (<div className="file-list">
-     {items.map((a) => {
-        const uploader = profileOf(data, a.uploaded_by);
-        const url = blobUrls.get(a.id) || a.file_url;
-        return (<div className="file-row" key={a.id}>
-        <span className="file-ext mono">{extOf(a.file_name) || "?"}</span>
-        <div className="file-main">
-         <div className="file-name">{a.file_name}</div>
-         <div className="file-meta">
-          {formatBytes(a.file_size)} · {ATTACHMENT_TYPE_LABEL[a.attachment_type]} ·{" "}
-          {fmtThaiShort(a.created_at)} · {uploader?.display_name ?? "—"}
-         </div>
-        </div>
-        <div className="file-acts">
-         {url ? (<>
-           <a className="icon-btn" href={url} target="_blank" rel="noreferrer" title="เปิด">
-            <Icon name="external"/>
-           </a>
-           <a className="icon-btn" href={url} download={a.file_name} title="ดาวน์โหลด">
-            <Icon name="download"/>
-           </a>
-          </>) : (<span className="file-note" title="demo: ไม่มีไฟล์จริง — เก็บเฉพาะข้อมูลไฟล์">
-           metadata
-          </span>)}
-         {editable && (<button className="icon-btn danger" onClick={() => removeAttachment(a.id)} title="ลบ">
-           <Icon name="trash"/>
-          </button>)}
-        </div>
-       </div>);
-      })}
-    </div>)}
-
-   {errors.map((e) => (<div className="upload-error" key={e.name}>
-     <Icon name="alert" size={14}/>
-     <span><b>{e.name}</b> — {e.error}</span>
-    </div>))}
-
-   {editable && (<>
-     <button className="btn ghost small" disabled={busy} onClick={() => inputRef.current?.click()}>
-      <Icon name="upload"/> {busy ? "กำลังอัปโหลด…" : "เพิ่มไฟล์"}
-     </button>
-     <input ref={inputRef} type="file" multiple hidden accept={DOC_EXT.map((e) => `.${e}`).join(",")} onChange={(e) => onPick(e.target.files)}/>
-    </>)}
-  </section>);
-}
 /* ================= 2. รูปบรีฟ / Reference ================= */
 export function ImageFiles({ cardId, items, editable, group, title, note }) {
   const { currentUser, addAttachments, updateAttachment, removeAttachment } = useApp();
@@ -344,55 +405,6 @@ export function ImageFiles({ cardId, items, editable, group, title, note }) {
      <img src={blobUrls.get(lightbox.id)} alt={lightbox.caption || lightbox.file_name}/>
      <div className="lightbox-cap">{lightbox.caption || lightbox.file_name}</div>
     </div>)}
-  </section>);
-}
-/* ================= 3. ลิงก์อ้างอิง ================= */
-function LinkList({ cardId, items, editable, title = "ลิงก์อ้างอิง", note, defaultType = "website" }) {
-  const { currentUser, upsertLink, removeLink } = useApp();
-  const [editing, setEditing] = useState(null);
-  const [adding, setAdding] = useState(false);
-  const blank = () => ({
-    id: genId("lnk"), card_id: cardId, title: "", url: "",
-    link_type: defaultType, note: "", created_by: currentUser.id, created_at: nowISO(),
-  });
-  return (<section>
-   <SectionLabel icon={defaultType === "tiktok" ? "video" : "link"} title={title} hint="เพิ่มได้หลายรายการ"/>
-   {note && <div className="sec-note">{note}</div>}
-
-   {items.length === 0 && !adding && <EmptyRow text={defaultType === "tiktok" ? "ยังไม่มีคลิปอ้างอิง" : "ยังไม่มีลิงก์"}/>}
-
-   <div className="file-list">
-    {items.map((l) => editing?.id === l.id ? (<LinkForm key={l.id} value={editing} onChange={setEditing} onSave={() => { upsertLink(editing); setEditing(null); }} onCancel={() => setEditing(null)}/>) : (<div className="file-row" key={l.id}>
-       <span className="link-type">{LINK_TYPE_LABEL[l.link_type]}</span>
-       <div className="file-main">
-        <div className="file-name">{l.title || hostLabel(l.url)}</div>
-        <div className="file-meta">
-         <span className="link-url">{l.url}</span>
-         {l.note && <> · {l.note}</>}
-        </div>
-       </div>
-       <div className="file-acts">
-        <a className="icon-btn" href={l.url} target="_blank" rel="noreferrer" title="เปิดลิงก์">
-         <Icon name="external"/>
-        </a>
-        {editable && (<>
-          <button className="icon-btn" onClick={() => setEditing(l)} title="แก้ไข">
-           <Icon name="pencil"/>
-          </button>
-          <button className="icon-btn danger" onClick={() => removeLink(l.id)} title="ลบ">
-           <Icon name="trash"/>
-          </button>
-         </>)}
-       </div>
-      </div>))}
-   </div>
-
-   {adding && (<LinkForm value={editing ?? blank()} onChange={setEditing} onSave={() => { if (editing)
-      upsertLink(editing); setEditing(null); setAdding(false); }} onCancel={() => { setEditing(null); setAdding(false); }}/>)}
-
-   {editable && !adding && (<button className="btn ghost small" onClick={() => { setEditing(blank()); setAdding(true); }}>
-     <Icon name="plus"/> เพิ่มลิงก์
-    </button>)}
   </section>);
 }
 function LinkForm({ value, onChange, onSave, onCancel, }) {

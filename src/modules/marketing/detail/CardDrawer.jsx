@@ -13,7 +13,7 @@ import { Sheet, Field, SheetActions } from "./Sheet.jsx";
 import { Icon } from "../mktIcon.jsx";
 import { InfoButton } from "../mktInfoButton.jsx";
 import { RejectModal } from "./RejectDialog.jsx";
-import { Attachments, RunProof, ImageFiles } from "./Attachments.jsx";
+import { AttachBox, RunProof, ImageFiles } from "./Attachments.jsx";
 import { NotesPanel } from "./NotesPanel.jsx";
 import { MktSelect } from "../mktSelect.jsx";
 /**
@@ -67,15 +67,17 @@ function fmtClock(iso) {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 const SEC_STAGE = {
-  idea: "idea", part1: "brief", part2: "brief", draft: "draft",
+  idea: "idea", brief: "brief", draft: "draft",
   scheduled: "scheduled", published: "published", measured: "measured",
 };
 /** ช่องผิด → อยู่กลุ่มไหน (ใช้กางกลุ่มที่พับอยู่ตอนกรอกไม่ครบ) */
 const FIELD_SEC = {
-  who_action: "part1", hook: "part1", key_message: "part1", cta: "part1", fact_checked: "part1",
-  format: "part2", size: "part2", deadline_review: "part2", channels: "part2",
-  publish_at: "part2", layout_note: "part2", mood: "part2", ref_note: "part2", ci_link: "part2",
+  who_action: "brief", hook: "brief", key_message: "brief", cta: "brief", fact_checked: "brief",
+  format: "brief", size: "brief", deadline_review: "brief", channels: "brief",
+  publish_at: "brief", layout_note: "brief", mood: "brief", ref_note: "brief", ci_link: "brief",
 };
+/** ช่องรองของบรีฟ — พับเก็บใน "รายละเอียดงานดีไซน์" กางเองเมื่อมีช่องผิด */
+const MORE_FIELDS = ["mood", "layout_note", "ref_note", "ci_link"];
 /* ตัวเลือกชนิดชิ้นงาน + ภาพประกอบ SVG — ให้คนบรีฟเห็นความต่างทันทีว่าได้อะไร
    art ใช้ currentColor ล้วน (ตามธีม) · apply = ค่าที่เซ็ตให้ brief พร้อมล้างข้อมูลแบบอื่น */
 const CLEAR_VIDEO = { video_seconds: null, video_subtitle: false, video_scenes: [] };
@@ -136,6 +138,7 @@ export function CardSheet({ card, onClose }) {
   const [submitted, setSubmitted] = useState(false);
   const [scrollTo, setScrollTo] = useState(null);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const formRef = useRef(null);
   const workingCard = {
     ...card, brief, self_check: selfCheck, draft_link: draftLink, title, pillar,
@@ -592,6 +595,12 @@ export function CardSheet({ card, onClose }) {
 
      {/* ---- ขั้น Idea — Owner ยืนยันว่าคุ้มทำ (ไม่ผ่านอัตโนมัติ) ---- */}
      {visible("idea") && (<StageSection sec="idea" phase={phase("idea")} open={openSecs.includes("idea")} onToggle={() => toggleSec("idea")} title="ขั้น Idea — คุ้มทำหรือไม่" summary={ideaSummary} ok={ideaOk}>
+       {/* ของแนบขึ้นก่อน — กดการ์ดมาเห็นรูป/ลิ้งที่โยนไว้ทันที เพิ่ม/แก้ได้เลย
+           พอเข้าขั้น Brief กล่องนี้ย้ายไปอยู่ใน flow บรีฟแทน (ที่เดียว ไม่โชว์ซ้ำ) */}
+       {phase("idea") === "now" && (
+        <AttachBox cardId={card.id} editable={editable} format={b.format}
+         title="รูป / ลิ้งอ้างอิงของไอเดีย"/>)}
+
        <div data-field="plan_confirmed" className="ff">
         <label className={`fact-card ${planConfirmed ? "on" : ""}`} onClick={() => editable && setPlanConfirmed(!planConfirmed)}>
          <span className="cbox">✓</span>
@@ -615,46 +624,12 @@ export function CardSheet({ card, onClose }) {
 
      {/* Pillar ไม่ซ้ำที่นี่ — แก้ได้ที่แผง "ข้อมูลงาน" ฝั่งซ้าย */}
 
-     {/* ---- ส่วนที่ 1 — โจทย์ (ขั้น Brief) ---- */}
-     {visible("part1") && (<StageSection sec="part1" phase={phase("part1")} open={openSecs.includes("part1")} onToggle={() => toggleSec("part1")} title="ส่วนที่ 1 — โจทย์" summary={secMissing("part1") === 0 ? "ครบ" : `ยังขาด ${secMissing("part1")} ข้อ`} ok={secMissing("part1") === 0}>
-
-     <FormField name="who_action" label="ใคร → ให้ทำอะไร" required error={errors.who_action} hint="กลุ่มเป้าหมาย และ action เดียวที่อยากให้เกิดหลังเห็น">
-      <textarea rows={2} className={errors.who_action ? "invalid" : ""} placeholder="ตัวอย่าง: เจ้าของธุรกิจ → ให้สมัครทดลองใช้ระบบ" value={b.who_action} disabled={!editable} onChange={(e) => setBrief({ ...b, who_action: e.target.value })}/>
-     </FormField>
-
-     <FormField name="hook" label="Hook" required error={errors.hook}>
-      <textarea rows={2} className={errors.hook ? "invalid" : ""} placeholder="ประโยคเปิดที่ต้องดึงความสนใจ" value={b.hook} disabled={!editable} onChange={(e) => setBrief({ ...b, hook: e.target.value })}/>
-     </FormField>
-
-     <FormField name="key_message" label="Key Message" required error={errors.key_message}>
-      <textarea rows={2} className={errors.key_message ? "invalid" : ""} placeholder="สารหลักที่ต้องการให้คนจดจำ" value={b.key_message} disabled={!editable} onChange={(e) => setBrief({ ...b, key_message: e.target.value })}/>
-     </FormField>
-
-     <FormField name="cta" label="CTA" required error={errors.cta}>
-      <input className={`field ${errors.cta ? "invalid" : ""}`} placeholder="ตัวอย่าง: สมัครเลย / ทักแชท / ดูรายละเอียด" value={b.cta} disabled={!editable} onChange={(e) => setBrief({ ...b, cta: e.target.value })}/>
-     </FormField>
-
-     <div data-field="fact_checked">
-      <label className={`fact-card ${b.fact_checked ? "on" : ""} ${errors.fact_checked ? "invalid" : ""}`} onClick={() => editable && setBrief({ ...b, fact_checked: !b.fact_checked })}>
-       <span className="cbox">✓</span>
-       <span>
-        ตรวจสอบตัวเลขและ Claim กับ Fact Sheet แล้ว
-        <span className="fact-sub">ต้องตรวจก่อนส่งเข้า {stages[curIdx + 1]?.name ?? "ขั้นถัดไป"}</span>
-       </span>
-      </label>
-      {errors.fact_checked && <div className="field-error"><Icon name="alert" size={13}/> {errors.fact_checked}</div>}
-     </div>
-
-     </StageSection>)}
-
-     {/* ---- ส่วนที่ 2 — ผลิต (โครงเดิมของ GRAPHIC BRIEF) ---- */}
-     {visible("part2") && (<StageSection sec="part2" phase={phase("part2")} open={openSecs.includes("part2")} onToggle={() => toggleSec("part2")} title="ส่วนที่ 2 — ผลิต" summary={secMissing("part2") === 0 ? "ครบ" : `ยังขาด ${secMissing("part2")} ข้อ`} ok={secMissing("part2") === 0}>
+     {/* ---- ขั้น Brief — flow เดียวตามลำดับคิดงาน: ชนิด → โจทย์ → สเปก → ส่ง → แนบ (+เพิ่มเติม) ---- */}
+     {visible("brief") && (<StageSection sec="brief" phase={phase("brief")} open={openSecs.includes("brief")} onToggle={() => toggleSec("brief")} title="ขั้น Brief — บรีฟงาน" summary={secMissing("brief") === 0 ? "ครบ" : `ยังขาด ${secMissing("brief")} ข้อ`} ok={secMissing("brief") === 0}>
      <div className="field-hint" style={{ marginBottom: 14 }}>
       Name / Pillar อยู่แผงข้อมูลงานฝั่งซ้าย
      </div>
 
-     {/* เลือกชนิดชิ้นงานด้วยการ์ดที่มีภาพประกอบ — เห็นความต่าง ภาพเดี่ยว/ชุด/คลิป ทันที
-         กดแล้วตั้ง format + aw_type ให้พร้อมกัน แล้วล้างข้อมูลของแบบอื่นทิ้ง (ไม่ถามซ้ำ ไม่ถามของที่ไม่เกี่ยว) */}
      <FormField name="format" label="ชนิดชิ้นงาน" required error={errors.format}
       hint="เลือกแล้วช่องด้านล่างจะเปลี่ยนตามชนิดที่เลือก">
       <div className="kindpick">
@@ -670,6 +645,34 @@ export function CardSheet({ card, onClose }) {
       </div>
      </FormField>
 
+     <div className="bflow-h">โจทย์ — งานนี้พูดกับใคร บอกอะไร</div>
+     <FormField name="who_action" label="ใคร → ให้ทำอะไร" required error={errors.who_action} hint="กลุ่มเป้าหมาย และ action เดียวที่อยากให้เกิดหลังเห็น">
+      <textarea rows={2} className={errors.who_action ? "invalid" : ""} placeholder="ตัวอย่าง: เจ้าของธุรกิจ → ให้สมัครทดลองใช้ระบบ" value={b.who_action} disabled={!editable} onChange={(e) => setBrief({ ...b, who_action: e.target.value })}/>
+     </FormField>
+
+     <FormField name="hook" label="Hook" required error={errors.hook}>
+      <textarea rows={2} className={errors.hook ? "invalid" : ""} placeholder="ประโยคเปิดที่ต้องดึงความสนใจ" value={b.hook} disabled={!editable} onChange={(e) => setBrief({ ...b, hook: e.target.value })}/>
+     </FormField>
+
+     <FormField name="key_message" label="Key Message" required error={errors.key_message}>
+      <textarea rows={2} className={errors.key_message ? "invalid" : ""} placeholder="สารหลักที่ต้องการให้คนจดจำ" value={b.key_message} disabled={!editable} onChange={(e) => setBrief({ ...b, key_message: e.target.value })}/>
+     </FormField>
+
+     <FormField name="cta" label="CTA" required error={errors.cta}>
+      <input className={`field ${errors.cta ? "invalid" : ""}`} placeholder="ตัวอย่าง: สมัครเลย / ทักแชท / ดูรายละเอียด" value={b.cta} disabled={!editable} onChange={(e) => setBrief({ ...b, cta: e.target.value })}/>
+     </FormField>
+     <div data-field="fact_checked">
+      <label className={`fact-card ${b.fact_checked ? "on" : ""} ${errors.fact_checked ? "invalid" : ""}`} onClick={() => editable && setBrief({ ...b, fact_checked: !b.fact_checked })}>
+       <span className="cbox">✓</span>
+       <span>
+        ตรวจสอบตัวเลขและ Claim กับ Fact Sheet แล้ว
+        <span className="fact-sub">ต้องตรวจก่อนส่งเข้า {stages[curIdx + 1]?.name ?? "ขั้นถัดไป"}</span>
+       </span>
+      </label>
+      {errors.fact_checked && <div className="field-error"><Icon name="alert" size={13}/> {errors.fact_checked}</div>}
+     </div>
+
+     <div className="bflow-h">สเปกชิ้นงาน</div>
      {/* ---- ภาพนิ่งเดี่ยว: ขนาดภาพเดียวจบ ---- */}
      {b.format === "image" && b.aw_type !== "album" && (
       <FormField name="size" label="ขนาดภาพ" required error={errors.size} hint="เลือกจากที่ตั้งไว้ หรือกรอก pixel เอง">
@@ -782,6 +785,7 @@ export function CardSheet({ card, onClose }) {
        </FormField>
       </div>)}
 
+     <div className="bflow-h">ส่งเมื่อไหร่ · ลงช่องไหน</div>
      <FormField name="deadline_review" label="Deadline ส่งตรวจ" required error={errors.deadline_review}>
       <input className={`field ${errors.deadline_review ? "invalid" : ""}`} type="date" value={b.deadline_review ?? ""} disabled={!editable} onChange={(e) => setBrief({ ...b, deadline_review: e.target.value || null })}/>
      </FormField>
@@ -809,25 +813,34 @@ export function CardSheet({ card, onClose }) {
       <input className={`field ${errors.publish_at ? "invalid" : ""}`} type="datetime-local" value={toLocalInput(b.publish_at)} disabled={!editable} onChange={(e) => setBrief({ ...b, publish_at: e.target.value ? new Date(e.target.value).toISOString() : null })}/>
      </FormField>
 
-     {b.format !== "video" && (<FormField name="layout_note" label={b.aw_type === "album" ? "Layout ร่วมทุกภาพ" : "Layout sketch"} required error={errors.layout_note}
+     <div className="bflow-h">ของแนบ</div>
+     <AttachBox cardId={card.id} editable={editable} format={b.format}/>
+
+     {/* ช่องรองพับเก็บ — กางเองถ้ามีช่องผิดตอนกดไปขั้นถัดไป · แนบรูปมีคำอธิบาย/ลิ้งแล้ว Ref–CI ผ่านเอง */}
+     <div className="bflow-more">
+      <button type="button" className="bflow-more-head" onClick={() => setMoreOpen((o) => !o)}>
+       <Icon name="chevron" size={13} style={{ transform: (moreOpen || MORE_FIELDS.some((f) => errors[f])) ? "rotate(180deg)" : "none" }}/>
+       รายละเอียดงานดีไซน์ — Mood · Layout · Ref · CI
+       {MORE_FIELDS.filter((f) => strictErrs[f]).length > 0
+         ? <span className="bflow-more-miss">ยังขาด {MORE_FIELDS.filter((f) => strictErrs[f]).length}</span>
+         : <span className="bflow-more-ok">ครบ</span>}
+      </button>
+      {(moreOpen || MORE_FIELDS.some((f) => errors[f])) && (<div className="bflow-more-body">
+       <FormField name="mood" label="Mood" required error={errors.mood} hint="อารมณ์/โทนภาพ เช่น จริงใจ อบอุ่น">
+      <input className={`field ${errors.mood ? "invalid" : ""}`} placeholder="เช่น จริงใจ อบอุ่น / คมชัด มืออาชีพ" value={b.mood} disabled={!editable} onChange={(e) => setBrief({ ...b, mood: e.target.value })}/>
+     </FormField>
+       {b.format !== "video" && (<FormField name="layout_note" label={b.aw_type === "album" ? "Layout ร่วมทุกภาพ" : "Layout sketch"} required error={errors.layout_note}
       hint={b.aw_type === "album" ? "องค์ประกอบที่ใช้ร่วมกันทุกภาพ — กรอบ/ตำแหน่งโลโก้/ที่วางตัวเลข" : "วางองค์ประกอบคร่าวๆ — อะไรอยู่ตรงไหน คนเห็นอะไรก่อน"}>
       <textarea rows={2} className={errors.layout_note ? "invalid" : ""} placeholder="เช่น ตัวเลขใหญ่กลางภาพ · โลโก้มุมล่างขวา · CTA แถบล่าง" value={b.layout_note} disabled={!editable} onChange={(e) => setBrief({ ...b, layout_note: e.target.value })}/>
      </FormField>)}
-
-     <FormField name="mood" label="Mood" required error={errors.mood} hint="อารมณ์/โทนภาพ เช่น จริงใจ อบอุ่น">
-      <input className={`field ${errors.mood ? "invalid" : ""}`} placeholder="เช่น จริงใจ อบอุ่น / คมชัด มืออาชีพ" value={b.mood} disabled={!editable} onChange={(e) => setBrief({ ...b, mood: e.target.value })}/>
-     </FormField>
-
-     <FormField name="ref_note" label="Ref AW — ระบุว่าอ้างอิงแง่ไหน" required error={errors.ref_note} hint="แนบรูป ref ด้านล่างก็ได้ แต่ต้องใส่คำอธิบายว่าอ้างแง่ไหน (layout / สี / pacing) — ไม่ใช่ลอกทั้งภาพ">
+       <FormField name="ref_note" label="Ref AW — ระบุว่าอ้างอิงแง่ไหน" required error={errors.ref_note} hint="แนบรูป ref ด้านล่างก็ได้ แต่ต้องใส่คำอธิบายว่าอ้างแง่ไหน (layout / สี / pacing) — ไม่ใช่ลอกทั้งภาพ">
       <textarea rows={2} className={errors.ref_note ? "invalid" : ""} placeholder="เช่น อ้าง pacing ของคลิปนี้ ไม่เอาโทนสี" value={b.ref_note} disabled={!editable} onChange={(e) => setBrief({ ...b, ref_note: e.target.value })}/>
      </FormField>
-
-     <FormField name="ci_link" label="ลิงก์ CI" required error={errors.ci_link} hint="ลิงก์ CI / Brand Guideline — หรือแนบไฟล์ Brand Guideline ด้านล่าง">
+       <FormField name="ci_link" label="ลิงก์ CI" required error={errors.ci_link} hint="ลิงก์ CI / Brand Guideline — หรือแนบไฟล์ Brand Guideline ด้านล่าง">
       <input className={`field ${errors.ci_link ? "invalid" : ""}`} placeholder="https://…" value={b.ci_link} disabled={!editable} onChange={(e) => setBrief({ ...b, ci_link: e.target.value })}/>
      </FormField>
-
-     {/* ไฟล์แนบ = วัสดุของ Layout sketch / Ref AW / ลิงก์ CI → อยู่ใน ส่วนที่ 2 ที่เดียว */}
-     <Attachments cardId={card.id} editable={editable} format={b.format}/>
+      </div>)}
+     </div>
 
      </StageSection>)}
 
