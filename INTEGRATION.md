@@ -76,6 +76,11 @@ const MarketingModule = lazy(() => import("../modules/marketing/MarketingModule.
   จะบังคับ reset localStorage ทุกเครื่อง demo
 - ไฟล์แนบเดโมเป็น **object URL ราย session** — refresh แล้วรูปหาย เหลือ metadata
   (ของจริงอัปเข้า bucket แล้วเก็บ `file_url` — จุดอ่านจุดเดียวคือ `attachmentUrl()` ใน `detail/Attachments.jsx`)
+  ครอบคลุมของแนบทุกทาง รวมที่แนบจาก IdeaModal (พักใน state แล้วผูก `card_id` ตอน submit)
+  และ cover การ์ดที่คำนวณจากรูปแนบ — ตกลงยอมรับไว้ก่อน ต่อ Supabase Storage แล้วหายเอง
+- **จุดแนบมีจุดเดียวคือ `AttachBox`** (`detail/Attachments.jsx`) — รับรูป/ไฟล์/ลิ้งช่องเดียว
+  detect ชนิดเอง แล้วแยกเก็บ `attachments` / `reference_links` ตาม schema เดิม
+  ห้ามสร้างกล่องอัปโหลดแยกรายชนิดอีก (ยกเว้นของที่มีบ้านตัวเอง: งานจริงขั้น Draft · แคปหลักฐาน · รูปโน้ต)
 
 ## seam ข้อมูล — จุดเดียวที่สลับเป็น Supabase
 

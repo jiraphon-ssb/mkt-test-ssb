@@ -242,7 +242,7 @@
   /* รูปหน้าปก — เต็มกว้าง สูงไม่เกิน 1:1 เกินแล้วครอบตัด ไม่บีบภาพ */
   .wcard-cover {
     margin: -11px -13px 10px; overflow: hidden; background: var(--surface-2);
-    border-radius: 9px 9px 0 0; line-height: 0; aspect-ratio: 16 / 10;
+    border-radius: 9px 9px 0 0; line-height: 0; aspect-ratio: 2 / 1;
   }
   .wcard-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
   /* ไม่มีรูป (เฉพาะกริดที่ขอ coverFallback) — พื้นโทนแบรนด์จางๆ + ไอคอนชนิดงาน + ป้ายบอก
@@ -257,11 +257,13 @@
 
   /* identity บรรทัดบาง — จุดสีแบรนด์ + ชื่อ + pillar จาง (ไม่ใช่ pill สีเต็ม 3 อัน) */
   .wcard-id {
-    display: flex; align-items: center; gap: 6px; min-width: 0;
-    font-size: var(--fs-xs); margin-bottom: 5px;
+    display: flex; align-items: center; gap: 7px; min-width: 0;
+    font-size: var(--fs-xs); margin-bottom: 7px;
   }
-  .wcard-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .wcard-id b { font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+  .wcard-brand-chip {
+    flex-shrink: 0; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .02em;
+    padding: 2px 8px; border-radius: 99px; white-space: nowrap; line-height: 1.5;
+  }
   .wcard-pillar { color: var(--ink-faint); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wcard-rt-chip {
     margin-left: auto; flex-shrink: 0;
@@ -272,21 +274,30 @@
   }
 
   /* ชื่องานเด่นสุด — จุดโฟกัสของสายตา */
-  .wcard-title { font-weight: 600; font-size: var(--fs-md); line-height: 1.4; margin-bottom: 6px; overflow-wrap: break-word; }
+  /* .wcard นำหน้าเพื่อชนะ .stat-section h3 — การ์ดวางใน Panel แล้วโดน h3 กลางทับขนาด */
+  .wcard .wcard-title {
+    font-weight: 700; font-size: var(--fs-lg); line-height: 1.35; letter-spacing: -.01em;
+    margin-bottom: 7px; overflow-wrap: break-word;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
 
   /* meta — ก้อนละเรื่อง icon นำ (ผู้ดูแล / ชนิดงาน / เวลา) กวาดตารู้เลยว่าอะไรคืออะไร */
   .wcard-meta {
-    display: flex; flex-wrap: wrap; align-items: center;
-    column-gap: 11px; row-gap: 4px;
+    display: flex; flex-wrap: nowrap; align-items: center; overflow: hidden;
+    column-gap: 11px;
     font-size: var(--fs-xs); color: var(--ink-soft); line-height: 1.5;
   }
+  .wcard-meta .wmeta-item:first-child { flex-shrink: 0; }
   .wmeta-item { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; min-width: 0; }
   .wmeta-item svg { color: var(--ink-faint); }
   .wcard-warn-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--warn); margin-left: 4px; vertical-align: 2px; }
   .wmeta-reject-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--bad); margin-left: 3px; vertical-align: 2px; }
 
   /* บรรทัดสถานะ — ชิปเตือน/SLA + แถบความพร้อม + ปุ่ม รวมโซนเดียวท้ายการ์ด */
-  .wcard-status { display: flex; flex-direction: column; gap: 7px; margin-top: 9px; }
+  .wcard-status {
+    display: flex; flex-direction: column; gap: 7px; margin-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent); padding-top: 8px;
+  }
   .wcard-chips { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
   .wchip { font-size: var(--fs-xs); font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
   .wchip.bad   { background: var(--bad-soft); color: var(--bad); }
@@ -294,9 +305,9 @@
   .wchip.ok    { background: var(--ok-soft); color: var(--ok); }
   .wchip.plain { background: var(--surface-2); color: var(--ink-soft); font-weight: 600; }
   .wcard-prog { display: flex; align-items: center; gap: 8px; }
-  .wcard-bar { flex: 1; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .wcard-bar { flex: 1; height: 4px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
   .wcard-bar i { display: block; height: 100%; border-radius: 99px; transition: width .3s; }
-  .wcard-cap { font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
+  .wcard-cap { font-size: var(--fs-2xs); font-weight: 600; white-space: nowrap; }
   .wcard-foot { display: flex; align-items: center; gap: 8px; }
   .wcard-foot .rq-go { flex: 1; justify-content: center; }
   /* ในกริด (รอตรวจ/คลัง) การ์ดต้องสูงเท่ากันทั้งแถว — status ชิดล่างเสมอ */
@@ -1997,7 +2008,7 @@
   .wl-brand { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--ink-soft); min-width: 0; }
   .wl-brand i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .wl-brand { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .wl-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .wl-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; letter-spacing: -.01em; }
   .wl-stage {
     font-size: var(--fs-xs); font-weight: 600; color: var(--ink-soft);
     display: inline-flex; align-items: center; gap: 5px;

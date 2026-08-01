@@ -28,9 +28,11 @@ export function WorkIdentity({ card }) {
   const pillar = card.track === "project" ? "Project" : card.pillar ? PILLAR_LABEL[card.pillar] : "รอระบุ Pillar";
   return (
     <div className="wcard-id">
-     <i className="wcard-dot" style={{ background: brand.color }}/>
-     <b style={{ color: brand.color }}>{brand.name}</b>
-     <span className="wcard-pillar">· {pillar}</span>
+     {/* text-first: แบรนด์เป็นชิป tint เล็กๆ — spine ซ้ายยังบอกสีแบรนด์อยู่แล้ว ไม่ต้องตะโกนซ้ำ */}
+     <span className="wcard-brand-chip" style={{ color: brand.color, background: `color-mix(in srgb, ${brand.color} 13%, transparent)` }}>
+      {brand.name}
+     </span>
+     <span className="wcard-pillar">{pillar}</span>
      {card.is_realtime && <span className="wcard-rt-chip">เรียลไทม์</span>}
     </div>
   );
