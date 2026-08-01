@@ -12,8 +12,7 @@
 import { InfoButton } from "./mktInfoButton.jsx";
 import { Icon } from "./mktIcon.jsx";
 import { useApp } from "./useMkt.jsx";
-import { brandOf, profileOf, coverImage, typeText, typeIcon, typeIncomplete, fmtThai, fmtThaiDateTime } from "./mktParts.jsx";
-import { PILLAR_LABEL } from "./mktEngine.js";
+import { brandOf, profileOf, coverImage, typeIcon, fmtThai, fmtThaiDateTime } from "./mktParts.jsx";
 import { attachmentUrl } from "./detail/Attachments.jsx";
 
 /* ── ชิ้นส่วน reusable ของการ์ดงาน — ประกอบเอง/ยกไปใช้ที่อื่นได้ ──────────────
@@ -21,19 +20,16 @@ import { attachmentUrl } from "./detail/Attachments.jsx";
    <WorkMeta>     = บรรทัดข้อมูล icon นำ อ่านกวาดตาได้: ผู้ดูแล · ชนิดงาน · เวลา
    ปฏิทิน (DayPanel) ก็ใช้สองตัวนี้ — ภาษาเดียวกันทุกจอ */
 
-/** บรรทัดแบรนด์ของการ์ด — ใช้ได้ทุกที่ที่ต้องบอกว่า "งานของใคร สายไหน" */
+/** บรรทัดแบรนด์ของการ์ด — ชิป tint เดียวจบ
+   pillar/เรียลไทม์ ย้ายไปอยู่ใน popup — บนการ์ด realtime เหลือ spine amber บอกอยู่แล้ว */
 export function WorkIdentity({ card }) {
   const { data } = useApp();
   const brand = brandOf(data, card.brand_id);
-  const pillar = card.track === "project" ? "Project" : card.pillar ? PILLAR_LABEL[card.pillar] : "รอระบุ Pillar";
   return (
     <div className="wcard-id">
-     {/* text-first: แบรนด์เป็นชิป tint เล็กๆ — spine ซ้ายยังบอกสีแบรนด์อยู่แล้ว ไม่ต้องตะโกนซ้ำ */}
      <span className="wcard-brand-chip" style={{ color: brand.color, background: `color-mix(in srgb, ${brand.color} 13%, transparent)` }}>
       {brand.name}
      </span>
-     <span className="wcard-pillar">{pillar}</span>
-     {card.is_realtime && <span className="wcard-rt-chip">เรียลไทม์</span>}
     </div>
   );
 }
@@ -58,17 +54,13 @@ export function WorkMeta({ card, dateLabel, withTime = false }) {
     : null;
   return (
     <div className="wcard-meta">
+     {/* 2 ก้อนพอ: คนทำ + วันที่ — สเปกงาน/จำนวนโน้ตอยู่ใน popup
+        ยกเว้นตีกลับค้าง = เรื่องด่วนจริง คงจุดแดงไว้ */}
      <span className="wmeta-item" title="ผู้ดูแล"><Icon name="user" size={13}/>{owner?.display_name ?? "—"}</span>
-     <span className="wmeta-item" title="ชนิดงาน/ขนาด">
-      <Icon name={typeIcon(brief)} size={13}/>{typeText(brief)}
-      {/* งานปิดแล้วไม่ต้องเตือนว่ากรอกไม่ครบ — จบไปแล้ว */}
-      {typeIncomplete(brief) && !card.archived && <i className="wcard-warn-dot" title="ยังกรอกไม่ครบ"/>}
-     </span>
      {dateTxt && <span className="wmeta-item" title="กำหนดเวลา"><Icon name="clock" size={13}/>{dateTxt}</span>}
-     {cardNotes.length > 0 && (
-      <span className="wmeta-item" title={hasReject ? "มีโน้ตตีกลับค้างอยู่ — เปิดการ์ดดูว่าต้องแก้อะไร" : "โน้ตในการ์ด"}>
-       <Icon name="pencil" size={13}/>{cardNotes.length}
-       {hasReject && <i className="wmeta-reject-dot"/>}
+     {hasReject && (
+      <span className="wmeta-item" title="มีโน้ตตีกลับค้างอยู่ — เปิดการ์ดดูว่าต้องแก้อะไร">
+       <Icon name="pencil" size={13}/><i className="wmeta-reject-dot"/>
       </span>
      )}
     </div>

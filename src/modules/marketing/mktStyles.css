@@ -26,9 +26,13 @@
   --ink: var(--color-zinc-100);
   --ink-soft: var(--color-zinc-400);
   --ink-faint: var(--color-zinc-400);
-  --bg: var(--color-zinc-950);
-  --surface: var(--color-zinc-900);
-  --surface-2: var(--color-zinc-800);
+  /* ผิว Premium Dark — ดำลึกอมน้ำเงินนิดเดียว (ผสมจาก token SSB ไม่ได้คิดสีใหม่)
+     ธีมสว่าง reset กลับเป็น zinc ล้วนที่ .light .mkt-root — ครีมอุ่นต้องไม่อมฟ้า */
+  --bg: color-mix(in srgb, var(--ssb-blue) 6%, var(--color-zinc-950));
+  --surface: color-mix(in srgb, var(--ssb-blue) 4%, var(--color-zinc-900));
+  --surface-2: color-mix(in srgb, var(--ssb-blue) 4%, var(--color-zinc-800));
+  /* เส้นขอบการ์ดแบบ hairline — จาก ink เลยพลิกตามธีมเอง */
+  --hairline: color-mix(in srgb, var(--ink) 11%, transparent);
   --line: var(--color-zinc-800);
   --accent: var(--color-emerald-600);           /* พื้นทึบของปุ่ม — ตรงกับ bg-emerald-600 ของเขา */
   --accent-deep: var(--color-emerald-700);
@@ -51,7 +55,7 @@
   --link: var(--ssb-blue);
   --rt: var(--color-amber-400);
   --rt-soft: var(--ssb-gold-soft);
-  --rt-tint: color-mix(in srgb, var(--color-amber-400) 7%, var(--surface));   /* พื้นการ์ดเรียลไทม์ */
+  --rt-tint: color-mix(in srgb, var(--color-amber-400) 4%, var(--surface));   /* พื้นการ์ดเรียลไทม์ — บาง ไม่ขุ่น */
   --rt-chip: color-mix(in srgb, var(--color-amber-400) 17%, var(--surface));  /* พื้นชิป "เรียลไทม์" */
   /* type scale 6 ระดับ */
   /* type scale — ตรงกับ ssbgroup-platform (cashflow.css + คลาส text-* ที่เขาใช้จริง)
@@ -186,6 +190,14 @@
   }
   .bf-chip:hover { color: var(--ink); }
   .bf-chip i { font-style: normal; color: var(--ink-faint); }
+  /* ปุ่มของฉัน — โหมดกรองเหลือหมากของตัวเอง เปิดอยู่ = พื้น accent ชัดๆ */
+  .bf-mine {
+    display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); font-weight: 600;
+    color: var(--ink-soft); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 11px;
+    flex-shrink: 0; transition: .15s; white-space: nowrap;
+  }
+  .bf-mine:hover { color: var(--ink); border-color: var(--ink-faint); }
+  .bf-mine.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .bf-more {
     display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); font-weight: 600;
     color: var(--ink-soft); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 11px; flex-shrink: 0;
@@ -213,8 +225,19 @@
   .col { flex: 0 0 272px; min-width: 0; scroll-snap-align: start; display: flex; flex-direction: column; }
   .col .tile-head { margin-bottom: 3px; padding: 0 2px; }
   .col-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stage, var(--ink-faint)); flex-shrink: 0; }
-  .col .gatekeeper { font-size: var(--fs-xs); font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
   .col-empty { font-size: var(--fs-xs); color: var(--ink-faint); text-align: center; padding: 14px 0; }
+  /* ขั้นว่างพับเป็นแท่งตั้งแคบ — กดเพื่อกาง */
+  .col-rail {
+    flex: 0 0 40px; align-self: stretch; min-height: 220px;
+    display: flex; flex-direction: column; align-items: center; gap: 9px;
+    padding: 12px 0; border: 1px dashed var(--hairline); border-radius: var(--r);
+    color: var(--ink-faint); background: transparent; transition: .15s;
+    scroll-snap-align: start;
+  }
+  .col-rail svg { color: var(--stage, var(--ink-faint)); opacity: .7; }
+  .col-rail:hover { color: var(--ink); border-color: var(--stage, var(--ink-faint)); background: var(--surface); }
+  .rail-name { writing-mode: vertical-rl; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .08em; }
+  .rail-n { margin-top: auto; font-size: var(--fs-xs); font-weight: 700; }
   .col .tile-body { display: flex; flex-direction: column; gap: 9px; min-height: 56px; padding: 0; overflow: visible; }
   /* คอลัมน์ Review ไม่ต้องมีกรอบประทั้งคอลัมน์ (รกตา) — ใช้พื้น tint บางๆ พอ */
   .col.review-col .tile-body { border-radius: var(--r); padding: 8px; background: var(--accent-soft); }
@@ -225,15 +248,16 @@
      ============================================================ */
   .wcard {
     position: relative; container-type: inline-size;
-    background: var(--surface); border: 1px solid var(--line);
+    background: var(--surface); border: 1px solid var(--hairline);
     border-left: 3px solid var(--brand, var(--line));
-    border-radius: 12px; padding: 11px 13px 11px; overflow: hidden;
-    box-shadow: var(--shadow); transition: transform .12s, box-shadow .12s;
+    border-radius: 12px; padding: 12px 14px; overflow: hidden;
+    box-shadow: var(--shadow); transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
   }
   .wcard.clickable { cursor: pointer; }
   .wcard.clickable:hover {
-    transform: translateY(-1px); box-shadow: var(--shadow-lg);
-    border-color: color-mix(in srgb, var(--brand, var(--line)) 35%, var(--line));
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in srgb, var(--brand, var(--line)) 38%, transparent);
+    border-color: color-mix(in srgb, var(--brand, var(--line)) 30%, var(--hairline));
     border-left-color: var(--brand, var(--line));
   }
   /* realtime = สีต่างจากงานปกติแต่ไม่จ้า: แถบซ้าย amber + พื้น tint บาง + ชิปใน identity */
@@ -241,8 +265,12 @@
 
   /* รูปหน้าปก — เต็มกว้าง สูงไม่เกิน 1:1 เกินแล้วครอบตัด ไม่บีบภาพ */
   .wcard-cover {
-    margin: -11px -13px 10px; overflow: hidden; background: var(--surface-2);
+    position: relative; margin: -12px -14px 10px; overflow: hidden; background: var(--surface-2);
     border-radius: 9px 9px 0 0; line-height: 0; aspect-ratio: 2 / 1;
+  }
+  .wcard-cover::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(to top, color-mix(in srgb, var(--surface) 85%, transparent), transparent 46%);
   }
   .wcard-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
   /* ไม่มีรูป (เฉพาะกริดที่ขอ coverFallback) — พื้นโทนแบรนด์จางๆ + ไอคอนชนิดงาน + ป้ายบอก
@@ -263,14 +291,6 @@
   .wcard-brand-chip {
     flex-shrink: 0; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .02em;
     padding: 2px 8px; border-radius: 99px; white-space: nowrap; line-height: 1.5;
-  }
-  .wcard-pillar { color: var(--ink-faint); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .wcard-rt-chip {
-    margin-left: auto; flex-shrink: 0;
-    font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .02em;
-    background: var(--rt-chip); color: var(--warn);
-    border: 1px solid color-mix(in srgb, var(--color-amber-400) 38%, var(--surface));
-    padding: 1px 7px; border-radius: 99px;
   }
 
   /* ชื่องานเด่นสุด — จุดโฟกัสของสายตา */
@@ -2537,6 +2557,10 @@
 }
 .light .mkt-root {
   --ch-tiktok: #111827;
+  /* ครีมอุ่นเดิม — ไม่เอาฟ้าปน (ฟ้าปนไว้เฉพาะธีมมืดให้ดำดู "ลึก") */
+  --bg: var(--color-zinc-950);
+  --surface: var(--color-zinc-900);
+  --surface-2: var(--color-zinc-800);
   /* ธีมสว่าง: สเกล zinc กลับด้าน — zinc-400 = #5a6472 (เข้มพอบนครีม) */
   --ink-faint: var(--color-zinc-400);
   /* ป้ายเล็กบนพื้น tint — shade 400 จางบนครีม ขยับเป็น 200/300 ที่เข้มกว่า */

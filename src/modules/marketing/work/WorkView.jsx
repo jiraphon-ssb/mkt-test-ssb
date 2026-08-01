@@ -42,6 +42,8 @@ export function Work({ view, onViewChange, onOpen }) {
   /** ชนิดชิ้นงาน — ภาพเดี่ยว / ชุดภาพ / คลิป (คิดจาก brief ไม่ได้เก็บเป็นคอลัมน์) */
   const [kindFilter, setKindFilter] = useState("all");
   const [realtimeOnly, setRealtimeOnly] = useState(false);
+  /** โหมดของฉัน — เหลือเฉพาะใบที่ฉันเกี่ยว: เป็นเจ้าของ หรือรอฉันตรวจ (team lead) */
+  const [mineOnly, setMineOnly] = useState(false);
   const [search, setSearch] = useState("");
   /** ลิสต์เท่านั้น — ที่เดียวในแอพที่ย้อนดูงานที่ปิดแล้ว */
   const [withArchived, setWithArchived] = useState(false);
@@ -58,14 +60,16 @@ export function Work({ view, onViewChange, onOpen }) {
     (ownerFilter === "all" || c.owner_id === ownerFilter) &&
     (kindFilter === "all" || kindOf(c.brief) === kindFilter) &&
     (!realtimeOnly || c.is_realtime) &&
+    (!mineOnly || c.owner_id === currentUser.id ||
+      (c.status === "review" && currentUser.role === "team_lead")) &&
     (q === "" || c.title.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)),
-    [inBrandScope, brandFilter, stageFilter, trackFilter, ownerFilter, kindFilter, realtimeOnly, q]);
+    [inBrandScope, brandFilter, stageFilter, trackFilter, ownerFilter, kindFilter, realtimeOnly, mineOnly, currentUser, q]);
   const filtered = useMemo(() => data.cards.filter((c) =>
     (view === "list" && withArchived ? true : !c.archived) && match(c)), [data.cards, match, withArchived, view]);
   const owners = data.profiles.filter((p) => p.active && !p.id.startsWith("hist"));
   /** แบรนด์ที่เลือกกรองได้ = แบรนด์ที่ยัง active และอยู่ในขอบเขตของ shell */
   const brandOptions = data.brands.filter((b) => b.active && inBrandScope({ brand_id: b.id }));
-  const filtersOn = stageFilter != null || brandFilter !== "all" || trackFilter !== "all" || ownerFilter !== "all" || kindFilter !== "all" || realtimeOnly || q !== "";
+  const filtersOn = stageFilter != null || brandFilter !== "all" || trackFilter !== "all" || ownerFilter !== "all" || kindFilter !== "all" || realtimeOnly || mineOnly || q !== "";
   const clearFilters = () => {
     setBrandFilter("all");
     setStageFilter(null);
@@ -73,6 +77,7 @@ export function Work({ view, onViewChange, onOpen }) {
     setOwnerFilter("all");
     setKindFilter("all");
     setRealtimeOnly(false);
+    setMineOnly(false);
     setSearch("");
   };
   const reviewCount = data.cards.filter((c) => c.status === "review").length;
@@ -99,6 +104,12 @@ export function Work({ view, onViewChange, onOpen }) {
    <div className="work-bar">
     {useFilters ? (<>
       <input className="bf-search" placeholder="ค้นหาชื่องาน / รหัส" value={search} onChange={(e) => setSearch(e.target.value)}/>
+
+      {/* โหมดของฉัน — ปุ่มเดียวเช้ามาเห็นหมากตัวเองทันที (เจ้าของ + รอฉันตรวจ) */}
+      <button className={`bf-mine ${mineOnly ? "on" : ""}`} onClick={() => setMineOnly(!mineOnly)}
+       title="เหลือเฉพาะงานที่ฉันเป็นเจ้าของ หรือรอฉันตรวจ">
+       <Icon name="user" size={13}/> ของฉัน
+      </button>
 
       {/* ตัวกรองยุบไว้ในปุ่มเดียว — แถบเครื่องมือไม่แน่น แต่ยังเห็นว่ากรองอะไรอยู่จากชิปข้างๆ */}
       <div className="bf-wrap">
