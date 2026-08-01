@@ -83,7 +83,8 @@ export function BoardCard({ card, onOpen }) {
   let cap = isReview ? "รอตรวจ" : `${pct ?? 0}%`;
   if (card.status === "scheduled" || card.status === "published" || card.status === "measured") {
     const pr = runProgress(card, card.status, data.channels);
-    if (pr.total > 0) cap = `${pr.done}/${pr.total}`;
+    /* "0/2" เฉยๆ อ่านไม่รู้เรื่อง — บอกหน่วยสั้นๆ พอให้รู้ว่านับช่องทาง */
+    if (pr.total > 0) cap = `${pr.done}/${pr.total} ช่องทาง`;
   }
 
   const statusChips = overdue ? [{ label: "เกิน SLA", tone: "bad" }]
