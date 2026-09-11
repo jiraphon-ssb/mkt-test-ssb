@@ -12,7 +12,8 @@
 import { InfoButton } from "./mktInfoButton.jsx";
 import { Icon } from "./mktIcon.jsx";
 import { useApp } from "./useMkt.jsx";
-import { brandOf, profileOf, coverImage, typeIcon, fmtThai, fmtThaiDateTime } from "./mktParts.jsx";
+import { brandOf, profileOf, coverImage, typeIcon, typeText, brandFill, fmtThai, fmtThaiDateTime } from "./mktParts.jsx";
+import { PILLAR_LABEL } from "./mktEngine.js";
 import { attachmentUrl } from "./detail/Attachments.jsx";
 
 /* ── ชิ้นส่วน reusable ของการ์ดงาน — ประกอบเอง/ยกไปใช้ที่อื่นได้ ──────────────
@@ -20,16 +21,21 @@ import { attachmentUrl } from "./detail/Attachments.jsx";
    <WorkMeta>     = บรรทัดข้อมูล icon นำ อ่านกวาดตาได้: ผู้ดูแล · ชนิดงาน · เวลา
    ปฏิทิน (DayPanel) ก็ใช้สองตัวนี้ — ภาษาเดียวกันทุกจอ */
 
-/** บรรทัดแบรนด์ของการ์ด — ชิป tint เดียวจบ
-   pillar/เรียลไทม์ ย้ายไปอยู่ใน popup — บนการ์ด realtime เหลือ spine amber บอกอยู่แล้ว */
+/** บรรทัดแบรนด์ของการ์ด — ชิปคู่: แบรนด์ (tint สีแบรนด์) + pillar (ชิปกลางๆ)
+   เรียลไทม์ไม่มีชิป (spine amber บอกอยู่แล้ว) */
 export function WorkIdentity({ card }) {
   const { data } = useApp();
   const brand = brandOf(data, card.brand_id);
+  const pillar = card.track === "project" ? "Project" : card.pillar ? PILLAR_LABEL[card.pillar] : "รอระบุ Pillar";
   return (
     <div className="wcard-id">
-     <span className="wcard-brand-chip" style={{ color: brand.color, background: `color-mix(in srgb, ${brand.color} 13%, transparent)` }}>
+     {/* สีตัวอักษรมาจาก brandFill() — คำนวณ contrast ตาม WCAG เลือกขาว/ink ให้เอง
+        (hardcode #fff ไม่ได้: TEAMDEE ส้มได้แค่ 3.04 ตกเกณฑ์ AA 4.5) */}
+     <span className="wcard-brand-chip" style={brandFill(brand.color)}>
       {brand.name}
      </span>
+     <span className="wcard-pillar-chip">{pillar}</span>
+     {card.is_realtime && <span className="wcard-rt-chip">Realtime</span>}
     </div>
   );
 }
@@ -49,15 +55,24 @@ export function WorkMeta({ card, dateLabel, withTime = false }) {
   const cardNotes = (data.card_notes ?? []).filter((n) => n.card_id === card.id);
   const hasReject = cardNotes.some((n) => n.kind === "reject" && n.pinned);
   const dateISO = brief?.publish_at ?? (brief?.deadline_review ? brief.deadline_review + "T00:00:00" : null);
-  const dateTxt = dateISO
-    ? `${dateLabel ?? (brief?.publish_at ? "โพสต์" : "ส่งตรวจ")} ${withTime ? fmtThaiDateTime(dateISO) : fmtThai(dateISO)}`
-    : null;
+  const dateWord = dateLabel ?? (brief?.publish_at ? "โพสต์" : "ส่งตรวจ");
+  const dateTxt = dateISO ? (withTime ? fmtThaiDateTime(dateISO) : fmtThai(dateISO)) : null;
+  /* บนการ์ดเอาแค่คำชนิด (AW/ALBUM/VIDEO) — ตัวเลขห้อยท้าย (9:16/30s·4ฉาก) กับจุดเตือน
+     ย้ายไปอยู่ในแผงข้อมูลของ popup — การ์ดอ่านง่าย รายละเอียดไม่หาย */
+  const spec = typeText(brief);
+  const specWord = spec.split("·")[0].trim().split(" ")[0];
   return (
     <div className="wcard-meta">
-     {/* 2 ก้อนพอ: คนทำ + วันที่ — สเปกงาน/จำนวนโน้ตอยู่ใน popup
-        ยกเว้นตีกลับค้าง = เรื่องด่วนจริง คงจุดแดงไว้ */}
      <span className="wmeta-item" title="ผู้ดูแล"><Icon name="user" size={13}/>{owner?.display_name ?? "—"}</span>
-     {dateTxt && <span className="wmeta-item" title="กำหนดเวลา"><Icon name="clock" size={13}/>{dateTxt}</span>}
+     <span className="wmeta-item" title={`ชนิดงาน: ${spec}`}>
+      <Icon name={typeIcon(brief)} size={13}/>{specWord}
+     </span>
+     {/* ไอคอนชุดเดียวกับแผงกำหนดเวลาใน popup: โพสต์ = send · ส่งตรวจ = eye */}
+     {dateTxt && (
+      <span className="wmeta-item" title={`${dateWord} ${dateTxt}`}>
+       <Icon name={brief?.publish_at ? "send" : "eye"} size={13}/>{dateTxt}
+      </span>
+     )}
      {hasReject && (
       <span className="wmeta-item" title="มีโน้ตตีกลับค้างอยู่ — เปิดการ์ดดูว่าต้องแก้อะไร">
        <Icon name="pencil" size={13}/><i className="wmeta-reject-dot"/>
@@ -96,30 +111,40 @@ export function WorkCard({ card, onOpen, cover, coverFallback, statusChips, foot
       onClick={go}
       onKeyDown={go ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } } : undefined}
     >
-      {coverUrl
-        ? (<div className="wcard-cover"><img src={coverUrl} alt="" loading="lazy"/></div>)
-        : cover && coverFallback && (
-          /* กริดที่การ์ดต้องสูงเท่ากัน (คลัง/รอตรวจ): ไม่มีรูปก็กันพื้นที่ไว้เท่ากัน
-             — แถวไม่เบี้ยว และบอกตรงๆ ว่าใบนี้ไม่มีรูปแนบ */
-          <div className="wcard-cover ph" aria-hidden="true">
-           <Icon name={typeIcon(card.brief)} size={24}/>
-           <span>ไม่มีรูปงานแนบ</span>
-          </div>)}
-
+      {/* ลำดับอ่านแบบ Notion: ชิป → ชื่อ → detail → รูปมุมมนใต้ข้อความ (ไม่ใช่หลังคาการ์ด) */}
       <WorkIdentity card={card}/>
       <h3 className="wcard-title">{title}</h3>
       <WorkMeta card={card} dateLabel={dateLabel}/>
 
+      {coverUrl
+        ? (<div className="wcard-img"><img src={coverUrl} alt="" loading="lazy"/></div>)
+        : cover && coverFallback && (
+          /* กริดที่การ์ดต้องสูงเท่ากัน (คลัง/รอตรวจ): ไม่มีรูปก็กันพื้นที่ไว้เท่ากัน
+             — แถวไม่เบี้ยว และบอกตรงๆ ว่าใบนี้ไม่มีรูปแนบ */
+          <div className="wcard-img ph" aria-hidden="true">
+           <Icon name={typeIcon(card.brief)} size={24}/>
+           <span>ไม่มีรูปงานแนบ</span>
+          </div>)}
+
       {children}
 
-      {/* สถานะ: ชิปเตือน/SLA + แถบ progress หรือปุ่ม */}
+      {/* ก้อนสถานะแบบ Forecast: [ป้าย + เหตุผลสั้น + %] / แถบสีตามอาการ
+         ป้ายกับแถบสีเดียวกัน — ใบปกติแถบ accent ไม่มีป้าย */}
       {(statusChips?.length > 0 || progress || foot) && (<div className="wcard-status">
-        {statusChips?.length > 0 && (<div className="wcard-chips">
-          {statusChips.map((c, i) => <span key={i} className={`wchip ${c.tone || "plain"}`}>{c.label}</span>)}
+        {progress && (<div className="wcard-st-row">
+          {statusChips?.map((c, i) => <span key={i} className={`wchip ${c.tone || "plain"}`}>{c.label}</span>)}
+          {progress.reason && <span className="wcard-st-reason">{progress.reason}</span>}
          </div>)}
-        {progress && (<div className="wcard-prog">
-          <div className="wcard-bar"><i style={{ width: `${progress.width}%`, background: progress.color }}/></div>
-          {progress.cap != null && <span className="wcard-cap" style={progress.capColor ? { color: progress.capColor } : undefined}>{progress.cap}</span>}
+        {/* แถบพาร์ทิชัน = ความพร้อมขั้นนี้ — ช่องละเงื่อนไข เต็มตามที่ทำครบ */}
+        {progress?.seg && (<div className="wcard-segbar" title={`เงื่อนไขขั้นนี้ ${progress.seg.filled}/${progress.seg.count}`}>
+          {Array.from({ length: progress.seg.count }, (_, i) => (
+            <i key={i} className={i < progress.seg.filled ? "f" : ""}
+             style={i < progress.seg.filled ? { background: progress.color } : undefined}/>
+          ))}
+         </div>)}
+        {progress && !progress.seg && (<div className="wcard-bar"><i style={{ width: `${progress.width}%`, background: progress.color }}/></div>)}
+        {!progress && statusChips?.length > 0 && (<div className="wcard-chips">
+          {statusChips.map((c, i) => <span key={i} className={`wchip ${c.tone || "plain"}`}>{c.label}</span>)}
          </div>)}
         {foot && <div className="wcard-foot">{foot}</div>}
        </div>)}

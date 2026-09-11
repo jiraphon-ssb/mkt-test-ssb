@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateTransition, applyApprove, applyReject, validateReject, isReviewOverdue, computeFirstPassRate, computeReviewSLA, flexSlotUsage, isIdeaPurgeDue, isStuck, stuckDays, canDecideReview, canDeleteCard, canEditCard, gatePercent, gateChecklist, meaningful, validateBriefForm, firstErrorField, briefRefCounts, metricsComplete, channelRuns, runMetricFields, normalizeRunMetrics, rollupCardMetrics, runProgress, channelKindOf, albumFrames, albumFilledCount, albumOutlineComplete, frameSize, isAlbum, sceneComplete, videoTimelineIssues, videoTimelineOk,
+import { gateBlocking, validateTransition, applyApprove, applyReject, validateReject, isReviewOverdue, computeFirstPassRate, computeReviewSLA, flexSlotUsage, isIdeaPurgeDue, isStuck, stuckDays, canDecideReview, canDeleteCard, canEditCard, gatePercent, gateChecklist, meaningful, validateBriefForm, firstErrorField, briefRefCounts, metricsComplete, channelRuns, runMetricFields, normalizeRunMetrics, rollupCardMetrics, runProgress, channelKindOf, albumFrames, albumFilledCount, albumOutlineComplete, frameSize, isAlbum, sceneComplete, videoTimelineIssues, videoTimelineOk,
   sceneDetailCount, scenesCoverage, timelineGaps, timelineSummary, resultLabel, brandAverageER, pendingToolboxItems, weeklyTopBottom, } from "../src/modules/marketing/mktRules.js";
 import { STAGE_META, stagesFor, selfCheckItems, ALL_SELF_CHECK_KEYS } from "../src/modules/marketing/mktEngine.js";
 const NOW = "2026-07-24T09:00:00.000Z";
@@ -64,7 +64,8 @@ describe("validateTransition — เงื่อนไขจบ", () => {
     const r = validateTransition(card({ status: "brief", brief: emptyBrief }), "draft", owner, NOW);
     expect(r.missing).toContain("Hook");
     expect(r.missing).toContain("CTA");
-    expect(r.missing).toContain("ติ๊กยืนยันเช็ค Fact Sheet");
+    // Fact Sheet ย้ายเป็น "แนะนำ" (soft) — ไม่กั้นทางแล้ว
+    expect(r.missing).not.toContain("เช็คตัวเลขกับ Fact Sheet");
   });
   it("draft→review ต้องมีงาน (ลิงก์ หรือ รูปงาน) + self-check ครบ", () => {
     // ไม่มีทั้งลิงก์และรูป = ส่งไม่ได้
@@ -402,16 +403,30 @@ describe("SOP ส่วนที่ 2 — ผลิต ต้องครบก�
     const r = validateTransition(briefCard(part1Only), "draft", owner, NOW);
     expect(r.ok).toBe(false);
   });
+  // แก่นที่กั้นทางจริง — ขาดข้อเดียวก็เดินต่อไม่ได้
   it.each([
     ["format", { format: "" }, "ประเภทไฟล์"],
-    ["size", { size: "" }, "ขนาดภาพ"],
     ["publish_at", { publish_at: null }, "วัน–เวลาโพสต์"],
-    ["layout_note", { layout_note: "" }, "Layout sketch"],
-    ["mood", { mood: "" }, "Mood"],
-  ])("ขาด %s อย่างเดียวก็ไปต่อไม่ได้ และบอกชื่อที่ขาด", (_n, patch, label) => {
+    ["hook", { hook: "" }, "Hook"],
+    ["cta", { cta: "" }, "CTA"],
+  ])("แก่น: ขาด %s อย่างเดียวก็ไปต่อไม่ได้ และบอกชื่อที่ขาด", (_n, patch, label) => {
     const r = validateTransition(briefCard({ ...fullBrief, ...patch }), "draft", owner, NOW);
     expect(r.ok).toBe(false);
     expect(r.missing.some((m) => m.includes(label))).toBe(true);
+  });
+  // แนะนำ — เช็คลิสต์ยังไม่ติ๊ก แต่ไม่กั้นทาง (ลดภาระกรอกให้ทีม)
+  it.each([
+    ["size", { size: "" }, "ขนาดภาพ"],
+    ["layout_note", { layout_note: "" }, "Layout sketch"],
+    ["mood", { mood: "" }, "Mood"],
+    ["who_action", { who_action: "" }, "ใคร → ให้ทำอะไร"],
+    ["fact_checked", { fact_checked: false }, "เช็คตัวเลขกับ Fact Sheet"],
+  ])("แนะนำ: ขาด %s ยังเดินต่อได้ แต่เช็คลิสต์ไม่ติ๊ก", (_n, patch, label) => {
+    const c = briefCard({ ...fullBrief, ...patch });
+    expect(validateTransition(c, "draft", owner, NOW).ok).toBe(true);
+    const row = gateChecklist(c).find((g) => g.label === label);
+    expect(row.done).toBe(false);
+    expect(row.soft).toBe(true);
   });
   it("track project ไม่บังคับวันโพสต์ (ไม่มีขั้น Scheduled)", () => {
     const proj = briefCard({ ...fullBrief, publish_at: null }, { track: "project", pillar: null });
@@ -419,35 +434,43 @@ describe("SOP ส่วนที่ 2 — ผลิต ต้องครบก�
     // แต่ track content ยังบังคับ
     expect(validateTransition(briefCard({ ...fullBrief, publish_at: null }), "draft", owner, NOW).ok).toBe(false);
   });
-  it("gateChecklist: content ได้ 14 ข้อ · project ได้ 13 ข้อ · label ไม่ซ้ำ", () => {
+  it("gateChecklist: content 14 ข้อ (บล็อกจริง 6) · project 13 (บล็อก 5) · label ไม่ซ้ำ", () => {
     const content = gateChecklist(briefCard(fullBrief));
     const proj = gateChecklist(briefCard(fullBrief, { track: "project", pillar: null }));
-    expect(content).toHaveLength(14);
-    expect(proj).toHaveLength(13);
+    expect(content).toHaveLength(13);
+    expect(proj).toHaveLength(12);
+    // แก่นที่กั้นทาง: Hook · Key message · CTA · ประเภทไฟล์ · ช่องทาง (+ วันโพสต์ ถ้า content)
+    expect(gateBlocking(content)).toHaveLength(6);
+    expect(gateBlocking(proj)).toHaveLength(5);
     expect(content.every((g) => g.done)).toBe(true);
     // label ซ้ำจะทำให้ React key ชนกัน
     const labels = content.map((g) => g.label);
     expect(new Set(labels).size).toBe(labels.length);
   });
-  it('"#" นับเป็น filler — ci_link = "#" ไม่ผ่าน', () => {
+  it('"#" นับเป็น filler — ci_link = "#" ไม่ติ๊กให้ (แต่ไม่กั้นทาง)', () => {
     expect(meaningful("#")).toBe(false);
-    const r = validateTransition(briefCard({ ...fullBrief, ci_link: "#" }), "draft", owner, NOW);
-    expect(r.ok).toBe(false);
+    const c = briefCard({ ...fullBrief, ci_link: "#" });
+    expect(gateChecklist(c).find((g) => g.label === "ลิงก์ CI").done).toBe(false);
+    expect(validateTransition(c, "draft", owner, NOW).ok).toBe(true);
   });
 });
 describe("ไฟล์แนบนับเข้า gate ได้ (Ref AW / ลิงก์ CI)", () => {
   const refEv = { refImages: 1, refLinks: 0 };
   const linkEv = { refImages: 0, refLinks: 1 };
   const briefCard = (b) => card({ status: "brief", brief: b });
-  it("ref_note ว่าง + ไม่มีรูป = ไม่ผ่าน · มีรูปที่มีคำอธิบาย = ผ่าน", () => {
+  it("ref_note ว่าง = เช็คลิสต์ไม่ติ๊ก (แต่ไม่กั้นทาง) · มีรูปที่มีคำอธิบาย = ติ๊กให้", () => {
     const c = briefCard({ ...fullBrief, ref_note: "" });
-    expect(validateTransition(c, "draft", owner, NOW).ok).toBe(false);
-    expect(validateTransition(c, "draft", owner, NOW, refEv).ok).toBe(true);
+    const row = (ev) => gateChecklist(c, ev).find((g) => g.label.startsWith("Ref AW"));
+    expect(row().done).toBe(false);
+    expect(row(refEv).done).toBe(true);
+    expect(validateTransition(c, "draft", owner, NOW).ok).toBe(true);
   });
-  it("ci_link ว่าง + ไม่มีลิงก์ = ไม่ผ่าน · มีลิงก์อ้างอิง = ผ่าน", () => {
+  it("ci_link ว่าง = เช็คลิสต์ไม่ติ๊ก (แต่ไม่กั้นทาง) · มีลิงก์อ้างอิง = ติ๊กให้", () => {
     const c = briefCard({ ...fullBrief, ci_link: "" });
-    expect(validateTransition(c, "draft", owner, NOW).ok).toBe(false);
-    expect(validateTransition(c, "draft", owner, NOW, linkEv).ok).toBe(true);
+    const row = (ev) => gateChecklist(c, ev).find((g) => g.label === "ลิงก์ CI");
+    expect(row().done).toBe(false);
+    expect(row(linkEv).done).toBe(true);
+    expect(validateTransition(c, "draft", owner, NOW).ok).toBe(true);
   });
   it("gateChecklist ติ๊ก Ref AW ให้เมื่อมีรูป", () => {
     const c = briefCard({ ...fullBrief, ref_note: "" });
@@ -610,14 +633,15 @@ describe("ชนิดชิ้นงาน — AW เดี่ยว vs ชุ�
     expect(validateTransition(single, "draft", lead, settings, NOW).ok).toBe(true);
   });
 
-  it("ชุดภาพที่ไม่บอกจำนวน/โครงเรื่อง ไปขั้น Draft ไม่ได้", () => {
-    expect(gatePercent(albumBare, refs)).toBeLessThan(100);
-    expect(validateTransition(albumBare, "draft", lead, settings, NOW).ok).toBe(false);
+  it("ชุดภาพที่ไม่บอกจำนวน/โครงเรื่อง — เช็คลิสต์ยังไม่ติ๊ก แต่เป็น 'แนะนำ' ไม่กั้นทาง", () => {
     const rows = gateChecklist(albumBare, refs);
     expect(rows.filter((r) => !r.done).map((r) => r.label)).toEqual([
       "จำนวนภาพในชุด (≥2)",
       "รายภาพครบ (ข้อความ + ขนาด)",
     ]);
+    // สเปกรายภาพเป็นคุณภาพบรีฟ ไม่ใช่ประตู — แก่นครบแล้วเดินต่อได้
+    expect(rows.filter((r) => !r.done).every((r) => r.soft)).toBe(true);
+    expect(validateTransition(albumBare, "draft", lead, settings, NOW).ok).toBe(true);
   });
 
   it("ชุดภาพที่กรอกครบ ผ่าน gate เท่ากับงานเดี่ยว", () => {
@@ -638,7 +662,8 @@ describe("ชนิดชิ้นงาน — AW เดี่ยว vs ชุ�
     });
     expect(albumFilledCount(partial.brief)).toBe(2);
     expect(albumOutlineComplete(partial.brief)).toBe(false);
-    expect(validateTransition(partial, "draft", lead, settings, NOW).ok).toBe(false);
+    // สเปกรายภาพเป็น "แนะนำ" — ไม่กั้นทาง แต่ฟอร์มยังบอกว่ากรอกไปกี่ภาพ
+    expect(validateTransition(partial, "draft", lead, settings, NOW).ok).toBe(true);
     expect(validateBriefForm(partial, true, NOW, refs).album_frames).toContain("2/4");
   });
 
@@ -673,12 +698,14 @@ describe("ประเภทไฟล์ — ภาพนิ่ง vs คลิ�
     expect(validateTransition(vCard(), "draft", lead, settings, NOW).ok).toBe(true);
   });
 
-  it("คลิปที่ไม่บอกความยาว/ไทม์ไลน์ ไปต่อไม่ได้", () => {
+  it("คลิปที่ไม่บอกความยาว/ไทม์ไลน์ — เช็คลิสต์ยังไม่ติ๊ก แต่ไม่กั้นทาง", () => {
     const bare = vCard({ video_seconds: null, video_scenes: [] });
-    const r = validateTransition(bare, "draft", lead, settings, NOW);
-    expect(r.ok).toBe(false);
-    expect(r.missing).toContain("ความยาวคลิป");
-    expect(r.missing.some((m) => m.includes("อย่างน้อย 2 ฉาก"))).toBe(true);
+    const rows = gateChecklist(bare);
+    const undone = rows.filter((r) => !r.done).map((r) => r.label);
+    expect(undone).toContain("ความยาวคลิป (วินาที)");
+    expect(undone).toContain("ไทม์ไลน์ฉาก (ฉากแรก = hook)");
+    expect(rows.filter((r) => !r.done).every((r) => r.soft)).toBe(true);
+    expect(validateTransition(bare, "draft", lead, settings, NOW).ok).toBe(true);
   });
 
   it("ไทม์ไลน์ต้องเริ่มวินาที 0 · ห้ามทับกัน · ห้ามเกินความยาวคลิป", () => {

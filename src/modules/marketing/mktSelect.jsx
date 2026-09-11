@@ -32,6 +32,7 @@ function flat(options) {
 export function MktSelect({ value, onChange, options, placeholder = "— เลือก —", disabled, compact, className = "" }) {
   const [open, setOpen] = useState(false);
   const [up, setUp] = useState(false);          /* ใกล้ขอบล่าง = เด้งแผงขึ้น */
+  const [rect, setRect] = useState(null);       /* ตำแหน่งปุ่ม — เมนูวางแบบ fixed ลอยเหนือทุกชั้น */
   const [hi, setHi] = useState(-1);             /* index ที่คีย์บอร์ดชี้อยู่ (ในลิสต์แบน) */
   const rootRef = useRef(null);
   const popRef = useRef(null);
@@ -42,19 +43,34 @@ export function MktSelect({ value, onChange, options, placeholder = "— เล�
     if (disabled) return;
     const r = rootRef.current?.getBoundingClientRect();
     setUp(r ? window.innerHeight - r.bottom < 300 && r.top > 300 : false);
+    setRect(r ?? null);
     setHi(Math.max(0, items.findIndex((o) => o.value === value)));
     setOpen(true);
   };
+  /* เมนูเป็น fixed — ถ้าหน้าหลังเลื่อน ตำแหน่งปุ่มขยับ ให้ปิดเมนูไปเลย (ไม่ลอยค้างผิดที่) */
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [open]);
   const pick = (o) => {
     onChange(o.value);
     setOpen(false);
     rootRef.current?.querySelector("button")?.focus();
   };
 
-  /* เลื่อนรายการที่คีย์บอร์ดชี้ให้อยู่ในสายตาเสมอ */
+  /* เลื่อนรายการที่ชี้ให้อยู่ในสายตา — ขยับ scroll "ในเมนู" เท่านั้น
+     (ห้าม scrollIntoView: มันเลื่อน ancestor ทุกชั้น แผงซ้ายทั้งแผงกระตุกตาม) */
   useEffect(() => {
     if (!open || hi < 0) return;
-    popRef.current?.querySelector(`[data-i="${hi}"]`)?.scrollIntoView({ block: "nearest" });
+    const pop = popRef.current;
+    const el = pop?.querySelector(`[data-i="${hi}"]`);
+    if (!pop || !el) return;
+    const pr = pop.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (er.top < pr.top) pop.scrollTop += er.top - pr.top;
+    else if (er.bottom > pr.bottom) pop.scrollTop += er.bottom - pr.bottom;
   }, [open, hi]);
 
   const onKey = (e) => {
@@ -102,7 +118,11 @@ export function MktSelect({ value, onChange, options, placeholder = "— เล�
 
       {open && (<>
         <div className="msel-veil" onClick={() => setOpen(false)}/>
-        <div ref={popRef} className={`msel-pop ${up ? "up" : ""}`} role="listbox">
+        <div ref={popRef} className={`msel-pop ${up ? "up" : ""}`} role="listbox"
+          style={rect ? {
+            position: "fixed", left: Math.min(rect.left, window.innerWidth - 348), minWidth: rect.width,
+            ...(up ? { bottom: window.innerHeight - rect.top + 4, top: "auto" } : { top: rect.bottom + 4 }),
+          } : undefined}>
           {options.map((o, gi) => o.group
             ? (<div className="msel-sec" key={`g${gi}`}>
                 <div className="msel-group">{o.group}</div>

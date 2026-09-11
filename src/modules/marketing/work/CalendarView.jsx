@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../useMkt.jsx";
 import { STAGE_META, secText, sceneRole, SCENE_ROLE_LABEL } from "../mktEngine.js";
-import { briefRefCounts, flexSlotUsage, gatePercent, timelineSummary, channelRuns } from "../mktRules.js";
+import { briefRefCounts, flexSlotUsage, gateChecklist, timelineSummary, channelRuns } from "../mktRules.js";
 import { brandOf, profileOf, fmtThaiDateTime, coverImage } from "../mktParts.jsx";
 import { Icon } from "../mktIcon.jsx";
 import { WorkIdentity, WorkMeta } from "../mktCard.jsx";
@@ -163,14 +163,14 @@ function DayPanel({ card, onOpen }) {
   const refs = briefRefCounts(card.id, data.attachments, data.reference_links, data.channels);
   const tl = card.brief.format === "video" ? timelineSummary(card.brief) : { count: 0, scenes: [] };
   const posted = channelRuns(card).filter((r) => r.post_url);
-  const pct = gatePercent(card, refs);
+  const gate = gateChecklist(card, refs);
+  const gateDone = gate.filter((x) => x.done).length;
   const history = (data.status_history ?? [])
     .filter((h) => h.card_id === card.id)
     .slice(-3)
     .reverse();
   const cover = coverImage(card, data, attachmentUrl);
   return (<div className={`calpanel ${card.is_realtime ? "rt" : ""}`}>
-   {cover && (<div className="cp-cover"><img src={cover} alt="" loading="lazy"/></div>)}
    <div className="cp-head">
     <span className="cp-stage" style={{ ["--stage"]: stage.color }}>{stage.name}</span>
    </div>
@@ -179,6 +179,9 @@ function DayPanel({ card, onOpen }) {
    <WorkIdentity card={card}/>
    <h3 className="cp-title">{card.title}</h3>
    <WorkMeta card={card} withTime/>
+
+   {/* รูปอยู่ใต้ข้อความ (มุมมน) เหมือนการ์ดบอร์ด — ไม่ใช่หลังคาแผง */}
+   {cover && (<div className="wcard-img"><img src={cover} alt="" loading="lazy"/></div>)}
 
    {card.brief.channels.length > 0 && (<div className="cp-row">
      <span className="k">ช่องทาง</span>
@@ -209,9 +212,18 @@ function DayPanel({ card, onOpen }) {
      </span>
     </div>)}
 
-   {pct != null && (<div className="cp-gate">
-     <div className="cp-gatebar"><i style={{ width: `${pct}%` }}/></div>
-     <span className="mono">{pct}%</span>
+   {/* ความพร้อม = แถบพาร์ทิชัน gate ชุดเดียวกับบอร์ด */}
+   {gate.length > 0 && (<div className="cp-gate" title={`ทำแล้ว ${gateDone}/${gate.length} เงื่อนไข`}>
+     <span className="wcard-segbar">
+      {Array.from({ length: gate.length }, (_, i) => (
+        <i key={i} className={i < gateDone ? "f" : ""}
+         style={i < gateDone ? { background: gateDone === gate.length ? "var(--ok)" : "var(--accent)" } : undefined}/>
+      ))}
+     </span>
+     <b className="mono">
+      {gateDone === gate.length && <Icon name="check" size={11}/>}
+      {gateDone}/{gate.length}
+     </b>
     </div>)}
 
    {history.length > 0 && (<div className="cp-hist">

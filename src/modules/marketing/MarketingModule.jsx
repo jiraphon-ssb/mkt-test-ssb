@@ -17,6 +17,8 @@ import "./mktStyles.css";
 
 // Dashboard ลาก Chart.js มาด้วย — โหลดเฉพาะตอนเปิดหน้านั้น
 const Dashboard = lazy(() => import("./dash/DashboardView.jsx").then((m) => ({ default: m.Dashboard })));
+// หน้า Ads ก็ลาก Chart.js เหมือนกัน — โหลดเฉพาะตอนเปิด
+const AdsView = lazy(() => import("./ads/AdsView.jsx").then((m) => ({ default: m.AdsView })));
 
 export default function MarketingModule({ view = "work" }) {
   const { data, toastState } = useApp();
@@ -58,6 +60,12 @@ export default function MarketingModule({ view = "work" }) {
       {view === "dash" && (
         <Suspense fallback={<div className="empty">กำลังโหลด Dashboard…</div>}>
           <Dashboard tab={dashTab} onTabChange={setDashTab} onOpenCard={setOpenCard} onJump={jump} />
+        </Suspense>
+      )}
+
+      {view === "ads" && (
+        <Suspense fallback={<div className="empty">กำลังโหลดหน้าค่าแอด…</div>}>
+          <AdsView />
         </Suspense>
       )}
 

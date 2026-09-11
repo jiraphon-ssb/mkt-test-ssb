@@ -20,16 +20,27 @@ export function NotesPanel({ card }) {
   const [text, setText] = useState("");
   const [pending, setPending] = useState([]);      /* File[] รอแนบไปกับโน้ตที่กำลังพิมพ์ */
   const [fileErrors, setFileErrors] = useState([]);
-  const [onlyStage, setOnlyStage] = useState(false);
+  /* กรอง 4 แบบ: ทั้งหมด / ขั้นนี้ / ตีกลับ / บทเรียน — เผื่ออนาคตเพิ่ม kind ใหม่ได้เลย */
+  const [filter, setFilter] = useState("all");
   const [editId, setEditId] = useState(null);
   const [editText, setEditText] = useState("");
   const [viewImg, setViewImg] = useState(null);    /* {url, name} — lightbox */
+  /* การ์ดที่ยังไม่มีโน้ตเลย: ยุบเป็นแถบแคบ คืนพื้นที่ 300px ให้ฟอร์ม — กดกางเพื่อจด */
+  const [openEmpty, setOpenEmpty] = useState(false);
   const fileRef = useRef(null);
 
   const all = (data.card_notes ?? []).filter((n) => n.card_id === card.id);
-  const notes = (onlyStage ? all.filter((n) => n.stage === card.status) : all)
+  const counts = {
+    reject: all.filter((n) => n.kind === "reject").length,
+    lesson: all.filter((n) => n.kind === "lesson").length,
+  };
+  const notes = (filter === "stage" ? all.filter((n) => n.stage === card.status)
+    : filter === "reject" ? all.filter((n) => n.kind === "reject")
+    : filter === "lesson" ? all.filter((n) => n.kind === "lesson")
+    : all)
     .slice()
     .sort((a, b) => (b.pinned - a.pinned) || b.created_at.localeCompare(a.created_at));
+  const firstUnpinned = notes.findIndex((n) => !n.pinned);
   const imagesOf = (n) => data.attachments.filter((a) => a.note_id === n.id);
 
   const canSubmit = text.trim() !== "" || pending.length > 0;
@@ -59,23 +70,51 @@ export function NotesPanel({ card }) {
     if (ok) removeNote(n.id);
   };
 
+  /* ยุบเฉพาะตอน "ไม่มีโน้ตสักใบ" — มีโน้ตแล้วกางเสมอ (คนต้องเห็น feedback/ตีกลับ) */
+  if (all.length === 0 && !openEmpty) {
+    return (
+      <aside className="notes-panel collapsed">
+        <button className="notes-rail" onClick={() => setOpenEmpty(true)} title="จดโน้ตการทำงานของการ์ดนี้">
+          <Icon name="pencil" size={14}/>
+          <span className="notes-rail-label">โน้ตการทำงาน</span>
+          <span className="notes-rail-hint">ยังไม่มี</span>
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="notes-panel">
       <div className="notes-head">
         <Icon name="pencil" size={14}/>
         <h3>โน้ตการทำงาน</h3>
         {all.length > 0 && <span className="notes-n mono">{all.length}</span>}
-        <button className={`notes-filter ${onlyStage ? "on" : ""}`} onClick={() => setOnlyStage(!onlyStage)}
-          title="ดูเฉพาะโน้ตของขั้นปัจจุบัน">
-          ขั้นนี้
-        </button>
       </div>
+
+      {/* ชิปกรอง — ตีกลับ/บทเรียนโผล่เฉพาะตอนมีของจริง ไม่รกตอนการ์ดใหม่ */}
+      {all.length > 0 && (<div className="notes-chips">
+        <button className={`notes-chip ${filter === "all" ? "on" : ""}`} onClick={() => setFilter("all")}>ทั้งหมด</button>
+        <button className={`notes-chip ${filter === "stage" ? "on" : ""}`} onClick={() => setFilter("stage")}>ขั้นนี้</button>
+        {counts.reject > 0 && (<button className={`notes-chip reject ${filter === "reject" ? "on" : ""}`} onClick={() => setFilter("reject")}>
+          ตีกลับ {counts.reject}
+         </button>)}
+        {counts.lesson > 0 && (<button className={`notes-chip lesson ${filter === "lesson" ? "on" : ""}`} onClick={() => setFilter("lesson")}>
+          บทเรียน {counts.lesson}
+         </button>)}
+       </div>)}
 
       {/* กล่องจด — พิมพ์ + แนบรูปได้หลายรูป · ⌘/Ctrl+Enter บันทึก */}
       <div className="notes-compose">
+        <div className="notes-compose-head">
+          <Avatar profile={currentUser} size={18}/>
+          <b>{currentUser.display_name}</b>
+          <span className="notes-stagechip" style={{ ["--stage"]: STAGE_META[card.status].color }}>
+           ติดขั้น {STAGE_META[card.status].name}
+          </span>
+        </div>
         <textarea
           rows={3}
-          placeholder={`จดถึงการ์ดนี้… (ติดขั้น ${STAGE_META[card.status].name} อัตโนมัติ)`}
+          placeholder="จดถึงการ์ดนี้… feedback ลูกค้า / ข้อตกลง / สิ่งที่ต้องแก้"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit(); }}
@@ -107,20 +146,26 @@ export function NotesPanel({ card }) {
 
       {notes.length === 0 && (
         <div className="notes-empty">
-          {onlyStage ? "ขั้นนี้ยังไม่มีโน้ต" : "ยังไม่มีโน้ต — จดข้อตกลง/สิ่งที่ต้องแก้ไว้ที่นี่"}
+          {filter === "stage" ? "ขั้นนี้ยังไม่มีโน้ต"
+            : filter === "reject" ? "ไม่มีโน้ตตีกลับ"
+            : filter === "lesson" ? "ยังไม่มีบทเรียน"
+            : "ยังไม่มีโน้ต — จดข้อตกลง/สิ่งที่ต้องแก้ไว้ที่นี่"}
         </div>
       )}
 
       <div className="notes-list">
-        {notes.map((n) => {
+        {notes.map((n, i) => {
           const author = profileOf(data, n.author_id);
           const mine = n.author_id === currentUser.id;
           const stage = STAGE_META[n.stage];
           const imgs = imagesOf(n);
           const isReject = n.kind === "reject";
           const isLesson = n.kind === "lesson";
-          return (
-            <article key={n.id} className={`note ${n.pinned ? "pinned" : ""} ${isReject ? "reject" : ""} ${isLesson ? "lesson" : ""}`}>
+          return (<div key={n.id}>
+            {/* เส้นคั่น: จบโซนปักหมุด → เข้าโซนล่าสุด */}
+            {i === firstUnpinned && firstUnpinned > 0 && (<div className="notes-divider">ล่าสุด</div>)}
+            {i === 0 && n.pinned && (<div className="notes-divider pin">★ ปักหมุด</div>)}
+            <article className={`note ${n.pinned ? "pinned" : ""} ${isReject ? "reject" : ""} ${isLesson ? "lesson" : ""}`}>
               <div className="note-head">
                 <Avatar profile={author} size={18}/>
                 <b>{author?.display_name ?? "—"}</b>
@@ -171,7 +216,7 @@ export function NotesPanel({ card }) {
                 </span>)}
               </div>
             </article>
-          );
+          </div>);
         })}
       </div>
 

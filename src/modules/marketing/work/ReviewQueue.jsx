@@ -27,15 +27,16 @@ const HERO_FIELDS = [
   { label: "CTA — ให้คนดูทำอะไรต่อ", get: (c) => c.brief.cta },
 ];
 /* รายละเอียดประกอบ — เล็ก 2 คอลัมน์ ไม่แย่งสายตาจากหัวใจ */
+/* soft = ช่อง "แนะนำ" ตามกติกาใหม่ — ว่างได้ ไม่ใช่ข้อผิดพลาด จึงไม่ขึ้นสีเตือน */
 const SUPPORT_FIELDS = [
-  { label: "ใคร → ทำอะไร", get: (c) => c.brief.who_action },
+  { label: "ใคร → ทำอะไร", soft: true, get: (c) => c.brief.who_action },
   { label: "ช่องทาง", get: (c) => c.brief.channels.join(" · ") },
-  { label: "Mood", get: (c) => c.brief.mood },
-  { label: "ซับไตเติล", only: "video", get: (c) => (c.brief.video_subtitle ? "มีซับไทยฝังในคลิป" : "ไม่มีซับ — ต้องอ่านรู้เรื่องปิดเสียง") },
-  { label: "Layout", only: "image", get: (c) => c.brief.layout_note },
-  { label: "Ref AW — อ้างอิงแง่ไหน", get: (c) => c.brief.ref_note },
-  { label: "ลิงก์ CI", get: (c) => c.brief.ci_link },
-  { label: "เช็คตัวเลขกับ Fact Sheet", get: (c) => (c.brief.fact_checked ? "เจ้าของงานยืนยันแล้ว" : "") },
+  { label: "Mood", soft: true, get: (c) => c.brief.mood },
+  { label: "ซับไตเติล", only: "video", soft: true, get: (c) => (c.brief.video_subtitle ? "มีซับไทยฝังในคลิป" : "ไม่มีซับ — ต้องอ่านรู้เรื่องปิดเสียง") },
+  { label: "Layout", only: "image", soft: true, get: (c) => c.brief.layout_note },
+  { label: "Ref AW — อ้างอิงแง่ไหน", soft: true, get: (c) => c.brief.ref_note },
+  { label: "ลิงก์ CI", soft: true, get: (c) => c.brief.ci_link },
+  { label: "เช็คตัวเลขกับ Fact Sheet", soft: true, get: (c) => (c.brief.fact_checked ? "เจ้าของงานยืนยันแล้ว" : "") },
   { label: "วัน–เวลาโพสต์", get: (c) => fmtThaiDateTime(c.brief.publish_at) },
 ];
 
@@ -76,9 +77,34 @@ export function ReviewQueue({ match = () => true, onOpen }) {
 
    {queue.length === 0
      ? (<div className="empty"><div className="t">คิวว่าง — เคลียร์ครบแล้ว</div></div>)
-     : (<div className="rq-grid">
-        {queue.map((c) => <QueueCard key={c.id} card={c} onOpen={() => setOpenId(c.id)}/>)}
-       </div>)}
+     : queue.length <= 5
+       /* คิวสั้น = ไม่ต้องมีหัวข้อกลุ่ม (หัวข้อจะเยอะกว่าการ์ด) — เรียงด่วนสุดขึ้นก่อน
+          ความเร่งอ่านได้จากขอบสี + บรรทัด "รอ n ชม." บนการ์ดอยู่แล้ว */
+       ? (<div className="rq-grid">
+          {queue.map((c) => <QueueCard key={c.id} card={c} onOpen={() => setOpenId(c.id)}/>)}
+         </div>)
+     : (<>
+        {/* คิวยาว — จัดกลุ่มความเร่งด่วนแบบเดียวกับลิสต์ */}
+        {[
+          { id: "over", label: "เกิน SLA แล้ว", hint: "ต้องตัดสินก่อน", tone: "bad", test: (x) => x.left <= 0 },
+          { id: "near", label: "ใกล้ครบ SLA", hint: `เหลือ ≤6 ชม.`, tone: "warn", test: (x) => x.left > 0 && x.left <= 6 },
+          { id: "ok", label: "ยังมีเวลา", hint: "", tone: "", test: (x) => x.left > 6 },
+        ].map((g) => {
+          const rows = queue.filter((c) => g.test(slaOf(c, settings)));
+          if (rows.length === 0) return null;
+          return (<section className={`tri ${g.tone}`} key={g.id}>
+           <div className="tri-head">
+            <span className="tri-dot"/>
+            <b>{g.label}</b>
+            <span className="tri-n mono">{rows.length}</span>
+            {g.hint && <em>{g.hint}</em>}
+           </div>
+           <div className="rq-grid">
+            {rows.map((c) => <QueueCard key={c.id} card={c} onOpen={() => setOpenId(c.id)}/>)}
+           </div>
+          </section>);
+        })}
+       </>)}
 
    {openCard && (<ReviewSheet
      card={openCard}
@@ -91,23 +117,39 @@ export function ReviewQueue({ match = () => true, onOpen }) {
   </>);
 }
 
-/* ---------- การ์ดในคิว: อ่านจบใน 3 บรรทัด แล้วกดเข้าไปตรวจ ---------- */
+/* ---------- การ์ดในคิว ----------
+   เดิมมีป้ายเวลา 3 อันพูดเรื่องเดียวกัน ("เกิน SLA 6 ชม." + "รอ 30 ชม." + "รอบ 2")
+   รวมเป็นประโยคเดียวที่อ่านแล้วรู้ว่าเร่งแค่ไหน + โชว์เหตุผลตีกลับรอบก่อน
+   (คนตรวจรอบ 2 ต้องรู้ว่าครั้งที่แล้วตีกลับเพราะอะไร ไม่งั้นต้องเปิดหาเอง) */
 function QueueCard({ card, onOpen }) {
-  const { settings } = useReviewCtx();
+  const { data, settings } = useReviewCtx();
   const sla = slaOf(card, settings);
   const redo = card.first_pass === false;
+  const why = sla.left <= 0
+    ? `รอ ${sla.wait} ชม. — เกิน SLA ${-sla.left} ชม.`
+    : `รอ ${sla.wait} ชม. — เหลือเวลา ${sla.left} ชม.`;
+  /* เหตุผลตีกลับครั้งล่าสุด (เฉพาะใบที่เคยโดนตีกลับ) */
+  const lastReject = redo
+    ? data.review_actions
+        .filter((a) => a.card_id === card.id && a.action === "reject")
+        .sort((a, b) => b.acted_at.localeCompare(a.acted_at))[0]
+    : null;
   return (
     <WorkCard
       card={card}
       cover
       coverFallback
       dateLabel="โพสต์"
-      statusChips={[
-        { label: sla.text, tone: sla.cls },
-        ...(redo ? [{ label: "รอบ 2", tone: "warn" }] : []),
-        { label: `รอ ${sla.wait} ชม.`, tone: "plain" },
-      ]}
-      foot={<button className="btn dark small rq-go" onClick={onOpen}>ตรวจงาน</button>}
+      statusChips={redo ? [{ label: "ตีกลับมาแล้ว — รอบ 2", tone: "warn" }] : []}
+      foot={<>
+        {lastReject && (
+          <div className="rq-lastreject" title={lastReject.reason}>
+            <Icon name="alert" size={12}/>
+            <span>รอบก่อน: {lastReject.direction_pack_ref || lastReject.reason}</span>
+          </div>)}
+        <div className={`rq-why ${sla.cls}`}>{why}</div>
+        <button className="btn dark small rq-go" onClick={onOpen}>ตรวจงาน</button>
+      </>}
     />
   );
 }
@@ -118,6 +160,8 @@ function QueueCard({ card, onOpen }) {
    เลขขั้นนับอัตโนมัติจากส่วนที่โผล่จริง ไม่ฮาร์ดโค้ด (คลิป/ชุดภาพ/AW เดี่ยว โชว์ไม่เท่ากัน) */
 function ReviewSheet({ card, isLead, onClose, onReject, onOpenCard }) {
   const { data, settings, approveCard } = useReviewCtx();
+  /* รูปที่กำลังดู — ใช้ร่วมกันระหว่างแกลเลอรีกับรายการ "รายภาพในชุด" */
+  const [shot, setShot] = useState(0);
   const brand = brandOf(data, card.brand_id);
   const owner = profileOf(data, card.owner_id);
   const sla = slaOf(card, settings);
@@ -179,7 +223,7 @@ function ReviewSheet({ card, isLead, onClose, onReject, onOpenCard }) {
        <div className="rv-kicker">ดูงานที่ส่งมา</div>
        {/* งานจริงเป็นแกลเลอรี เลื่อน/ซูมได้ — ตรวจได้ครบโดยไม่ต้องออกไป Drive */}
        {workImages.length > 0
-         ? <WorkGallery images={workImages}/>
+         ? <WorkGallery images={workImages} index={Math.min(shot, workImages.length - 1)} onIndex={setShot}/>
          : (<div className="rv-nowork"><Icon name="image" size={22}/><span>งานอยู่ในลิงก์ Drive — กดปุ่มด้านล่างเพื่อเปิดดู</span></div>)}
 
        {card.draft_link
@@ -236,9 +280,12 @@ function ReviewSheet({ card, isLead, onClose, onReject, onOpenCard }) {
         <div className="rv-grid">
          {SUPPORT_FIELDS.filter((f) => !f.only || f.only === card.brief.format).map((f) => {
            const val = f.get(card);
+           /* ช่องแนะนำที่ว่าง = "—" เงียบๆ · ช่องที่กติกาบังคับถึงจะเตือนสีส้ม */
            return (<div className="rv-field" key={f.label}>
             <div className="rv-k">{f.label}</div>
-            <div className={`rv-v ${val ? "" : "miss"}`}>{val || "ยังไม่กรอก"}</div>
+            <div className={`rv-v ${val ? "" : f.soft ? "none" : "miss"}`}>
+             {val || (f.soft ? "—" : "ยังไม่กรอก")}
+            </div>
            </div>);
          })}
         </div>
@@ -278,7 +325,10 @@ function ReviewSheet({ card, isLead, onClose, onReject, onOpenCard }) {
        {isAlbum(card.brief) && (<section className="rv-block">
          <div className="rv-kicker">รายภาพในชุด <span className="chip-tone plain">{frames.length} ภาพ</span></div>
          <ol className="rv-frames">
-          {frames.map((f, i) => (<li key={i} className={frameComplete(f) ? "" : "miss"}>
+          {frames.map((f, i) => (<li key={i}
+            className={`${frameComplete(f) ? "" : "miss"} ${i === shot ? "on" : ""} ${i < workImages.length ? "linked" : ""}`}
+            onClick={() => i < workImages.length && setShot(i)}
+            title={i < workImages.length ? `ดูรูปที่ ${i + 1} ที่ส่งมา` : "ยังไม่มีรูปของภาพนี้"}>
             <span className="rf-n mono">{i + 1}</span>
             <span className="rf-body">
              <span className="rf-text">{f.text || "ยังไม่ระบุว่าภาพนี้พูดอะไร"}</span>
@@ -329,9 +379,15 @@ function ReviewSheet({ card, isLead, onClose, onReject, onOpenCard }) {
 
 /* ---------- แกลเลอรีรูปงานจริง — รูปใหญ่ + thumbs + ‹ › + ตัวนับ + กดซูมเต็มจอ ---------- */
 /* แกลเลอรีรูปงาน — คิวรอตรวจใช้ดูของที่ส่งมา · หน้าคลังยืมไปโชว์ผลงานที่ปิดแล้ว */
-export function WorkGallery({ images }) {
-  const [idx, setIdx] = useState(0);
+export function WorkGallery({ images, index, onIndex }) {
+  const [own, setOwn] = useState(0);
   const [zoom, setZoom] = useState(false);
+  /* คุมจากข้างนอกได้ (คิวรอตรวจใช้ให้ "รายภาพในชุด" สั่งเลื่อนรูป) — ไม่ส่งมาก็คุมเอง */
+  const idx = index ?? own;
+  const setIdx = (v) => {
+    const n = typeof v === "function" ? v(idx) : v;
+    if (onIndex) onIndex(n); else setOwn(n);
+  };
   const i = Math.min(idx, images.length - 1);
   const cur = images[i];
   const url = attachmentUrl(cur);

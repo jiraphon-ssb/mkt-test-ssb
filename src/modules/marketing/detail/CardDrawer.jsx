@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../useMkt.jsx";
 import { CHANNEL_KIND_LABEL, selfCheckItems, SCENE_OPTIONAL, SCENE_ROLE_LABEL, sceneRole, emptyScene, secText, sizeText, stagesFor, PILLAR_LABEL, STAGE_META, RESULT_LABEL_TEXT, } from "../mktEngine.js";
-import { brandAverageER, briefRefCounts, engagementRate, gateChecklist, isAdsCard, metricsComplete, nowISO, resultLabel, stageIndex, validateTransition, validateBriefForm, firstErrorField, canEditCard, canDecideReview, canDeleteCard, albumFrames, albumFilledCount, frameComplete, meaningful,  timelineSummary, sceneComplete, sceneDetailCount, timelineGaps, channelRuns, rollupCardMetrics, runMetricFields, channelKindOf, runMissing, runProgress, normalizeRunMetrics,} from "../mktRules.js";
+import { brandAverageER, briefRefCounts, gateBlocking, deriveDeadline, deriveSize, engagementRate, gateChecklist, isAdsCard, metricsComplete, nowISO, resultLabel, stageIndex, validateTransition, validateBriefForm, firstErrorField, canEditCard, canDecideReview, canDeleteCard, albumFrames, albumFilledCount, frameComplete, meaningful,  timelineSummary, sceneComplete, sceneDetailCount, timelineGaps, channelRuns, rollupCardMetrics, runMetricFields, channelKindOf, runMissing, runProgress, normalizeRunMetrics,} from "../mktRules.js";
 import { brandOf, profileOf, fmtDateTime, fmtDayMonth, brandFill, typeIcon, typeText, typeIncomplete } from "../mktParts.jsx";
 import { Sheet, Field, SheetActions } from "./Sheet.jsx";
 import { Icon } from "../mktIcon.jsx";
@@ -55,6 +55,47 @@ function ratioOf(w, h) {
   const d = g(w, h) || 1;
   return `${w / d}:${h / d}`;
 }
+/** เลือกช่องทางหลายอันจากแผงซ้าย — dropdown ติ๊กได้ (กดแล้วเมนูไม่ปิด เลือกต่อได้เลย)
+   หน้าตาชุดเดียวกับ MktSelect · เมนูวางแบบ fixed — ไม่โดน UI ทับ/ตัดเหมือนกัน */
+function ChannelPicker({ value = [], channels, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState(null);
+  const rootRef = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e) => { if (!rootRef.current?.contains(e.target)) setOpen(false); };
+    const close = () => setOpen(false);
+    document.addEventListener("mousedown", away);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+  const toggle = (name) => onChange(value.includes(name) ? value.filter((c) => c !== name) : [...value, name]);
+  return (<div className="msel compact" ref={rootRef}>
+   <button type="button" className={`msel-btn ${open ? "open" : ""}`}
+    onClick={() => { setRect(rootRef.current?.getBoundingClientRect() ?? null); setOpen(!open); }}>
+    <span className={`msel-val ${value.length ? "" : "ph"}`}>
+     {value.length > 0 ? value.join(" · ") : "— เลือก —"}
+    </span>
+    <Icon name="chevron" size={13} className={`msel-chev ${open ? "flip" : ""}`}/>
+   </button>
+   {open && (<div className="msel-pop" role="listbox"
+     style={rect ? { position: "fixed", left: Math.min(rect.left, window.innerWidth - 348), top: rect.bottom + 4, minWidth: rect.width } : undefined}>
+     {channels.map((ch) => {
+       const on = value.includes(ch.name);
+       return (<button type="button" key={ch.id} className={`msel-opt ${on ? "on" : ""}`} onClick={() => toggle(ch.name)}>
+        <span className="msel-check">{on && <Icon name="check" size={12}/>}</span>
+        <i className="msel-dot" style={{ background: ch.color }}/>
+        <span className="msel-lab">{ch.name}</span>
+       </button>);
+     })}
+    </div>)}
+  </div>);
+}
 const TH_MONTH = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 function fmtThai(iso) {
   if (!iso)
@@ -76,8 +117,22 @@ const FIELD_SEC = {
   format: "brief", size: "brief", deadline_review: "brief", channels: "brief",
   publish_at: "brief", layout_note: "brief", mood: "brief", ref_note: "brief", ci_link: "brief",
 };
-/** ช่องรองของบรีฟ — พับเก็บใน "รายละเอียดงานดีไซน์" กางเองเมื่อมีช่องผิด */
+/** ช่องรองของบรีฟ — อยู่ในหมวด "ดีไซน์" */
 const MORE_FIELDS = ["mood", "layout_note", "ref_note", "ci_link"];
+/* ขั้น Brief มี 14 ช่อง — เดิมกองในคอลัมน์เดียวยาว 2,600px ต้องเลื่อนหาแบบมืดๆ
+   หั่นเป็น 6 หมวด ทำทีละหมวดให้พอดีหน้าจอ · แต่ละหมวดรู้ว่าตัวเองขาดกี่ช่อง */
+/* core = ช่องที่กั้นทางจริง (ตรงกับ gateBlocking) · fields = ทั้งหมดในหมวดรวมช่องแนะนำ
+   แยกกันเพราะแถบหมวดต้องบอก "ขาดกี่ข้อที่ทำให้ไปต่อไม่ได้" ไม่ใช่ "ยังไม่ได้กรอกกี่ช่อง" */
+const BRIEF_SECS = [
+  { id: "kind",   label: "ชนิดชิ้นงาน", icon: "image",     core: ["format"],
+    fields: ["format", "size", "album_count", "album_frames", "video_seconds", "video_scenes"] },
+  { id: "brief",  label: "โจทย์",       icon: "bulb",      core: ["hook", "key_message", "cta"],
+    fields: ["who_action", "hook", "key_message", "cta", "fact_checked"] },
+  { id: "send",   label: "ส่ง + ช่องทาง", icon: "send",    core: ["channels", "publish_at"],
+    fields: ["deadline_review", "channels", "publish_at"] },
+  { id: "attach", label: "ของแนบ",      icon: "paperclip", core: [], fields: [] },
+  { id: "design", label: "ดีไซน์",       icon: "sparkles",  core: [], fields: MORE_FIELDS },
+];
 /* ตัวเลือกชนิดชิ้นงาน + ภาพประกอบ SVG — ให้คนบรีฟเห็นความต่างทันทีว่าได้อะไร
    art ใช้ currentColor ล้วน (ตามธีม) · apply = ค่าที่เซ็ตให้ brief พร้อมล้างข้อมูลแบบอื่น */
 const CLEAR_VIDEO = { video_seconds: null, video_subtitle: false, video_scenes: [] };
@@ -138,7 +193,10 @@ export function CardSheet({ card, onClose }) {
   const [submitted, setSubmitted] = useState(false);
   const [scrollTo, setScrollTo] = useState(null);
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  /* เช็คลิสต์เงื่อนไขจบขั้น — พับไว้ กางเมื่ออยากไล่ดูทั้งหมด */
+  const [gateOpen, setGateOpen] = useState(false);
+  /* หมวดของขั้น Brief ที่กำลังทำอยู่ (ทีละหมวด ไม่ใช่ม้วนเดียว) */
+  const [briefSec, setBriefSec] = useState("kind");
   const formRef = useRef(null);
   const workingCard = {
     ...card, brief, self_check: selfCheck, draft_link: draftLink, title, pillar,
@@ -210,8 +268,9 @@ export function CardSheet({ card, onClose }) {
   const strictErrs = validateBriefForm(workingCard, true, undefined, refs);
   const secMissing = (k) => Object.keys(strictErrs).filter((f) => FIELD_SEC[f] === k).length;
   const gate = gateChecklist(workingCard, refs);
-  const missing = gate.filter((g) => !g.done).map((g) => g.label);
-  const gateDone = gate.length - missing.length;
+  /* "ยังขาด…" ท้ายจอต้องพูดถึงเฉพาะข้อที่กั้นทาง — ข้อแนะนำที่ว่างไม่ใช่สิ่งที่ค้างงาน */
+  const missing = gateBlocking(gate).filter((g) => !g.done).map((g) => g.label);
+  const gateDone = gate.length - gate.filter((g) => !g.done).length;
   const nextStatus = card.status === "review" || curIdx >= stages.length - 1 ? null : stages[curIdx + 1].id;
   const transition = nextStatus
     ? validateTransition(workingCard, nextStatus, currentUser, undefined, refs)
@@ -221,7 +280,6 @@ export function CardSheet({ card, onClose }) {
   /* ชนิดชิ้นงานที่เลือกอยู่ — รวม format + aw_type เป็นค่าเดียวให้การ์ด SVG ไฮไลต์ถูกใบ */
   const currentKind = b.format === "video" ? "video" : b.aw_type === "album" ? "album" : "single";
   /* ---------- ขั้นไหนอยู่สถานะไหน ---------- */
-  const stageMeta = STAGE_META[card.status];
   const phaseOf = (s) => {
     const i = stageIndex(card.track, s);
     if (i < 0)
@@ -238,9 +296,15 @@ export function CardSheet({ card, onClose }) {
     const p = phase(k);
     return p === "past" || p === "now";
   };
-  /* กลุ่มที่กางอยู่ — เริ่มด้วยกลุ่มของขั้นปัจจุบัน */
-  const [openSecs, setOpenSecs] = useState(() => Object.keys(SEC_STAGE).filter((k) => phaseOf(SEC_STAGE[k]) === "now"));
-  const toggleSec = (k) => setOpenSecs((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
+  /* แท็บขั้น — เห็นฟอร์มทีละขั้น (แบบไทล์ kindpick) · ค่าแรก = ขั้นปัจจุบัน
+     review/done ไม่มีฟอร์ม → เป็นไทล์ข้อมูล · ยังไม่กด = ตามสถานะการ์ด */
+  const [activeSecState, setActiveSec] = useState(null);
+  const defaultSec = SEC_STAGE[card.status] !== undefined && card.status !== "review" && card.status !== "done"
+    ? card.status
+    : (card.status === "review" || card.status === "done")
+      ? card.status
+      : Object.keys(SEC_STAGE).filter((k) => phaseOf(SEC_STAGE[k]) !== "next").pop() ?? "idea";
+  const activeSec = activeSecState ?? defaultSec;
   /* ตัวเลขสรุปบนหัวกลุ่มที่พับไว้ */
   // ขั้น Idea จบเมื่อ "คุ้มทำ + ระบุ Pillar" (project ไม่มี Pillar) — สรุปหัวกลุ่มต้องตรงกับ gate
   const ideaNeedPillar = card.track === "content" && pillar == null;
@@ -296,29 +360,39 @@ export function CardSheet({ card, onClose }) {
       setSubmitted(true);
     const errs = checkBrief ? validateBriefForm(workingCard, true, undefined, refs) : {};
     if (Object.keys(errs).length > 0) {
-      // กางกลุ่มที่มีช่องผิดก่อน ไม่งั้นบอกให้ "ดูช่องแดง" แต่ช่องนั้นถูกพับอยู่
-      const need = new Set();
-      Object.keys(errs).forEach((f) => need.add(FIELD_SEC[f]));
-      setOpenSecs((o) => [...new Set([...o, ...need])]);
+      // เด้งไปแท็บ + หมวดที่มีช่องผิด ไม่งั้นบอกให้ "ดูช่องแดง" แต่ช่องอยู่คนละหมวด
+      const bad = firstErrorField(errs);
+      setActiveSec(FIELD_SEC[bad] ?? "brief");
+      const sec = BRIEF_SECS.find((x) => x.fields.includes(bad));
+      if (sec) setBriefSec(sec.id);
       setScrollTo(firstErrorField(errs));
       toast("ยังกรอกไม่ครบ — ดูช่องที่ขึ้นแดง", "bad");
       return;
     }
     if (!nextStatus)
       return;
-    const ok = await confirm({
-      title: `ส่ง Brief ไปขั้น ${stages[curIdx + 1].name}?`,
-      message: `หลังจากส่งแล้ว ทีม ${stages[curIdx + 1].name} จะเริ่มทำงานจากข้อมูลชุดนี้ได้`,
-      confirmLabel: `ยืนยันและไป ${stages[curIdx + 1].name}`,
-      cancelLabel: "กลับไปตรวจสอบ",
-    });
-    if (!ok)
-      return;
+    /* ถามยืนยันเฉพาะขั้นที่ "ส่งต่อให้คนอื่น" — ขั้นที่เจ้าของงานเดินเองไม่ต้องถามซ้ำ
+       (เดิมถามทุกขั้น = คลิกเกินขั้นละ 1 ครั้ง ทั้งที่กดปุ่มไปแล้ว) */
+    const handOff = nextStatus === "review";
+    if (handOff) {
+      const ok = await confirm({
+        title: `ส่งงานให้ Team Lead ตรวจ?`,
+        message: "ระหว่างรอตรวจจะแก้งานไม่ได้ — ถ้ายังไม่ชัวร์ กด “กลับไปตรวจสอบ” ก่อน",
+        confirmLabel: "ส่งตรวจ",
+        cancelLabel: "กลับไปตรวจสอบ",
+      });
+      if (!ok)
+        return;
+    }
     if (dirty && !doSave())
       return;
     const r = await moveCard(card.id, nextStatus);
-    if (r.ok)
-      onClose();
+    /* อยู่ในการ์ดต่อ — เดิมปิด popup ทิ้ง ทำให้ต้องไปหาการ์ดบนบอร์ดแล้วเปิดใหม่เพื่อกรอกขั้นถัดไป
+       ส่งตรวจแล้วค่อยปิด เพราะงานไปอยู่ในมือคนอื่นแล้ว */
+    if (r.ok) {
+      if (handOff) onClose();
+      else { setActiveSec(nextStatus); setBriefSec("kind"); toast(`ไปขั้น ${stages[curIdx + 1].name} แล้ว`, "ok"); }
+    }
   };
   /** ปิดงาน = เก็บเข้ากรุ (SOP: ตัวเลขครบ + ติดป้ายแล้ว = การ์ดจบชีวิต) */
   /* ปิดงานมี dialog ของตัวเอง (ไม่ใช่ confirm กลาง) — แถมช่อง "บทเรียน" ให้จดก่อนงานหายจากบอร์ด */
@@ -360,10 +434,13 @@ export function CardSheet({ card, onClose }) {
     };
   }, [data.attachments, data.reference_links, data.card_notes, card.id]);
   /* "อีก n วัน / เกินมา n วัน" — เดดไลน์อ่านแวบเดียวรู้ว่ารีบแค่ไหน */
+  /* คืน {text, tone} — เกินกำหนด = late(แดง) · วันนี้ = today(เหลือง) · อนาคต = กลางๆ */
   const relDays = (iso) => {
     if (!iso || card.archived) return null;
     const d = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
-    return d === 0 ? "วันนี้" : d > 0 ? `อีก ${d} วัน` : `เกินมา ${-d} วัน`;
+    if (d === 0) return { text: "วันนี้", tone: "today" };
+    if (d > 0) return { text: `อีก ${d} วัน`, tone: "" };
+    return { text: `เกินมา ${-d} วัน`, tone: "late" };
   };
   /* ประวัติการ์ด — รวมทุกเหตุการณ์ที่เกิดกับงานใบนี้ไว้เส้นเดียว (ครอบคลุม ไม่ต้องไปดูหลายที่)
      ย้ายขั้น · ปิดงาน · Approve · ตีกลับ(+เหตุผลเต็ม) · โน้ต · บทเรียน */
@@ -371,7 +448,7 @@ export function CardSheet({ card, onClose }) {
     const nameOf = (id) => data.profiles.find((p) => p.id === id)?.display_name ?? "—";
     const hist = (data.status_history ?? []).filter((h) => h.card_id === card.id).map((h) => ({
       id: h.id, at: h.moved_at, who: nameOf(h.moved_by),
-      kind: h.from_status === h.to_status ? "close" : "move",
+      kind: h.from_status === h.to_status ? "close" : "move", to: h.to_status,
       title: h.from_status === h.to_status
         ? "ปิดงาน — เก็บเข้าคลัง"
         : `${h.from_status ? STAGE_META[h.from_status]?.name ?? h.from_status : "สร้างการ์ด"} → ${STAGE_META[h.to_status]?.name ?? h.to_status}`,
@@ -383,11 +460,10 @@ export function CardSheet({ card, onClose }) {
       ref: a.action === "reject" ? a.direction_pack_ref : null,
       hours: a.hours_in_review,
     }));
-    const notes = (data.card_notes ?? []).filter((n) => n.card_id === card.id && n.kind !== "reject").map((n) => ({
+    /* โน้ตธรรมดาไม่เข้าประวัติ — มีแผงโน้ตของมันเอง ไม่โชว์ซ้ำ 2 ที่ · บทเรียนเป็นเหตุการณ์สำคัญ เก็บไว้ */
+    const notes = (data.card_notes ?? []).filter((n) => n.card_id === card.id && n.kind === "lesson").map((n) => ({
       id: n.id, at: n.created_at, who: nameOf(n.author_id),
-      kind: n.kind === "lesson" ? "lesson" : "note",
-      title: n.kind === "lesson" ? "จดบทเรียน" : "จดโน้ต",
-      detail: n.text,
+      kind: "lesson", title: "จดบทเรียน", detail: n.text,
     }));
     return [...hist, ...acts, ...notes].sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
   }, [data, card.id]);
@@ -411,37 +487,128 @@ export function CardSheet({ card, onClose }) {
       <button className="btn ghost danger-text" onClick={() => setRejectOpen(true)}>ตีกลับ</button>
       <button className="btn dark" onClick={() => { approveCard(card.id); onClose(); }}>Approve</button>
      </>)}
-    {/* SOP ขั้น 7: ตัวเลขครบ + ติดป้ายแล้ว = การ์ดจบชีวิต (archive ได้) */}
-    {card.status === "measured" && !card.archived && editable && (<button className="btn dark" disabled={!metricsComplete(workingCard)} onClick={onArchive}>
-      ปิดงาน — เก็บเข้ากรุ
-     </button>)}
+    {/* SOP ขั้น 7: ตัวเลขครบ + ติดป้ายแล้ว = การ์ดจบชีวิต (archive ได้)
+       ปุ่มกดไม่ได้ต้องบอกว่าขาดอะไร — ไม่ใช่เทาเงียบๆ ให้เดา */}
+    {card.status === "measured" && !card.archived && editable && (<>
+      {!metricsComplete(workingCard) && measProg.total > 0 && (
+       <span className="bf-why">ยังขาดตัวเลข {measProg.total - measProg.done} ช่องทาง</span>)}
+      <button className="btn dark" disabled={!metricsComplete(workingCard)} onClick={onArchive}>
+       ปิดงาน — เก็บเข้ากรุ
+      </button>
+     </>)}
    </div>
   </div>);
   /* ================= render ================= */
   return (<>
   <Sheet wide onClose={onClose} footer={footer}
    dirty={dirty}
-   dirtyMessage="แก้ไขการ์ดไว้แล้วแต่ยังไม่ได้กดบันทึก — ปิดตอนนี้การแก้ทั้งหมดจะหายไป">
-   <div className="brief-2col">
-    {/* ---------- ซ้าย: ข้อมูลงาน (อยู่นิ่ง) ---------- */}
-    <aside className="brief-meta">
-     <div className="meta-code mono">{card.id}</div>
-     {editable ? (<input className="meta-title-input" value={title} onChange={(e) => setTitle(e.target.value)}/>) : (<div className="meta-title-input" style={{ cursor: "default" }}>{title}</div>)}
-     <div className="meta-badges">
-      <span className="tag brand" style={brandFill(wBrand.color)}>{wBrand.name}</span>
-      {card.track === "project" ? (<span className="tag proj">Project</span>) : pillar ? (<span className="tag pillar">{PILLAR_LABEL[pillar]}</span>) : null}
-      {card.is_realtime && <span className="tag rt">Realtime</span>}
+   dirtyMessage="แก้ไขการ์ดไว้แล้วแต่ยังไม่ได้กดบันทึก — ปิดตอนนี้การแก้ทั้งหมดจะหายไป"
+   head={<div className="cs-head">
+    <div className="cs-head-id">
+     <span className="meta-code mono">{card.id}</span>
+     <span className="tag brand" style={brandFill(wBrand.color)}>{wBrand.name}</span>
+     {card.track === "project" ? (<span className="tag proj">Project</span>) : pillar ? (<span className="tag pillar">{PILLAR_LABEL[pillar]}</span>) : null}
+     {card.is_realtime && <span className="tag rt">Realtime</span>}
+    </div>
+    {editable
+      ? <input className="meta-title-input" value={title} onChange={(e) => setTitle(e.target.value)}/>
+      : <div className="meta-title-input" style={{ cursor: "default" }}>{title}</div>}
+   </div>}
+   subhead={<div className="cs-sub">
+     {/* ---- แถบไทล์ขั้น (แบบ kindpick) — กดเพื่อดูฟอร์มทีละขั้น · ยังไม่ถึง = จาง ---- */}
+     <div className="stage-strip">
+      {stages.map((st) => {
+        const secKey = (st.id === "review" || st.id === "done") ? st.id : (SEC_STAGE[st.id] !== undefined ? st.id : null);
+        if (!secKey) return null;
+        const ph = phaseOf(st.id);
+        const sMeta = STAGE_META[st.id];
+        const clickable = ph !== "next";
+        /* ขั้นที่ผ่านแล้ว: โชว์วันที่เข้าขั้นจริง (ยกมาจาก stepper เดิม) — เห็นจังหวะงานทั้งเส้น */
+        const pastDate = ph === "past" && stageDates[st.id] ? fmtDayMonth(stageDates[st.id]) : null;
+        const sum = st.id === "idea" ? (ideaOk ? "คุ้มทำ" : "ยังไม่ยืนยัน")
+          : st.id === "brief" ? (secMissing("brief") === 0 ? "ครบ" : `ขาด ${secMissing("brief")}`)
+          : st.id === "draft" ? `เช็ค ${selfDone}/${selfItems.length}`
+          : st.id === "review" ? (card.status === "review" ? "รอตรวจ" : ph === "past" ? "ผ่านแล้ว" : "—")
+          : st.id === "scheduled" ? `${schedProg.done}/${schedProg.total || "–"}`
+          : st.id === "published" ? `${pubProg.done}/${pubProg.total || "–"}`
+          : st.id === "measured" ? (liveEr != null ? `ER ${(liveEr * 100).toFixed(1)}%` : `${measProg.done}/${measProg.total || "–"}`)
+          : st.id === "done" ? (ph === "now" ? "จบแล้ว" : "—") : "";
+        return (<button key={st.id} type="button"
+          className={`stgtile ${activeSec === secKey ? "on" : ""} ${ph === "past" ? "done" : ph === "next" ? "off" : ""}`}
+          style={{ ["--stage"]: sMeta.color }} disabled={!clickable}
+          title={`${sMeta.owner} · ${sMeta.question}`}
+          onClick={() => clickable && setActiveSec(secKey)}>
+          <span className="stgtile-ic">{ph === "past" ? <Icon name="check" size={13}/> : <Icon name={sMeta.icon} size={14}/>}</span>
+          <span className="stgtile-name">{st.name}</span>
+          <span className="stgtile-sum">{pastDate ?? sum}</span>
+          {ph === "now" && !card.archived && <span className="stgtile-owner">{sMeta.owner}</span>}
+         </button>);
+      })}
      </div>
 
-     {/* stepper แนวตั้ง — ขั้นที่ผ่านแล้วติดวันที่จริงจากประวัติ เห็นจังหวะงานทั้งเส้น */}
-     <div className="vstep">
-      {stages.map((s, i) => (<div key={s.id} className={`vstep-row ${i < curIdx ? "past" : ""} ${i === curIdx ? "now" : ""}`} style={{ ["--stage"]: s.color }}>
-        <span className="vstep-knot"/>
-        <span className="vstep-label">{s.name}</span>
-        {i === curIdx && !card.archived && <span className="vstep-owner">{s.owner}</span>}
-        {i <= curIdx && stageDates[s.id] && <span className="vstep-date mono">{fmtDayMonth(stageDates[s.id])}</span>}
-       </div>))}
-     </div>
+     {/* เช็คลิสต์เงื่อนไขจบขั้น — ตามขั้นที่เลือกดูในไทล์ (สลับไทล์ = แผงนี้สลับตาม)
+        ไล่ตรวจ task ของขั้นไหนก็ได้ว่าขาดตกอะไร · งานปิดแล้วไม่ต้องโชว์ */}
+     {!card.archived && (() => {
+       const vStage = STAGE_META[activeSec] ? activeSec : card.status;
+       const vMeta = STAGE_META[vStage];
+       const isCur = vStage === card.status;
+       const vGate = isCur ? gate : gateChecklist({ ...workingCard, status: vStage }, refs);
+       const vMiss = vGate.filter((g) => !g.done).length;
+       const vDone = vGate.length - vMiss;
+       if (vGate.length === 0) return null;
+       /* ครบแล้ว = ไม่ต้องอ่าน 15 ข้อ · ยังขาด = โชว์เฉพาะข้อที่ขาด (ข้อที่ทำแล้วไม่ใช่ข้อมูลใหม่)
+          กดหัวแถบเพื่อกางดูทั้งหมด — เดิมกางค้างตลอดกิน 305px = 46% ของฟอร์มที่มองเห็น */
+       const showAll = gateOpen || vMiss === 0;
+       const listed = gateOpen ? vGate : vGate.filter((g) => !g.done);
+       return (
+       <div className={`gcheck ${vMiss === 0 ? "ok" : ""} slim`} style={{ ["--stage"]: vMeta.color }}>
+        <button className="gcheck-head" onClick={() => setGateOpen(!gateOpen)} aria-expanded={gateOpen}>
+         <span className="gcheck-stagename">ขั้น {vMeta.name}</span>
+         <span className="gcheck-owner">{vMeta.owner}</span>
+         <span className="gcheck-sum">
+          {(() => {
+            /* นับเฉพาะข้อที่กั้นทาง — ข้อ "แนะนำ" บอกต่อท้ายแบบเงียบ ไม่ใช่ตัวเลขที่ทำให้ตกใจ */
+            const block = vGate.filter((g) => !g.soft);
+            const blockMiss = block.filter((g) => !g.done).length;
+            const softMiss = vGate.filter((g) => g.soft && !g.done).length;
+            return blockMiss === 0
+              ? (<><Icon name="check" size={12}/> ผ่านเงื่อนไขครบ
+                  {isCur && nextStatus ? ` — พร้อมไป ${stages[curIdx + 1].name}` : ""}
+                  {softMiss > 0 && <em className="gcheck-softn"> · แนะนำอีก {softMiss}</em>}</>)
+              : (<>ต้องกรอกอีก {blockMiss} จาก {block.length}
+                  {softMiss > 0 && <em className="gcheck-softn"> · แนะนำอีก {softMiss}</em>}</>);
+          })()}
+         </span>
+         <span className="gcheck-bar" aria-hidden="true">
+          <i style={{
+            width: `${(vDone / Math.max(1, vGate.length)) * 100}%`,
+            background: vMiss === 0 ? "var(--ok)" : "var(--stage, var(--accent))",
+          }}/>
+         </span>
+         <Icon name="chevron" size={14} className={gateOpen ? "up" : ""}/>
+        </button>
+        {listed.length > 0 && (
+        <ul className={`gcheck-list ${showAll ? "" : "missing-only"}`}>
+         {listed.map((g) => (<li key={g.label} className={`${g.done ? "done" : ""} ${g.soft ? "soft" : ""}`}>
+           <span className="gcheck-mark">
+            {g.done ? <Icon name="check" size={11}/> : null}
+           </span>
+           {g.label}
+           {g.soft && <em className="gcheck-soft">แนะนำ</em>}
+          </li>))}
+        </ul>)}
+        {!isCur && vMiss === 0 && (<div className="gcheck-ready">
+          <Icon name="check" size={13}/> ขั้นนี้ครบแล้ว
+         </div>)}
+       </div>);
+     })()}
+
+   </div>}>
+   <div className="brief-2col">
+    {/* ---------- ซ้าย: คุณสมบัติการ์ด (ชื่อ/ชิป/ขั้น ย้ายขึ้นหัว popup แล้ว) ---------- */}
+    <aside className="brief-meta">
+
+
 
      {/* แท็บเล็ก: ข้อมูล / ประวัติ */}
      <div className="meta-tabs">
@@ -455,97 +622,148 @@ export function CardSheet({ card, onClose }) {
      </div>
 
      {metaTab === "info" && <>
-     <dl className="meta-list">
-      <dt>แบรนด์</dt>
-      <dd>
-       {editable ? (<MktSelect compact value={brandId} onChange={setBrandId}
-         options={data.brands.filter((x) => x.active).map((x) => ({ value: x.id, label: x.name, dot: x.color }))}/>) : wBrand.name}
-      </dd>
-
-      {/* ขั้น Idea เลือก Pillar ในกล่องเงื่อนไขจบฝั่งขวา — ที่นี่ขึ้นตั้งแต่ขั้น Brief */}
-      {card.track === "content" && card.status !== "idea" && (<>
-        <dt>Pillar</dt>
-        <dd>
+     <div className="prop-list">
+      <div className="prop-sec">ข้อมูลงาน</div>
+      <div className="prop-row">
+       <span className="prop-k"><Icon name="grid" size={12}/>แบรนด์</span>
+       <span className="prop-v">
+        {editable ? (<MktSelect compact value={brandId} onChange={setBrandId}
+          options={data.brands.filter((x) => x.active).map((x) => ({ value: x.id, label: x.name, dot: x.color }))}/>) : wBrand.name}
+       </span>
+      </div>
+      {card.track === "content" && card.status !== "idea" && (
+       <div className="prop-row">
+        <span className="prop-k"><Icon name="columns" size={12}/>Pillar</span>
+        <span className="prop-v">
          {editable ? (<MktSelect compact value={pillar ?? ""} onChange={(v) => setPillar(v || null)} options={[
            { value: "", label: "— ยังไม่ระบุ —" },
            ...Object.keys(PILLAR_LABEL).map((p) => ({ value: p, label: PILLAR_LABEL[p] })),
           ]}/>) : pillar ? PILLAR_LABEL[pillar] : "—"}
-        </dd>
-       </>)}
-
-      <dt>ผู้ดูแล</dt>
-      <dd>
-       {editable ? (<div className="meta-person-edit">
-         <MktSelect compact value={ownerId} onChange={(next) => {
+        </span>
+       </div>)}
+      <div className="prop-row">
+       <span className="prop-k"><Icon name="user" size={12}/>ผู้ดูแล</span>
+       <span className="prop-v">
+        {editable ? (<MktSelect compact value={ownerId} onChange={(next) => {
           setOwnerId(next);
           // ผู้ดูแลไม่ต้องอยู่ในรายชื่อสมาชิกซ้ำอีก
           setMembers((ms) => ms.filter((m) => m !== next));
-         }} options={activeUsers.map((p) => ({ value: p.id, label: p.display_name }))}/>
-        </div>) : wOwner?.display_name}
-      </dd>
-      <dt>ชนิดงาน</dt>
-      <dd className="meta-kind">
-       <Icon name={typeIcon(b)} size={13}/> {typeText(b)}
-       {typeIncomplete(b) && !card.archived && <i className="wcard-warn-dot" title="สเปคยังไม่ครบ"/>}
-      </dd>
+         }} options={activeUsers.map((p) => ({ value: p.id, label: p.display_name }))}/>) : wOwner?.display_name}
+       </span>
+      </div>
+      <div className="prop-row">
+       <span className="prop-k"><Icon name={typeIcon(b)} size={12}/>ชนิดงาน</span>
+       <span className="prop-v">
+        {typeText(b)}
+        {typeIncomplete(b) && !card.archived && <i className="wcard-warn-dot" title="สเปคยังไม่ครบ"/>}
+       </span>
+      </div>
+      <div className="prop-row">
+       <span className="prop-k"><Icon name="send" size={12}/>ช่องทาง</span>
+       <span className="prop-v">
+        {editable
+          ? <ChannelPicker value={b.channels} channels={activeChannels}
+             onChange={(channels) => setBrief({
+            ...b, channels,
+            /* ขนาด/อัตราส่วนเดาจากชนิดช่องทาง — เติมให้เฉพาะตอนยังว่าง */
+            size: meaningful(b.size) ? b.size : deriveSize(channels, activeChannels, b.format),
+          })}/>
+          : b.channels.length > 0
+            ? b.channels.map((ch) => <span className="meta-ch" key={ch}>{ch}</span>)
+            : "—"}
+       </span>
+      </div>
 
-      {b.channels.length > 0 && (<>
-        <dt>ช่องทาง</dt>
-        <dd className="meta-chs">
-         {b.channels.map((ch) => <span className="meta-ch" key={ch}>{ch}</span>)}
-        </dd>
-       </>)}
+      <div className="prop-sec">กำหนดเวลา</div>
+      <div className="prop-row">
+       <span className="prop-k"><Icon name="bulb" size={12}/>เริ่ม</span>
+       <span className="prop-v">{fmtThai(card.created_at)}</span>
+      </div>
+      {b.deadline_review && (
+       <div className="prop-row">
+        <span className="prop-k"><Icon name="eye" size={12}/>ส่งตรวจ</span>
+        <span className="prop-v">
+         {fmtThai(b.deadline_review + "T00:00:00")}
+         {relDays(b.deadline_review + "T00:00:00") && (
+          <em className={`meta-rel ${relDays(b.deadline_review + "T00:00:00").tone}`}>
+           {relDays(b.deadline_review + "T00:00:00").text}
+          </em>)}
+        </span>
+       </div>)}
+      {b.publish_at && (
+       <div className="prop-row">
+        <span className="prop-k"><Icon name="send" size={12}/>โพสต์</span>
+        <span className="prop-v">
+         {fmtThai(b.publish_at)}
+         {relDays(b.publish_at) && (
+          <em className={`meta-rel ${relDays(b.publish_at).tone}`}>{relDays(b.publish_at).text}</em>)}
+        </span>
+       </div>)}
 
-      <dt>กำหนดเวลา</dt>
-      <dd className="meta-tl">
-       <span className="meta-tl-row"><Icon name="bulb" size={12}/> เริ่ม <b>{fmtThai(card.created_at)}</b></span>
-       {b.deadline_review && (<span className="meta-tl-row">
-         <Icon name="eye" size={12}/> ส่งตรวจ <b>{fmtThai(b.deadline_review + "T00:00:00")}</b>
-         {relDays(b.deadline_review + "T00:00:00") && <em className="meta-rel">{relDays(b.deadline_review + "T00:00:00")}</em>}
-        </span>)}
-       {b.publish_at && (<span className="meta-tl-row">
-         <Icon name="send" size={12}/> โพสต์ <b>{fmtThai(b.publish_at)}</b>
-         {relDays(b.publish_at) && <em className="meta-rel">{relDays(b.publish_at)}</em>}
-        </span>)}
-      </dd>
-
-      <dt>ของในการ์ด</dt>
-      <dd className="meta-things">
-       <span title="รูปในการ์ด"><Icon name="image" size={13}/>{thingCounts.imgs}</span>
-       <span title="ไฟล์เอกสาร"><Icon name="paperclip" size={13}/>{thingCounts.docs}</span>
-       <span title="ลิงก์อ้างอิง"><Icon name="link" size={13}/>{thingCounts.links}</span>
-       <span title="โน้ตการทำงาน"><Icon name="pencil" size={13}/>{thingCounts.notes}</span>
-      </dd>
+      <div className="prop-sec">ของในการ์ด</div>
+      <div className="prop-row">
+       <span className="prop-v meta-things" style={{ justifyContent: "flex-start" }}>
+        <span title="รูปในการ์ด"><Icon name="image" size={13}/>{thingCounts.imgs}</span>
+        <span title="ไฟล์เอกสาร"><Icon name="paperclip" size={13}/>{thingCounts.docs}</span>
+        <span title="ลิงก์อ้างอิง"><Icon name="link" size={13}/>{thingCounts.links}</span>
+        <span title="โน้ตการทำงาน"><Icon name="pencil" size={13}/>{thingCounts.notes}</span>
+       </span>
+      </div>
 
       {!card.archived && gate.length > 0 && (<>
-        <dt>ความพร้อมขั้นนี้</dt>
-        <dd className="meta-gate">
+       <div className="prop-sec">ความพร้อมขั้นนี้</div>
+       <div className="prop-row">
+        <span className="prop-v meta-gate" style={{ width: "100%" }}>
          <span className="meta-gate-bar"><i style={{ width: `${(gateDone / gate.length) * 100}%`, background: missing.length === 0 ? "var(--ok)" : "var(--stage, var(--accent))" }}/></span>
          <b className="mono">{gateDone}/{gate.length}</b>
-        </dd>
-       </>)}
-     </dl>
+        </span>
+       </div>
+      </>)}
+     </div>
 
      </>}
 
      {metaTab === "history" && (historyRows.length === 0
        ? (<div className="empty-row">ยังไม่มีการเคลื่อนไหว</div>)
-       : (<ol className="mhist">
-          {historyRows.map((h) => (<li key={h.id} className={`mhist-row ${h.kind}`}>
-            <span className="mhist-dot"/>
-            <div className="mhist-body">
-             <div className="mhist-head">
-              <b>{h.title}</b>
-              {h.hours != null && <em>ใช้เวลาตรวจ {h.hours} ชม.</em>}
+       : (<ol className="mtl">
+          {(() => { let lastDay = null; return historyRows.map((h) => {
+            const day = fmtThai(h.at);
+            const newDay = day !== lastDay; lastDay = day;
+            /* เนื้อตีกลับ: หัวข้อที่เว้นว่าง ("จุดที่ผิด:" เปล่าๆ) ไม่ต้องโชว์ */
+            const detail = h.detail
+              ? h.detail.split("\n").filter((l) => !/^[^:]{2,20}:\s*$/.test(l.trim())).join("\n").trim()
+              : null;
+            const icon = h.kind === "move" ? (STAGE_META[h.to]?.icon ?? "arrow")
+              : h.kind === "approve" || h.kind === "close" ? "check"
+              : h.kind === "reject" ? "alert"
+              : h.kind === "lesson" ? "trophy" : "pencil";
+            const tint = h.kind === "move" ? (STAGE_META[h.to]?.color ?? "var(--ink-faint)")
+              : h.kind === "approve" || h.kind === "close" ? "var(--ok)"
+              : h.kind === "reject" ? "var(--bad)"
+              : h.kind === "lesson" ? "var(--warn)" : "var(--ink-faint)";
+            return (<li key={h.id} className={`mtl-item ${h.kind}`} style={{ ["--tint"]: tint }}>
+             {newDay && <div className="mtl-day">{day}</div>}
+             <div className="mtl-row">
+              <span className="mtl-ic"><Icon name={icon} size={11}/></span>
+              <div className="mtl-body">
+               <div className="mtl-head">
+                <b>{h.title}</b>
+                <span className="mtl-time mono">{fmtClock(h.at)}</span>
+               </div>
+               {detail && <p className="mtl-detail">{detail}</p>}
+               {h.ref && <span className="mtl-ref">{h.ref}</span>}
+               <div className="mtl-who">
+                {h.who}
+                {h.hours != null && <em> · ใช้เวลาตรวจ {h.hours} ชม.</em>}
+               </div>
+              </div>
              </div>
-             {h.detail && <p className="mhist-detail">{h.detail}</p>}
-             {h.ref && <span className="mhist-ref">{h.ref}</span>}
-             <div className="mhist-meta">{h.who} · {fmtDateTime(h.at)}</div>
-            </div>
-           </li>))}
+            </li>);
+          }); })()}
          </ol>))}
 
-     {canDeleteCard(currentUser, card) && (<div className="meta-del">
+     {/* ลบการ์ด = ของแท็บข้อมูล — ประวัติเป็นที่อ่านอย่างเดียว */}
+     {metaTab === "info" && canDeleteCard(currentUser, card) && (<div className="meta-del">
        <button className="meta-link danger-text" onClick={askDelete}>
         <Icon name="trash" size={13}/> ลบการ์ดนี้
        </button>
@@ -562,39 +780,14 @@ export function CardSheet({ card, onClose }) {
         <span>ตัวเลขและบรีฟแก้ไม่ได้ · ที่เพิ่มได้: โน้ต บทเรียน หมวด และปักเป็นต้นแบบ (หน้าคลัง)</span>
        </div>
       </div>)}
-     {/* เช็คลิสต์เงื่อนไขจบขั้นนี้ — งานที่ปิดแล้วไม่ต้องโชว์ (จบไปแล้ว เงื่อนไขไม่มีความหมาย) */}
-     {!card.archived && (
-     <div className={`gcheck ${missing.length === 0 ? "ok" : ""}`} style={{ ["--stage"]: stageMeta.color }}>
-      <div className="gcheck-stage">
-       <span className="gcheck-stagename">ขั้น {stageMeta.name}</span>
-       <span className="gcheck-owner">{stageMeta.owner}</span>
-       <span className="gcheck-q">{stageMeta.question}</span>
-      </div>
-      <div className="gcheck-head">
-       <span className="gcheck-title">เงื่อนไขจบขั้นนี้</span>
-       <span className="gcheck-count mono">{gateDone}/{gate.length}</span>
-      </div>
-      <div className="gcheck-bar">
-       <i style={{
-      width: `${(gateDone / Math.max(1, gate.length)) * 100}%`,
-      background: missing.length === 0 ? "var(--ok)" : "var(--stage, var(--accent))",
-    }}/>
-      </div>
-      <ul className="gcheck-list">
-       {gate.map((g) => (<li key={g.label} className={g.done ? "done" : ""}>
-         <span className="gcheck-mark">
-          {g.done ? <Icon name="check" size={11}/> : null}
-         </span>
-         {g.label}
-        </li>))}
-      </ul>
-      {missing.length === 0 && nextStatus && (<div className="gcheck-ready">
-        <Icon name="check" size={13}/> ครบแล้ว — พร้อมไป {stages[curIdx + 1].name}
-       </div>)}
-     </div>)}
+     {/* review/done ไม่มีฟอร์ม — แผงบอกสถานะสั้นๆ */}
+     {activeSec === "review" && (<div className="stsec-info">
+       งานอยู่ในคิวรอตรวจ — Team Lead ตรวจ/ตีกลับได้จากแท็บ "รอตรวจ" หรือปุ่ม Approve ด้านล่าง · ระหว่างนี้กดไทล์ขั้นก่อนหน้าเพื่อย้อนดูงานได้
+      </div>)}
+     {activeSec === "done" && (<div className="stsec-info">งานปิดจบแล้ว — ย้อนดูรายละเอียดแต่ละขั้นได้จากไทล์ด้านบน</div>)}
 
      {/* ---- ขั้น Idea — Owner ยืนยันว่าคุ้มทำ (ไม่ผ่านอัตโนมัติ) ---- */}
-     {visible("idea") && (<StageSection sec="idea" phase={phase("idea")} open={openSecs.includes("idea")} onToggle={() => toggleSec("idea")} title="ขั้น Idea — คุ้มทำหรือไม่" summary={ideaSummary} ok={ideaOk}>
+     {visible("idea") && (<StageSection sec="idea" active={activeSec === "idea"} title="คุ้มทำหรือไม่" summary={ideaSummary} ok={ideaOk}>
        {/* ของแนบขึ้นก่อน — กดการ์ดมาเห็นรูป/ลิ้งที่โยนไว้ทันที เพิ่ม/แก้ได้เลย
            พอเข้าขั้น Brief กล่องนี้ย้ายไปอยู่ใน flow บรีฟแทน (ที่เดียว ไม่โชว์ซ้ำ) */}
        {phase("idea") === "now" && (
@@ -605,15 +798,15 @@ export function CardSheet({ card, onClose }) {
         <label className={`fact-card ${planConfirmed ? "on" : ""}`} onClick={() => editable && setPlanConfirmed(!planConfirmed)}>
          <span className="cbox">✓</span>
          <span>
-          อยู่ใน Monthly Plan หรือเห็นว่าคุ้มทำ
-          <span className="fact-sub">ยังไม่แน่ใจ = ทิ้งไว้ใน Idea หรือลบทิ้ง</span>
+          อยู่ในแผนเดือน หรือคุ้มทำ
+          <span className="fact-sub">ยังไม่แน่ใจ = ทิ้งไว้ใน Idea ก่อนได้</span>
          </span>
         </label>
        </div>
 
        {/* SOP ขั้น 1: Pillar เป็นเงื่อนไขจบของขั้นนี้ → เลือกตรงนี้เลย
         ขั้นถัดไปย้ายไปอยู่แผงข้อมูลงานฝั่งซ้าย (ที่เดียว ไม่ซ้ำ) */}
-       {card.track === "content" && phase("idea") === "now" && (<FormField name="pillar" label="Pillar / กลุ่มลูกค้า" required hint="ตอบไม่ได้ = ยังไม่ชัดว่าทำให้ใคร ยังไม่ต้องดันเข้า Brief">
+       {card.track === "content" && phase("idea") === "now" && (<FormField name="pillar" label="Pillar / กลุ่มลูกค้า" required hint="ตอบไม่ได้ = ยังไม่ต้องดันเข้า Brief">
          <div className="chips-input">
           {Object.keys(PILLAR_LABEL).map((p) => (<button key={p} className={pillar === p ? "on" : ""} disabled={!editable} onClick={() => setPillar(pillar === p ? null : p)}>
             {PILLAR_LABEL[p]}
@@ -625,13 +818,30 @@ export function CardSheet({ card, onClose }) {
      {/* Pillar ไม่ซ้ำที่นี่ — แก้ได้ที่แผง "ข้อมูลงาน" ฝั่งซ้าย */}
 
      {/* ---- ขั้น Brief — flow เดียวตามลำดับคิดงาน: ชนิด → โจทย์ → สเปก → ส่ง → แนบ (+เพิ่มเติม) ---- */}
-     {visible("brief") && (<StageSection sec="brief" phase={phase("brief")} open={openSecs.includes("brief")} onToggle={() => toggleSec("brief")} title="ขั้น Brief — บรีฟงาน" summary={secMissing("brief") === 0 ? "ครบ" : `ยังขาด ${secMissing("brief")} ข้อ`} ok={secMissing("brief") === 0}>
-     <div className="field-hint" style={{ marginBottom: 14 }}>
-      Name / Pillar อยู่แผงข้อมูลงานฝั่งซ้าย
+     {visible("brief") && (<StageSection sec="brief" active={activeSec === "brief"} title="บรีฟงาน" summary={secMissing("brief") === 0 ? "ครบ" : `ยังขาด ${secMissing("brief")} ข้อ`} ok={secMissing("brief") === 0}>
+     {/* แถบหมวด — เห็นทั้งเส้นทางว่าเหลืออะไร กดข้ามหมวดได้ (ไม่ต้องเลื่อนหา) */}
+     <div className="bsec-nav">
+      {BRIEF_SECS.map((sc, i) => {
+        /* ขาดจริง = เฉพาะช่องที่กั้นทาง · ช่องแนะนำที่ยังว่างบอกเบาๆ ไม่ใช่คำเตือน */
+        const missCore = sc.core.filter((f) => strictErrs[f]).length;
+        const missSoft = sc.fields.filter((f) => !sc.core.includes(f) && strictErrs[f]).length;
+        const done = sc.core.length > 0 && missCore === 0;
+        return (<button key={sc.id} type="button"
+          className={`bsec ${briefSec === sc.id ? "on" : ""} ${done ? "done" : ""} ${missCore > 0 ? "miss" : ""}`}
+          onClick={() => setBriefSec(sc.id)}>
+         <span className="bsec-n">{done ? <Icon name="check" size={11}/> : i + 1}</span>
+         <span className="bsec-label">{sc.label}</span>
+         <span className="bsec-state">
+          {missCore > 0 ? `ต้องกรอก ${missCore}` : sc.core.length === 0 ? "ไม่บังคับ" : "ครบ"}
+          {missSoft > 0 && <em className="bsec-soft"> · แนะนำอีก {missSoft}</em>}
+         </span>
+        </button>);
+      })}
      </div>
 
-     <FormField name="format" label="ชนิดชิ้นงาน" required error={errors.format}
-      hint="เลือกแล้วช่องด้านล่างจะเปลี่ยนตามชนิดที่เลือก">
+     {/* ── หมวด: ชนิดชิ้นงาน + สเปกตามชนิด ── */}
+     {briefSec === "kind" && (<>
+     <FormField name="format" label="ชนิดชิ้นงาน" required error={errors.format}>
       <div className="kindpick">
        {KIND_OPTIONS.map((k) => {
          const on = k.id === currentKind;
@@ -645,8 +855,11 @@ export function CardSheet({ card, onClose }) {
       </div>
      </FormField>
 
-     <div className="bflow-h">โจทย์ — งานนี้พูดกับใคร บอกอะไร</div>
-     <FormField name="who_action" label="ใคร → ให้ทำอะไร" required error={errors.who_action} hint="กลุ่มเป้าหมาย และ action เดียวที่อยากให้เกิดหลังเห็น">
+     </>)}
+
+     {/* ── หมวด: โจทย์ ── */}
+     {briefSec === "brief" && (<>
+     <FormField name="who_action" label="ใคร → ให้ทำอะไร" required error={errors.who_action} hint="กลุ่มเป้าหมาย + action เดียวที่อยากให้เกิด">
       <textarea rows={2} className={errors.who_action ? "invalid" : ""} placeholder="ตัวอย่าง: เจ้าของธุรกิจ → ให้สมัครทดลองใช้ระบบ" value={b.who_action} disabled={!editable} onChange={(e) => setBrief({ ...b, who_action: e.target.value })}/>
      </FormField>
 
@@ -665,23 +878,23 @@ export function CardSheet({ card, onClose }) {
       <label className={`fact-card ${b.fact_checked ? "on" : ""} ${errors.fact_checked ? "invalid" : ""}`} onClick={() => editable && setBrief({ ...b, fact_checked: !b.fact_checked })}>
        <span className="cbox">✓</span>
        <span>
-        ตรวจสอบตัวเลขและ Claim กับ Fact Sheet แล้ว
-        <span className="fact-sub">ต้องตรวจก่อนส่งเข้า {stages[curIdx + 1]?.name ?? "ขั้นถัดไป"}</span>
+        เช็คตัวเลข/Claim กับ Fact Sheet แล้ว
+        <span className="fact-sub">ต้องเช็คก่อนส่งเข้า {stages[curIdx + 1]?.name ?? "ขั้นถัดไป"}</span>
        </span>
       </label>
       {errors.fact_checked && <div className="field-error"><Icon name="alert" size={13}/> {errors.fact_checked}</div>}
      </div>
 
-     <div className="bflow-h">สเปกชิ้นงาน</div>
+
      {/* ---- ภาพนิ่งเดี่ยว: ขนาดภาพเดียวจบ ---- */}
      {b.format === "image" && b.aw_type !== "album" && (
-      <FormField name="size" label="ขนาดภาพ" required error={errors.size} hint="เลือกจากที่ตั้งไว้ หรือกรอก pixel เอง">
+      <FormField name="size" label="ขนาดภาพ" required error={errors.size}>
        <SizePicker value={b.size} presets={sizePresets} disabled={!editable} onChange={(size) => setBrief({ ...b, size })}/>
       </FormField>)}
 
      {/* ---- ชุดภาพ: จำนวน + รายภาพ (ขนาดอยู่ในแต่ละภาพ) ---- */}
      {b.format === "image" && b.aw_type === "album" && (<div className="album-box">
-       <FormField name="album_count" label="จำนวนภาพในชุด" required error={errors.album_count} hint="2–20 ภาพ · เปลี่ยนจำนวนแล้วรายการด้านล่างปรับตาม">
+       <FormField name="album_count" label="จำนวนภาพในชุด" required error={errors.album_count} hint="2–20 ภาพ">
         <div className="stepper">
          <button type="button" disabled={!editable || (b.album_count ?? 0) <= 2}
           onClick={() => setBrief({ ...b, album_count: Math.max(2, (b.album_count ?? 2) - 1) })} aria-label="ลดจำนวนภาพ">−</button>
@@ -695,7 +908,7 @@ export function CardSheet({ card, onClose }) {
        </FormField>
 
        {(b.album_count ?? 0) >= 2 && (<FormField name="album_frames" label="รายละเอียดรายภาพ" required error={errors.album_frames}
-        hint="กดไอคอนแก้ไขเพื่อใส่ข้อความ + ขนาดของภาพนั้น · ภาพแรกคือภาพที่หยุดนิ้ว ภาพสุดท้ายคือ CTA">
+        hint="ภาพแรก = หยุดนิ้ว · ภาพสุดท้าย = CTA">
         <div className="frames">
          {frames.map((f, i) => {
            const first = i === 0, last = i === frames.length - 1;
@@ -727,7 +940,7 @@ export function CardSheet({ card, onClose }) {
         <SizePicker value={b.size} presets={sizePresets} disabled={!editable} ratioOnly onChange={(size) => setBrief({ ...b, size })}/>
        </FormField>
        <div className="grid2">
-        <FormField name="video_seconds" label="ความยาวคลิป" required error={errors.video_seconds} hint="วินาที — ยาวเกินช่องทางกำหนดจะโดนตัด · เพิ่มค่ายอดใช้ได้ที่หน้าตั้งค่า">
+        <FormField name="video_seconds" label="ความยาวคลิป" required error={errors.video_seconds} hint="ยาวเกินช่องทางกำหนดจะโดนตัด">
          <div className="stepper">
           <input className={`field ${errors.video_seconds ? "invalid" : ""}`} type="number" min={1} max={600}
            value={b.video_seconds ?? ""} disabled={!editable}
@@ -748,7 +961,7 @@ export function CardSheet({ card, onClose }) {
        </div>
 
        <FormField name="video_scenes" label="ไทม์ไลน์ฉาก" required error={errors.video_scenes}
-        hint="ฉากแรกเริ่มวินาที 0 = hook · ฉากสุดท้าย = CTA · กดไอคอนแก้ไขเพื่อใส่มุมกล้อง/คน/สถานที่/เสียง">
+        hint="ฉากแรก = hook · ฉากสุดท้าย = CTA">
         <Timeline tl={tl} onEdit={editable ? setEditScene : null}/>
         <div className="frames scenes">
          {scenes.map((sc, i) => {
@@ -785,12 +998,16 @@ export function CardSheet({ card, onClose }) {
        </FormField>
       </div>)}
 
-     <div className="bflow-h">ส่งเมื่อไหร่ · ลงช่องไหน</div>
-     <FormField name="deadline_review" label="Deadline ส่งตรวจ" required error={errors.deadline_review}>
+     </>)}
+
+     {/* ── หมวด: ส่ง + ช่องทาง ── */}
+     {briefSec === "send" && (<>
+     <FormField name="deadline_review" label="Deadline ส่งตรวจ (ระบบคิดให้)" error={errors.deadline_review}
+      info="ปกติ = วันโพสต์ − 2 วัน ตามกติกาเผื่อแก้ · แก้ทับได้ถ้ารอบนี้ต้องส่งเร็ว/ช้ากว่าปกติ">
       <input className={`field ${errors.deadline_review ? "invalid" : ""}`} type="date" value={b.deadline_review ?? ""} disabled={!editable} onChange={(e) => setBrief({ ...b, deadline_review: e.target.value || null })}/>
      </FormField>
 
-     <FormField name="channels" label="ช่องทาง" required error={errors.channels} hint="เลือกได้หลายช่องทาง · เพิ่ม/แก้ช่องทางได้ที่หน้าตั้งค่า">
+     <FormField name="channels" label="ช่องทาง" required error={errors.channels} hint="เพิ่ม/แก้รายการช่องทางได้ที่หน้าตั้งค่า">
       <div className="chips-input ch-chips">
        {activeChannels.map((ch) => {
         const on = b.channels.includes(ch.name);
@@ -810,22 +1027,27 @@ export function CardSheet({ card, onClose }) {
      </FormField>
 
      <FormField name="publish_at" label="วัน–เวลาโพสต์จริง" required={card.track === "content"} error={errors.publish_at}>
-      <input className={`field ${errors.publish_at ? "invalid" : ""}`} type="datetime-local" value={toLocalInput(b.publish_at)} disabled={!editable} onChange={(e) => setBrief({ ...b, publish_at: e.target.value ? new Date(e.target.value).toISOString() : null })}/>
+      <input className={`field ${errors.publish_at ? "invalid" : ""}`} type="datetime-local" value={toLocalInput(b.publish_at)} disabled={!editable}
+       onChange={(e) => {
+         const iso = e.target.value ? new Date(e.target.value).toISOString() : null;
+         /* Deadline ส่งตรวจคิดเองจากวันโพสต์ (−2 วัน) — คนแก้ทับได้ที่ "เพิ่มเติม" */
+         setBrief({ ...b, publish_at: iso, deadline_review: deriveDeadline(iso) ?? b.deadline_review });
+       }}/>
+      {b.publish_at && b.deadline_review && (
+       <div className="field-hint">ส่งตรวจอัตโนมัติ {b.deadline_review} (เผื่อแก้ 2 วัน)</div>)}
      </FormField>
 
-     <div className="bflow-h">ของแนบ</div>
-     <AttachBox cardId={card.id} editable={editable} format={b.format}/>
+     </>)}
 
-     {/* ช่องรองพับเก็บ — กางเองถ้ามีช่องผิดตอนกดไปขั้นถัดไป · แนบรูปมีคำอธิบาย/ลิ้งแล้ว Ref–CI ผ่านเอง */}
-     <div className="bflow-more">
-      <button type="button" className="bflow-more-head" onClick={() => setMoreOpen((o) => !o)}>
-       <Icon name="chevron" size={13} style={{ transform: (moreOpen || MORE_FIELDS.some((f) => errors[f])) ? "rotate(180deg)" : "none" }}/>
-       รายละเอียดงานดีไซน์ — Mood · Layout · Ref · CI
-       {MORE_FIELDS.filter((f) => strictErrs[f]).length > 0
-         ? <span className="bflow-more-miss">ยังขาด {MORE_FIELDS.filter((f) => strictErrs[f]).length}</span>
-         : <span className="bflow-more-ok">ครบ</span>}
-      </button>
-      {(moreOpen || MORE_FIELDS.some((f) => errors[f])) && (<div className="bflow-more-body">
+     {/* ── หมวด: ของแนบ ── */}
+     {briefSec === "attach" && (
+      <AttachBox cardId={card.id} editable={editable} format={b.format}/>)}
+
+     {/* ── หมวด: ดีไซน์ (Mood · Layout · Ref · CI) ── */}
+     {briefSec === "design" && (<>
+      <div className="sec-note" style={{ marginBottom: 12 }}>
+       แนบรูปที่มีคำอธิบาย หรือแนบลิ้ง CI ในหมวด "ของแนบ" แล้ว ช่อง Ref/CI ผ่านเงื่อนไขเอง
+      </div>
        <FormField name="mood" label="Mood" required error={errors.mood} hint="อารมณ์/โทนภาพ เช่น จริงใจ อบอุ่น">
       <input className={`field ${errors.mood ? "invalid" : ""}`} placeholder="เช่น จริงใจ อบอุ่น / คมชัด มืออาชีพ" value={b.mood} disabled={!editable} onChange={(e) => setBrief({ ...b, mood: e.target.value })}/>
      </FormField>
@@ -839,20 +1061,34 @@ export function CardSheet({ card, onClose }) {
        <FormField name="ci_link" label="ลิงก์ CI" required error={errors.ci_link} hint="ลิงก์ CI / Brand Guideline — หรือแนบไฟล์ Brand Guideline ด้านล่าง">
       <input className={`field ${errors.ci_link ? "invalid" : ""}`} placeholder="https://…" value={b.ci_link} disabled={!editable} onChange={(e) => setBrief({ ...b, ci_link: e.target.value })}/>
      </FormField>
-      </div>)}
-     </div>
+     </>)}
+
+     {/* เดินหมวดถัดไปโดยไม่ต้องกลับไปกดที่แถบ */}
+     {(() => {
+       const idx = BRIEF_SECS.findIndex((x) => x.id === briefSec);
+       const next = BRIEF_SECS[idx + 1];
+       const prev = BRIEF_SECS[idx - 1];
+       return (<div className="bsec-foot">
+        {prev && <button type="button" className="btn ghost small" onClick={() => setBriefSec(prev.id)}>
+          <Icon name="chevron" size={13} style={{ transform: "rotate(90deg)" }}/> {prev.label}
+         </button>}
+        {next && <button type="button" className="btn ghost small bsec-next" onClick={() => setBriefSec(next.id)}>
+          {next.label} <Icon name="chevron" size={13} style={{ transform: "rotate(-90deg)" }}/>
+         </button>}
+       </div>);
+     })()}
 
      </StageSection>)}
 
      {/* ---- ขั้น Draft — งานจริง (SOP ขั้น 3) ---- */}
-     {visible("draft") && (<StageSection sec="draft" phase={phase("draft")} open={openSecs.includes("draft")} onToggle={() => toggleSec("draft")} title="ขั้น Draft — งานจริง + Self-check"
+     {visible("draft") && (<StageSection sec="draft" active={activeSec === "draft"} title="งานจริง + Self-check"
        summary={`${workCount > 0 ? `แนบงาน ${workCount} รูป` : draftLink ? "มีลิงก์งาน" : "ยังไม่มีงาน"} · Self-check ${selfDone}/${selfItems.length}`}
        ok={(draftLink.trim() !== "" || workCount > 0) && selfDone === selfItems.length}>
        {/* งานจริง — แนบรูปได้หลายรูป (ตรวจง่ายโดยไม่ต้องออกไป Drive) หรือใส่ลิงก์ Drive ก็ได้ */}
-       <FormField name="draft_work" label="งานที่ทำเสร็จ — แนบรูปได้หลายรูป" hint="ลากรูปงานจริงมาวางได้หลายใบ · คนตรวจจะเลื่อนดูได้เลย · คลิป/ไฟล์ใหญ่ใส่เป็นลิงก์ Drive ด้านล่าง">
+       <FormField name="draft_work" label="งานที่ทำเสร็จ" hint="คลิป/ไฟล์ใหญ่ใส่เป็นลิงก์ Drive ด้านล่าง">
         <ImageFiles cardId={card.id} items={data.attachments.filter((a) => a.card_id === card.id && a.attachment_type === "draft_work").sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))} editable={editable} group="work" title="งานที่ทำเสร็จ" note=""/>
        </FormField>
-       <FormField name="draft_link" label="ลิงก์ไฟล์งาน (Drive)" hint="ไม่บังคับถ้าแนบรูปงานไว้แล้ว — ใส่ไว้สำหรับไฟล์ต้นฉบับ/คลิป">
+       <FormField name="draft_link" label="ลิงก์ไฟล์งาน (Drive)" hint="ไม่บังคับถ้าแนบรูปงานแล้ว">
         <input className="field" placeholder="https://drive.google.com/..." value={draftLink} disabled={!editable} onChange={(e) => setDraftLink(e.target.value)}/>
        </FormField>
        <FormField name="self_check" label="Self-check 6 ข้อ" hint="ต้องครบทุกข้อก่อนส่งตรวจ">
@@ -864,34 +1100,37 @@ export function CardSheet({ card, onClose }) {
       </StageSection>)}
 
      {/* ---- ขั้น Scheduled — ตั้งเวลาจริงทีละช่องทาง (SOP ขั้น 5) ---- */}
-     {visible("scheduled") && (<StageSection sec="scheduled" phase={phase("scheduled")} open={openSecs.includes("scheduled")} onToggle={() => toggleSec("scheduled")}
-       title="ขั้น Scheduled — ตั้งเวลาโพสต์จริง"
+     {visible("scheduled") && (<StageSection sec="scheduled" active={activeSec === "scheduled"}
+       title="ตั้งเวลาโพสต์จริง"
        summary={`ตั้งแล้ว ${schedProg.done}/${schedProg.total} ช่องทาง`} ok={schedProg.ok}>
        <RunTable
          stage="scheduled" runs={liveRuns} card={workingCard} refs={refs} channels={data.channels}
          editable={editable} onChangeRun={setRun}
-         hint="ติ๊กเมื่อตั้งโพสต์ในเครื่องมือของช่องทางนั้นจริง — ไม่ใช่ “เดี๋ยวคืนนี้ค่อยตั้ง” · ต้องแนบแคปหน้าจอเป็นหลักฐานด้วย"/>
+         hint="ตั้งจริงในเครื่องมือของช่องทางนั้น + แนบแคปเป็นหลักฐาน"
+         info="ติ๊กเมื่อตั้งโพสต์ในเครื่องมือของช่องทางนั้นจริง — ไม่ใช่ “เดี๋ยวคืนนี้ค่อยตั้ง” · แคปหน้าจอตอนตั้งคือหลักฐานที่คนอื่นตรวจย้อนได้"/>
       </StageSection>)}
 
      {/* ---- ขั้น Published — ลิงก์โพสต์ + ยืนยันรายช่องทาง (SOP ขั้น 6) ---- */}
-     {visible("published") && (<StageSection sec="published" phase={phase("published")} open={openSecs.includes("published")} onToggle={() => toggleSec("published")}
-       title="ขั้น Published — โพสต์แล้ว"
+     {visible("published") && (<StageSection sec="published" active={activeSec === "published"}
+       title="โพสต์แล้ว"
        summary={`ขึ้นจริง ${pubProg.done}/${pubProg.total} ช่องทาง`} ok={pubProg.ok}>
        <RunTable
          stage="published" runs={liveRuns} card={workingCard} refs={refs} channels={data.channels}
          editable={editable} onChangeRun={setRun}
-         hint="ทุกช่องทางต้องมีลิงก์โพสต์จริง + ยืนยันว่าขึ้นถูกต้อง + ดูแลคอมเมนต์ 24 ชม.แรก · แนบแคปโพสต์ที่ขึ้นจริง"/>
+         hint="ลิงก์โพสต์จริง + ยืนยันขึ้นถูกต้อง + แนบแคป"
+         info="ทุกช่องทางต้องมีลิงก์โพสต์จริง · ยืนยันว่าแสดงผลถูกต้อง (ภาพไม่ crop เพี้ยน ลิงก์กดได้ แท็กครบ) · ดูแลคอมเมนต์ใน 24 ชม.แรก · แนบแคปโพสต์ที่ขึ้นจริง"/>
       </StageSection>)}
 
      {/* ---- ขั้น Measured — ตัวเลขรายช่องทาง + ป้ายผล (SOP ขั้น 7) ---- */}
-     {visible("measured") && (<StageSection sec="measured" phase={phase("measured")} open={openSecs.includes("measured")} onToggle={() => toggleSec("measured")}
-       title="ขั้น Measured — ผลงาน"
+     {visible("measured") && (<StageSection sec="measured" active={activeSec === "measured"}
+       title="ผลงาน"
        summary={liveEr != null ? `ER ${(liveEr * 100).toFixed(1)}% · ${measProg.done}/${measProg.total} ช่องทาง` : "ยังไม่กรอกตัวเลข"}
        ok={metricsComplete(workingCard) && measProg.ok}>
        <RunTable
          stage="measured" runs={liveRuns} card={workingCard} refs={refs} channels={data.channels}
          editable={editable} onChangeRun={setRun}
-         hint="แต่ละแพลตฟอร์มถามตัวเลขคนละชุดตามชนิดช่องทาง · ต้องแนบแคปหน้า insight เป็นที่มาของตัวเลข"/>
+         hint="กรอกตัวเลขตามชนิดช่องทาง + แนบแคปหน้า insight"
+         info="แต่ละแพลตฟอร์มถามตัวเลขคนละชุดตามชนิดช่องทาง (ฟีด/คลิปสั้น/broadcast) · แคปหน้า insight คือที่มาของตัวเลข ให้ตรวจย้อนได้"/>
        <MetricsSummary card={workingCard} metrics={metrics} brandAvg={brandAvg} runs={liveRuns} isAds={isAdsCard(card)}/>
       </StageSection>)}
 
@@ -948,14 +1187,17 @@ export function CardSheet({ card, onClose }) {
 const PROOF_TYPE = { scheduled: "schedule_proof", published: "live_proof", measured: "insight_proof" };
 const PROOF_LABEL = { scheduled: "แคปตอนตั้งเวลา", published: "แคปโพสต์ที่ขึ้นจริง", measured: "แคปหน้า insight" };
 
-function RunTable({ stage, runs, card, refs, channels, editable, onChangeRun, hint }) {
+function RunTable({ stage, runs, card, refs, channels, editable, onChangeRun, hint, info }) {
   const { data } = useApp();
-  const [open, setOpen] = useState(null);   /* ช่องทางที่กางอยู่ (ทีละอัน) */
+  /* ขั้นปัจจุบันของการ์ด: กางช่องทางแรกให้เลย — เข้ามาถึงกรอกได้ทันที ไม่ต้องกดกางเอง */
+  const [open, setOpen] = useState(() => (card.status === stage && runs.length > 0 ? runs[0].channel : null));
   if (runs.length === 0) {
     return <div className="empty-row">ยังไม่ได้เลือกช่องทางใน Brief — เลือกก่อนถึงจะกรอกขั้นนี้ได้</div>;
   }
   return (<>
-   <div className="field-hint" style={{ marginBottom: 10 }}>{hint}</div>
+   <div className="field-hint" style={{ marginBottom: 10 }}>
+    {hint}{info && <InfoButton label="กติกาขั้นนี้" text={info}/>}
+   </div>
    <div className="crun-list">
     {runs.map((run, i) => {
       const ch = data.channels.find((c) => c.name === run.channel);
@@ -1008,25 +1250,24 @@ function StageFields({ stage, run, card, editable, onChange }) {
       measured_at: run.measured_at ?? nowISO(),
     });
   };
-  const rows = stageRows(stage, run, fields);
   return (<div className="crun-fields">
    {stage === "scheduled" && (<>
     {ch?.best_time && (<div className="tile-note" style={{ marginBottom: 12 }}>
       เวลาแนะนำของ {run.channel}: {ch.best_time}
      </div>)}
     <div className="grid2">
-     <Field label="เวลาที่ตั้งไว้ในเครื่องมือ" required hint="ต่างจากวันโพสต์ในบรีฟได้ ถ้าช่องทางนี้ลงคนละเวลา">
+     <Field label="เวลาที่ตั้งไว้ในเครื่องมือ" required info="ต่างจากวันโพสต์ในบรีฟได้ ถ้าช่องทางนี้ลงคนละเวลา">
       <input className="field" type="datetime-local" disabled={!editable}
        value={toLocalInput(run.scheduled_at)}
        onChange={(e) => onChange({ scheduled_at: e.target.value ? new Date(e.target.value).toISOString() : null })}/>
      </Field>
-     <Field label="เครื่องมือที่ใช้ตั้ง" required hint="แก้รายการได้ที่หน้าตั้งค่า">
+     <Field label="เครื่องมือที่ใช้ตั้ง" required info="แก้รายการเครื่องมือได้ที่หน้าตั้งค่า">
       <MktSelect value={run.scheduler_tool} disabled={!editable} placeholder="— เลือก —"
        onChange={(v) => onChange({ scheduler_tool: v })}
        options={tools.map((t) => ({ value: t, label: t }))}/>
      </Field>
     </div>
-    <Field label="ลิงก์/รหัสโพสต์ในเครื่องมือ" hint="ไว้ให้คนอื่นเปิดไปดูของจริงได้ ไม่ต้องถามเจ้าของงาน">
+    <Field label="ลิงก์/รหัสโพสต์ในเครื่องมือ (ไม่บังคับ)" info="ไว้ให้คนอื่นเปิดไปดูของจริงได้ ไม่ต้องถามเจ้าของงาน">
      <input className="field" placeholder="https://business.facebook.com/..." value={run.schedule_ref}
       disabled={!editable} onChange={(e) => onChange({ schedule_ref: e.target.value })}/>
     </Field>
@@ -1045,7 +1286,7 @@ function StageFields({ stage, run, card, editable, onChange }) {
        onChange={(e) => onChange({ posted_at: e.target.value ? new Date(e.target.value).toISOString() : null })}/>
      </Field>
     </div>
-    <Field label="คอมเมนต์แรก / ลิงก์ที่ปักไว้" hint="FB/IG ใช้ปักลิงก์สั่งซื้อ — เขียนคำจริงที่โพสต์ไป">
+    <Field label="คอมเมนต์แรก / ลิงก์ที่ปักไว้ (ไม่บังคับ)" info="FB/IG ใช้ปักลิงก์สั่งซื้อ — เขียนคำจริงที่โพสต์ไป">
      <input className="field" value={run.first_comment} disabled={!editable}
       onChange={(e) => onChange({ first_comment: e.target.value })}/>
     </Field>
@@ -1067,26 +1308,18 @@ function StageFields({ stage, run, card, editable, onChange }) {
      ชุดตัวเลขของ “{CHANNEL_KIND_LABEL[kind]}” — เปลี่ยนชนิดช่องทางได้ที่หน้าตั้งค่า
     </div>
     <div className="crun-metrics">
-     {fields.map((f) => (<Field key={f.key} label={f.label + (f.unit ? ` (${f.unit})` : "")} required={f.req} hint={f.hint}>
+     {fields.map((f) => (<Field key={f.key} label={f.label + (f.unit ? ` (${f.unit})` : "")} required={f.req} info={f.hint}>
        <input className="field mono" type="number" min="0" placeholder="0" disabled={!editable}
         value={run.metrics?.[f.key] ?? ""} onChange={(e) => setMetric(f.key, e.target.value)}/>
       </Field>))}
     </div>
-    <Field label="หมายเหตุของช่องทางนี้" hint="อะไรผิดปกติ เช่น โดนลดการมองเห็น ยิงผิดเวลา">
+    <Field label="หมายเหตุของช่องทางนี้ (ไม่บังคับ)" info="อะไรผิดปกติ เช่น โดนลดการมองเห็น ยิงผิดเวลา">
      <textarea rows={2} className="field" value={run.note} disabled={!editable}
       onChange={(e) => onChange({ note: e.target.value })}/>
     </Field>
     <RunProof cardId={card.id} channel={run.channel} type="insight_proof" label={PROOF_LABEL.measured} editable={editable}/>
    </>)}
 
-   <div className="frame-task">
-    <div className="ft-head">ขั้นนี้ต้องกรอกอะไรบ้าง</div>
-    {rows.map((r) => (<div className={`ft-row ${r.done ? "done" : r.req ? "miss" : ""}`} key={r.label}>
-      <Icon name={r.done ? "check" : "alert"} size={13}/>
-      <span className="ft-label">{r.label}{r.req && <b> *</b>}</span>
-      <span className="ft-note">{r.done ? "ครบ" : r.req ? "ยังไม่กรอก" : "ไม่ใส่ก็ได้"}</span>
-     </div>))}
-   </div>
   </div>);
 }
 
@@ -1139,46 +1372,12 @@ function MetricsSummary({ card, metrics, brandAvg, runs, isAds }) {
 }
 
 
-/** ข้อที่ขั้นนั้นต้องกรอก — ใช้ทั้งเช็คลิสต์ในแท็บและตัวเลขขาดบนหัวแท็บ */
-function stageRows(stage, run, fields) {
-  if (stage === "scheduled") {
-    return [
-      { label: "เวลาที่ตั้งไว้ในเครื่องมือ", done: run.scheduled_at != null, req: true },
-      { label: "เครื่องมือที่ใช้ตั้ง", done: meaningful(run.scheduler_tool), req: true },
-      { label: "ลิงก์/รหัสโพสต์ในเครื่องมือ", done: meaningful(run.schedule_ref), req: false },
-    ];
-  }
-  if (stage === "published") {
-    return [
-      { label: "ลิงก์โพสต์จริง", done: meaningful(run.post_url), req: true },
-      { label: "เวลาที่ขึ้นจริง", done: run.posted_at != null, req: true },
-      { label: "ยืนยันขึ้นจริง แสดงผลถูกต้อง", done: run.live_ok, req: true },
-      { label: "ดูแลคอมเมนต์ 24 ชม.แรก", done: run.comments_handled, req: true },
-      { label: "คอมเมนต์แรก / ลิงก์ที่ปัก", done: meaningful(run.first_comment), req: false },
-    ];
-  }
-  return [
-    ...fields.map((f) => ({ label: f.label, done: run.metrics?.[f.key] != null, req: !!f.req })),
-    { label: "หมายเหตุของช่องทางนี้", done: meaningful(run.note), req: false },
-  ];
-}
-
-/* ---------- กลุ่มฟอร์มของหนึ่งขั้น ----------
- past = พับไว้ โชว์บรรทัดสรุป · now = กางค้าง มีสีประจำขั้น · next = กรอกล่วงหน้าได้ */
-function StageSection({ sec, phase, open, onToggle, title, summary, ok, children, }) {
+/* ---------- เนื้อหาของขั้นที่เลือกจากแถบไทล์ — ไทล์บอกชื่อ/สรุปอยู่แล้ว ไม่มีหัวซ้ำ ---------- */
+function StageSection({ sec, active, children, }) {
   const meta = STAGE_META[SEC_STAGE[sec]];
-  return (<section className={`stsec ${phase} ${open ? "open" : ""}`} style={{ ["--stage"]: meta.color }}>
-   <button className="stsec-head" onClick={onToggle} aria-expanded={open}>
-    <span className={`stsec-mark ${ok ? "ok" : ""}`}>
-     {ok ? <Icon name="check" size={11}/> : null}
-    </span>
-    <span className="stsec-title">{title}</span>
-    <span className="stsec-sum">{summary}</span>
-    <span className={`stsec-chev ${open ? "up" : ""}`}>
-     <Icon name="chevron" size={14}/>
-    </span>
-   </button>
-   {open && <div className="stsec-body">{children}</div>}
+  if (!active) return null;
+  return (<section className="stsec now open" style={{ ["--stage"]: meta.color }}>
+   <div className="stsec-body">{children}</div>
   </section>);
 }
 /* ---------- Form field ---------- */

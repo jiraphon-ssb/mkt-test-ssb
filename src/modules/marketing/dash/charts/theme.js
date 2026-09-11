@@ -40,11 +40,6 @@ export const SERIES = {
   green: "#34d399", cogs: "#64748b", red: "#fb7185",
 };
 
-/** จานสีสำหรับชุดข้อมูลหลายเส้น — ลำดับเดียวกับที่แพลตฟอร์มใช้ */
-export const PALETTE = () => [
-  SERIES.blue, SERIES.green, SERIES.orange, SERIES.gold, SERIES.red, SERIES.cogs,
-];
-
 /** ความสูงมาตรฐานของกล่องกราฟ */
 export const CHART_H = 250;
 

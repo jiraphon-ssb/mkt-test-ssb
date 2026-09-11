@@ -160,42 +160,42 @@ export function gateChecklist(card, refs = NO_REFS) {
         },
       ];
     case "brief":
+      /* แก่นที่บล็อกจริง 5-6 ข้อ — ที่เหลือเป็น "แนะนำ" (soft) เห็นในเช็คลิสต์แต่ไม่กั้นทาง
+         เดิมบังคับ 15 ข้อ ทำให้กว่าจะดันการ์ดได้ต้องกรอกครบทั้งใบ (ทีมบ่นว่ากรอกยาก)
+         soft ยังนับเป็น "คุณภาพบรีฟ" ให้เห็น แต่ไม่ทำให้งานค้าง */
       return [
-        // ส่วนที่ 1 — โจทย์
-        { label: "ใคร → ให้ทำอะไร", done: nonEmpty(b.who_action) },
         { label: "Hook", done: nonEmpty(b.hook) },
         { label: "Key message เดียว", done: nonEmpty(b.key_message) },
         { label: "CTA", done: meaningful(b.cta) },
-        { label: "เช็คตัวเลขกับ Fact Sheet", done: b.fact_checked },
-        // ส่วนที่ 2 — ผลิต (SOP: "ส่วนที่ 2 ครบ")
         { label: "ประเภทไฟล์ (ภาพ/คลิป)", done: b.format === "image" || b.format === "video" },
-        { label: "Deadline ส่งตรวจ (เผื่อแก้ ≥2 วัน)", done: b.deadline_review != null },
         { label: "ช่องทาง ≥ 1", done: b.channels.length >= 1 },
         // track project ไม่มีขั้น Scheduled/Published จึงไม่บังคับวันโพสต์
         ...(card.track === "content"
           ? [{ label: "วัน–เวลาโพสต์", done: b.publish_at != null }]
           : []),
-        // ---- แยกตามประเภทไฟล์: ไม่ถามซ้ำ ไม่ถามของที่ไม่เกี่ยว ----
+        // ---- แนะนำ (ไม่บล็อก) — คุณภาพบรีฟ ไม่ใช่ประตู ----
+        { label: "ใคร → ให้ทำอะไร", done: nonEmpty(b.who_action), soft: true },
+        { label: "เช็คตัวเลขกับ Fact Sheet", done: b.fact_checked, soft: true },
         ...(b.format === "video"
           ? [
-            { label: "อัตราส่วนคลิป", done: meaningful(b.size) },
-            { label: "ความยาวคลิป (วินาที)", done: (b.video_seconds ?? 0) > 0 },
-            { label: "ไทม์ไลน์ฉาก (ฉากแรก = hook)", done: videoTimelineOk(b) },
+            { label: "อัตราส่วนคลิป", done: meaningful(b.size), soft: true },
+            { label: "ความยาวคลิป (วินาที)", done: (b.video_seconds ?? 0) > 0, soft: true },
+            { label: "ไทม์ไลน์ฉาก (ฉากแรก = hook)", done: videoTimelineOk(b), soft: true },
           ]
           : isAlbum(b)
             ? [
-              { label: "จำนวนภาพในชุด (≥2)", done: (b.album_count ?? 0) >= 2 },
-              { label: "รายภาพครบ (ข้อความ + ขนาด)", done: albumOutlineComplete(b) },
-              { label: "Layout ร่วมทุกภาพ", done: meaningful(b.layout_note) },
+              { label: "จำนวนภาพในชุด (≥2)", done: (b.album_count ?? 0) >= 2, soft: true },
+              { label: "รายภาพครบ (ข้อความ + ขนาด)", done: albumOutlineComplete(b), soft: true },
+              { label: "Layout ร่วมทุกภาพ", done: meaningful(b.layout_note), soft: true },
             ]
             : [
-              { label: "ขนาดภาพ", done: meaningful(b.size) },
-              { label: "Layout sketch", done: meaningful(b.layout_note) },
+              { label: "ขนาดภาพ", done: meaningful(b.size), soft: true },
+              { label: "Layout sketch", done: meaningful(b.layout_note), soft: true },
             ]),
-        { label: "Mood", done: meaningful(b.mood) },
+        { label: "Mood", done: meaningful(b.mood), soft: true },
         // Ref AW / ลิงก์ CI ผ่านได้ด้วยไฟล์แนบ — ไฟล์แนบจึงนับเข้า gate จริง
-        { label: "Ref AW (ระบุแง่ที่อ้าง)", done: meaningful(b.ref_note) || refs.refImages > 0 },
-        { label: "ลิงก์ CI", done: meaningful(b.ci_link) || refs.refLinks > 0 },
+        { label: "Ref AW (ระบุแง่ที่อ้าง)", done: meaningful(b.ref_note) || refs.refImages > 0, soft: true },
+        { label: "ลิงก์ CI", done: meaningful(b.ci_link) || refs.refLinks > 0, soft: true },
       ];
     case "draft":
       return [
@@ -472,10 +472,31 @@ export function gateReason(card, refs = NO_REFS) {
   }
 }
 /** % ความพร้อมของขั้นปัจจุบัน (สำหรับ stitch readiness line) */
+/** Deadline ส่งตรวจ = วันโพสต์ − 2 วัน (กติกา "เผื่อแก้ ≥2 วัน" คิดเองได้ ไม่ต้องถาม)
+    คืน "YYYY-MM-DD" · ไม่มีวันโพสต์ = null */
+export function deriveDeadline(publishISO) {
+  if (!publishISO) return null;
+  const d = new Date(publishISO);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() - 2);
+  return d.toISOString().slice(0, 10);
+}
+/** อัตราส่วน/ขนาดที่ควรเป็น เดาจากชนิดช่องทางที่เลือก — คลิปสั้น = 9:16 · ฟีด = 1:1 */
+export function deriveSize(channels = [], allChannels = [], format = "image") {
+  const kinds = channels.map((n) => allChannels.find((c) => c.name === n)?.kind).filter(Boolean);
+  if (kinds.length === 0) return "";
+  if (format === "video") return kinds.includes("short_video") ? "9:16" : "16:9";
+  return kinds.includes("short_video") ? "1080 × 1920 px" : "1080 × 1080 px";
+}
+
+/** เฉพาะข้อที่กั้นทางจริง (ไม่รวม soft = แนะนำ) — ใช้ตัดสิน "ไปขั้นต่อไปได้ไหม" */
+export function gateBlocking(rows) {
+  return rows.filter((r) => !r.soft);
+}
 export function gatePercent(card, refs = NO_REFS) {
   if (card.status === "review")
     return null; // รอ Team Lead
-  const rows = gateChecklist(card, refs);
+  const rows = gateBlocking(gateChecklist(card, refs));
   if (rows.length === 0)
     return 100;
   const done = rows.filter((r) => r.done).length;
@@ -520,50 +541,11 @@ export function validateTransition(card, to, _actor, nowClock = nowISO(), refs =
       return { ok: missing.length === 0, missing };
     }
     case "brief->draft": {
-      const b = card.brief;
-      const missing = [];
-      // ส่วนที่ 1 — โจทย์
-      if (!nonEmpty(b.who_action))
-        missing.push("โจทย์ข้อ 1 (ใคร→ทำอะไร)");
-      if (!nonEmpty(b.hook))
-        missing.push("Hook");
-      if (!nonEmpty(b.key_message))
-        missing.push("Key message");
-      if (!meaningful(b.cta))
-        missing.push("CTA");
-      if (!b.fact_checked)
-        missing.push("ติ๊กยืนยันเช็ค Fact Sheet");
-      // ส่วนที่ 2 — ผลิต (SOP: "ส่วนที่ 2 ครบ")
-      if (b.format !== "image" && b.format !== "video")
-        missing.push("ประเภทไฟล์ (ภาพ/คลิป)");
-      if (b.deadline_review == null)
-        missing.push("Deadline ส่งตรวจ");
-      if (b.channels.length < 1)
-        missing.push("ช่องทางอย่างน้อย 1");
-      if (card.track === "content" && b.publish_at == null)
-        missing.push("วัน–เวลาโพสต์");
-      if (b.format === "video") {
-        if (!meaningful(b.size)) missing.push("อัตราส่วนคลิป");
-        if ((b.video_seconds ?? 0) <= 0) missing.push("ความยาวคลิป");
-        for (const issue of videoTimelineIssues(b)) missing.push(`ไทม์ไลน์: ${issue}`);
-      }
-      else if (isAlbum(b)) {
-        if ((b.album_count ?? 0) < 2)
-          missing.push("จำนวนภาพในชุด (≥2)");
-        if (!albumOutlineComplete(b))
-          missing.push(`รายภาพยังไม่ครบ (${albumFilledCount(b)}/${b.album_count ?? 0} ภาพ)`);
-        if (!meaningful(b.layout_note)) missing.push("Layout ร่วมทุกภาพ");
-      }
-      else {
-        if (!meaningful(b.size)) missing.push("ขนาดภาพ");
-        if (!meaningful(b.layout_note)) missing.push("Layout sketch");
-      }
-      if (!meaningful(b.mood))
-        missing.push("Mood");
-      if (!meaningful(b.ref_note) && refs.refImages === 0)
-        missing.push("Ref AW (ระบุแง่ที่อ้าง หรือแนบรูป ref พร้อมคำอธิบาย)");
-      if (!meaningful(b.ci_link) && refs.refLinks === 0)
-        missing.push("ลิงก์ CI (หรือแนบไฟล์ CI / ลิงก์อ้างอิง)");
+      /* แหล่งเดียวกับเช็คลิสต์ — เดิมเขียนรายการซ้ำที่นี่อีกชุด พอแก้กติกาที่เดียวอีกที่ไม่ตาม
+         นับเฉพาะข้อที่กั้นทาง (soft = แนะนำ ไม่บล็อก) */
+      const missing = gateBlocking(gateChecklist(card, refs))
+        .filter((g) => !g.done)
+        .map((g) => g.label);
       return { ok: missing.length === 0, missing };
     }
     case "draft->review": {
@@ -941,9 +923,6 @@ export function canDeleteCard(actor, card) {
     return true;
   // เจ้าของ ลบได้เฉพาะการ์ดตัวเองที่ยังอยู่ Idea/Brief
   return card.owner_id === actor.id && (card.status === "idea" || card.status === "brief");
-}
-export function canManageAdmin(actor) {
-  return actor.role === "team_lead";
 }
 /* ---------- utils ---------- */
 function nonEmpty(s) {

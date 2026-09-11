@@ -7,6 +7,7 @@
  ปิดได้ด้วย: คลิกฉากหลัง · ปุ่ม ✕ · Esc
  ============================================================ */
 import { useEffect, useRef, useState } from "react";
+import { InfoButton } from "../mktInfoButton.jsx";
 
 /* ซ้อน popup ได้ (เช่น popup รายฉาก เปิดทับฟอร์มบรีฟ) — Esc ต้องปิดแค่ใบบนสุด
    ไม่งั้นกด Esc ครั้งเดียวปิดหมดทั้งกอง งานที่กรอกค้างไว้หายไปด้วย
@@ -102,10 +103,12 @@ export function Sheet({
   </>);
 }
 /* ---------- Field: label convention ของ Brief v2 ---------- */
-export function Field({ label, required, hint, children, }) {
+export function Field({ label, required, hint, info, children, }) {
   return (<div className="field-row">
    <div className="form-label">
     {label} {required && <span className="req">*</span>}
+    {/* คำอธิบายยาวเก็บในปุ่ม i — hint ใช้เฉพาะประโยคที่เปลี่ยนพฤติกรรมตอนกรอก */}
+    {info && <InfoButton label={typeof label === "string" ? label : "คำอธิบาย"} text={info}/>}
    </div>
    {children}
    {hint && <div className="field-hint">{hint}</div>}

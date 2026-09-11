@@ -26,6 +26,7 @@ const NotificationsPage = lazy(() => import("./NotificationsPage.jsx"));
 const MODULE_ELEMENTS = {
   mkt_work: <MarketingModule view="work" />,
   mkt_dash: <MarketingModule view="dash" />,
+  mkt_ads: <MarketingModule view="ads" />,
 };
 
 export default function AppShell() {

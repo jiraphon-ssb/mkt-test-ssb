@@ -152,11 +152,22 @@ export function ArchiveView({ match, onOpen }) {
           const er = engagementRate(c.metrics);
           const brandAvg = brandAverageER(data.cards, c.brand_id, c.id);
           const lesson = lessonOf(c);
+          /* คนมาคลังเพื่อหา "อะไรเวิร์ค" — ผลเทียบค่าเฉลี่ยแบรนด์ต้องอ่านได้ทันที
+             ไม่ใช่เลข ER ลอยๆ ที่ต้องไปหาค่าเฉลี่ยมาเทียบเอง */
+          const delta = er != null && brandAvg ? Math.round((er / brandAvg - 1) * 100) : null;
           const chips = [];
-          if (er != null) chips.push({ label: `ER ${(er * 100).toFixed(1)}%`, tone: brandAvg != null && er >= brandAvg ? "ok" : "plain" });
+          if (delta != null) {
+            chips.push({
+              label: delta >= 5 ? `เหนือค่าเฉลี่ย ${delta}%` : delta <= -5 ? `ต่ำกว่าค่าเฉลี่ย ${-delta}%` : "ตามค่าเฉลี่ย",
+              tone: delta >= 5 ? "ok" : delta <= -5 ? "bad" : "plain",
+            });
+          }
+          if (er != null) chips.push({ label: `ER ${(er * 100).toFixed(1)}%`, tone: "plain" });
           if (c.metrics?.reach != null) chips.push({ label: `Reach ${fmtNum(c.metrics.reach)}`, tone: "plain" });
           return (
-            <WorkCard key={c.id} card={c} cover coverFallback dateLabel="โพสต์"
+            /* ไม่ใส่ coverFallback — งานเก่าส่วนใหญ่ไม่มีรูปแล้ว
+               กล่อง "ไม่มีรูปงานแนบ" 200px ต่อใบไม่ได้ช่วยอะไร */
+            <WorkCard key={c.id} card={c} cover dateLabel="โพสต์"
               onOpen={() => setPicked(c)}
               statusChips={chips}
               foot={<>

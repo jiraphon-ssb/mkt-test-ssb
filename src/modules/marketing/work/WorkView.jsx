@@ -32,7 +32,7 @@ const VIEWS = [
 const kindOf = (b) => (b.format === "video" ? "video" : isAlbum(b) ? "album" : "single");
 const KIND_LABEL = { single: "ภาพเดี่ยว (AW)", album: "ชุดภาพ (Album)", video: "คลิป (Video)" };
 
-export function Work({ view, onViewChange, onOpen }) {
+export function Work({ view, onViewChange, onOpen, onNewIdea }) {
   const { data, currentUser, inBrandScope, settings } = useApp();
   /* ตัวกรองร่วมของบอร์ด+ลิสต์ */
   const [brandFilter, setBrandFilter] = useState("all");
@@ -185,7 +185,7 @@ export function Work({ view, onViewChange, onOpen }) {
      <div className="t">ไม่มีงานตรงกับตัวกรอง</div>
      <button className="btn ghost small" style={{ marginTop: 10 }} onClick={clearFilters}>ล้างตัวกรอง</button>
     </div>) : (<>
-     {view === "board" && <Board cards={filtered} onOpen={onOpen}/>}
+     {view === "board" && <Board cards={filtered} onOpen={onOpen} onNewIdea={onNewIdea}/>}
      {view === "list" && <ListView
        cards={filtered} allCards={data.cards.filter((c) => !c.id.startsWith("hist") && !c.archived && inBrandScope(c))}
        onOpen={onOpen}

@@ -93,14 +93,20 @@ const STORIES = [
 ];
 /** งาน ads (track project) — CPL ลดลงเรื่อยๆ ตามการ optimize */
 const ADS_PLAN = [
-  { week: 1, brandId: "b_jt", spend: 4_500, cpl: 450, title: "ads — ยูนิฟอร์มร้านอาหาร (ชุดแรก)" },
-  { week: 2, brandId: "b_jt", spend: 5_200, cpl: 430, title: "ads — ยูนิฟอร์มร้านอาหาร (ทดสอบ creative)" },
-  { week: 4, brandId: "b_td", spend: 3_000, cpl: 380, title: "ads — เสื้อทีมองค์กร ชุดรีมาร์เก็ต" },
-  { week: 6, brandId: "b_jt", spend: 5_000, cpl: 320, title: "ads — ยูนิฟอร์มร้าน ปรับ audience" },
-  { week: 8, brandId: "b_td", spend: 3_800, cpl: 300, title: "ads — เสื้อทีม จับกลุ่ม HR" },
-  { week: 9, brandId: "b_jt", spend: 5_600, cpl: 260, title: "ads — ยูนิฟอร์ม ชุด creative ใหม่" },
-  { week: 10, brandId: "b_td", spend: 4_200, cpl: 235, title: "ads — เสื้อทีม รอบสั่งผลิตปลายปี" },
-  { week: 11, brandId: "b_jt", spend: 6_000, cpl: 220, title: "ads — ยูนิฟอร์ม ขยายงบชุดที่ได้ผล" },
+  /* ช่องทาง + มูลค่าออเดอร์ที่ปิดได้ = mock ไว้ให้หน้า Ads มีหลายช่องทางและคำนวณ ROAS ได้
+     value = บาทต่อ 1 ลีดที่ปิดได้จริง (ต่างกันตามแบรนด์/ช่องทาง) */
+  { week: 1, brandId: "b_jt", channel: "Facebook", spend: 4_500, cpl: 450, value: 1_900, title: "ads — ยูนิฟอร์มร้านอาหาร (ชุดแรก)" },
+  { week: 2, brandId: "b_jt", channel: "Facebook", spend: 5_200, cpl: 430, value: 1_750, title: "ads — ยูนิฟอร์มร้านอาหาร (ทดสอบ creative)" },
+  { week: 3, brandId: "b_ta", channel: "Facebook", spend: 2_400, cpl: 400, value: 2_100, title: "ads — t around ชุดทดลองช่องทางแชต" },
+  { week: 4, brandId: "b_td", channel: "Facebook", spend: 3_000, cpl: 380, value: 2_600, title: "ads — เสื้อทีมองค์กร ชุดรีมาร์เก็ต" },
+  { week: 5, brandId: "b_jk", channel: "Facebook", spend: 1_800, cpl: 520, value: 1_400, title: "ads — JK Design ชุดทดสอบ Reels" },
+  { week: 6, brandId: "b_jt", channel: "Facebook", spend: 5_000, cpl: 320, value: 2_000, title: "ads — ยูนิฟอร์มร้าน ปรับ audience" },
+  { week: 7, brandId: "b_ta", channel: "Facebook", spend: 3_100, cpl: 350, value: 1_850, title: "ads — t around ชุดวิดีโอสั้น" },
+  { week: 8, brandId: "b_td", channel: "Facebook", spend: 3_800, cpl: 300, value: 2_400, title: "ads — เสื้อทีม จับกลุ่ม HR" },
+  { week: 9, brandId: "b_jt", channel: "Facebook", spend: 5_600, cpl: 260, value: 2_200, title: "ads — ยูนิฟอร์ม ชุด creative ใหม่" },
+  { week: 10, brandId: "b_td", channel: "Facebook", spend: 4_200, cpl: 235, value: 2_800, title: "ads — เสื้อทีม รอบสั่งผลิตปลายปี" },
+  { week: 10, brandId: "b_jk", channel: "Facebook", spend: 2_200, cpl: 420, value: 1_600, title: "ads — JK Design ชุดคอลเลกชันใหม่" },
+  { week: 11, brandId: "b_jt", channel: "Facebook", spend: 6_000, cpl: 220, value: 2_300, title: "ads — ยูนิฟอร์ม ขยายงบชุดที่ได้ผล" },
 ];
 /* ---------- ตัวช่วยสร้าง ---------- */
 const selfCheck = () => ({
@@ -264,7 +270,7 @@ export function buildBackfill(anchorMs = Date.now()) {
       is_realtime: false,
       plan_confirmed: true,
       brief: backfillBrief({
-        format: "image", size: "1080x1350", channels: ["Facebook"],
+        format: "image", size: "1080x1350", channels: [plan.channel ?? "Facebook"],
         // งาน ads ไม่ผูกวันโพสต์ในปฏิทิน content — Dashboard จึงใช้ measured_at เป็นหลัก
         publish_at: null,
         deadline_review: new Date(publishMs - 3 * DAY).toISOString().slice(0, 10),
@@ -277,8 +283,15 @@ export function buildBackfill(anchorMs = Date.now()) {
       archived: true,
       metrics: {
         reach, engagement, leads,
+        // ต้องมี impressions/clicks ด้วย ไม่งั้น CTR/CPM/ความถี่ รวมทั้งเดือนจะเพี้ยน
+        // (ความถี่ = impressions ÷ reach ต้องไม่ต่ำกว่า 1)
+        impressions: Math.round(reach * 1.35),
+        clicks: Math.max(1, Math.round(reach * 1.35 * 0.018)),
+        link_clicks: Math.max(1, Math.round(reach * 1.35 * 0.018)),
         spend: plan.spend,
         cpl: plan.spend / leads,
+        /* mock: มูลค่าออเดอร์ที่ปิดได้จากลีดชุดนี้ — ใช้คำนวณ ROAS/%Ads ในหน้า Ads */
+        revenue: plan.value == null ? null : Math.round(leads * plan.value * (0.75 + rnd() * 0.5)),
         measured_at: new Date(measuredMs).toISOString(),
       },
       created_at: new Date(publishMs - 14 * DAY).toISOString(),
@@ -286,4 +299,145 @@ export function buildBackfill(anchorMs = Date.now()) {
     });
   }
   return { cards, history };
+}
+
+/* ============================================================
+   งบ + ค่าแอด "เดือนนี้" (mock) — ตารางเดียวคุมทั้งเพดานงบและยอดใช้จริง
+   ให้การ์ดเกจบนหน้า Ads โชว์ % ของงบครบทุกแบรนด์ทุกช่องทาง (แบบ reference)
+   used = สัดส่วนงบที่ใช้ไปแล้ว ณ ตอนนี้ · roas/er/cpl คุมให้ตัวเลขบนการ์ดสมจริง
+   ============================================================ */
+/* ครีเอทีฟ mock — decay คือความเสื่อมตามวันในเดือน (CTR ตก + ความถี่ขึ้น = คนเห็นซ้ำจนล้า)
+   ตั้งให้มีทั้งตัวแรงคงที่ · ตัวกำลังล้า · ตัวอ่อน เพื่อให้ leaderboard มีเรื่องเล่าจริง */
+const CREATIVES = [
+  { name: "วิดีโอ 15 วิ — ปัญหาลูกค้าจริง", ctr: 0.028, freq: 1.2, roasMul: 1.35, decay: 0.05 },
+  { name: "คาร์รูเซล — รีวิวลูกค้า 5 ราย", ctr: 0.021, freq: 1.4, roasMul: 1.00, decay: 0.55 },
+  { name: "ภาพนิ่ง — ราคาโปรโมชัน", ctr: 0.014, freq: 1.6, roasMul: 0.75, decay: 0.30 },
+  { name: "วิดีโอ 30 วิ — เบื้องหลังงานผลิต", ctr: 0.019, freq: 1.3, roasMul: 0.90, decay: 0.10 },
+];
+
+/* ชื่อแคมเปญ mock ใต้แพลตฟอร์ม — ให้ชั้นแพลตฟอร์มแตกดูต่อได้ */
+const CAMPAIGNS = ["Always-on — คนเคยทัก", "Prospecting — กลุ่มใหม่", "Remarketing — คนดูแล้วไม่ทัก"];
+
+const MONTH_ADS = [
+  /* ช่วงแรกยิงแค่ Meta — ช่องทางอื่นค่อยเปิดเพิ่มทีหลัง (โครงรองรับอยู่แล้ว) */
+  { brand: "b_jt", channel: "Meta Ads", budget: 30_000, used: 0.45, cpl: 380, roas: 3.3, er: 0.030, prev: 0.88, title: "ยูนิฟอร์มร้าน — Meta Ads เดือนนี้" },
+  { brand: "b_td", channel: "Meta Ads", budget: 24_000, used: 0.55, cpl: 300, roas: 2.8, er: 0.031, prev: 1.06, title: "เสื้อทีมองค์กร — Meta Ads เดือนนี้" },
+  { brand: "b_ta", channel: "Meta Ads", budget: 22_000, used: 0.25, cpl: 400, roas: 4.0, er: 0.024, prev: 0.75, title: "t around — Meta Ads เดือนนี้" },
+  { brand: "b_jk", channel: "Meta Ads", budget: 9_000,  used: 0.62, cpl: 450, roas: 2.2, er: 0.020, prev: 1.12, title: "JK Design — Meta Ads เดือนนี้" },
+];
+
+/* ---------- เป้ายอดขายรายเดือน (mock) ----------
+   ใช้คู่กับบล็อก "ยอดขายเทียบเป้า" — ของจริงจะมาจากฝั่งขาย/ERP
+   ตั้งให้สูงกว่ายอดที่ทำได้เล็กน้อย เพื่อให้เห็นเคส "ต่ำกว่าเป้า" จริง */
+const SALES_TARGETS = [
+  /* เป้ารายได้ต่อ แบรนด์ × แพลตฟอร์ม — อ่านคู่กับงบแอดของช่องทางเดียวกัน
+     ("เป้าเท่านี้ ทำได้เท่าไร แล้วจ่ายค่าแอดไปเท่าไร") */
+  { brand: "b_jt", channel: "Meta Ads", amount: 280_000 },
+  { brand: "b_td", channel: "Meta Ads", amount: 240_000 },
+  { brand: "b_ta", channel: "Meta Ads", amount: 130_000 },
+  { brand: "b_jk", channel: "Meta Ads", amount: 100_000 },
+];
+
+/** เป้ายอดขายรายแบรนด์ของเดือนที่ anchor อยู่ (mock) */
+export function buildSalesTargets(anchorMs = Date.now()) {
+  const month = new Date(anchorMs).toISOString().slice(0, 7);
+  return SALES_TARGETS.map((r, i) => ({
+    id: `st_${i + 1}`, brand_id: r.brand, channel: r.channel, month, amount: r.amount,
+  }));
+}
+
+/** งบราย แบรนด์×ช่องทาง ของเดือนที่ anchor อยู่ (mock) — คู่กับ MONTH_ADS ตัวเดียวกัน */
+export function buildAdBudgets(anchorMs = Date.now()) {
+  const month = new Date(anchorMs).toISOString().slice(0, 7);
+  return MONTH_ADS.map((r, i) => ({
+    id: `adb_${i + 1}`, brand_id: r.brand, channel: r.channel, month, amount: r.budget,
+  }));
+}
+
+/** งานยิงแอด "เดือนนี้" หนึ่งใบต่อช่องทางในงบ — measured + archived (ไม่โผล่บอร์ด)
+    spend ผูกกับงบตาม used เพื่อให้เกจตรงกับเพดานที่ตั้งไว้จริง */
+export function buildMonthAds(anchorMs = Date.now()) {
+  const now = new Date(anchorMs);
+  const rnd = mulberry32(20260911);
+  const cards = [];
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const firstOfPrev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const daysInPrev = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  const dayNow = now.getDate();
+
+  /** วันที่ออกใบในเดือนนั้น — step 1 = ทุกวัน (เดือนนี้ให้เส้นสะสมละเอียด) */
+  const datesOf = (base, lastDay, step) => {
+    const out = [];
+    for (let d = 1; d <= lastDay; d += step) out.push(new Date(base.getFullYear(), base.getMonth(), d, 15, 0, 0));
+    return out;
+  };
+
+  /** แจกยอดรวมลงวัน แล้วบังคับให้ผลรวมเท่าเดิมเป๊ะ (เกจงบต้องไม่เพี้ยน) */
+  const emit = (r, dates, total, tag) => {
+    if (dates.length === 0 || total <= 0) return;
+    const w = dates.map(() => 0.7 + rnd() * 0.6);
+    const sw = w.reduce((a, b) => a + b, 0);
+    let spent = 0;
+    dates.forEach((date, i) => {
+      const last = i === dates.length - 1;
+      const spend = last ? total - spent : Math.round((total * w[i]) / sw);
+      spent += spend;
+      if (spend <= 0) return;
+      /* ครีเอทีฟหมุนไปทีละใบ · ยิ่งปลายเดือน ตัวที่ decay สูงจะ CTR ตกและความถี่ขึ้น */
+      const cr = CREATIVES[i % CREATIVES.length];
+      const wear = dates.length > 1 ? i / (dates.length - 1) : 0;
+      const leads = Math.max(1, Math.round(spend / r.cpl));
+      const reach = Math.round(spend * 16);
+      const impressions = Math.round(reach * (cr.freq + cr.decay * wear * 1.6));
+      const clicks = Math.max(1, Math.round(impressions * cr.ctr * (1 - cr.decay * wear)));
+      const engagement = Math.max(1, Math.round(reach * r.er));
+      const measuredMs = Math.min(now.getTime() - HOUR, date.getTime());
+      cards.push({
+        id: `ma_${tag}_${r.brand}_${i}`,
+        /* แคมเปญย่อยใต้แพลตฟอร์ม (mock) — วนให้แต่ละใบตกอยู่คนละแคมเปญ */
+        campaign: CAMPAIGNS[i % CAMPAIGNS.length],
+        creative: cr.name,
+        track: "project",
+        status: "measured",
+        brand_id: r.brand,
+        owner_id: "u_fai",
+        title: `ads — ${r.title}`,
+        pillar: null,
+        is_realtime: false,
+        plan_confirmed: true,
+        brief: backfillBrief({
+          format: "image", size: "1080x1350", channels: [r.channel],
+          publish_at: null,
+          deadline_review: new Date(measuredMs - 3 * DAY).toISOString().slice(0, 10),
+        }),
+        draft_link: "https://drive.google.com/file/mock-ads",
+        self_check: selfCheck(),
+        first_pass: true,
+        entered_review_at: null,
+        archived: true,
+        metrics: {
+          reach, impressions, clicks, link_clicks: clicks, engagement, leads,
+          conversions: leads,
+          orders: null,
+          spend,
+          cpl: spend / leads,
+          revenue: Math.round(spend * r.roas * cr.roasMul),
+          measured_at: new Date(measuredMs).toISOString(),
+        },
+        created_at: new Date(measuredMs - 10 * DAY).toISOString(),
+        updated_at: new Date(measuredMs).toISOString(),
+      });
+    });
+  };
+
+  for (const r of MONTH_ADS) {
+    const total = Math.round(r.budget * r.used);
+    /* เดือนนี้: ทุกวันจนถึงเมื่อวาน — ผลรวมต้องเท่า budget × used พอดี (เกจอ้างอิงตัวนี้) */
+    const curDates = datesOf(firstOfMonth, Math.max(1, dayNow - 1), 1);
+    emit(r, curDates, total, "cur");
+    /* เดือนก่อน: อัตราต่อวันเท่าเดือนนี้ × ตัวคูณของแบรนด์ → เทียบ "ณ วันเดียวกัน" ได้จริง */
+    const perDay = total / curDates.length;
+    emit(r, datesOf(firstOfPrev, daysInPrev, 2), Math.round(perDay * (r.prev ?? 1) * daysInPrev), "prev");
+  }
+  return cards;
 }

@@ -200,7 +200,7 @@ export function Dashboard({ tab = "overview", onTabChange, onOpenCard, onJump })
           </div>
 
           <div className="dash-card">
-            <HeroTile measured={v.measured} allCards={data.cards} onSeeResults={() => {}} />
+            <HeroTile measured={v.measured} allCards={data.cards} onSeeResults={() => setTab("results")} />
           </div>
         </div>
       </section>

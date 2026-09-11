@@ -74,7 +74,6 @@
  * @property {string} note   หมายเหตุคนทำ เช่น ต้องใช้รูปจริงจากหน้างาน (ว่างได้)
  */
 /** ภาพเปล่า 1 ใบ */
-export const emptyFrame = () => ({ text: "", size: "", note: "" });
 
 /**
  * ฉากหนึ่งในคลิป — บรีฟระดับวินาที ให้คนถ่าย/ตัดต่อรู้ว่านาทีไหนต้องได้อะไร
@@ -339,16 +338,10 @@ export const SEED_SCHEDULER_TOOLS = [
  * @property {string} owner   เจ้าของขั้นตาม SOP
  * @property {string} question คำถามที่ขั้นนี้ต้องตอบ
  */
-export const EMPTY_METRICS = {
-  reach: null, engagement: null, leads: null, spend: null, cpl: null, measured_at: null,
-};
 export const RESULT_LABEL_TEXT = {
   green: "เกินค่าเฉลี่ย brand",
   yellow: "ตามค่าเฉลี่ย",
   red: "ต่ำกว่าครึ่งของค่าเฉลี่ย",
-};
-export const EMPTY_PUBLISHED_CHECKS = {
-  live_ok: false, comments_handled: false,
 };
 export const ATTACHMENT_TYPE_LABEL = {
   brief_file: "Brief",
@@ -458,20 +451,6 @@ export const SEED_VIDEO_LENGTHS = [
 ];
 
 export const sizeText = (w, h) => `${w} × ${h} px`;
-
-/* ประเภทไฟล์ — เลือกก่อนทุกอย่าง เพราะเปลี่ยนว่าต้องกรอกอะไรต่อ
-   image → เลือกได้ว่าเดี่ยวหรือชุดภาพ · video → เป็นชิ้นเดียวเสมอ ไม่มีชุด */
-export const FORMATS = [
-  { id: "image", label: "ภาพนิ่ง (image)" },
-  { id: "video", label: "คลิป (video)" },
-];
-export const FORMAT_LABEL = { image: "ภาพนิ่ง", video: "คลิป" };
-
-export const AW_TYPES = [
-  { id: "single", label: "AW เดี่ยว", hint: "ภาพเดียวจบ" },
-  { id: "album", label: "ชุดภาพ (Album)", hint: "หลายภาพเรียงเป็นเรื่อง" },
-];
-export const AW_TYPE_LABEL = { single: "AW เดี่ยว", album: "ชุดภาพ" };
 
 /* Self-check — 5 ข้อร่วม + ข้อเฉพาะชนิดงาน
    เดิมเป็นลิสต์เดียวที่เขียนไว้สำหรับภาพนิ่งล้วน ("ตัวหนังสือบนภาพ ≤30%") ใช้กับคลิปไม่ได้

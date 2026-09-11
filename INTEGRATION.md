@@ -53,8 +53,22 @@ cp package.json vite.config.js src/theme.css "$SB/"; ln -s "$PWD/node_modules" "
 |---|---|---|
 | `/mkt/work` | งาน | `marketing.work.view` |
 | `/mkt/dashboard` | Dashboard | `marketing.dash.view` |
+| `/mkt/ads` | ค่าแอด | `marketing.dash.view` |
 | `/mkt/results` | ผลตอบรับ | `marketing.results.view` |
 | `/mkt/admin` | ตั้งค่า | `marketing.admin` |
+
+> **หน้า ค่าแอด (เพิ่ม 11 ก.ย. 2026)** — ยกแนวคิดหน้าจอมาจากโปรเจกต์ `dashboard ads`
+> แต่เขียนด้วยของแพลตฟอร์มล้วน (Chart.js ผ่าน ChartBox · Panel/Icon ของโมดูล · ธีม zinc เดิม)
+> ไฟล์ที่เพิ่ม: `ads/AdsView.jsx` (หน้าจอ) + `adsOverview.js` (เลข pure + เทส `tests/adsOverview.test.js`)
+> เข้าโมดูลผ่าน `view="ads"` เหมือนหน้าอื่น — ไม่มี dependency ใหม่ ไม่แตะ foundation เพิ่ม
+>
+> **โครง (v18):** หัว KPI = %Ads · ROAS · Spend · Conversions · การ์ดเกจงบราย แบรนด์×ช่องทาง
+> (เกจครึ่งวงกลม % ของงบ + ขีดจังหวะเดือน + เหลือ/คาดการณ์สิ้นเดือน + ROAS) · กราฟค่าแอดรายสัปดาห์ ·
+> โดนัทสัดส่วนช่องทาง · กรวย Reach→Engagement→Leads
+> **Mock ที่เพิ่มใน seed (ไม่แตะ schema Supabase — ไหลผ่าน buildSeed ก้อน JSON เดียว):**
+>   `metrics.revenue` ต่อการ์ด ads (→ ROAS/%Ads) · `ad_budgets` ราย แบรนด์×ช่องทาง×เดือน (→ เกจงบ) ·
+>   `buildMonthAds()` งานยิงแอดเดือนนี้ 1 ใบต่อช่องทางในงบ ให้เกจมีข้อมูลจริง (ทั้งหมดใน `data/seedBackfill.js`)
+> **ของจริง:** เปลี่ยน `revenue`/`ad_budgets` เป็นข้อมูลจาก Supabase/หน้าตั้งค่าเมื่อพร้อม — โครงหน้าไม่ต้องแก้
 
 **2. `src/shell/AppShell.jsx`** — เพิ่ม lazy import + ใส่ใน `MODULE_ELEMENTS`
 

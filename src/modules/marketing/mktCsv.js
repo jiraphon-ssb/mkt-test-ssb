@@ -36,12 +36,3 @@ export function measuredCsv(cards, data) {
   });
   return "﻿" + [MEASURED_CSV_HEAD.join(","), ...body].join("\n");
 }
-/** ดาวน์โหลดไฟล์จากเบราว์เซอร์ (ไม่มี backend — เดโมสร้างไฟล์ฝั่ง client) */
-export function downloadFile(name, content, type = "application/json") {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-}

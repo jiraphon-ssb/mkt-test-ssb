@@ -5,9 +5,9 @@
    ห้าม hex ดิบ (ยกเว้นสีแบรนด์ที่มาจากข้อมูล)
    ============================================================ */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Info as InfoIcon } from "lucide-react";
+import { X } from "lucide-react";
 
 /* ---------- token ---------- */
 export const C = {
@@ -51,9 +51,6 @@ export const inp = {
   padding: "9px 11px", color: C.text, fontSize: FS.md, fontFamily: FONT,
   outline: "none", boxSizing: "border-box",
 };
-/** กล่องที่พื้นเป็น surface2 อยู่แล้ว — spread อันนี้ให้ช่องกรอกไม่จมหาย */
-export const nestedBox = { "--inp-bg": "var(--color-zinc-900)", "--inp-border": "var(--color-zinc-600)" };
-
 /* ---------- primitives ---------- */
 export const Card = ({ children, style, pad = SP.lg }) => (
   <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: R.lg, padding: pad, ...style }}>
@@ -80,62 +77,6 @@ export const Kpi = ({ label, value, sub, tone, big }) => (
   </div>
 );
 
-const TONE_MAP = {
-  accent: [C.accent, C.accentSoft],
-  amber: [C.amber, C.amberSoft],
-  rose: [C.rose, C.roseSoft],
-  blue: [C.blue, C.blueSoft],
-  violet: [C.violet, C.violetSoft],
-  zinc: [C.muted, "var(--color-zinc-800)"],
-};
-
-/** ป้ายสถานะ — pill สีอ่อน (tone = accent|amber|rose|blue|violet|zinc) */
-export const Pill = ({ tone = "zinc", children, style }) => {
-  const [fg, bg] = TONE_MAP[tone] ?? TONE_MAP.zinc;
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5, fontSize: FS.xs, fontWeight: 600,
-      color: fg, background: bg, borderRadius: R.pill, padding: "2px 9px", whiteSpace: "nowrap", ...style,
-    }}>
-      {children}
-    </span>
-  );
-};
-
-/** ป้ายที่มีจุดสีนำ — ใช้กับขั้นงาน/แบรนด์ (สีมาจากข้อมูล) */
-export const DotTag = ({ color, children, style }) => (
-  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: FS.xs, fontWeight: 600, color: C.muted, ...style }}>
-    <i style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-    {children}
-  </span>
-);
-
-export const PrimaryBtn = ({ children, style, ...rest }) => (
-  <button
-    style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
-      background: C.accentSolid, color: "#fff", border: "none", borderRadius: R.sm,
-      padding: "9px 15px", fontSize: FS.md, fontWeight: 600, cursor: "pointer", fontFamily: FONT, ...style,
-    }}
-    {...rest}
-  >
-    {children}
-  </button>
-);
-
-export const GhostBtn = ({ children, style, ...rest }) => (
-  <button
-    style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-      background: "transparent", border: `1px solid ${C.border}`, borderRadius: R.sm,
-      padding: "8px 13px", color: C.muted, fontSize: FS.sm, cursor: "pointer", fontFamily: FONT, ...style,
-    }}
-    {...rest}
-  >
-    {children}
-  </button>
-);
-
 export const Field = ({ label, required, hint, children, style }) => (
   <div style={{ marginBottom: SP.md, ...style }}>
     {label && (
@@ -149,44 +90,7 @@ export const Field = ({ label, required, hint, children, style }) => (
   </div>
 );
 
-export const Input = ({ style, ...rest }) => <input style={{ ...inp, ...style }} {...rest} />;
-export const Textarea = ({ style, ...rest }) => (
-  <textarea style={{ ...inp, resize: "vertical", minHeight: 72, lineHeight: 1.55, ...style }} {...rest} />
-);
 /* dropdown ห้ามใช้ <select> ดิบ — ใช้ <MktSelect> จาก mktSelect.jsx ตัวเดียวทั้งระบบ */
-
-/** แท็บ/ตัวสลับมุมมอง — ภาษาเดียวทั้งโมดูล: กล่องขอบบาง + ตัวเลือกที่เลือกพื้นทึบ */
-export const Segmented = ({ options, value, onChange, style }) => (
-  <div style={{
-    display: "inline-flex", gap: 2, background: C.surface, border: `1px solid ${C.border}`,
-    borderRadius: R.sm + 2, padding: 2, flexWrap: "wrap", ...style,
-  }}>
-    {options.map((o) => {
-      const on = o.id === value;
-      return (
-        <button
-          key={o.id}
-          onClick={() => onChange(o.id)}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6, border: "none", cursor: "pointer",
-            fontFamily: FONT, fontSize: FS.sm, fontWeight: 600, padding: "5px 12px", borderRadius: R.sm,
-            background: on ? C.text : "transparent", color: on ? C.bg : C.muted,
-          }}
-        >
-          {o.label}
-          {o.badge != null && o.badge > 0 && (
-            <Num style={{
-              fontSize: FS.xxs, fontWeight: 700, minWidth: 16, height: 16, borderRadius: R.pill,
-              display: "grid", placeItems: "center", padding: "0 4px",
-              background: o.alert ? C.rose : on ? "rgba(255,255,255,.22)" : C.surface2,
-              color: o.alert ? "#fff" : on ? C.bg : C.muted,
-            }}>{o.badge}</Num>
-          )}
-        </button>
-      );
-    })}
-  </div>
-);
 
 /** ชิปกรองแบบเลือกได้หลายค่า/ค่าเดียว */
 export const Chip = ({ on, color, children, style, ...rest }) => (
@@ -207,59 +111,6 @@ export const Chip = ({ on, color, children, style, ...rest }) => (
 export const EmptyRow = ({ children, style }) => (
   <div style={{ fontSize: FS.sm, color: C.faint, padding: `${SP.md}px 0`, ...style }}>{children}</div>
 );
-
-export const EmptyBox = ({ children, style }) => (
-  <div style={{
-    textAlign: "center", padding: `${SP.xxl}px ${SP.lg}px`, color: C.faint, fontSize: FS.sm,
-    border: `1px dashed ${C.border}`, borderRadius: R.md, background: C.surface, ...style,
-  }}>
-    {children}
-  </div>
-);
-
-/** ปุ่ม i — คำอธิบายยาวๆ ซ่อนไว้ในนี้ ให้หน้าจอเหลือแต่ตัวเลข */
-export function InfoBtn({ label, text }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (e) => { if (!box.current?.contains(e.target)) setOpen(false); };
-    const esc = (e) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", away);
-    window.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      window.removeEventListener("keydown", esc);
-    };
-  }, [open]);
-
-  return (
-    <span ref={box} style={{ position: "relative", display: "inline-flex" }}>
-      <button
-        onClick={() => setOpen(!open)}
-        aria-label={`คำอธิบาย ${label}`}
-        aria-expanded={open}
-        style={{
-          width: 17, height: 17, borderRadius: "50%", display: "grid", placeItems: "center",
-          border: `1px solid ${open ? C.dim : C.border}`, background: "transparent",
-          color: open ? C.text : C.faint, cursor: "pointer", padding: 0, flexShrink: 0,
-        }}
-      >
-        <InfoIcon size={11} />
-      </button>
-      {open && (
-        <span style={{
-          position: "absolute", top: "calc(100% + 7px)", left: -6, zIndex: 30, width: "max-content",
-          maxWidth: 268, background: C.text, color: C.bg, fontSize: FS.sm, lineHeight: 1.55,
-          borderRadius: R.sm, padding: "9px 11px", boxShadow: "0 8px 40px rgba(0,0,0,.35)", fontWeight: 400,
-        }}>
-          {text}
-        </span>
-      )}
-    </span>
-  );
-}
 
 /** Drawer ขวา / modal กลาง — ตัวเดียวใช้ทุก popup ในโมดูล (ล็อก body scroll + Esc) */
 export function Shell({ title, sub, onClose, variant = "drawer", wide, children, footer }) {

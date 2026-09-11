@@ -71,9 +71,9 @@ describe("backfill — เล่าเรื่องได้จริง (ข�
   // backfill เติมสัปดาห์ที่จบแล้ว 12 สัปดาห์ — หน้าต่างต้องตรงกันเป๊ะ
   const weeks = lastCompletedWeeks(BACKFILL_WEEKS, NOW);
   const range = weeksRange(weeks);
-  it("ปริมาณ ~50-70 ใบ กระจายครบ 12 สัปดาห์", () => {
+  it("ปริมาณ ~50-90 ใบ กระจายครบ 12 สัปดาห์", () => {
     expect(cards.length).toBeGreaterThanOrEqual(50);
-    expect(cards.length).toBeLessThanOrEqual(80);
+    expect(cards.length).toBeLessThanOrEqual(90);  // +ช่องทาง ads หลากขึ้น
     const series = weeklySeries(cards, weeks);
     expect(series.every((p) => p.produced > 0)).toBe(true); // ทุกสัปดาห์มีงาน
   });

@@ -11,11 +11,11 @@ import { useState } from "react";
 import { useApp } from "../useMkt.jsx";
 import { Panel, WorkCard } from "../mktCard.jsx";
 import { CONTENT_STAGES, STAGE_META } from "../mktEngine.js";
-import { briefRefCounts, gatePercent, isReviewOverdue, isIdeaPurgeDue, runProgress } from "../mktRules.js";
+import { briefRefCounts, gateChecklist, gateReason, isReviewOverdue, isIdeaPurgeDue, runProgress } from "../mktRules.js";
 import { Icon } from "../mktIcon.jsx";
 
 /** ตัวกรองเป็นของหน้า "งาน" (แชร์กับมุมมองลิสต์) — Board รับการ์ดที่กรองมาแล้ว */
-export function Board({ cards, onOpen }) {
+export function Board({ cards, onOpen, onNewIdea }) {
   /* ขั้นว่างพับเป็นแท่งแคบ — กดแล้วกางค้างไว้ทั้ง session ของหน้า */
   const [openEmpty, setOpenEmpty] = useState(() => new Set());
   return (
@@ -31,6 +31,11 @@ export function Board({ cards, onOpen }) {
             {inStage.length === 0
               ? <div className="col-empty">— ว่าง —</div>
               : inStage.map((c) => <BoardCard key={c.id} card={c} onOpen={onOpen} />)}
+            {/* โยนไอเดียจากบอร์ดตรงๆ — เฉพาะคอลัมน์ Idea ไม่ต้องไปหาปุ่มลอย */}
+            {st.id === "idea" && onNewIdea && (
+              <button className="col-add" onClick={onNewIdea}>
+                <Icon name="plus" size={14}/> โยนไอเดีย
+              </button>)}
           </Column>
         );
       })}
@@ -72,24 +77,31 @@ function Column({ status, name, count, children }) {
 export function BoardCard({ card, onOpen }) {
   const { data, settings } = useCardCtx();
   const refs = briefRefCounts(card.id, data.attachments, data.reference_links, data.channels);
-  const pct = gatePercent(card, refs);
   const overdue = isReviewOverdue(card, settings);
   const purge = isIdeaPurgeDue(card, settings);
   const redoRounds = data.review_actions.filter((a) => a.card_id === card.id && a.action === "reject").length;
 
   const isReview = card.status === "review";
-  const fillWidth = isReview ? 100 : pct ?? 0;
-  /* สีเดียวทั้งกระดาน — พอทุกใบเงียบ ใบที่มีชิปเตือนจะเด่นเอง */
-  let cap = isReview ? "รอตรวจ" : `${pct ?? 0}%`;
+  /* เหตุผลสั้น (แบบ Forecast) — บอกว่า "ติดอะไร/ทำถึงไหน" ไม่มีตัวเลข % แล้ว */
+  let reason = isReview ? "รอตรวจ" : gateReason(card, refs);
   if (card.status === "scheduled" || card.status === "published" || card.status === "measured") {
     const pr = runProgress(card, card.status, data.channels);
-    /* "0/2" เฉยๆ อ่านไม่รู้เรื่อง — บอกหน่วยสั้นๆ พอให้รู้ว่านับช่องทาง */
-    if (pr.total > 0) cap = `${pr.done}/${pr.total} ช่องทาง`;
+    const word = { scheduled: "ตั้งเวลาแล้ว", published: "ขึ้นจริงแล้ว", measured: "กรอกแล้ว" }[card.status];
+    if (pr.total > 0) reason = `${word} ${pr.done}/${pr.total} ช่องทาง`;
   }
 
   const statusChips = overdue ? [{ label: "เกิน SLA", tone: "bad" }]
     : card.first_pass === false && redoRounds > 0 ? [{ label: `แก้ ${redoRounds} รอบ`, tone: "warn" }]
     : purge ? [{ label: "กวาดล้าง", tone: "bad" }] : [];
+
+  /* แถบสีเดียวกับป้าย — ใบป่วยตะโกน ใบปกติ accent เงียบทั้งกระดาน */
+  const tone = statusChips[0]?.tone;
+  const barColor = tone === "bad" ? "var(--bad)" : tone === "warn" ? "var(--warn)" : "var(--accent)";
+  /* แถบพาร์ทิชัน = ความพร้อมขั้นนี้: ช่องละเงื่อนไข gate เต็มตามที่ทำครบ
+     (ก้อนเดียวกับ "n/n" ในแผงซ้ายของ popup — ไม่มี % แล้ว) */
+  const gate = gateChecklist(card, refs);
+  const gateDone = gate.filter((g) => g.done).length;
+  const seg = gate.length > 0 ? { count: gate.length, filled: gateDone } : null;
 
   return (
     <WorkCard
@@ -97,7 +109,7 @@ export function BoardCard({ card, onOpen }) {
       onOpen={() => onOpen(card)}
       cover
       statusChips={statusChips}
-      progress={{ width: fillWidth, color: "var(--accent)", cap }}
+      progress={{ color: barColor, reason, seg }}
     />
   );
 }

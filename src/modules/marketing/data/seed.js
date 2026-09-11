@@ -3,12 +3,12 @@
  วันที่ generate สัมพัทธ์กับ "วันนี้" เพื่อให้ demo ดูสดเสมอ
  ============================================================ */
 import { genId } from "../mktRules.js";
-import { buildBackfill } from "./seedBackfill.js";
+import { buildBackfill, buildAdBudgets, buildMonthAds, buildSalesTargets } from "./seedBackfill.js";
 import {
   SEED_SIZE_PRESETS, SEED_SHOT_TYPES, SEED_VIDEO_LENGTHS, ALL_SELF_CHECK_KEYS,
   SEED_SCHEDULER_TOOLS, emptyRun,
 } from "../mktEngine.js";
-export const DATA_VERSION = "ssb-cp-v17";  /* v17 = โปสเตอร์ mock ให้งานเด่นในคลัง — เดโมเห็นรูปโดยไม่ง้อไฟล์จริง */
+export const DATA_VERSION = "ssb-cp-v19";  /* v19 = Meta อย่างเดียว + เป้ายอดขายรายแบรนด์ */
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 function iso(offsetMs) {
@@ -557,9 +557,10 @@ export function buildSeed() {
   const phantoms = buildPhantomCards(actions);
   // งานย้อนหลัง 12 สัปดาห์ (archived ทั้งหมด) — ให้ Dashboard มี trend/funnel จริง
   const backfill = buildBackfill();
+  const monthAds = buildMonthAds();  // งานยิงแอดเดือนนี้ — ให้เกจงบบนหน้า Ads มีข้อมูลจริง
   /* คลัง: ติดดาว "ต้นแบบ" + บทเรียนตัวอย่างให้ 2 งานที่ ER สูงสุด — เดโมเปิดมาเห็นภาพเลย
      เลือกแบบ deterministic จากข้อมูล backfill เอง ไม่ฮาร์ดโค้ดรหัส (รหัสเลื่อนแล้วไม่หลุด) */
-  const allCards = [...cards, ...phantoms, ...backfill.cards];
+  const allCards = [...cards, ...phantoms, ...backfill.cards, ...monthAds];
   const topClosed = allCards
     .filter((c) => c.archived && c.metrics?.reach > 0 && c.metrics?.engagement != null)
     .sort((a, b) => (b.metrics.engagement / b.metrics.reach) - (a.metrics.engagement / a.metrics.reach))
@@ -606,5 +607,7 @@ export function buildSeed() {
     scheduler_tools: SEED_SCHEDULER_TOOLS,
     video_lengths: SEED_VIDEO_LENGTHS,
     settings: SEED_SETTINGS,
+    ad_budgets: buildAdBudgets(),
+    sales_targets: buildSalesTargets(),
   };
 }
