@@ -1,0 +1,52 @@
+.aw { --aw-ink:#18352e; color:var(--ink); max-width:1680px; margin:auto; padding:28px; }
+.aw-header { display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:24px; }
+.aw-eyebrow { font-size:10px; font-weight:700; letter-spacing:.12em; color:var(--ink-soft); }
+.aw h1 { font-size:clamp(22px,2.3vw,34px); margin:7px 0; letter-spacing:-.04em; }
+.aw-header p { color:var(--ink-soft); margin:0; }
+.aw a { color:var(--ink); font-weight:600; text-decoration:none; white-space:nowrap; }
+.aw-controls { display:flex; align-items:center; gap:16px; border-block:1px solid var(--line); padding:14px 0; margin-bottom:26px; flex-wrap:wrap; }
+.aw-controls label { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-soft); }
+.aw-controls select,.aw-controls input { background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; }
+.aw-demo { margin-left:auto; font-size:11px; color:var(--ink-soft); }
+.aw-layout { display:grid; grid-template-columns:250px minmax(0,1fr); gap:28px; align-items:start; }
+.aw-brands { position:sticky; top:80px; }
+.aw-section-label { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; font-weight:700; }
+.aw-section-label>span { font-size:11px; font-weight:500; color:var(--ink-soft); }
+.aw-brands>p { font-size:11px; color:var(--ink-soft); margin:6px 0 18px; }
+.mkt-root .aw-brand { display:block; width:100%; text-align:left; padding:16px; margin:0 0 10px; background:var(--surface); border:1px solid var(--line); border-radius:10px; color:var(--ink); cursor:pointer; }
+.mkt-root .aw-brand.selected { border-color:#23725a; box-shadow:inset 3px 0 #23725a; background:color-mix(in srgb,var(--surface) 95%,#23725a); }
+.aw-brand>div { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.aw-brand>div>span:last-child { margin-left:auto; }
+.aw-brand strong { font-size:13px; }.aw-brand b { font-size:17px; }.aw-brand small { font-size:10px; color:var(--ink-soft); }.aw-brand>div>small { margin-left:auto; }
+.aw-content { display:grid; gap:18px; min-width:0; }
+.aw-hero { background:#193d32; color:#fff; border-radius:16px; padding:28px; }
+.aw-hero-top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:30px; }
+.aw-brand-title { display:flex; align-items:center; gap:12px; }.aw-brand-title h2 { font-size:22px; margin:0; }
+.aw-status { font-size:11px; border:1px solid #ffffff40; border-radius:30px; padding:5px 12px; color:#fff!important; }
+.aw-hero-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:36px; }.aw-hero .aw-eyebrow { color:#b8d5c9; }
+.aw-revenue { font-size:clamp(32px,4.3vw,60px); font-weight:650; letter-spacing:-.045em; line-height:1.25; font-variant-numeric:tabular-nums; margin-top:10px; }
+.aw-hero p { font-size:12px; color:#c0d7cd; }.aw-hero-foot { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:10px; color:#c0d7cd; margin-top:10px; }
+.aw-track { display:block!important; position:relative; height:7px; background:var(--line); border-radius:9px; margin:14px 0!important; overflow:visible; }
+.aw-track i { display:block; height:100%; border-radius:9px; background:#2b8d68; }.aw-track i.rose { background:#d97563; }.aw-track i.amber { background:#ca9a43; }.aw-track em { position:absolute; top:-4px; width:2px; height:15px; background:var(--ink-soft); }
+.aw-hero .aw-track { background:#ffffff22; }.aw-hero .aw-track i { background:#94d9b4; }.aw-hero .aw-track em { background:#fff; }
+.aw-forecast { border-left:1px solid #ffffff25; padding-left:32px; display:flex; flex-direction:column; justify-content:center; }.aw-forecast>span { font-size:12px;color:#c0d7cd; }.aw-forecast h3 { font-size:30px; margin:8px 0 0; letter-spacing:-.03em; }.aw-forecast strong { font-size:13px; }.aw-forecast small { color:#c0d7cd; font-size:10px; margin-top:16px; }
+.aw .rose { color:#ba5143; }.aw .emerald { color:#25815e; }.aw .amber { color:#9b7027; }.aw-hero .rose { color:#ffb4a8; }.aw-hero .emerald { color:#a8e5bf; }
+.aw-panel { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:22px; min-width:0; }
+.aw-middle { display:grid; grid-template-columns:1.5fr 1fr; gap:18px; }.aw-spend { font-size:28px; font-weight:650; margin-top:18px; font-variant-numeric:tabular-nums; }.aw-spend small { font-size:14px;color:var(--ink-soft);font-weight:400; }
+.aw-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0 0; }.aw-facts dt { font-size:11px;color:var(--ink-soft);margin-bottom:4px; }.aw-facts dd { font-size:16px;font-weight:600;margin:0;font-variant-numeric:tabular-nums; }
+.aw-efficiency>div:not(:first-child) { display:flex; align-items:center; justify-content:space-between; padding:15px 0;border-bottom:1px solid var(--line); }.aw-efficiency small { display:block;font-size:10px;color:var(--ink-soft); }.aw-efficiency b { font-size:27px; }.aw-efficiency p { font-size:10px;color:var(--ink-soft);line-height:1.8; }
+.aw-journey .ads-pipe--row { width:100%; grid-template-columns:repeat(4,minmax(0,1fr)); margin-top:20px; }.aw-journey .ads-pipe-item { border-top:0;border-left:1px solid var(--line);padding:0 16px; }.aw-journey .ads-pipe-item:first-child { border-left:0;padding-left:0; }.aw-key { color:var(--ink-soft); font-size:10px; margin-top:16px; }
+.aw-tabs { display:flex;gap:24px;border-bottom:1px solid var(--line);margin-bottom:20px; }.mkt-root .aw-tabs button { font:inherit;font-size:13px;padding:0 0 12px;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent; }.mkt-root .aw-tabs button[aria-selected=true] { color:var(--ink);border-color:#23725a;font-weight:700; }.aw-tabs span { font-size:10px;margin-left:5px; }
+.aw-channel-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px; }.aw-channel-grid .ads-chan-card { margin:0; }.aw button:focus-visible,.aw a:focus-visible { outline:2px solid #23725a;outline-offset:4px; }
+@media(max-width:1100px){.aw-layout { grid-template-columns:200px minmax(0,1fr);gap:18px; }.aw-hero-grid { grid-template-columns:1fr;gap:24px; }.aw-forecast { border-left:0;border-top:1px solid #ffffff25;padding:20px 0 0; }.aw-middle { grid-template-columns:1fr; }}
+@media(max-width:760px){.aw { padding:16px; }.aw-header { align-items:start;flex-direction:column; }.aw-layout { grid-template-columns:1fr; }.aw-brands { position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }.aw-brands>.aw-section-label,.aw-brands>p,.aw-brands>.aw-key { grid-column:1/-1;margin:0; }.mkt-root .aw-brand { margin:0; }.aw-brand>div { flex-wrap:wrap; }.aw-hero { padding:20px; }.aw-journey .ads-pipe--row { grid-template-columns:repeat(2,minmax(0,1fr));gap:16px; }.aw-journey .ads-pipe-item:nth-child(3){border-left:0;padding-left:0;}.aw-controls { gap:10px; }.aw-demo { margin-left:0; }}
+.aw-controls label { white-space:nowrap; flex-shrink:0; }
+.aw .ads-chan-card { border-top:1px solid var(--line); border-radius:8px; }
+.aw .ads-chan-verdict,.aw .ads-chan-support { line-height:1.7; }
+.aw-trend-controls { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-top:20px; }
+.aw-trend-controls .aw-tabs { flex-wrap:wrap; gap:18px; margin:0; }
+.aw-trend-controls select { font:inherit; font-size:12px; padding:6px; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:6px; }
+.aw-trend-controls label { font-size:12px; display:flex; gap:6px; align-items:center; }
+.aw-trend-total { display:flex; align-items:baseline; gap:16px; margin:20px 0; flex-wrap:wrap; }.aw-trend-total b { font-size:30px; }.aw-trend-total span { color:var(--ink-soft); font-size:12px; }
+.aw-table-scroll { overflow:auto; }.aw table { width:100%; border-collapse:collapse; font-size:12px; margin-top:16px; }.aw th,.aw td { padding:12px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }.aw th:first-child { text-align:left; }.aw-comparison td:nth-child(3),.aw-comparison td:nth-child(4) { min-width:130px; }.aw-comparison small { color:var(--ink-soft); }.mkt-root .aw-comparison button { color:var(--ink); cursor:pointer; font:inherit; font-weight:600; }.aw details summary { cursor:pointer; font-size:12px; }
+.aw-trend-controls .aw-tabs select { width:auto; min-width:130px; align-self:flex-start; }

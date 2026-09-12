@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  adsByBrandChannel, adsByChannel, adsChannelList, adsDecisionRows, adsFunnel, adsKpis, adsWeekly,
-  adsCreativeRows, adsDailyRevenue, adsDailySeries, adsSalesPace, decideAction, adsSalesVsTarget, budgetOf, deliveryOf, revenuePace, budgetPace, change, filterByChannel, normalizeAdPlatform, paceGroup, paceStatus, roasOf, salesTargetOf, share,
+  adsByBrandChannel, adsByChannel, adsChannelList, adsCompanyPaceChart, adsCompanySummary, adsSpendShareByBrand, adsDecisionRows, adsFunnel, adsKpis, adsWeekly,
+  adsCreativeRows, adsDailyRevenue, adsDailySeries, adsMetricBoard, adsSalePipeline, adsSalesPace, decideAction, adsSalesVsTarget, budgetOf, deliveryOf, revenuePace, budgetPace, change, filterByChannel, normalizeAdPlatform, paceGroup, paceStatus, roasOf, salesTargetOf, share,
 } from "../src/modules/marketing/adsOverview.js";
 
 /* ศุกร์ 24 ก.ค. 2026 — สัปดาห์เริ่มจันทร์ 20 ก.ค. (ชุดเดียวกับ mktAnalytics.test.js) */
@@ -233,6 +233,12 @@ describe("แบรนด์ × ช่องทาง (การ์ดเกจ�
     expect(ch.pace.used).toBeCloseTo(0.5);          // 8000/16000
     expect(ch.roas).toBeCloseTo(3.6);               // 28800/8000
   });
+  it("ระดับแบรนด์มี %Ads = ค่าแอดรวม ÷ ยอดขายรวมของแบรนด์ (ไม่ใช่เฉลี่ยรายช่องทาง)", () => {
+    const rows = adsByBrandChannel(cards, RANGE, [{ id: "b_td", name: "TEAMDEE" }], budgets, "2026-07-15");
+    expect(rows[0].pctAds).toBeCloseTo(8000 / 28_800);
+    const none = adsByBrandChannel(cards, RANGE, [{ id: "b_zz", name: "ว่าง" }], budgets, "2026-07-15");
+    expect(none[0].pctAds).toBeNull();               // ไม่มียอดขาย → null ไม่ใช่ 0
+  });
   it("แบรนด์ที่ยังไม่ใช้เงินก็ต้องอยู่ในผล (ค่าแอด 0)", () => {
     const rows = adsByBrandChannel(cards, RANGE, [
       { id: "b_td", name: "TEAMDEE" }, { id: "b_ta", name: "t around" },
@@ -260,6 +266,17 @@ describe("กรวยผลจากค่าแอด", () => {
   });
   it("ไม่มีงานยิงแอดเลย ทุกขั้นเป็น null", () => {
     expect(adsFunnel([], RANGE).stages.every((s) => s.value === null)).toBe(true);
+  });
+});
+
+describe("กรวย — ขั้นหล่นแรงสุด", () => {
+  it("worstKey = ขั้นที่อัตราแปลงต่ำสุด (ไม่นับขั้นแรก)", () => {
+    /* leads 20 → 13 (65%) → 2 (15%) → 2 (100%) */
+    const cards = [card({ metrics: metrics({ spend: 2000, leads: 20, revenue: 8000 }) })];
+    expect(adsFunnel(cards, RANGE).worstKey).toBe("deposits");
+  });
+  it("ไม่มีข้อมูล → worstKey เป็น null", () => {
+    expect(adsFunnel([], RANGE).worstKey).toBeNull();
   });
 });
 
@@ -488,5 +505,292 @@ describe("ครีเอทีฟ — ตัวไหนเวิร์ค / �
       shot("bad", "ตัวแย่", 6, { revenue: 500, leads: 1 }),           // ROAS 0.25 → Stop
     ], RANGE_M, brands);
     expect(rows.map((r) => r.action)).toEqual(["Stop", "Scale"]);
+  });
+});
+
+describe("กระดานตัวชี้วัดและแนวโน้ม", () => {
+  const shot = (id, over = {}, briefOver = {}) => card({
+    id, brief: brief({ channels: ["Facebook"], publish_at: null, ...briefOver }),
+    metrics: metrics({ spend: 2000, leads: 10, revenue: 8000, impressions: 100_000, clicks: 2000, reach: 50_000,
+      measured_at: "2026-07-22T09:00:00.000Z", ...over }),
+  });
+  const by = (board, key) => board.find((c) => c.key === key);
+  it("คำนวณค่าหลักครบ และ delta มีค่าช่วงก่อนให้เทียบ", () => {
+    const prevCard = shot("p1", { measured_at: "2026-07-15T09:00:00.000Z", spend: 1000 }, { });
+    const board = adsMetricBoard([shot("a1"), prevCard], RANGE, PREV);
+    expect(by(board, "spend").value).toBe(2000);
+    expect(by(board, "spend").before).toBe(1000);
+    expect(by(board, "ctr").value).toBeCloseTo(0.02);
+    expect(by(board, "cpm").value).toBe(20);
+    expect(by(board, "frequency").value).toBe(2);
+    expect(by(board, "roas").value).toBe(4);
+  });
+  it("Inquiry ไม่มีฟิลด์จริง = null พร้อมเหตุผลกันเลขซ้ำกับ Leads (ห้าม fallback)", () => {
+    const board = adsMetricBoard([shot("a1")], RANGE, PREV);
+    expect(by(board, "inquiry").value).toBeNull();
+    expect(by(board, "inquiry").reason).toContain("ซ้ำกับ Leads");
+    const withReal = adsMetricBoard([shot("a2", { inquiries: 40 })], RANGE, PREV);
+    expect(by(withReal, "inquiry").value).toBe(40);
+  });
+  it("CPR เป็นลีดล้วน = null บอกว่าค่าเดียวกับ CPL · แพลตฟอร์มออเดอร์ = คำนวณจริง", () => {
+    const board = adsMetricBoard([shot("a1")], RANGE, PREV);
+    expect(by(board, "cpr").value).toBeNull();
+    expect(by(board, "cpr").reason).toContain("CPL");
+    const shopee = adsMetricBoard([shot("s1", { orders: 8 }, { channels: ["Shopee"] })], RANGE, PREV);
+    expect(by(shopee, "cpr").value).toBe(250); // 2000 / 8 ออเดอร์
+  });
+  it("Reach/Frequency หลายแพลตฟอร์ม = null เพราะคนซ้ำกันข้ามแพลตฟอร์ม", () => {
+    const board = adsMetricBoard([shot("m1"), shot("t1", {}, { channels: ["TikTok"] })], RANGE, PREV);
+    expect(by(board, "reach").value).toBeNull();
+    expect(by(board, "reach").reason).toContain("ช่องทางเดียว");
+    expect(by(board, "frequency").value).toBeNull();
+    expect(by(board, "spend").value).toBe(4000); // ตัวอื่นยังรวมได้ปกติ
+  });
+  it("series รายวันพกอัตราส่วนไว้วาดเส้น (ctr/cpc/cpm/frequency)", () => {
+    const days = adsDailySeries([shot("a1")], RANGE);
+    expect(days[0].ctr).toBeCloseTo(0.02);
+    expect(days[0].cpc).toBe(1);
+    expect(days[0].cpm).toBe(20);
+    expect(days[0].frequency).toBe(2);
+  });
+});
+
+describe("Sale pipeline แนวนอน", () => {
+  const shot = (id, over = {}) => card({
+    id, brief: brief({ channels: ["Facebook"], publish_at: null }),
+    metrics: metrics({ spend: 2000, leads: 20, revenue: 8000, measured_at: "2026-07-22T09:00:00.000Z", ...over }),
+  });
+  const prevShot = shot("p1", { spend: 1000, leads: 5, revenue: 2000, measured_at: "2026-07-15T09:00:00.000Z" });
+  it("4 ขั้นขาย + ROAS + %Ads พร้อมค่าช่วงก่อนไว้บอกดีขึ้น/แย่ลง", () => {
+    const p = adsSalePipeline([shot("a1"), prevShot], RANGE, PREV);
+    expect(p.items.map((i) => i.label)).toEqual(["คนทัก", "Lead", "มัดจำ", "ออเดอร์ปิดแล้ว", "ROAS", "%Ads"]);
+    const roas = p.items.find((i) => i.key === "roas");
+    expect(roas.value).toBe(4);
+    expect(roas.before).toBe(2);         // ช่วงก่อน 2000/1000
+    const pctAds = p.items.find((i) => i.key === "pctAds");
+    expect(pctAds.value).toBeCloseTo(0.25);
+    expect(pctAds.sense).toBe("lower");  // %Ads ต่ำลง = ดีขึ้น
+    expect(p.items[0].value).toBe(20);   // คนทัก (ประมาณจากลีด)
+    expect(p.estimated).toBe(true);      // mock ยังไม่เก็บมัดจำ/ออเดอร์จริง
+  });
+  it("ไม่ส่งช่วงเทียบ → before เป็น null ไม่ใช่ 0", () => {
+    const p = adsSalePipeline([shot("a1")], RANGE);
+    expect(p.items.every((i) => i.before == null)).toBe(true);
+  });
+  it("ขั้นขายพกอัตราแปลงจากขั้นก่อน และชี้ขั้นที่หล่นแรงสุด", () => {
+    /* leads 20 → Lead 13 (65%) → มัดจำ 2 (15%) → ปิด 2 (100%) — มัดจำหล่นแรงสุด */
+    const p = adsSalePipeline([shot("a1")], RANGE);
+    const [inq, lead, dep, closed] = p.items;
+    expect(inq.conv).toBeNull();
+    expect(lead.conv).toBeCloseTo(13 / 20);
+    expect(dep.conv).toBeCloseTo(2 / 13);
+    expect(closed.conv).toBeCloseTo(1);
+    expect(p.items.find((i) => i.key === "roas").conv).toBeUndefined();
+    expect(p.worstKey).toBe("deposits");
+  });
+  it("ไม่มีข้อมูลในช่วง → conv เป็น null และไม่ชี้ขั้นหล่น", () => {
+    const p = adsSalePipeline([], RANGE);
+    expect(p.items.slice(0, 4).every((i) => i.conv == null)).toBe(true);
+    expect(p.worstKey).toBeNull();
+  });
+});
+
+describe("คาดปิดเดือนฝั่งยอดขาย (run-rate เชิงเส้น)", () => {
+  it("forecast = ยอดสะสม ÷ สัดส่วนวันที่ผ่านไป · เทียบเป้าเป็นบาท", () => {
+    const p = revenuePace(84_134, 240_000, 0.4);
+    expect(p.forecast).toBeCloseTo(210_335);
+    expect(p.forecastVsTarget).toBeCloseTo(210_335 - 240_000);  // ติดลบ = คาดว่าขาดเป้า
+  });
+  it("ไม่มีเป้าก็ยังคาดยอดได้ แต่เทียบเป้าไม่ได้", () => {
+    const p = revenuePace(50_000, null, 0.5);
+    expect(p.forecast).toBeCloseTo(100_000);
+    expect(p.forecastVsTarget).toBeNull();
+  });
+  it("ยังไม่มีวันผ่านไปหรือยอดว่าง → null ไม่ใช่ Infinity", () => {
+    expect(revenuePace(1000, 100, 0).forecast).toBeNull();
+    expect(revenuePace(null, 100, 0.5).forecast).toBeNull();
+  });
+});
+
+describe("เครื่องหมายแบรนด์", () => {
+  it("ตัวย่อจากชื่อ — คงตัวพิมพ์เดิม และเคารพชื่อที่เป็นตัวย่ออยู่แล้ว", async () => {
+    const { monogramOf, inkOn } = await import("../src/modules/marketing/ads/BrandMark.jsx");
+    expect(monogramOf("TEAMDEE")).toBe("TE");
+    expect(monogramOf("JUNTAKARN")).toBe("JU");
+    expect(monogramOf("JK Design")).toBe("JK");   // ไม่ใช่ "JD"
+    expect(monogramOf("t around")).toBe("ta");    // คงพิมพ์เล็กตามโลโก้
+    expect(monogramOf("")).toBe("?");
+  });
+  it("สีตัวอักษรบนพื้นแบรนด์เลือกตามคอนทราสต์ ไม่ใช่ขาวเสมอ", async () => {
+    const { inkOn } = await import("../src/modules/marketing/ads/BrandMark.jsx");
+    expect(inkOn("#0D2B5E")).toBe("#FFFFFF");  // navy เข้ม → ตัวขาว
+    expect(inkOn("#111111")).toBe("#FFFFFF");  // ดำ → ตัวขาว
+    expect(inkOn("#F4700A")).toBe("#11181C");  // ส้ม → ตัวเข้ม (ขาวได้แค่ ~3:1 ไม่ผ่าน AA)
+  });
+});
+
+describe("จุดอ้างอิงจังหวะใช้งบ", () => {
+  it("บอกเป็นบาทว่าควรใช้เท่าไร และตอนนี้เร็ว/ช้ากว่าจังหวะกี่บาท", () => {
+    // งบ 30,000 · ผ่านไป 15/31 วัน → ควรใช้ ~14,516 · ใช้จริง 19,500
+    const p = budgetPace(19_500, 30_000, "2026-07-15");
+    expect(p.expectedSpend).toBeCloseTo(30_000 * (15 / 31), 0);
+    expect(p.vsPace).toBeCloseTo(19_500 - 30_000 * (15 / 31), 0);
+    expect(p.vsPace).toBeGreaterThan(0);            // ใช้เร็วกว่าจังหวะ
+  });
+  it("ใช้ช้ากว่าจังหวะ → vsPace ติดลบ", () => {
+    expect(budgetPace(3_000, 30_000, "2026-07-15").vsPace).toBeLessThan(0);
+  });
+  it("ยังไม่ตั้งงบ → null ไม่ใช่ NaN", () => {
+    const p = budgetPace(5_000, null, "2026-07-15");
+    expect(p.expectedSpend).toBeNull();
+    expect(p.vsPace).toBeNull();
+  });
+});
+
+describe("สรุประดับบริษัท (แถวบนสุด)", () => {
+  const BRANDS = [
+    { id: "b_td", name: "TEAMDEE", color: "#F4700A" },
+    { id: "b_jk", name: "JK Design", color: "#123A6B" },
+  ];
+  const budgets = [
+    { brand_id: "b_td", channel: "TikTok", month: "2026-07", amount: 16_000 },
+    { brand_id: "b_jk", channel: "Facebook", month: "2026-07", amount: 9_000 },
+  ];
+  const targets = [
+    { brand_id: "b_td", month: "2026-07", amount: 40_000 },
+    { brand_id: "b_jk", month: "2026-07", amount: 20_000 },
+  ];
+  const JUNE = { start: "2026-06-20T00:00:00.000Z", end: "2026-06-27T00:00:00.000Z" };
+  const cards = [
+    card({ id: "a1", brand_id: "b_td", brief: brief({ channels: ["TikTok"] }), metrics: metrics({ spend: 8000, leads: 20, revenue: 28_800 }) }),
+    card({ id: "a2", brand_id: "b_jk", brief: brief({ channels: ["Facebook"] }), metrics: metrics({ spend: 2000, leads: 4, revenue: 3200 }) }),
+    /* เดือนก่อน — ไว้เทียบยอดรวม */
+    card({ id: "p1", brand_id: "b_td", brief: brief({ channels: ["TikTok"], publish_at: "2026-06-22T12:00:00.000Z" }),
+      metrics: metrics({ spend: 3000, leads: 10, revenue: 10_000, measured_at: "2026-06-23T09:00:00.000Z" }) }),
+    card({ id: "p2", brand_id: "b_jk", brief: brief({ channels: ["Facebook"], publish_at: "2026-06-22T12:00:00.000Z" }),
+      metrics: metrics({ spend: 1000, leads: 3, revenue: 5000, measured_at: "2026-06-23T09:00:00.000Z" }) }),
+  ];
+  const rows = (bs = BRANDS, tg = targets, bg = budgets) =>
+    adsByBrandChannel(cards, RANGE, bs, bg, "2026-07-15", tg, JUNE);
+
+  it("รวมยอดขาย/ค่าแอด/เป้า/งบทุกแบรนด์ + จังหวะคิดจากยอดรวม", () => {
+    const s = adsCompanySummary(rows(), "2026-07-15");
+    expect(s.brands).toBe(2);
+    expect(s.revenue).toBe(32_000);
+    expect(s.spend).toBe(10_000);
+    expect(s.revTarget).toBe(60_000);
+    expect(s.budget).toBe(25_000);
+    expect(s.revPct).toBeCloseTo(32_000 / 60_000);
+    expect(s.revPace.expectedSpend).toBeCloseTo(60_000 * (15 / 31));   // ควรได้ ณ วันนี้
+    expect(s.revPace.vsPace).toBeCloseTo(32_000 - 60_000 * (15 / 31)); // ยอดนำ/ตามแผนกี่บาท
+    expect(s.revPctOfExpected).toBeCloseTo(32_000 / (60_000 * (15 / 31))); // % ของที่ควรได้วันนี้
+    expect(s.pace.used).toBeCloseTo(10_000 / 25_000);
+    expect(s.pace.vsPace).toBeCloseTo(10_000 - 25_000 * (15 / 31));
+    expect(s.pace.forecast).toBeCloseTo((10_000 / 15) * 31);
+  });
+
+  it("เทียบเดือนก่อนจากผลรวม", () => {
+    const s = adsCompanySummary(rows(), "2026-07-15");
+    expect(s.prevRevenue).toBe(15_000);
+    expect(s.revChangePct).toBeCloseTo(((32_000 - 15_000) / 15_000) * 100);
+  });
+
+  it("เป้า/งบไม่ครบทุกแบรนด์ = รวมไม่ได้ (null ไม่เดา)", () => {
+    const s = adsCompanySummary(rows(BRANDS, targets.slice(0, 1), budgets.slice(0, 1)), "2026-07-15");
+    expect(s.revTarget).toBeNull();
+    expect(s.revPct).toBeNull();
+    expect(s.budget).toBeNull();
+    expect(s.pace.used).toBeNull();
+    expect(s.revenue).toBe(32_000);   // ยอดจริงยังรวมได้เสมอ
+  });
+
+  it("จัดกลุ่มสถานะแบรนด์ — ปัญหาก่อน · ข้ามกลุ่มว่าง · พกสีแบรนด์", () => {
+    const s = adsCompanySummary(rows(), "2026-07-15");
+    /* b_jk ได้ 3,200 จากที่ควรได้ ~9,677 → ช้ากว่าแผน · b_td 28,800 จาก ~19,355 → ตามแผน */
+    expect(s.byStatus.map((g) => g.tone)).toEqual(["rose", "emerald"]);
+    expect(s.byStatus[0].text).toBe("ช้ากว่าแผน");
+    expect(s.byStatus[0].brands.map((b) => b.name)).toEqual(["JK Design"]);
+    expect(s.byStatus[1].brands[0]).toMatchObject({ id: "b_td", name: "TEAMDEE", color: "#F4700A" });
+  });
+
+  it("แบรนด์ไม่มีเป้า → กลุ่ม ยังประเมินไม่ได้ (zinc) ท้ายสุด", () => {
+    const s = adsCompanySummary(rows(BRANDS, targets.slice(0, 1)), "2026-07-15");
+    const zinc = s.byStatus.find((g) => g.tone === "zinc");
+    expect(zinc.brands.map((b) => b.id)).toEqual(["b_jk"]);
+    expect(s.byStatus[s.byStatus.length - 1].tone).toBe("zinc");
+  });
+
+  it("ไม่มีแบรนด์ในขอบเขต → ค่าว่างทั้งชุด ไม่พัง", () => {
+    const s = adsCompanySummary([], "2026-07-15");
+    expect(s.brands).toBe(0);
+    expect(s.revenue).toBe(0);
+    expect(s.revTarget).toBeNull();
+    expect(s.byStatus).toEqual([]);
+  });
+});
+
+describe("กราฟจังหวะเดือน (สะสม vs เป้า/งบ + คาดการณ์)", () => {
+  const MTD = { start: "2026-07-01T00:00:00.000Z", end: "2026-07-16T00:00:00.000Z" };
+  const cards = [
+    card({ id: "d1", brief: brief({ channels: ["Facebook"], publish_at: null }),
+      metrics: metrics({ spend: 4000, leads: 8, revenue: 10_000, measured_at: "2026-07-05T09:00:00.000Z" }) }),
+    card({ id: "d2", brief: brief({ channels: ["Facebook"], publish_at: null }),
+      metrics: metrics({ spend: 2000, leads: 4, revenue: 5000, measured_at: "2026-07-10T09:00:00.000Z" }) }),
+  ];
+  it("สะสมจริงถึงวันนี้ หลังจากนั้นเป็น null · คาดการณ์ต่อจากจุดจริงด้วย run-rate", () => {
+    const c = adsCompanyPaceChart(cards, MTD, "2026-07-15", 62_000, 12_000);
+    expect(c.daysInMonth).toBe(31);
+    expect(c.elapsed).toBe(15);
+    expect(c.days).toHaveLength(31);
+    expect(c.revCum[4]).toBe(10_000);      // 5 ก.ค.
+    expect(c.revCum[14]).toBe(15_000);     // วันนี้
+    expect(c.revCum[15]).toBeNull();       // อนาคตไม่มีข้อมูลจริง
+    expect(c.revProj[13]).toBeNull();      // ก่อนวันนี้ไม่มีเส้นคาดการณ์
+    expect(c.revProj[14]).toBe(15_000);    // ต่อจากจุดจริง
+    expect(c.revProj[30]).toBeCloseTo(31_000); // 15000 + (15000/15)*16
+  });
+  it("เส้นเป้าไต่ตามจังหวะวัน · เส้นงบเป็นเส้นราบ", () => {
+    const c = adsCompanyPaceChart(cards, MTD, "2026-07-15", 62_000, 12_000);
+    expect(c.targetLine[30]).toBeCloseTo(62_000);
+    expect(c.targetLine[14]).toBeCloseTo(62_000 * (15 / 31));
+    expect(c.budgetLine[0]).toBe(12_000);
+    expect(c.budgetLine[30]).toBe(12_000);
+  });
+  it("ชี้วันงบหมดจากเส้นคาดการณ์", () => {
+    const c = adsCompanyPaceChart(cards, MTD, "2026-07-15", 62_000, 12_000);
+    /* ใช้ไป 6,000 ใน 15 วัน (เฉลี่ย 400/วัน) → ถึง 12,000 วันที่ 30 */
+    expect(c.exhaustDay).toBe(30);
+  });
+  it("ไม่มีเป้า/งบ → เส้นนั้นเป็น null ไม่ใช่ศูนย์", () => {
+    const c = adsCompanyPaceChart(cards, MTD, "2026-07-15", null, null);
+    expect(c.targetLine).toBeNull();
+    expect(c.budgetLine).toBeNull();
+    expect(c.exhaustDay).toBeNull();
+  });
+  it("ไม่มีข้อมูลเลย → เส้นคาดการณ์ไม่พัง", () => {
+    const c = adsCompanyPaceChart([], MTD, "2026-07-15", 62_000, null);
+    expect(c.revCum[14]).toBe(0);
+    expect(c.revProj[30]).toBe(0);
+  });
+});
+
+describe("สัดส่วนค่าแอดตามแบรนด์", () => {
+  const rows = [
+    { id: "b_td", name: "TEAMDEE", color: "#F4700A", spend: 6000 },
+    { id: "b_jk", name: "JK Design", color: "#123A6B", spend: 2000 },
+    { id: "b_ta", name: "t around", color: "#111111", spend: 0 },
+  ];
+  it("เรียงมาก→น้อย · ตัดแบรนด์ที่ไม่ใช้เงิน · สัดส่วนรวม 1", () => {
+    const s = adsSpendShareByBrand(rows);
+    expect(s.total).toBe(8000);
+    expect(s.rows.map((r) => r.id)).toEqual(["b_td", "b_jk"]);
+    expect(s.rows[0].share).toBeCloseTo(0.75);
+    expect(s.rows.reduce((n, r) => n + r.share, 0)).toBeCloseTo(1);
+    expect(s.rows[0].color).toBe("#F4700A");
+  });
+  it("ไม่มีใครใช้เงิน → ว่างเปล่า ไม่หารศูนย์", () => {
+    const s = adsSpendShareByBrand([{ id: "x", name: "X", spend: 0 }]);
+    expect(s.total).toBe(0);
+    expect(s.rows).toEqual([]);
   });
 });

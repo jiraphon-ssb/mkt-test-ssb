@@ -319,11 +319,14 @@ const CREATIVES = [
 const CAMPAIGNS = ["Always-on — คนเคยทัก", "Prospecting — กลุ่มใหม่", "Remarketing — คนดูแล้วไม่ทัก"];
 
 const MONTH_ADS = [
-  /* ช่วงแรกยิงแค่ Meta — ช่องทางอื่นค่อยเปิดเพิ่มทีหลัง (โครงรองรับอยู่แล้ว) */
-  { brand: "b_jt", channel: "Meta Ads", budget: 30_000, used: 0.45, cpl: 380, roas: 3.3, er: 0.030, prev: 0.88, title: "ยูนิฟอร์มร้าน — Meta Ads เดือนนี้" },
-  { brand: "b_td", channel: "Meta Ads", budget: 24_000, used: 0.55, cpl: 300, roas: 2.8, er: 0.031, prev: 1.06, title: "เสื้อทีมองค์กร — Meta Ads เดือนนี้" },
-  { brand: "b_ta", channel: "Meta Ads", budget: 22_000, used: 0.25, cpl: 400, roas: 4.0, er: 0.024, prev: 0.75, title: "t around — Meta Ads เดือนนี้" },
-  { brand: "b_jk", channel: "Meta Ads", budget: 9_000,  used: 0.62, cpl: 450, roas: 2.2, er: 0.020, prev: 1.12, title: "JK Design — Meta Ads เดือนนี้" },
+  /* แพลตฟอร์มต่อแบรนด์ (mock): TEAMDEE = Meta+Google · t around, JK Design = Meta · JUNTAKARN = Meta+Shopee+TikTok */
+  { brand: "b_jt", channel: "Meta Ads",   budget: 30_000, used: 0.45, cpl: 380, roas: 3.3, er: 0.030, prev: 0.88, title: "ยูนิฟอร์มร้าน — Meta Ads เดือนนี้" },
+  { brand: "b_jt", channel: "Shopee Ads", budget: 8_000,  used: 0.70, cpl: 260, roas: 5.1, er: 0.015, prev: 1.20, title: "ยูนิฟอร์มร้าน — Shopee Ads เดือนนี้" },
+  { brand: "b_jt", channel: "TikTok Ads", budget: 10_000, used: 0.36, cpl: 610, roas: 1.9, er: 0.042, prev: 0.80, title: "ยูนิฟอร์มร้าน — TikTok Ads เดือนนี้" },
+  { brand: "b_td", channel: "Meta Ads",   budget: 24_000, used: 0.55, cpl: 300, roas: 2.8, er: 0.031, prev: 1.06, title: "เสื้อทีมองค์กร — Meta Ads เดือนนี้" },
+  { brand: "b_td", channel: "Google Ads", budget: 12_000, used: 0.48, cpl: 520, roas: 3.4, er: 0.018, prev: 0.90, title: "เสื้อทีมองค์กร — Google Ads เดือนนี้" },
+  { brand: "b_ta", channel: "Meta Ads",   budget: 22_000, used: 0.25, cpl: 400, roas: 4.0, er: 0.024, prev: 0.75, title: "t around — Meta Ads เดือนนี้" },
+  { brand: "b_jk", channel: "Meta Ads",   budget: 9_000,  used: 0.62, cpl: 450, roas: 2.2, er: 0.020, prev: 1.12, title: "JK Design — Meta Ads เดือนนี้" },
 ];
 
 /* ---------- เป้ายอดขายรายเดือน (mock) ----------
@@ -332,10 +335,13 @@ const MONTH_ADS = [
 const SALES_TARGETS = [
   /* เป้ารายได้ต่อ แบรนด์ × แพลตฟอร์ม — อ่านคู่กับงบแอดของช่องทางเดียวกัน
      ("เป้าเท่านี้ ทำได้เท่าไร แล้วจ่ายค่าแอดไปเท่าไร") */
-  { brand: "b_jt", channel: "Meta Ads", amount: 280_000 },
-  { brand: "b_td", channel: "Meta Ads", amount: 240_000 },
-  { brand: "b_ta", channel: "Meta Ads", amount: 130_000 },
-  { brand: "b_jk", channel: "Meta Ads", amount: 100_000 },
+  { brand: "b_jt", channel: "Meta Ads",   amount: 280_000 },
+  { brand: "b_jt", channel: "Shopee Ads", amount: 45_000 },
+  { brand: "b_jt", channel: "TikTok Ads", amount: 25_000 },
+  { brand: "b_td", channel: "Meta Ads",   amount: 240_000 },
+  { brand: "b_td", channel: "Google Ads", amount: 60_000 },
+  { brand: "b_ta", channel: "Meta Ads",   amount: 130_000 },
+  { brand: "b_jk", channel: "Meta Ads",   amount: 100_000 },
 ];
 
 /** เป้ายอดขายรายแบรนด์ของเดือนที่ anchor อยู่ (mock) */

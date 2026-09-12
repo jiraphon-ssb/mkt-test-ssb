@@ -8,7 +8,7 @@ import {
   SEED_SIZE_PRESETS, SEED_SHOT_TYPES, SEED_VIDEO_LENGTHS, ALL_SELF_CHECK_KEYS,
   SEED_SCHEDULER_TOOLS, emptyRun,
 } from "../mktEngine.js";
-export const DATA_VERSION = "ssb-cp-v19";  /* v19 = Meta อย่างเดียว + เป้ายอดขายรายแบรนด์ */
+export const DATA_VERSION = "ssb-cp-v21";  /* v21 = แพลตฟอร์มหลายตัวต่อแบรนด์ (Google/Shopee/TikTok) */
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 function iso(offsetMs) {
@@ -30,11 +30,14 @@ export const SEED_PROFILES = [
   { id: "u_fai", display_name: "ฝ้าย", role: "performance_marketer", active: true },
 ];
 /* ---------- brands ---------- */
+/* สีประจำแบรนด์ = สีจากโลโก้จริง (ประมาณจากไฟล์โลโก้ — ถ้ามี hex ทางการให้ทับค่านี้)
+   หมายเหตุ: JUNTAKARN กับ JK Design เป็นน้ำเงินกรมท่าทั้งคู่ และ t around เป็นดำ
+   จึงห้ามใช้ "สีแบรนด์" เป็นตัวแยกแบรนด์เพียงอย่างเดียวบนหน้าจอ — ต้องมีชื่อกำกับเสมอ */
 export const SEED_BRANDS = [
-  { id: "b_td", name: "TEAMDEE", mode: "grow", default_owner: "u_arm", color: "#F26B21", logo: "", active: true },
-  { id: "b_jk", name: "JK Design", mode: "maintain", default_owner: "u_earn", color: "#1F6E4A", logo: "", active: true },
-  { id: "b_ta", name: "t around", mode: "maintain", default_owner: "u_neung", color: "#3E63C4", logo: "", active: true },
-  { id: "b_jt", name: "JUNTAKARN", mode: "rebuild", default_owner: "u_earn", color: "#A63D7A", logo: "", active: true },
+  { id: "b_td", name: "TEAMDEE", mode: "grow", default_owner: "u_arm", color: "#F4700A", logo: "", active: true },
+  { id: "b_jk", name: "JK Design", mode: "maintain", default_owner: "u_earn", color: "#123A6B", logo: "", active: true },
+  { id: "b_ta", name: "t around", mode: "maintain", default_owner: "u_neung", color: "#111111", logo: "", active: true },
+  { id: "b_jt", name: "JUNTAKARN", mode: "rebuild", default_owner: "u_earn", color: "#0D2B5E", logo: "", active: true },
 ];
 /* ---------- ช่องทาง (ตั้งค่าเพิ่ม/แก้สี/ใส่โลโก้ได้ในหน้าตั้งค่า) ---------- */
 export const SEED_CHANNELS = [

@@ -14,7 +14,7 @@ const dayLabelPlugin = (labels) => ({
     const { ctx } = chart;
     const meta = chart.getDatasetMeta(0);
     ctx.save();
-    ctx.font = "11px 'IBM Plex Mono', monospace";
+    ctx.font = "11px 'IBM Plex Mono', 'Noto Sans Thai', monospace";
     ctx.fillStyle = chartColor.inkFaint();
     ctx.textBaseline = "middle";
     meta.data.forEach((bar, i) => {

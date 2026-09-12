@@ -45,7 +45,7 @@ export const CHART_H = 250;
 
 /* ---------- option พื้นฐาน — เรียบ ไม่มีกรอบ ตัวเลขเล็ก ---------- */
 export function baseOpts(extra = {}) {
-  const tick = { color: chartColor.inkFaint(), font: { size: 11, family: "'IBM Plex Mono', monospace" } };
+  const tick = { color: chartColor.inkFaint(), font: { size: 11, family: "'IBM Plex Mono', 'Noto Sans Thai', monospace" } };
   const grid = { color: chartColor.line(), drawTicks: false };
   const { plugins = {}, scales = {}, ...rest } = extra;
   return {

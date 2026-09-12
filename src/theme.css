@@ -14,7 +14,7 @@
    Thai-friendly sans + monospace for financial figures (tabular-nums). */
 @theme {
   --font-sans: "Noto Sans Thai", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-mono: "IBM Plex Mono", "Noto Sans Thai", ui-monospace, SFMono-Regular, monospace;
 }
 
 /* `light:` utility variant (rarely needed — prefer the var remap below). */

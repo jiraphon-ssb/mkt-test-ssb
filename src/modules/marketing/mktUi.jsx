@@ -34,7 +34,7 @@ export const C = {
 };
 
 export const FONT = "'Noto Sans Thai', ui-sans-serif, system-ui, -apple-system, sans-serif";
-export const MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
+export const MONO = "'IBM Plex Mono', 'Noto Sans Thai', ui-monospace, 'SF Mono', Menlo, monospace";
 
 /* สเกลตัวอักษร 6 ระดับ (px — สาย inline style ไม่ใช้ rem เหมือน CSS เดิม) */
 /* สเกลเดียวกับ token กลาง (--fs-*) — xxl = --fs-kpi ของแพลตฟอร์ม ห้ามบวมกว่านี้ */

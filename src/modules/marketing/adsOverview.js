@@ -218,15 +218,27 @@ export function adsDailySeries(cards, range) {
     const iso = cardAnchorISO(c);
     if (!iso) continue;
     const k = dayKey(iso);
-    const cur = byDay.get(k) ?? { day: k, spend: 0, leads: 0, revenue: 0 };
-    cur.spend += c.metrics?.spend ?? 0;
-    cur.leads += c.metrics?.leads ?? 0;
-    cur.revenue += c.metrics?.revenue ?? 0;
+    const cur = byDay.get(k) ?? { day: k, spend: 0, leads: 0, revenue: 0, impressions: 0, clicks: 0, reach: 0 };
+    const m = c.metrics ?? {};
+    cur.spend += m.spend ?? 0;
+    cur.leads += m.leads ?? 0;
+    cur.revenue += m.revenue ?? 0;
+    cur.impressions += m.impressions ?? 0;
+    cur.clicks += m.clicks ?? m.link_clicks ?? 0;
+    cur.reach += m.reach ?? 0;
     byDay.set(k, cur);
   }
   return [...byDay.values()]
     .sort((a, b) => a.day.localeCompare(b.day))
-    .map((d) => ({ ...d, cpl: d.leads > 0 ? d.spend / d.leads : null, roas: roasOf(d.revenue, d.spend) }));
+    .map((d) => ({
+      ...d,
+      cpl: d.leads > 0 ? d.spend / d.leads : null,
+      roas: roasOf(d.revenue, d.spend),
+      ctr: share(d.clicks, d.impressions),
+      cpc: share(d.spend, d.clicks),
+      cpm: d.impressions > 0 ? (d.spend / d.impressions) * 1000 : null,
+      frequency: share(d.impressions, d.reach),
+    }));
 }
 
 /* ---------- งบราย แบรนด์×ช่องทาง×เดือน ---------- */
@@ -248,12 +260,14 @@ export function budgetPace(spend, budget, today) {
   const forecast = average * daysInMonth;                  // คาดค่าแอดสิ้นเดือน (ถ้าใช้จังหวะนี้ต่อ)
   const daysLeft = daysInMonth - elapsed;
   if (budget == null || budget <= 0) {
-    return { used: null, expected, remaining: null, average, forecast, forecastOver: null, daysLeft, requiredDaily: null, daysToExhaust: null };
+    return { used: null, expected, expectedSpend: null, vsPace: null, remaining: null, average, forecast, forecastOver: null, daysLeft, requiredDaily: null, daysToExhaust: null };
   }
   const remaining = budget - spend;
   return {
     used: spend / budget,                                 // ใช้ไปกี่ % ของงบ
     expected,
+    expectedSpend: budget * expected,                     // ควรใช้ไปแล้วเท่าไร ณ วันนี้ (เป็นบาท)
+    vsPace: spend - budget * expected,                    // เร็ว(+)/ช้า(−) กว่าจังหวะกี่บาท — กันคนต้องคิดเลขเอง
     remaining,                                            // เหลือ (ติดลบ = เกินงบแล้ว)
     average,
     forecast,
@@ -301,6 +315,7 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
             revPct: share(c.revenue, revTarget),
             cpl: c.leads > 0 ? c.spend / c.leads : null,
             roas: roasOf(c.revenue, c.spend),
+            pctAds: share(c.spend, c.revenue),
             delivery: deliveryOf(c),
             cplSeries: adsDailySeries(filterByChannel(mine, c.key), monthRange).map((d) => d.cpl),
             budget,
@@ -320,7 +335,7 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
       /* เทียบเดือนก่อน — ยอดขายล้วน (ค่าแอดอยู่ชั้นแพลตฟอร์ม จะได้ไม่ซ้ำกัน) */
       const prevRevenue = prevMonthRange ? adsChannelBreakdown(mine, prevMonthRange).reduce((n, c) => n + c.revenue, 0) : null;
       return {
-        id: b.id, name: b.name, spend, revenue, leads,
+        id: b.id, name: b.name, color: b.color, logo: b.logo, spend, revenue, leads,
         revTarget,
         revPct: share(revenue, revTarget),
         /* จังหวะทำยอดของแบรนด์ — เทียบ "ที่ควรได้ ณ วันนี้" */
@@ -329,6 +344,7 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
         revChangePct: change(revenue, prevRevenue),
         roasSeries: adsDailySeries(mine, monthRange).map((d) => d.roas),
         roas: roasOf(revenue, spend),
+        pctAds: share(spend, revenue),   // ค่าแอดกี่ % ของยอดขายแบรนด์ (รวมทุกแพลตฟอร์ม)
         budget,
         pace,
         channels,
@@ -371,7 +387,10 @@ export function adsFunnel(cards, range, prev = null) {
     lost: i === 0 ? null : now.values[i - 1] - now.values[i],
     before: before?.values[i] ?? null,
   }));
-  return { stages, estimated: now.estimated };
+  /* ขั้นที่อัตราแปลงต่ำสุด (ไม่นับฐาน) = คอขวดของกรวย — จอชี้ให้เอง คนไม่ต้องไล่เทียบ */
+  const rated = stages.filter((st, i) => i > 0 && st.rate != null);
+  const worstKey = rated.length ? rated.reduce((a, b) => (b.rate < a.rate ? b : a)).key : null;
+  return { stages, estimated: now.estimated, worstKey };
 }
 
 /* ---------- ยอดขายเทียบเป้า (เดือนปัจจุบัน) ----------
@@ -380,10 +399,14 @@ export function adsFunnel(cards, range, prev = null) {
 /** จังหวะทำยอดจากเป้ารายได้ — ได้กี่ % ของที่ควรได้ ณ วันนี้ (elapsed = สัดส่วนวันที่ผ่านไป) */
 export function revenuePace(revenue, target, elapsed) {
   const expectedToDate = target == null ? null : target * elapsed;
+  /* คาดปิดเดือน (run-rate เชิงเส้น) — ไม่ต้องมีเป้าก็คาดได้ แต่ "เกิน/ขาดเป้า" ต้องมีเป้า */
+  const forecast = revenue == null || !(elapsed > 0) ? null : revenue / elapsed;
   return {
     expectedToDate,
     pctOfExpected: share(revenue, expectedToDate),
     behind: revenue == null || expectedToDate == null ? null : expectedToDate - revenue,
+    forecast,
+    forecastVsTarget: forecast == null || target == null ? null : forecast - target,  // + เกินเป้า / − ขาดเป้า
   };
 }
 
@@ -480,6 +503,97 @@ export function salesPaceStatus(pctOfExpected) {
   if (pctOfExpected >= 1) return { text: "ตามแผน", tone: "emerald" };
   if (pctOfExpected >= 0.85) return { text: "ใกล้เป้า", tone: "amber" };
   return { text: "ช้ากว่าแผน", tone: "rose" };
+}
+
+/* ---------- กราฟจังหวะเดือน (สะสมจริง vs เส้นเป้า/งบ + คาดการณ์) ----------
+   ตอบ "หลุดแผนตั้งแต่วันไหน · กำลังไล่ทันหรือถ่างออก · งบจะหมดวันไหน"
+   monthRange = ตั้งแต่ต้นเดือนถึงวันนี้ (ข้อมูลจริง) · แกนกราฟลากเต็มเดือนเสมอ */
+export function adsCompanyPaceChart(cards, monthRange, today, revTarget = null, budget = null) {
+  const asOf = today.slice(0, 10);
+  const y = Number(asOf.slice(0, 4)), m = Number(asOf.slice(5, 7)), day = Number(asOf.slice(8, 10));
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const elapsed = Math.min(Math.max(day, 1), daysInMonth);
+  const revDaily = adsDailyRevenue(cards, monthRange);
+  const spendDaily = adsDailySeries(cards, monthRange);
+  let sc = 0;
+  const spendCumRaw = spendDaily.map((d) => (sc += d.spend ?? 0));
+  const fill = (raw) => Array.from({ length: daysInMonth }, (_, i) =>
+    (i < elapsed ? raw[Math.min(i, raw.length - 1)] ?? 0 : null));
+  const revCum = fill(revDaily.map((d) => d.cumulative));
+  const spendCum = fill(spendCumRaw);
+  /* เส้นคาดการณ์ต่อจากจุดจริงวันนี้ (run-rate เชิงเส้น) — เริ่มที่วันนี้เพื่อให้เส้นต่อกัน */
+  const proj = (cum) => {
+    const last = cum[elapsed - 1] ?? 0;
+    const avg = last / elapsed;
+    return Array.from({ length: daysInMonth }, (_, i) =>
+      (i < elapsed - 1 ? null : last + avg * (i - (elapsed - 1))));
+  };
+  const revProj = proj(revCum);
+  const spendProj = proj(spendCum);
+  const targetLine = revTarget == null ? null
+    : Array.from({ length: daysInMonth }, (_, i) => revTarget * ((i + 1) / daysInMonth));
+  const budgetLine = budget == null ? null : Array.from({ length: daysInMonth }, () => budget);
+  /* วันงบหมด — วันแรกที่สะสมจริง (หรือคาดการณ์) ถึงเพดานงบ */
+  let exhaustDay = null;
+  if (budget != null && budget > 0) {
+    for (let i = 0; i < daysInMonth; i++) {
+      const v = i < elapsed ? spendCum[i] : spendProj[i];
+      if (v != null && v >= budget) { exhaustDay = i + 1; break; }
+    }
+  }
+  return {
+    days: Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    daysInMonth, elapsed,
+    revCum, spendCum, revProj, spendProj, targetLine, budgetLine, exhaustDay,
+  };
+}
+
+/* ---------- สัดส่วนค่าแอดตามแบรนด์ (แถบแบ่งสี) ----------
+   part-to-whole ≤5 ชิ้น · ตัดแบรนด์ที่ยังไม่ใช้เงิน · เลขจริงอยู่ที่ legend ไม่ใช่ในแถบ */
+export function adsSpendShareByBrand(brandRows) {
+  const rows = brandRows.filter((r) => r.spend > 0).sort((a, b) => b.spend - a.spend);
+  const total = rows.reduce((n, r) => n + r.spend, 0);
+  return {
+    total,
+    rows: rows.map((r) => ({ id: r.id, name: r.name, color: r.color, spend: r.spend, share: share(r.spend, total) })),
+  };
+}
+
+/* ---------- สรุประดับบริษัท (แถวบนสุด) ----------
+   คิดต่อจากแถวของ adsByBrandChannel โดยตรง — เลขหัวกับเลขรายแบรนด์มาจากก้อนเดียวกัน ไม่มีทางเหลื่อม
+   เป้า/งบ "รวมไม่ได้" ถ้าบางแบรนด์ยังไม่ตั้ง (รวมเฉพาะที่กรอกแล้วจะทำให้ % เพี้ยน) */
+export function adsCompanySummary(brandRows, today) {
+  const asOf = today.slice(0, 10);
+  const total = (pick) => brandRows.reduce((n, r) => n + (pick(r) ?? 0), 0);
+  const allOrNull = (pick) => (brandRows.length > 0 && brandRows.every((r) => pick(r) != null)
+    ? brandRows.reduce((n, r) => n + pick(r), 0)
+    : null);
+  const revenue = total((r) => r.revenue);
+  const spend = total((r) => r.spend);
+  const revTarget = allOrNull((r) => r.revTarget);
+  const budget = allOrNull((r) => r.budget);
+  const prevRevenue = allOrNull((r) => r.prevRevenue);
+  /* กลุ่มสถานะจังหวะทำยอด — ปัญหาขึ้นก่อน (rose → amber → emerald → zinc) ข้ามกลุ่มว่าง */
+  const byTone = new Map();
+  for (const r of brandRows) {
+    const st = salesPaceStatus(r.revPace?.pctOfExpected ?? null);
+    if (!byTone.has(st.tone)) byTone.set(st.tone, { ...st, brands: [] });
+    byTone.get(st.tone).brands.push({ id: r.id, name: r.name, color: r.color, logo: r.logo });
+  }
+  const revPace = budgetPace(revenue, revTarget, asOf); // expectedSpend = ควรได้ ณ วันนี้ · vsPace = นำ/ตามแผนกี่บาท
+  return {
+    brands: brandRows.length,
+    revenue, revTarget,
+    revPct: share(revenue, revTarget),
+    revPace,
+    /* ได้กี่ % ของที่ควรได้ ณ วันนี้ — เลขเดียวกับเกจรายแบรนด์ แต่คิดจากยอดรวม */
+    revPctOfExpected: share(revenue, revPace.expectedSpend),
+    prevRevenue,
+    revChangePct: change(revenue, prevRevenue),
+    spend, budget,
+    pace: budgetPace(spend, budget, asOf),
+    byStatus: ["rose", "amber", "emerald", "zinc"].map((t) => byTone.get(t)).filter(Boolean),
+  };
 }
 
 /* ---------- เกณฑ์ตัดสินใจ Scale / Fix / Stop ----------
@@ -580,4 +694,125 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     };
     return { ...base, ...decideAction(base, rules) };
   }).sort((a, b) => b.rank - a.rank || b.spend - a.spend);
+}
+
+
+/* ---------- กระดานตัวชี้วัดและแนวโน้ม ----------
+   หนึ่งการ์ดต่อหนึ่งตัวชี้วัดของขอบเขต+ช่วงที่เลือก พร้อม series รายวันไว้วาดเส้น
+   กติกา: สรุปไม่ได้ = คืน null พร้อม "เหตุผล" เสมอ — ห้ามเดา ห้ามโชว์เลขที่ซ้ำกับการ์ดอื่น */
+export function adsMetricBoard(cards, range, prev = null) {
+  const build = (r) => {
+    const rows = adFactRows(cards, r);
+    const platforms = [...new Set(rows.map(adPlatformOf).filter(Boolean))];
+    const resultTypes = [...new Set(platforms.map(resultLabelOf))];
+    const plain = (pick) => {
+      const total = rows.reduce((n, c) => n + (pick(c.metrics ?? {}) ?? 0), 0);
+      return total > 0 ? total : null;
+    };
+    const spend = completeSum(rows, (c) => c.metrics?.spend);
+    const revenue = adsRevenue(rows, r);
+    const leads = completeSum(rows, (c) => c.metrics?.leads);
+    const impressions = plain((m) => m.impressions);
+    const clicks = plain((m) => m.clicks ?? m.link_clicks);
+    const reach = plain((m) => m.reach);
+    /* คนทัก: นับเฉพาะฟิลด์จริง — fallback เป็นลีดจะได้เลขซ้ำกับการ์ด Leads */
+    const realInquiry = rows.filter((c) => (c.metrics?.inquiries ?? c.metrics?.chats) != null);
+    const inquiry = realInquiry.length === rows.length && rows.length > 0
+      ? realInquiry.reduce((n, c) => n + (c.metrics.inquiries ?? c.metrics.chats), 0)
+      : null;
+    /* CPR: ผลลัพธ์คนละชนิดรวมกันไม่ได้ · เป็นลีดล้วน = เลขเดียวกับ CPL ไม่โชว์ซ้ำ */
+    let cpr = null, cprReason = null;
+    if (rows.length === 0) cprReason = "ไม่มีรายการในช่วงนี้";
+    else if (resultTypes.length > 1) cprReason = "ผลลัพธ์หลายชนิด (ลีด/ออเดอร์/คอนเวอร์ชัน) รวมกันไม่ได้";
+    else if (resultTypes[0] === "ลีด") cprReason = "ผลลัพธ์ตอนนี้คือลีดทั้งหมด — ค่าเดียวกับ CPL";
+    else {
+      const results = plain((m) => (resultTypes[0] === "ออเดอร์" ? m.orders : m.conversions));
+      cpr = share(spend, results);
+      if (cpr == null) cprReason = "ข้อมูลผลลัพธ์ยังไม่ครบ";
+    }
+    const single = platforms.length === 1;
+    return {
+      rows: rows.length, platforms, single,
+      spend, revenue, leads, impressions, clicks, reach, inquiry, cpr, cprReason,
+      roas: roasOf(revenue, spend),
+      cpl: share(spend, leads),
+      ctr: share(clicks, impressions),
+      cpc: share(spend, clicks),
+      cpm: impressions > 0 && spend != null ? (spend / impressions) * 1000 : null,
+      frequency: single ? share(impressions, reach) : null,
+    };
+  };
+  const now = build(range);
+  const before = prev ? build(prev) : null;
+  const days = adsDailySeries(cards, range);
+  const prevDays = prev ? adsDailySeries(cards, prev) : [];
+  const line = (field) => days.map((d) => d[field] ?? null);
+  const prevLine = (field) => prevDays.map((d) => d[field] ?? null);
+  const empty = now.rows === 0 ? "ไม่มีรายการในช่วงนี้" : null;
+  const crossPlatform = "คนอาจซ้ำกันข้ามแพลตฟอร์ม — ดูได้เมื่อเลือกช่องทางเดียว";
+  const card = (key, label, thai, sense, fmt, value, over = {}) => ({
+    key, label, thai, sense, fmt, value,
+    before: before?.[key] ?? null,
+    series: line(key), prevSeries: prevLine(key),
+    reason: null, ...over,
+  });
+  return [
+    card("spend", "Spend", "เงินโฆษณา", "neutral", "money", now.spend,
+      { reason: now.spend == null ? empty ?? "ข้อมูลค่าแอดยังไม่ครบทุกใบ" : null }),
+    card("roas", "ROAS", "ผลตอบแทนค่าแอด", "higher", "roas", now.roas,
+      { reason: now.roas == null ? empty ?? "ข้อมูลรายได้ยังไม่ครบ สรุปผลตอบแทนไม่ได้" : null }),
+    card("inquiry", "Inquiry", "คนทัก", "higher", "int", now.inquiry,
+      { series: [], prevSeries: [], reason: now.inquiry == null ? empty ?? "ยังไม่เก็บคนทักแยกจากลีด — กันเลขซ้ำกับ Leads" : null }),
+    card("leads", "Leads", "ลีดจากแอด", "higher", "int", now.leads,
+      { reason: now.leads == null ? empty ?? "ข้อมูลลีดยังไม่ครบทุกใบ" : null }),
+    card("cpl", "CPL", "ต้นทุนต่อลีด", "lower", "money", now.cpl,
+      { reason: now.cpl == null ? empty ?? "ยังไม่มีลีดในช่วงนี้" : null }),
+    card("cpr", "CPR", "ต้นทุนต่อผลลัพธ์", "lower", "money", now.cpr,
+      { series: [], prevSeries: [], reason: now.cprReason }),
+    card("ctr", "CTR", "อัตราคลิกลิงก์", "higher", "pct2", now.ctr,
+      { reason: now.ctr == null ? empty ?? "ไม่มีข้อมูลการแสดงผล/คลิก" : null }),
+    card("cpc", "CPC", "ต้นทุนต่อคลิก", "lower", "money", now.cpc,
+      { reason: now.cpc == null ? empty ?? "ไม่มีข้อมูลคลิก" : null }),
+    card("cpm", "CPM", "ต้นทุนต่อพันครั้งที่เห็น", "lower", "money", now.cpm,
+      { reason: now.cpm == null ? empty ?? "ไม่มีข้อมูลการแสดงผล" : null }),
+    card("reach", "Reach", "คนเห็นโฆษณา", "neutral", "compact", now.single ? now.reach : null,
+      { reason: now.single ? (now.reach == null ? empty ?? "ไม่มีข้อมูล Reach" : null) : crossPlatform }),
+    card("frequency", "Frequency", "ความถี่เฉลี่ย", "neutral", "freq", now.frequency,
+      { reason: now.frequency == null ? (now.single ? empty ?? "ไม่มีข้อมูล Reach" : crossPlatform) : null }),
+    card("impressions", "Impressions", "จำนวนแสดงผล", "neutral", "compact", now.impressions,
+      { reason: now.impressions == null ? empty ?? "ไม่มีข้อมูลการแสดงผล" : null }),
+    card("clicks", "Clicks", "คลิกลิงก์", "higher", "int", now.clicks,
+      { reason: now.clicks == null ? empty ?? "ไม่มีข้อมูลคลิก" : null }),
+  ];
+}
+
+/* ---------- Sale pipeline (แนวนอน) ----------
+   ตัวเลขหลักของเส้นทางขาย + ROAS/%Ads พร้อมค่าช่วงก่อนไว้บอก "ดีขึ้น/แย่ลง"
+   ใช้ได้ทั้งระดับขอบเขตและรายแบรนด์ — ส่ง cards ที่กรองแล้วเข้ามา */
+export function adsSalePipeline(cards, range, prev = null) {
+  const f = adsFunnel(cards, range, prev);
+  const ratio = (r) => {
+    const rows = adFactRows(cards, r);
+    const spend = completeSum(rows, (c) => c.metrics?.spend);
+    const revenue = adsRevenue(cards, r);
+    return { roas: roasOf(revenue, spend), pctAds: share(spend, revenue) };
+  };
+  const now = ratio(range);
+  const before = prev ? ratio(prev) : { roas: null, pctAds: null };
+  /* อัตราแปลงจากขั้นก่อน (ขั้นแรกไม่มี) + ขั้นที่แปลงต่ำสุด = จุดที่หล่นแรงสุดของเส้นทางขาย */
+  const stageItems = f.stages.map((st, i) => ({
+    key: st.key, label: st.label, value: st.value, before: st.before, sense: "higher", fmt: "int",
+    conv: i === 0 ? null : st.rate,
+  }));
+  const withConv = stageItems.filter((s) => s.conv != null);
+  const worstKey = withConv.length ? withConv.reduce((a, b) => (b.conv < a.conv ? b : a)).key : null;
+  return {
+    estimated: f.estimated,
+    worstKey,
+    items: [
+      ...stageItems,
+      { key: "roas", label: "ROAS", value: now.roas, before: before.roas, sense: "higher", fmt: "roas" },
+      { key: "pctAds", label: "%Ads", value: now.pctAds, before: before.pctAds, sense: "lower", fmt: "pct1" },
+    ],
+  };
 }
