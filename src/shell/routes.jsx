@@ -188,7 +188,7 @@ const MARKETING_GROUPS = [
         purpose: "ภาพรวม · ผลตอบรับ (ช่องทาง/อันดับโพสต์/เจาะรายมิติ/เวลาโพสต์/ยิงแอด) · กระบวนการ",
       },
       {
-        id: "mkt_ads", path: "/mkt/ads", label: "ค่าแอด", icon: Megaphone,
+        id: "mkt_ads", path: "/mkt/ads", label: "Overview ads", icon: Megaphone,
         perm: "marketing.dash.view", status: "live", view: "ads",
         purpose: "ค่าแอด · CPL · สัดส่วนรายช่องทาง · แบรนด์ × ช่องทาง · กรวย Reach → Engagement → Leads",
       },

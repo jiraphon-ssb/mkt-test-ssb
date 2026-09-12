@@ -149,9 +149,14 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const [targets, setTargets] = useState(() => buildTargets(brands, initial.targets));
   const [rules, setRules] = useState(() => ({ ...DEFAULT_RULES, ...(initial.rules ?? {}) }));
   const save = () => { onSave({ mappings: config.mappings, sources: config.sources, targets, rules, updatedAt: new Date().toISOString() }); toast?.("บันทึกการตั้งค่าค่าแอดแล้ว", "ok"); };
+  const primaryTabs = [["sources",Database,"แหล่งข้อมูล"],["targets",Target,"เป้า"],["rules",ShieldAlert,"แจ้งเตือน"]];
+  const systemTabs = [["lineage",Check,"นิยามตัวเลข"],["ready",Gauge,"ความพร้อม API"]];
   return <main className="aw acc">
-    <header className="acc-header"><div><a href="/mkt/ads?design=workspace"><ArrowLeft size={15} /> กลับหน้า Overview</a><span className="aw-eyebrow">ADS DATA CONTROL</span><h1>แหล่งข้อมูล เป้า และกฎ</h1><p>ตั้งค่าครั้งเดียว แล้วใช้คำนวณและอธิบายตัวเลขทั้งหน้าแบบเดียวกัน</p></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึกการตั้งค่า</button></header>
-    <nav className="acc-tabs" aria-label="หมวดการตั้งค่าค่าแอด">{[["sources",Database,"แหล่งข้อมูล"],["targets",Target,"เป้าและเพดาน"],["rules",ShieldAlert,"กฎแจ้งเตือน"],["lineage",Check,"นิยามตัวเลข"],["ready",Gauge,"ความพร้อม"]].map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}</nav>
+    <header className="acc-header"><div><a href="/mkt/ads?design=workspace"><ArrowLeft size={15} /> Overview ads</a><h1>ตั้งค่า Overview ads</h1></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึก</button></header>
+    <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
+      {primaryTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}
+      <details className="acc-more"><summary>เพิ่มเติม</summary><div>{systemTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={(event) => { setTab(id); event.currentTarget.closest("details")?.removeAttribute("open"); }}><Icon size={15} />{label}</button>)}</div></details>
+    </nav>
     {tab === "sources" && <Connections brands={brands} config={config} setConfig={setConfig} />}
     {tab === "targets" && <Targets brands={brands} targets={targets} setTargets={setTargets} />}
     {tab === "rules" && <Rules rules={rules} setRules={setRules} />}

@@ -64,7 +64,7 @@ export default function MarketingModule({ view = "work" }) {
       )}
 
       {view === "ads" && (
-        <Suspense fallback={<div className="empty">กำลังโหลดหน้าค่าแอด…</div>}>
+        <Suspense fallback={<div className="empty">กำลังโหลด Overview ads…</div>}>
           <AdsView />
         </Suspense>
       )}
