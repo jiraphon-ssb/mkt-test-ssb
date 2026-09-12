@@ -152,7 +152,7 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const primaryTabs = [["sources",Database,"แหล่งข้อมูล"],["targets",Target,"เป้า"],["rules",ShieldAlert,"แจ้งเตือน"]];
   const systemTabs = [["lineage",Check,"นิยามตัวเลข"],["ready",Gauge,"ความพร้อม API"]];
   return <main className="aw acc">
-    <header className="acc-header"><div><a href="/mkt/ads?design=workspace"><ArrowLeft size={15} /> Overview ads</a><h1>ตั้งค่า Overview ads</h1></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึก</button></header>
+    <header className="acc-header"><div><a href="/mkt/ads"><ArrowLeft size={15} /> Overview ads</a><h1>ตั้งค่า Overview ads</h1></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึก</button></header>
     <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
       {primaryTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}
       <details className="acc-more"><summary>เพิ่มเติม</summary><div>{systemTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={(event) => { setTab(id); event.currentTarget.closest("details")?.removeAttribute("open"); }}><Icon size={15} />{label}</button>)}</div></details>

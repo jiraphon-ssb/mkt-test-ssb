@@ -2409,7 +2409,7 @@ const adsData = {
     if (error) throw error;
     return data;
   },
-  async startOAuth(provider, returnTo = "/mkt/ads?design=workspace&panel=settings") {
+  async startOAuth(provider, returnTo = "/mkt/ads?panel=settings") {
     const db = requireSupabase();
     const { data, error } = await db.functions.invoke("ads-oauth-start", { body: { provider, returnTo } });
     if (error) throw error;

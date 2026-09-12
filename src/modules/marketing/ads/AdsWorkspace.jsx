@@ -27,7 +27,7 @@ export function AdsWorkspace({ v, controls, ChannelCard, SalePipeline, settings,
     return <AdsControlCenter brands={v.brands} saved={settings?.ads_control} onSave={updateAdsControl} toast={toast}/>;
   }
   return <main className="aw">
-    <header className="aw-header"><h1>Overview ads</h1><a className="aw-settings-link" href="/mkt/ads?design=workspace&panel=settings"><Settings2 size={15}/> ตั้งค่า</a></header>
+    <header className="aw-header"><h1>Overview ads</h1><a className="aw-settings-link" href="/mkt/ads?panel=settings"><Settings2 size={15}/> ตั้งค่า</a></header>
     <div className="aw-controls">{controls}<span className="aw-demo"><i/> Mock data</span></div>
     <div className="aw-layout">
       <aside className="aw-brands"><div className="aw-section-label">พอร์ตแบรนด์ <span>{v.brands.length}</span></div><p>ยอดขายและเป้าเดือนปัจจุบัน</p>{<button type="button" className={`aw-brand ${overview?'selected':''}`} aria-pressed={overview} onClick={()=>setSelected(null)}><div><strong>ภาพรวมทุกแบรนด์</strong><span>↗</span></div><b>{money(s.revenue)}</b><small> ยอดขายเดือนปัจจุบัน</small></button>}{v.brands.map(x=>{const st=salesPaceStatus(x.revPace.pctOfExpected);return <button key={x.id} type="button" className={`aw-brand ${x.id===b?.id?'selected':''}`} onClick={()=>setSelected(x.id)} aria-pressed={x.id===b?.id}><div><BrandMark brand={x}/><strong>{x.name}</strong><span>↗</span></div><div><b>{money(x.revenue)}</b><small>{pct(x.revPct)} ของเป้า</small></div><Track value={x.revPct} expected={x.pace.expected} label={x.name} tone={st.tone}/><small className={st.tone}>{st.text}</small></button>})}<div className="aw-key">ขีดบนแถบ = จังหวะที่ควรถึงวันนี้</div></aside>
