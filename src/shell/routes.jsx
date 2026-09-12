@@ -1,5 +1,4 @@
 import {
-  Kanban, Gauge,
   ArrowUpRight, ArrowDownLeft, Activity, BarChart3, Target, CheckCheck,
   ShoppingCart, Megaphone, Users, UserRound, LayoutDashboard, HandCoins, ClipboardList,
   CalendarClock, Building2, Store, Sliders, ListTree, Landmark, Shirt, Settings, BookOpen,
@@ -178,16 +177,6 @@ const MARKETING_GROUPS = [
     id: "mkt_main",
     items: [
       {
-        id: "mkt_work", path: "/mkt/work", label: "Content Planner", icon: Kanban,
-        perm: "marketing.work.view", status: "live", view: "work",
-        purpose: "บอร์ด 7 ขั้น · ลิสต์ · คิวรอตรวจ (SLA) · ปฏิทิน · ตั้งค่าทีม/แบรนด์/กติกา — การ์ดเดียวเดินทั้งสาย",
-      },
-      {
-        id: "mkt_dash", path: "/mkt/dashboard", label: "Dashboard", icon: Gauge,
-        perm: "marketing.dash.view", status: "live", view: "dash",
-        purpose: "ภาพรวม · ผลตอบรับ (ช่องทาง/อันดับโพสต์/เจาะรายมิติ/เวลาโพสต์/ยิงแอด) · กระบวนการ",
-      },
-      {
         id: "mkt_ads", path: "/mkt/ads", label: "Overview ads", icon: Megaphone,
         perm: "marketing.dash.view", status: "live", view: "ads",
         purpose: "ค่าแอด · CPL · สัดส่วนรายช่องทาง · แบรนด์ × ช่องทาง · กรวย Reach → Engagement → Leads",
@@ -213,7 +202,7 @@ export const ALL_NAV = MODULES.flatMap((m) => (m.groups ?? []).flatMap((g) => g.
 
 /* เดโมนี้โฟกัสโมดูล marketing — หน้าแรกจึงเป็นงานคอนเทนต์
    (ของจริงบนแพลตฟอร์มคือ "/cashflow") */
-export const DEFAULT_ROUTE = "/mkt/work";
+export const DEFAULT_ROUTE = "/mkt/ads";
 
 /** Look up a nav entry by its route path (for the topbar breadcrumb). */
 export function navByPath(pathname) {
