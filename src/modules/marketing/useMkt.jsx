@@ -347,6 +347,40 @@ export function AppProvider({ children }) {
   const updateSettings = useCallback((patch) => {
     persist({ ...latest(), settings: { ...latest().settings, ...patch } });
   }, [persist]);
+  const updateAdsControl = useCallback((adsControl) => {
+    const current = latest();
+    const month = new Date().toISOString().slice(0, 7);
+    const redistribute = (rows, field) => {
+      const active = rows.filter((row) => row.month === month);
+      const untouched = rows.filter((row) => row.month !== month);
+      const next = [];
+      for (const [brandId, target] of Object.entries(adsControl.targets ?? {})) {
+        const group = active.filter((row) => row.brand_id === brandId);
+        const wanted = Math.max(0, Number(target[field]) || 0);
+        if (group.length === 0) {
+          next.push({ id: `${field}_${brandId}_${month}`, brand_id: brandId, channel: "Meta Ads", month, amount: wanted });
+          continue;
+        }
+        const oldTotal = group.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+        let allocated = 0;
+        group.forEach((row, index) => {
+          const amount = index === group.length - 1
+            ? wanted - allocated
+            : Math.round(wanted * (oldTotal > 0 ? row.amount / oldTotal : 1 / group.length));
+          allocated += amount;
+          next.push({ ...row, amount });
+        });
+      }
+      next.push(...active.filter((row) => !adsControl.targets?.[row.brand_id]));
+      return [...untouched, ...next];
+    };
+    persist({
+      ...current,
+      settings: { ...current.settings, ads_control: adsControl },
+      sales_targets: redistribute(current.sales_targets ?? [], "revenue"),
+      ad_budgets: redistribute(current.ad_budgets ?? [], "budget"),
+    });
+  }, [persist]);
   const value = {
     data,
     settings: data.settings,
@@ -383,6 +417,7 @@ export function AppProvider({ children }) {
     resetData,
     importData,
     updateSettings,
+    updateAdsControl,
     toast,
     toastState,
   };

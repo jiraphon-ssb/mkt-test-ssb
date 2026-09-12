@@ -1,16 +1,18 @@
 import { useState } from 'react';
+import { Settings2 } from 'lucide-react';
 import { BrandMark } from './BrandMark.jsx';
 import { fmtMoney, fmtPct } from '../dash/charts/theme.js';
 import { salesPaceStatus, paceStatus, adsSalePipeline, share } from '../adsOverview.js';
 import './adsWorkspace.css';
 import { WorkspaceTrends } from './WorkspaceTrends.jsx';
+import { AdsControlCenter } from './AdsControlCenter.jsx';
 
 const money = n => n == null ? '—' : fmtMoney(n);
 const pct = n => n == null ? '—' : fmtPct(n, 1);
 function Track({ value, expected, label, tone }) {
   return <div className="aw-track" role="img" aria-label={`${label}: ${pct(value)} · จังหวะวันนี้ ${pct(expected)}`}><i className={tone} style={{width:`${Math.max(0,Math.min(100,(value ?? 0)*100))}%`}} />{expected != null && <em style={{left:`${Math.min(100,expected*100)}%`}} />}</div>;
 }
-export function AdsWorkspace({ v, controls, ChannelCard, SalePipeline }) {
+export function AdsWorkspace({ v, controls, ChannelCard, SalePipeline, settings, updateAdsControl, toast }) {
   const [selected, setSelected] = useState(null);
   const [tab, setTab] = useState('platform');
   const picked = v.brands.find(x=>x.id===selected);
@@ -21,9 +23,12 @@ export function AdsWorkspace({ v, controls, ChannelCard, SalePipeline }) {
   const rst = b ? salesPaceStatus(b.revPace.pctOfExpected) : null;
   const bst = b ? paceStatus(b.pace) : null;
   const roas = pipeline?.items.find(x=>x.key==='roas')?.value;
+  if (new URLSearchParams(window.location.search).get('panel') === 'settings') {
+    return <AdsControlCenter brands={v.brands} saved={settings?.ads_control} onSave={updateAdsControl} toast={toast}/>;
+  }
   return <main className="aw">
-    <header className="aw-header"><div><span className="aw-eyebrow">SSB GROUP / PERFORMANCE WORKSPACE</span><h1>ทุกแบรนด์ ในมุมที่ตัดสินใจได้</h1><p>เลือกแบรนด์เพื่อดูยอดขาย จังหวะใช้เงิน และเส้นทางปิดการขาย</p></div><a href="/mkt/ads">เทียบกับหน้าเดิม ↗</a></header>
-    <div className="aw-controls">{controls}<span className="aw-demo">ข้อมูลจำลอง</span></div>
+    <header className="aw-header"><div><span className="aw-eyebrow">PERFORMANCE</span><h1>Overview ads</h1></div><a className="aw-settings-link" href="/mkt/ads?design=workspace&panel=settings"><Settings2 size={15}/> ตั้งค่า</a></header>
+    <div className="aw-controls">{controls}<span className="aw-demo"><i/> Mock data</span></div>
     <div className="aw-layout">
       <aside className="aw-brands"><div className="aw-section-label">พอร์ตแบรนด์ <span>{v.brands.length}</span></div><p>ยอดขายและเป้าเดือนปัจจุบัน</p>{<button type="button" className={`aw-brand ${overview?'selected':''}`} aria-pressed={overview} onClick={()=>setSelected(null)}><div><strong>ภาพรวมทุกแบรนด์</strong><span>↗</span></div><b>{money(s.revenue)}</b><small> ยอดขายเดือนปัจจุบัน</small></button>}{v.brands.map(x=>{const st=salesPaceStatus(x.revPace.pctOfExpected);return <button key={x.id} type="button" className={`aw-brand ${x.id===b?.id?'selected':''}`} onClick={()=>setSelected(x.id)} aria-pressed={x.id===b?.id}><div><BrandMark brand={x}/><strong>{x.name}</strong><span>↗</span></div><div><b>{money(x.revenue)}</b><small>{pct(x.revPct)} ของเป้า</small></div><Track value={x.revPct} expected={x.pace.expected} label={x.name} tone={st.tone}/><small className={st.tone}>{st.text}</small></button>})}<div className="aw-key">ขีดบนแถบ = จังหวะที่ควรถึงวันนี้</div></aside>
       {b ? <div className="aw-content">

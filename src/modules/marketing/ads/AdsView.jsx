@@ -957,7 +957,7 @@ function BrandRowDecision({ b, pipeline }) {
 }
 
 export function AdsView() {
-  const { data, inBrandScope, brandFilter } = useApp();
+  const { data, inBrandScope, brandFilter, updateAdsControl, toast } = useApp();
   const todayLocal = isoDay(new Date());
   const [period, setPeriod] = useState("mtd");
   const [customFrom, setCustomFrom] = useState(todayLocal.slice(0, 8) + "01");
@@ -1032,12 +1032,23 @@ export function AdsView() {
   );
 
   if (new URLSearchParams(window.location.search).get("design") === "workspace") {
-    return <AdsWorkspace v={v} ChannelCard={ChannelCard} SalePipeline={SalePipeline} controls={<>
-      <label>ช่วงเวลา <select value={period} onChange={e=>setPeriod(e.target.value)}>{PERIODS.map(x=><option key={x.k} value={x.k}>{x.label}</option>)}</select></label>
-      {period === "custom" && <><label>จาก <input type="date" value={customFrom} max={customTo} onChange={e=>setCustomFrom(e.target.value)} /></label><label>ถึง <input type="date" value={customTo} min={customFrom} onChange={e=>setCustomTo(e.target.value)} /></label></>}
-      <label>แพลตฟอร์ม <select value={channel} onChange={e=>setChannel(e.target.value)}><option value="all">ทุกแพลตฟอร์ม</option>{v.channelList.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
-      <label>เทียบกับ <select value={compare} onChange={e=>setCompare(e.target.value)}><option value="previous">ช่วงก่อนหน้า</option><option value="lastMonth">วันเดียวกันเดือนก่อน</option></select></label>
-      <span>{new Date(v.range.start).toLocaleDateString("th-TH")} – {new Date(new Date(v.range.end).getTime()-1).toLocaleDateString("th-TH")}</span>
+    const shownFrom = isoDay(new Date(v.range.start));
+    const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
+    const changeFrom = (next) => {
+      setCustomFrom(next);
+      setCustomTo(next > shownTo ? next : shownTo);
+      setPeriod("custom");
+    };
+    const changeTo = (next) => {
+      setCustomTo(next);
+      setCustomFrom(next < shownFrom ? next : shownFrom);
+      setPeriod("custom");
+    };
+    return <AdsWorkspace v={v} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
+      <div className="aw-presets" role="group" aria-label="ช่วงเวลาด่วน">{[["today","วันนี้"],["7d","7 วัน"],["mtd","เดือนนี้"]].map(([key,label])=><button type="button" key={key} className={period===key?'active':''} aria-pressed={period===key} onClick={()=>setPeriod(key)}>{label}</button>)}</div>
+      <div className="aw-date-range"><label><span>จาก</span><input aria-label="วันที่เริ่มต้น" type="date" value={shownFrom} max={shownTo} onChange={e=>changeFrom(e.target.value)}/></label><b>–</b><label><span>ถึง</span><input aria-label="วันที่สิ้นสุด" type="date" value={shownTo} min={shownFrom} max={todayLocal} onChange={e=>changeTo(e.target.value)}/></label></div>
+      <label className="aw-filter"><span>ช่องทาง</span><select value={channel} onChange={e=>setChannel(e.target.value)}><option value="all">ทั้งหมด</option>{v.channelList.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+      <label className="aw-filter"><span>เทียบ</span><select value={compare} onChange={e=>setCompare(e.target.value)}><option value="previous">ช่วงก่อน</option><option value="lastMonth">เดือนก่อน</option></select></label>
     </>} />;
   }
 

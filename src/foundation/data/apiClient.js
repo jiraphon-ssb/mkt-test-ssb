@@ -2400,8 +2400,39 @@ const marketing = {
   },
 };
 
+/** Ads connectors — browser receives OAuth URLs and sync status only.
+ * Provider tokens stay inside Edge Functions/server secrets. */
+const adsData = {
+  async connections() {
+    const db = requireSupabase();
+    const { data, error } = await db.from("ad_connections").select("id,provider,brand_id,external_account_id,account_name,currency,timezone,status,last_success_at,last_error_code,last_error_at").order("provider").order("account_name");
+    if (error) throw error;
+    return data;
+  },
+  async startOAuth(provider, returnTo = "/mkt/ads?design=workspace&panel=settings") {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-oauth-start", { body: { provider, returnTo } });
+    if (error) throw error;
+    if (!data?.authorizeUrl) throw new Error("OAuth URL was not returned");
+    return data.authorizeUrl;
+  },
+  async sync(connectionId, mode = "incremental") {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-sync", { body: { connectionId, mode } });
+    if (error) throw error;
+    return data;
+  },
+  async recentSyncs(limit = 20) {
+    const db = requireSupabase();
+    const { data, error } = await db.from("ad_sync_runs").select("*").order("started_at", { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data;
+  },
+};
+
 export const apiClient = {
   marketing,
+  ads: adsData,
   /** The cashflow year the data is for (drives in-progress-month detection). */
   cashflowYear: YEAR,
 
