@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards, previousRange } from "../mktAnalytics.js";
-import { adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, change, filterByChannel, paceStatus } from "../adsOverview.js";
+import { adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, change, filterByChannel, paceStatus, revenueBasisCards } from "../adsOverview.js";
 import { fmtCompact, fmtInt, fmtMoney, fmtPct } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
 import { PlatformIcon, platformMeta } from "./PlatformIcon.jsx";
@@ -227,9 +227,10 @@ export function AdsView() {
   const [customTo, setCustomTo] = useState(todayLocal);
   const [compare, setCompare] = useState("previous");
   const [channel, setChannel] = useState("all");
+  const [revenueBasis, setRevenueBasis] = useState("total");
 
   const v = useMemo(() => {
-    const scopedAll = analyticsCards(data.cards).filter(inBrandScope);
+    const scopedAll = revenueBasisCards(analyticsCards(data.cards).filter(inBrandScope), revenueBasis, { mockFallback: true });
     const scoped = filterByChannel(scopedAll, channel);
     const range = periodRange(period, customFrom, customTo);
     const before = compare === "lastMonth" ? sameDatesLastMonth(range) : previousRange(range);
@@ -244,12 +245,13 @@ export function AdsView() {
       range,
       before,
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
+      revenueBasis,
       channelList: adsChannelList(scopedAll),
       summary: adsCompanySummary(brandTotals, today),
       brands: brandTotals.map((brand) => ({ ...brand, channels: filteredById.get(brand.id)?.channels ?? [] })),
       pipelines: Object.fromEntries(brands.map((brand) => [brand.id, adsSalePipeline(scoped.filter((card) => card.brand_id === brand.id), range, before)])),
     };
-  }, [data, inBrandScope, period, customFrom, customTo, compare, brandFilter, channel]);
+  }, [data, inBrandScope, period, customFrom, customTo, compare, brandFilter, channel, revenueBasis]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
@@ -267,6 +269,7 @@ export function AdsView() {
   return <AdsWorkspace v={v} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
     <div className="aw-presets" role="group" aria-label="ช่วงเวลาด่วน">{[["today","วันนี้"],["7d","7 วัน"],["mtd","เดือนนี้"]].map(([key,label]) => <button type="button" key={key} className={period === key ? "active" : ""} aria-pressed={period === key} onClick={() => setPeriod(key)}>{label}</button>)}</div>
     <div className="aw-date-range"><label><span>จาก</span><input aria-label="วันที่เริ่มต้น" type="date" value={shownFrom} max={shownTo} onChange={(event) => changeFrom(event.target.value)} /></label><b>–</b><label><span>ถึง</span><input aria-label="วันที่สิ้นสุด" type="date" value={shownTo} min={shownFrom} max={todayLocal} onChange={(event) => changeTo(event.target.value)} /></label></div>
+    <div className="aw-basis" role="radiogroup" aria-label="ฐานยอดขาย"><span>คิดจาก</span>{[["new","ยอดใหม่"],["total","ยอดรวม"]].map(([key,label]) => <button type="button" role="radio" aria-checked={revenueBasis === key} key={key} className={revenueBasis === key ? "active" : ""} onClick={() => setRevenueBasis(key)}>{label}</button>)}</div>
     <label className="aw-filter"><span>ช่องทาง</span><select value={channel} onChange={(event) => setChannel(event.target.value)}><option value="all">ทั้งหมด</option>{v.channelList.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
     <label className="aw-filter"><span>เทียบ</span><select value={compare} onChange={(event) => setCompare(event.target.value)}><option value="previous">ช่วงก่อน</option><option value="lastMonth">เดือนก่อน</option></select></label>
   </>} />;

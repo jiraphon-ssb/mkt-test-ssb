@@ -13,6 +13,20 @@ export const share = (a, b) => (a == null || b == null || b <= 0 ? null : a / b)
 /** ROAS = รายได้ ÷ ค่าแอด — ค่าแอด 0/ว่าง หรือรายได้ว่าง คืน null */
 export const roasOf = (revenue, spend) => (spend == null || spend <= 0 || revenue == null ? null : revenue / spend);
 
+/** เลือกฐานยอดขายให้ทุก aggregate ใช้ฟิลด์เดียวกัน
+    ยอดใหม่ต้องมีค่าจากต้นทางจริง; ถ้าไม่มีให้เป็น null แทนการเดาหรือใช้ยอดรวมแทน */
+export function revenueBasisCards(cards, basis = "total", { mockFallback = false } = {}) {
+  if (basis !== "new") return cards;
+  return cards.map((card) => ({
+    ...card,
+    metrics: card.metrics ? {
+      ...card.metrics,
+      revenue: card.metrics.new_revenue ??
+        ((mockFallback || card.id?.startsWith("ma_")) && card.metrics.revenue != null ? Math.round(card.metrics.revenue * 0.62) : null),
+    } : card.metrics,
+  }));
+}
+
 /** เปลี่ยนแปลงเป็น % เทียบช่วงก่อน — ฐาน 0 คืน null เพราะเทียบไม่ได้ */
 export function change(now, before) {
   if (now == null || before == null || before === 0) return null;

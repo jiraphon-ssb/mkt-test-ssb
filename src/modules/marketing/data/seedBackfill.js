@@ -397,6 +397,8 @@ export function buildMonthAds(anchorMs = Date.now()) {
       const impressions = Math.round(reach * (cr.freq + cr.decay * wear * 1.6));
       const clicks = Math.max(1, Math.round(impressions * cr.ctr * (1 - cr.decay * wear)));
       const engagement = Math.max(1, Math.round(reach * r.er));
+      const revenue = Math.round(spend * r.roas * cr.roasMul);
+      const newRevenue = Math.round(revenue * 0.62);
       const measuredMs = Math.min(now.getTime() - HOUR, date.getTime());
       cards.push({
         id: `ma_${tag}_${r.brand}_${i}`,
@@ -427,7 +429,8 @@ export function buildMonthAds(anchorMs = Date.now()) {
           orders: null,
           spend,
           cpl: spend / leads,
-          revenue: Math.round(spend * r.roas * cr.roasMul),
+          revenue,
+          new_revenue: newRevenue,
           measured_at: new Date(measuredMs).toISOString(),
         },
         created_at: new Date(measuredMs - 10 * DAY).toISOString(),

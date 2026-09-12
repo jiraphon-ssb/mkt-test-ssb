@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   adsByBrandChannel, adsByChannel, adsChannelList, adsCompanyPaceChart, adsCompanySummary, adsSpendShareByBrand, adsDecisionRows, adsFunnel, adsKpis, adsWeekly,
-  adsCreativeRows, adsDailyRevenue, adsDailySeries, adsMetricBoard, adsSalePipeline, adsSalesPace, decideAction, adsSalesVsTarget, budgetOf, deliveryOf, revenuePace, budgetPace, change, filterByChannel, normalizeAdPlatform, paceGroup, paceStatus, roasOf, salesTargetOf, share,
+  adsCreativeRows, adsDailyRevenue, adsDailySeries, adsMetricBoard, adsSalePipeline, adsSalesPace, decideAction, adsSalesVsTarget, budgetOf, deliveryOf, revenuePace, budgetPace, change, filterByChannel, normalizeAdPlatform, paceGroup, paceStatus, revenueBasisCards, roasOf, salesTargetOf, share,
 } from "../src/modules/marketing/adsOverview.js";
 
 /* ศุกร์ 24 ก.ค. 2026 — สัปดาห์เริ่มจันทร์ 20 ก.ค. (ชุดเดียวกับ mktAnalytics.test.js) */
@@ -32,6 +32,16 @@ const RANGE = { start: "2026-07-20T00:00:00.000Z", end: "2026-07-27T00:00:00.000
 const PREV = { start: "2026-07-13T00:00:00.000Z", end: "2026-07-20T00:00:00.000Z" };
 
 describe("ตัวช่วยอัตราส่วน", () => {
+  it("สลับฐานยอดใหม่โดยไม่ใช้ยอดรวมแทนเมื่อข้อมูลขาด", () => {
+    const rows = revenueBasisCards([
+      card({ id: "known", metrics: metrics({ revenue: 10_000, new_revenue: 6_000 }) }),
+      card({ id: "missing", metrics: metrics({ revenue: 5_000 }) }),
+    ], "new");
+    expect(rows[0].metrics.revenue).toBe(6_000);
+    expect(rows[1].metrics.revenue).toBeNull();
+    expect(revenueBasisCards(rows, "total")).toBe(rows);
+    expect(revenueBasisCards([card({ metrics: metrics({ revenue: 5_000 }) })], "new", { mockFallback: true })[0].metrics.revenue).toBe(3_100);
+  });
   it("ตัวหารศูนย์หรือค่าว่างคืน null ไม่ใช่ 0", () => {
     expect(share(5, 0)).toBeNull();
     expect(share(null, 10)).toBeNull();
