@@ -28,7 +28,7 @@
 .cp-table td.cp-delta { font-size: var(--fs-xs); color: var(--ink-soft); white-space: normal; min-width: 84px; line-height: 1.35; }
 .cp-table th .cp-name b { white-space: normal; line-height: 1.25; }
 .cp-camp.open th, .cp-camp.open td, .cp-detail td { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
-.cp-detail td { padding: 12px 14px 16px; }
+.cp-table tr.cp-detail td { padding: 12px 14px 16px; white-space: normal; } /* .aw td บังคับ nowrap → ข้อค้นพบ/ครีเอทีฟต้องตัดบรรทัดได้ */
 
 .cp-detail-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
 .cp-detail-grid h4 { margin: 0 0 8px; font-size: 11px; font-weight: 700; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; }
