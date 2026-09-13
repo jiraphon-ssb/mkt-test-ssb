@@ -78,3 +78,46 @@ export function reconciliationRows(config = {}, brands = []) {
       return { key: `${source.id}:${brandId}`, provider: source.name, brand: brandNames.get(brandId) ?? brandId, accountId: row.accountId || "—", mappingValid, connected, checks, ready: connected && checks.every((check) => check.status === "passed") };
     }));
 }
+
+export function syncAccountRows(config = {}, brands = [], now = new Date()) {
+  const brandNames = new Map(brands.map((brand) => [brand.id, brand.name]));
+  return ADS_PROVIDERS.flatMap((source) => Object.entries(config.mappings?.[source.id] ?? {})
+    .filter(([, row]) => row?.enabled)
+    .map(([brandId, row]) => {
+      const normalized = { ...DEFAULT_SOURCE_CONFIG, ...(config.sources?.[source.id] ?? {}), ...row };
+      const valid = validateAdsConnection(source.id, normalized);
+      const connected = Boolean(valid.ok && row.connectionId && row.oauthStatus === "connected");
+      const lastSuccess = validDate(row.lastSuccessAt);
+      const ageHours = lastSuccess ? Math.max(0, (new Date(now).getTime() - lastSuccess.getTime()) / HOURS) : null;
+      let state = "waiting", label = valid.ok ? "รอเชื่อม OAuth" : "Mapping ไม่ครบ";
+      if (connected) { state = "missing"; label = "รอ Sync ครั้งแรก"; }
+      if (connected && row.syncStatus === "backfill") { state = "syncing"; label = "กำลังดึงย้อนหลัง"; }
+      else if (connected && row.syncStatus === "syncing") { state = "syncing"; label = "กำลัง Sync"; }
+      else if (connected && lastSuccess) { state = ageHours > Number(config.rules?.missingDataHours ?? 12) ? "missing" : ageHours > Number(config.rules?.staleHours ?? 6) ? "stale" : "healthy"; label = state === "healthy" ? "ข้อมูลล่าสุดปกติ" : state === "stale" ? "ข้อมูลล่าช้า" : "ข้อมูลขาด"; }
+      if (connected && (Number(row.missingDays) > 0 || row.coverageStatus === "incomplete")) { state = "missing"; label = "ช่วงวันที่ไม่ครบ"; }
+      if (connected && row.lastErrorCode) { state = "error"; label = "Sync ไม่สำเร็จ"; }
+      return {
+        key: `${source.id}:${brandId}`, providerId: source.id, provider: source.name, color: source.color,
+        brandId, brand: brandNames.get(brandId) ?? brandId, accountId: row.accountId || "—",
+        connectionId: row.connectionId ?? null, valid: valid.ok, errors: valid.errors, connected,
+        state, label, lastSuccessAt: lastSuccess?.toISOString() ?? null, ageHours,
+        missingDays: Math.max(0, Number(row.missingDays) || 0), errorCode: row.lastErrorCode ?? null,
+        creativeEnabled: source.id === "meta" && Boolean(row.creativeSyncEnabled ?? true),
+        reconciliation: reconciliationRows(config, brands).find((item) => item.key === `${source.id}:${brandId}`),
+      };
+    }));
+}
+
+export function normalizeSyncRuns(runs = []) {
+  return [...runs].filter(Boolean).map((run) => ({
+    id: run.id ?? `${run.connection_id ?? "unknown"}:${run.started_at ?? "unknown"}`,
+    connectionId: run.connection_id ?? run.connectionId ?? null,
+    status: run.status ?? "unknown",
+    mode: run.mode ?? "incremental",
+    startedAt: run.started_at ?? run.startedAt ?? null,
+    finishedAt: run.finished_at ?? run.finishedAt ?? null,
+    rowsRead: Number(run.rows_read ?? run.rowsRead) || 0,
+    rowsWritten: Number(run.rows_written ?? run.rowsWritten) || 0,
+    errorCode: run.error_code ?? run.errorCode ?? null,
+  })).sort((a, b) => new Date(b.startedAt ?? 0) - new Date(a.startedAt ?? 0));
+}

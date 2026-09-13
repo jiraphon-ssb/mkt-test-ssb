@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adsDataHealth, reconciliationRows } from "../src/modules/marketing/ads/adsDataHealth.js";
+import { adsDataHealth, normalizeSyncRuns, reconciliationRows, syncAccountRows } from "../src/modules/marketing/ads/adsDataHealth.js";
 
 const mapping = (over = {}) => ({ enabled: true, accountId: "act_123", timezone: "Asia/Bangkok", currency: "THB", ...over });
 
@@ -53,5 +53,22 @@ describe("reconciliationRows", () => {
     const [row] = reconciliationRows(config, [{ id: "b1", name: "Brand" }]);
     expect(row.checks.every((check) => check.status === "passed")).toBe(true);
     expect(row.ready).toBe(true);
+  });
+});
+
+describe("sync status", () => {
+  it("แสดงสถานะรายบัญชีจากหลักฐานจริงและไม่ถือว่า mapping เท่ากับเชื่อมแล้ว", () => {
+    const config = { mappings: { meta: {
+      b1: mapping({ accountId: "act_1" }),
+      b2: mapping({ accountId: "act_2", connectionId: "c2", oauthStatus: "connected", lastSuccessAt: "2026-09-14T10:00:00Z", reconciliation: { status: "passed" } }),
+    } } };
+    const rows = syncAccountRows(config, [{ id: "b1", name: "A" }, { id: "b2", name: "B" }], new Date("2026-09-14T12:00:00Z"));
+    expect(rows[0]).toMatchObject({ brand: "A", connected: false, state: "waiting" });
+    expect(rows[1]).toMatchObject({ brand: "B", connected: true, state: "healthy", creativeEnabled: true });
+  });
+  it("normalize ประวัติ backend และเรียงใหม่สุดก่อน", () => {
+    const runs = normalizeSyncRuns([{ id: "a", started_at: "2026-09-13", rows_written: 4 }, { id: "b", started_at: "2026-09-14", rows_written: 8 }]);
+    expect(runs.map((run) => run.id)).toEqual(["b", "a"]);
+    expect(runs[0].rowsWritten).toBe(8);
   });
 });

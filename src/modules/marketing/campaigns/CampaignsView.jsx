@@ -89,7 +89,7 @@ export function CampaignsView() {
       </div>
     </section>
 
-    <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><a href="/mkt/ads?panel=settings&tab=reconcile">ตรวจยอด</a></section>
+    <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><a href="/mkt/ads/sync">ดูสถานะ Sync</a></section>
 
     <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
   </main>;
