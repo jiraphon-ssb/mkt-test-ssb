@@ -69,4 +69,14 @@ describe("campaignRows", () => {
     expect(a.days).toBe(2);
     expect(a.creatives[0].creative).toBe("ชิ้น A");
   });
+  it("แถวงบแคมเปญ (mock) เก็บ channel แบบไม่ normalize เช่น \"Facebook\" ก็ต้องจับคู่กับแพลตฟอร์ม Meta Ads ได้", () => {
+    const cbRaw = [
+      { brand_id: "b_td", channel: "Facebook", campaign: "Always-on — คนเคยทัก", month: "2026-07", share: 0.6, objective: "messages", status: "active" },
+      cb[1],
+    ];
+    const [a] = campaignRows(cards, RANGE, { ...opts, campaignBudgets: cbRaw });
+    expect(a.budget).toBe(6000);
+    expect(a.objective).toBe("messages");
+    expect(a.status).toBe("active");
+  });
 });

@@ -5,7 +5,7 @@
    ============================================================ */
 import {
   ACTION_RULES, adFactRows, adPlatformOf, adsCreativeRows, adsDailySeries, budgetOf, budgetPace,
-  change, deliveryOf, roasOf, share,
+  change, deliveryOf, normalizeAdPlatform, roasOf, share,
 } from "./adsOverview.js";
 
 export const NO_CAMPAIGN = "ไม่ระบุแคมเปญ";
@@ -40,7 +40,7 @@ export function campaignRows(cards, range, { brands = [], adBudgets = [], campai
 
   return [...groups.values()].map((g) => {
     const m = rollup(g.cards);
-    const meta = campaignBudgets.find((r) => r.brand_id === g.brandId && r.channel === g.platform && r.campaign === g.name && r.month === month) ?? null;
+    const meta = campaignBudgets.find((r) => r.brand_id === g.brandId && normalizeAdPlatform(r.channel) === g.platform && r.campaign === g.name && r.month === month) ?? null;
     const platformBudget = budgetOf(g.brandId, g.platform, month, adBudgets);
     const budget = meta && platformBudget != null ? Math.round(platformBudget * meta.share) : null;
     const p = rollup(prevByKey.get(g.key) ?? []);
