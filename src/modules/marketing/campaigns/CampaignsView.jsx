@@ -8,6 +8,7 @@ import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from
 import { isoDay, periodRange, sameDatesLastMonth, PERIOD_PRESETS } from "../adsScope.js";
 import { CampaignsTable } from "./CampaignsTable.jsx";
 import { CampaignDetail } from "./CampaignDetail.jsx";
+import { adsDataHealth } from "../ads/adsDataHealth.js";
 import "../ads/adsWorkspace.css";
 import "./campaigns.css";
 
@@ -48,11 +49,13 @@ export function CampaignsView() {
     );
     const rows = withSpendShare(filtered).map((r) => ({ ...r, decision: campaignDecision(r, targets[r.brandId] ?? null) }));
     const brandSums = campaignsByBrand(all);
+    const dataHealth = adsDataHealth(data.settings?.ads_control ?? {});
     return {
       rows, brands, selectedBrand, byBrand: brandSums.byBrand,
       channelList: adsChannelList(scopedAll), scopeEmpty: all.length === 0, range,
       statuses: [...new Set(all.map((r) => r.status))], objectives: [...new Set(all.map((r) => r.objective ?? "unknown"))],
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
+      dataHealth,
     };
   }, [data, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis]);
 
@@ -85,6 +88,8 @@ export function CampaignsView() {
         <label className="cp-search"><span className="ads-sr-only">ค้นหา</span><input aria-label="ค้นหาแคมเปญ" type="search" placeholder="ค้นหาชื่อแคมเปญ" value={query} onChange={(e) => setQuery(e.target.value)} /></label>
       </div>
     </section>
+
+    <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><a href="/mkt/ads?panel=settings&tab=reconcile">ตรวจยอด</a></section>
 
     <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
   </main>;

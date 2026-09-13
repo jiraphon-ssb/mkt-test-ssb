@@ -68,6 +68,23 @@
 - Conversion ที่ยังไม่มี mapping ไม่รวมใน KPI หลักและแสดงในคิวให้ผู้ดูแลจัดประเภท
 - การเปลี่ยน attribution window ต้องขึ้น revision ใหม่ ห้ามนำค่าคนละหน้าต่างมาเปรียบเทียบตรง ๆ
 
+## Data Health และด่านเปิดใช้
+
+หน้าเว็บอ่านสถานะจากหลักฐานของ backend เท่านั้น และห้ามอนุมานว่าเชื่อมสำเร็จจากการมี Account ID โดย mapping ของแต่ละบัญชีรองรับฟิลด์ต่อไปนี้:
+
+- `connectionId`, `oauthStatus` — ยืนยัน OAuth ที่สร้างโดย backend
+- `syncStatus`, `lastSuccessAt`, `lastErrorCode`, `missingDays` หรือ `coverageStatus` — ใช้แยกกำลังดึง, ปกติ, ล่าช้า, ช่วงวันที่ขาด และผิดพลาด
+- `reconciliation.windows.7d` และ `reconciliation.windows.30d` — เก็บ `localSpend` กับ `remoteSpend` จากรอบตรวจเดียวกัน
+
+เปิดใช้ข้อมูลจริงได้เมื่อบัญชีที่เปิดใช้งานทุกบัญชีผ่านครบทุกข้อ:
+
+1. mapping ถูกต้องและ OAuth ยังใช้งานได้
+2. sync สำเร็จล่าสุดไม่เกิน freshness threshold
+3. ยอดค่าแอด 7 วันและ 30 วันต่างจากต้นทางไม่เกิน reconciliation tolerance
+4. ไม่มี error หรือช่วงวันที่ขาดในบัญชีใด
+
+หากยังไม่มีหลักฐาน ระบบต้องแสดง `ข้อมูลจำลอง`, `รอเชื่อมบัญชี` หรือ `ยังตรวจไม่ได้` และห้ามแสดงสถานะพร้อมใช้
+
 ## เอกสารต้นทาง
 
 - [Meta Marketing API — Insights](https://developers.facebook.com/docs/marketing-api/insights)

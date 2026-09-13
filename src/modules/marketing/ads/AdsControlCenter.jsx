@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Check, CircleAlert, Database, ExternalLink, Gauge, Save, ShieldAlert, Target } from "lucide-react";
+import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, Save, Scale, ShieldAlert, Target } from "lucide-react";
 import { BrandMark } from "./BrandMark.jsx";
 import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, validateAdsConnection } from "./adsConnectorContract.js";
+import { adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
 
 const SOURCE_DETAILS = {
   meta: "Spend · Delivery · Messaging",
@@ -35,7 +36,7 @@ function SourceCard({ source, active, onSelect }) {
   return <button type="button" className={`acc-source ${active ? "active" : ""}`} onClick={onSelect}>
     <span className="acc-source-mark" style={{ background: source.color }}><Database size={17} /></span>
     <span><strong>{source.name}</strong><small>{SOURCE_DETAILS[source.id]}</small></span>
-    <span className={`acc-state ${source.phase === 1 ? "ready" : ""}`}>Phase {source.phase}</span>
+    <span className={`acc-state ${source.id === "meta" ? "ready" : ""}`}>{source.id === "meta" ? "เริ่มที่นี่" : "ลำดับถัดไป"}</span>
   </button>;
 }
 
@@ -57,14 +58,14 @@ function Connections({ brands, config, setConfig }) {
       {ADS_PROVIDERS.map((item) => <SourceCard key={item.id} source={item} active={item.id === sourceId} onSelect={() => setSourceId(item.id)} />)}
     </section>
     <section className="acc-sheet">
-      <header className="acc-sheet-head"><div><span className="acc-kicker">ACCOUNT MAPPING</span><h2>{source.name}</h2><p>ผูกบัญชีโฆษณากับแบรนด์เพื่อกันยอดข้ามแบรนด์และตรวจย้อนหลังได้</p></div><a href={source.doc} target="_blank" rel="noreferrer">เอกสาร API <ExternalLink size={14} /></a></header>
-      <div className="acc-callout"><CircleAlert size={17} /><span>หน้านี้เตรียม mapping และกติกาไว้ก่อน การเชื่อมจริงต้องใช้ OAuth ผ่าน backend และเก็บ token นอกเบราว์เซอร์</span></div>
-      <div className="acc-source-config">
+      <header className="acc-sheet-head"><div><span className="acc-kicker">บัญชีและแบรนด์</span><h2>{source.name}</h2><p>ใส่บัญชีและจับคู่กับแบรนด์ให้ถูกต้อง</p></div><a href={source.doc} target="_blank" rel="noreferrer">เอกสาร API <ExternalLink size={14} /></a></header>
+      <div className="acc-callout"><CircleAlert size={17} /><span>ยังไม่เชื่อม OAuth · หน้านี้บันทึก mapping เท่านั้น</span></div>
+      <details className="acc-source-options"><summary>ตัวเลือกการดึงข้อมูล</summary><div className="acc-source-config">
         <label><span>ดึงทุก</span><select value={sourceConfig.syncEveryHours} onChange={(e) => updateSource({ syncEveryHours: Number(e.target.value) })}><option value="1">1 ชั่วโมง</option><option value="3">3 ชั่วโมง</option><option value="6">6 ชั่วโมง</option></select></label>
         <label><span>ย้อนหลัง</span><select value={sourceConfig.backfillDays} onChange={(e) => updateSource({ backfillDays: Number(e.target.value) })}><option value="30">30 วัน</option><option value="90">90 วัน</option><option value="180">180 วัน</option></select></label>
         <label><span>Attribution</span><select value={sourceConfig.attribution} onChange={(e) => updateSource({ attribution: e.target.value })}><option value="platform_default">ตามแพลตฟอร์ม</option><option value="7d_click_1d_view">7d click / 1d view</option><option value="1d_click">1d click</option></select></label>
         <label><span>Lead event</span><select value={sourceConfig.leadEvent ?? source.leadEvents[0]} onChange={(e) => updateSource({ leadEvent: e.target.value })}>{source.leadEvents.map((event) => <option key={event}>{event}</option>)}</select></label>
-      </div>
+      </div></details>
       <div className="acc-mapping-head"><span>แบรนด์</span><span>{source.accountLabel}</span><span>Timezone / เงิน</span><span>สถานะ</span></div>
       {brands.map((brand) => {
         const row = mappings[brand.id] ?? {};
@@ -79,13 +80,10 @@ function Connections({ brands, config, setConfig }) {
   </div>;
 }
 
-function Readiness({ config, brands }) {
-  return <section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">GO-LIVE CHECK</span><h2>ความพร้อมเชื่อม API</h2><p>โครงแอปพร้อมแล้ว ส่วนที่มีรูปกุญแจต้องทำและเก็บบน backend</p></div></header>
-    <div className="acc-ready-grid">{ADS_PROVIDERS.map((source) => {
-      const mappings = config.mappings?.[source.id] ?? {};
-      const readyMappings = brands.filter((brand) => validateAdsConnection(source.id, mappings[brand.id]).ok).length;
-      return <article key={source.id}><header><span className="acc-source-mark" style={{background:source.color}}><Database size={16}/></span><div><h3>{source.name}</h3><small>Phase {source.phase}</small></div></header><ul><li className="done">Data contract พร้อม</li><li className="done">เตรียม migration แล้ว</li><li className={readyMappings ? "done" : ""}>Account mapping {readyMappings}/{brands.length}</li><li>OAuth credentials</li><li>Deploy Edge Function + scheduler</li></ul><strong>{readyMappings === brands.length ? "Mapping พร้อม" : "ยังตั้งค่าไม่ครบ"}</strong></article>;
-    })}</div>
+function HealthSummary({ config }) {
+  const health = adsDataHealth(config);
+  return <section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">DATA HEALTH</span><h2>สถานะข้อมูล</h2><p>ระบบจะไม่ให้สถานะพร้อมใช้จนกว่าจะมีทั้งข้อมูลล่าสุดและผลตรวจยอด</p></div><span className={`acc-health-pill ${health.state}`}>{health.label}</span></header>
+    <div className="acc-health-grid">{health.sources.map((source) => <article key={source.provider}><span>{source.name}</span><strong>{source.label}</strong><small>{source.detail}</small></article>)}</div>
   </section>;
 }
 
@@ -114,6 +112,7 @@ const RULE_FIELDS = [
   ["lowRoasDays", "ROAS ต่ำกว่าเป้าต่อเนื่อง", "วัน", "เตือนเมื่อ ROAS ต่ำกว่าเป้าติดต่อกันตามจำนวนวัน"],
   ["staleHours", "ข้อมูลเริ่มล่าช้า", "ชม.", "แสดงสถานะข้อมูลล่าช้าเมื่อยังไม่มีการ sync ใหม่"],
   ["missingDataHours", "ข้อมูลขาดหาย", "ชม.", "ยกระดับเป็นข้อมูลขาดเมื่อเลยเวลานี้"],
+  ["reconciliationTolerance", "ผลต่างยอดที่ยอมรับ", "%", "ยอดค่าแอดจากระบบกับแพลตฟอร์มต้องต่างกันไม่เกินค่านี้"],
 ];
 
 function Rules({ rules, setRules }) {
@@ -125,42 +124,38 @@ function Rules({ rules, setRules }) {
   </div>;
 }
 
-const LINEAGE = [
-  ["ค่าแอด", "Ads API ของแต่ละแพลตฟอร์ม", "ตรงจากต้นทาง", "รายชั่วโมง"],
-  ["Reach / Impressions / Clicks", "Ads API ของแต่ละแพลตฟอร์ม", "ตรงจากต้นทาง", "รายชั่วโมง"],
-  ["คนทัก", "Meta Messaging / Lead event", "ต้องกำหนด event กลาง", "รายชั่วโมง"],
-  ["Lead", "CRM", "สถานะผ่านการคัดกรอง", "ใกล้เวลาจริง"],
-  ["มัดจำ / ออเดอร์", "CRM หรือ Shopee Orders", "ยอดธุรกิจจริง", "ใกล้เวลาจริง"],
-  ["ยอดขาย", "CRM / POS / Shopee Orders", "หักยกเลิกและคืนเงิน", "รายวัน"],
-  ["ROAS", "ยอดขาย ÷ ค่าแอด", "คำนวณกลางจากสองแหล่ง", "หลัง sync"],
-  ["%Ads", "ค่าแอด ÷ ยอดขาย", "คำนวณกลางจากสองแหล่ง", "หลัง sync"],
-];
+const money = (value) => value == null ? "—" : `฿${Math.round(value).toLocaleString("th-TH")}`;
+function CheckCell({ check }) {
+  if (check.status === "pending") return <div className="acc-check pending"><strong>ยังตรวจไม่ได้</strong><small>รอข้อมูลจาก API</small></div>;
+  return <div className={`acc-check ${check.status}`}><strong>{check.status === "passed" ? "ตรงกัน" : "ยอดไม่ตรง"}</strong><small>{money(check.local)} / {money(check.remote)} · ต่าง {check.diffPct.toFixed(2)}%</small></div>;
+}
 
-function Lineage() {
-  return <section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">DATA LINEAGE</span><h2>นิยามและแหล่งที่มาของตัวเลข</h2><p>ใช้เป็น data contract กลางก่อนเขียน connector เพื่อให้ทุกแพลตฟอร์มแปลเป็นความหมายเดียวกัน</p></div></header>
-    <div className="acc-lineage"><div className="acc-lineage-row head"><span>ตัวชี้วัด</span><span>แหล่งหลัก</span><span>นิยาม</span><span>รอบอัปเดต</span></div>{LINEAGE.map((row) => <div className="acc-lineage-row" key={row[0]}>{row.map((cell) => <span key={cell}>{cell}</span>)}</div>)}</div>
-  </section>;
+function Reconciliation({ config, brands }) {
+  const rows = reconciliationRows(config, brands);
+  return <div className="acc-reconcile-stack"><HealthSummary config={config} /><section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">BEFORE GO-LIVE</span><h2>ตรวจยอดกับต้นทาง</h2><p>ค่าแอดในระบบต้องตรงกับแพลตฟอร์มทั้งช่วง 7 และ 30 วัน</p></div><span className="acc-tolerance">ยอมรับผลต่าง ≤ {config.rules?.reconciliationTolerance ?? 1}%</span></header>
+    {rows.length ? <div className="acc-reconcile"><div className="acc-reconcile-row head"><span>บัญชี</span><span>7 วัน</span><span>30 วัน</span><span>ผล</span></div>{rows.map((row) => <div className="acc-reconcile-row" key={row.key}><div><strong>{row.brand}</strong><small>{row.provider} · {row.accountId}</small></div><CheckCell check={row.checks[0]} /><CheckCell check={row.checks[1]} /><span className={`acc-ready-state ${row.ready ? "passed" : "pending"}`}>{row.ready ? "เปิดใช้ได้" : !row.mappingValid ? "Mapping ไม่ครบ" : row.connected ? "รอตรวจยอด" : "รอเชื่อม OAuth"}</span></div>)}</div> : <div className="acc-empty-check"><Scale size={24} /><strong>ยังไม่มีบัญชีสำหรับตรวจยอด</strong><span>กลับไปเปิด “เตรียมดึง” และกรอก Account ID ก่อน</span></div>}
+  </section></div>;
 }
 
 export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const initial = useMemo(() => saved ?? {}, [saved]);
-  const [tab, setTab] = useState("sources");
+  const requestedTab = new URLSearchParams(window.location.search).get("tab");
+  const [tab, setTab] = useState(["sources", "targets", "rules", "reconcile"].includes(requestedTab) ? requestedTab : "sources");
   const [config, setConfig] = useState(() => ({ mappings: initial.mappings ?? {}, sources: initial.sources ?? {} }));
   const [targets, setTargets] = useState(() => buildTargets(brands, initial.targets));
-  const [rules, setRules] = useState(() => ({ ...DEFAULT_RULES, ...(initial.rules ?? {}) }));
+  const [rules, setRules] = useState(() => ({ ...DEFAULT_RULES, reconciliationTolerance: 1, ...(initial.rules ?? {}) }));
   const save = () => { onSave({ mappings: config.mappings, sources: config.sources, targets, rules, updatedAt: new Date().toISOString() }); toast?.("บันทึกการตั้งค่าค่าแอดแล้ว", "ok"); };
-  const primaryTabs = [["sources",Database,"แหล่งข้อมูล"],["targets",Target,"เป้า"],["rules",ShieldAlert,"แจ้งเตือน"]];
-  const systemTabs = [["lineage",Check,"นิยามตัวเลข"],["ready",Gauge,"ความพร้อม API"]];
+  const currentConfig = { ...config, rules };
+  const health = adsDataHealth(currentConfig);
+  const primaryTabs = [["sources",Link2,"1 · บัญชี"],["targets",Target,"2 · เป้า"],["rules",ShieldAlert,"3 · กฎ"],["reconcile",Scale,"4 · ตรวจยอด"]];
   return <main className="aw acc">
-    <header className="acc-header"><div><a href="/mkt/ads"><ArrowLeft size={15} /> Overview ads</a><h1>ตั้งค่า Overview ads</h1></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึก</button></header>
+    <header className="acc-header"><div><a href="/mkt/ads"><ArrowLeft size={15} /> Overview ads</a><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึก</button></header>
     <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
       {primaryTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}
-      <details className="acc-more"><summary>เพิ่มเติม</summary><div>{systemTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={(event) => { setTab(id); event.currentTarget.closest("details")?.removeAttribute("open"); }}><Icon size={15} />{label}</button>)}</div></details>
     </nav>
     {tab === "sources" && <Connections brands={brands} config={config} setConfig={setConfig} />}
     {tab === "targets" && <Targets brands={brands} targets={targets} setTargets={setTargets} />}
     {tab === "rules" && <Rules rules={rules} setRules={setRules} />}
-    {tab === "lineage" && <Lineage />}
-    {tab === "ready" && <Readiness config={config} brands={brands} />}
+    {tab === "reconcile" && <Reconciliation config={currentConfig} brands={brands} />}
   </main>;
 }
