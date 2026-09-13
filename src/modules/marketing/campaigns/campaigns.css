@@ -1,2 +1,25 @@
 /* หน้าแคมเปญ — สไตล์เฉพาะ (prefix cp-) · โครง/สี reuse aw-* ของ AdsWorkspace */
 .cp .cp-search input { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 0 9px; font: inherit; min-width: 180px; }
+
+.cp-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.cp-totals > div { display: flex; flex-direction: column; gap: 2px; }
+.cp-totals span { font-size: var(--fs-xs); color: var(--ink-soft); }
+.cp-totals b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.cp-totals b small { font-size: var(--fs-sm); color: var(--ink-soft); font-weight: 500; }
+.cp-totals-review { grid-column: span 2; }
+.cp-views { margin: 12px 0; flex-wrap: wrap; }
+.cp-views .ads-seg-btn span { margin-left: 4px; color: var(--ink-faint); }
+.cp .ads-table-wrap { border: 0; border-radius: 0; position: relative; }
+.cp-table { min-width: 0; }
+.cp-table thead th { background: none; border-bottom: 1px solid var(--line); padding: 0 10px 6px; white-space: nowrap; }
+.cp-table th, .cp-table td { padding: 8px 10px; vertical-align: middle; }
+.cp-table tbody th { background: none; padding-left: 12px; }
+.cp-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.mkt-root .cp-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; background: none; border: 0; font: inherit; font-weight: 600; color: var(--ink-soft); cursor: pointer; min-height: 24px; }
+.mkt-root .cp-sort:hover { color: var(--ink); }
+.cp-name { display: flex; align-items: center; gap: 6px; }
+.cp-budget { min-width: 150px; }
+.cp-budget .ads-brand-bar { margin: 4px 0 0; }
+.cp-delta { font-size: var(--fs-xs); color: var(--ink-soft); white-space: nowrap; }
+.cp-row.open th, .cp-row.open td, .cp-detail td { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.cp-detail td { padding: 12px 14px 16px; }
