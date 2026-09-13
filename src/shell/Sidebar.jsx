@@ -21,7 +21,7 @@ export default function Sidebar({ user, open, onClose, onSignOut }) {
   const modules = MODULES.map((m) => ({
     ...m,
     groups: (m.groups ?? [])
-      .map((g) => ({ ...g, items: g.items.filter((n) => can(user, n.perm)) }))
+      .map((g) => ({ ...g, items: g.items.filter((n) => can(user, n.perm) && n.sidebar !== false) }))
       .filter((g) => g.items.length > 0),
   }));
   const navigable = (m) => !m.locked && m.groups.length > 0;

@@ -185,17 +185,17 @@ const MARKETING_GROUPS = [
       },
       {
         id: "mkt_campaigns", path: "/mkt/campaigns", label: "แคมเปญ", icon: LayoutList,
-        perm: "marketing.dash.view", status: "live", view: "campaigns",
+        perm: "marketing.dash.view", status: "live", view: "campaigns", sidebar: false,
         purpose: "แคมเปญทุกแบรนด์×แพลตฟอร์ม · จังหวะงบระดับแคมเปญ · ป้ายสเกล/ตรวจแก้/หยุด · ครีเอทีฟล้า",
       },
       {
         id: "mkt_creatives", path: "/mkt/creatives", label: "Creative Library", icon: Images,
-        perm: "marketing.dash.view", status: "live", view: "creatives",
+        perm: "marketing.dash.view", status: "live", view: "creatives", sidebar: false,
         purpose: "รวมชิ้นงานโฆษณา · ดูผลลัพธ์ · ตรวจความล้า · เปรียบเทียบครีเอทีฟ",
       },
       {
         id: "mkt_sync", path: "/mkt/ads/sync", label: "สถานะ Sync", icon: RefreshCw,
-        perm: "marketing.dash.view", status: "live", view: "sync",
+        perm: "marketing.dash.view", status: "live", view: "sync", sidebar: false,
         purpose: "ตรวจการเชื่อมบัญชี · ความสดของข้อมูล · วันที่ขาด · ผลตรวจยอดก่อนเปิดใช้",
       },
     ],
