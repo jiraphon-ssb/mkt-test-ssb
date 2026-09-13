@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { campaignRows, NO_CAMPAIGN } from "../src/modules/marketing/adsCampaigns.js";
 import { campaignDecision, SAVED_VIEWS, applyView, campaignTotals, sortCampaigns } from "../src/modules/marketing/adsCampaigns.js";
+import { periodRange, sameDatesLastMonth, isoDay, PERIOD_PRESETS } from "../src/modules/marketing/adsScope.js";
 
 const RANGE = { start: "2026-07-01T00:00:00.000Z", end: "2026-07-16T00:00:00.000Z" };
 const PREV = { start: "2026-06-16T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z" };
@@ -141,4 +142,21 @@ describe("saved views · ยอดรวม · เรียง", () => {
     expect(sortCampaigns(rows, "cpl", "asc").map((r) => r.key)).toEqual(["a", "c", "b"]);
     expect(sortCampaigns(rows, "cpl", "desc").map((r) => r.key)).toEqual(["c", "a", "b"]);
   });
+});
+
+describe("adsScope", () => {
+  const NOW = new Date(2026, 8, 12, 10, 0, 0);            // 12 ก.ย. 2026 local
+  it("mtd = ต้นเดือนถึงพรุ่งนี้ (end exclusive) · 7d ย้อน 6 วัน · custom ใช้วันที่ที่ส่ง", () => {
+    const m = periodRange("mtd", null, null, NOW);
+    expect(isoDay(new Date(m.start))).toBe("2026-09-01");
+    expect(isoDay(new Date(m.end))).toBe("2026-09-13");
+    expect(isoDay(new Date(periodRange("7d", null, null, NOW).start))).toBe("2026-09-06");
+    const c = periodRange("custom", "2026-09-03", "2026-09-05", NOW);
+    expect(isoDay(new Date(c.end))).toBe("2026-09-06");
+  });
+  it("sameDatesLastMonth เลื่อนทั้งช่วงไป 1 เดือน", () => {
+    const r = sameDatesLastMonth(periodRange("mtd", null, null, NOW));
+    expect(isoDay(new Date(r.start))).toBe("2026-08-01");
+  });
+  it("มี preset 3 ตัวตามหน้า Overview", () => { expect(PERIOD_PRESETS.map((p) => p[0])).toEqual(["today", "7d", "mtd"]); });
 });
