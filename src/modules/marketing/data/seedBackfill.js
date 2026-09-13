@@ -318,6 +318,23 @@ const CREATIVES = [
 /* ชื่อแคมเปญ mock ใต้แพลตฟอร์ม — ให้ชั้นแพลตฟอร์มแตกดูต่อได้ */
 const CAMPAIGNS = ["Always-on — คนเคยทัก", "Prospecting — กลุ่มใหม่", "Remarketing — คนดูแล้วไม่ทัก"];
 
+/* แคมเปญ mock ใต้แพลตฟอร์ม — objective/สถานะ + "สัดส่วน" งบของแพลตฟอร์ม
+   เก็บสัดส่วนไม่ใช่จำนวนเงิน: แก้งบแพลตฟอร์มที่หน้าตั้งค่าแล้วงบแคมเปญขยับตามเอง
+   (ตรงกับ ad_daily_facts.level = 'campaign' ที่จะมาจาก API) */
+export const CAMPAIGN_META = {
+  "Always-on — คนเคยทัก":         { objective: "messages", status: "active", share: 0.45 },
+  "Prospecting — กลุ่มใหม่":      { objective: "leads",    status: "active", share: 0.35 },
+  "Remarketing — คนดูแล้วไม่ทัก": { objective: "messages", status: "paused", share: 0.20 },
+};
+
+/** สัดส่วนงบ/objective/สถานะ ต่อ แบรนด์×แพลตฟอร์ม×แคมเปญ ของเดือนที่ anchor อยู่ */
+export function buildCampaignBudgets(anchorMs = Date.now()) {
+  const month = new Date(anchorMs).toISOString().slice(0, 7);
+  return MONTH_ADS.flatMap((r) => Object.entries(CAMPAIGN_META).map(([campaign, m]) => ({
+    brand_id: r.brand, channel: r.channel, campaign, month, share: m.share, objective: m.objective, status: m.status,
+  })));
+}
+
 const MONTH_ADS = [
   /* แพลตฟอร์มต่อแบรนด์ (mock): TEAMDEE = Meta+Google · t around, JK Design = Meta · JUNTAKARN = Meta+Shopee+TikTok */
   { brand: "b_jt", channel: "Meta Ads",   budget: 30_000, used: 0.45, cpl: 380, roas: 3.3, er: 0.030, prev: 0.88, title: "ยูนิฟอร์มร้าน — Meta Ads เดือนนี้" },

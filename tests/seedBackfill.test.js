@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildBackfill, mondayOf, BACKFILL_WEEKS } from "../src/modules/marketing/data/seedBackfill.js";
+import { buildBackfill, mondayOf, BACKFILL_WEEKS, buildCampaignBudgets, CAMPAIGN_META } from "../src/modules/marketing/data/seedBackfill.js";
 import { buildSeed } from "../src/modules/marketing/data/seed.js";
 import { analyticsCards, ideaToPublishedCycle, kpiSummary, lastCompletedWeeks, publishHeatmap, stageFlows, weeklySeries, weeksRange, adsRollup, } from "../src/modules/marketing/mktAnalytics.js";
 import { brandAverageER, engagementRate, isStuck } from "../src/modules/marketing/mktRules.js";
@@ -134,6 +134,29 @@ describe("backfill — เล่าเรื่องได้จริง (ข�
     expect(new Set(cards.map((c) => c.brand_id)).size).toBe(4);
     const pillars = new Set(cards.map((c) => c.pillar).filter(Boolean));
     expect(pillars.size).toBe(4);
+  });
+});
+describe("งบแคมเปญ mock", () => {
+  it("ทุกแพลตฟอร์มมีครบทุกแคมเปญ · สัดส่วนรวม = 1 · มี objective/status", () => {
+    const rows = buildCampaignBudgets(ANCHOR);
+    const names = Object.keys(CAMPAIGN_META);
+    const byPlatform = new Map();
+    for (const r of rows) {
+      const k = `${r.brand_id}|${r.channel}`;
+      byPlatform.set(k, [...(byPlatform.get(k) ?? []), r]);
+      expect(names).toContain(r.campaign);
+      expect(["messages", "leads"]).toContain(r.objective);
+      expect(["active", "paused"]).toContain(r.status);
+      expect(r.month).toBe(new Date(ANCHOR).toISOString().slice(0, 7));
+    }
+    for (const list of byPlatform.values()) {
+      expect(list).toHaveLength(names.length);
+      expect(list.reduce((n, r) => n + r.share, 0)).toBeCloseTo(1);
+    }
+  });
+  it("seed มี campaign_budgets", () => {
+    expect(Array.isArray(buildSeed().campaign_budgets)).toBe(true);
+    expect(buildSeed().campaign_budgets.length).toBeGreaterThan(0);
   });
 });
 describe("seed รวม backfill แล้วยังไม่พังเรื่องเดิม", () => {

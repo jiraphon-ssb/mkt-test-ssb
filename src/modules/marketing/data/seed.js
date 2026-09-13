@@ -3,12 +3,12 @@
  วันที่ generate สัมพัทธ์กับ "วันนี้" เพื่อให้ demo ดูสดเสมอ
  ============================================================ */
 import { genId } from "../mktRules.js";
-import { buildBackfill, buildAdBudgets, buildMonthAds, buildSalesTargets } from "./seedBackfill.js";
+import { buildBackfill, buildAdBudgets, buildMonthAds, buildSalesTargets, buildCampaignBudgets } from "./seedBackfill.js";
 import {
   SEED_SIZE_PRESETS, SEED_SHOT_TYPES, SEED_VIDEO_LENGTHS, ALL_SELF_CHECK_KEYS,
   SEED_SCHEDULER_TOOLS, emptyRun,
 } from "../mktEngine.js";
-export const DATA_VERSION = "ssb-cp-v21";  /* v21 = แพลตฟอร์มหลายตัวต่อแบรนด์ (Google/Shopee/TikTok) */
+export const DATA_VERSION = "ssb-cp-v22";  /* v22 = งบ/objective/สถานะระดับแคมเปญ */
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 function iso(offsetMs) {
@@ -611,6 +611,7 @@ export function buildSeed() {
     video_lengths: SEED_VIDEO_LENGTHS,
     settings: SEED_SETTINGS,
     ad_budgets: buildAdBudgets(),
+    campaign_budgets: buildCampaignBudgets(),
     sales_targets: buildSalesTargets(),
   };
 }
