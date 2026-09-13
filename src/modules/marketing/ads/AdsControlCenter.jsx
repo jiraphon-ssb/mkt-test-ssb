@@ -59,7 +59,7 @@ function Connections({ brands, config, setConfig }) {
     </section>
     <section className="acc-sheet">
       <header className="acc-sheet-head"><div><span className="acc-kicker">บัญชีและแบรนด์</span><h2>{source.name}</h2><p>ใส่บัญชีและจับคู่กับแบรนด์ให้ถูกต้อง</p></div><a href={source.doc} target="_blank" rel="noreferrer">เอกสาร API <ExternalLink size={14} /></a></header>
-      <div className="acc-callout"><CircleAlert size={17} /><span>ยังไม่เชื่อม OAuth · หน้านี้บันทึก mapping เท่านั้น</span></div>
+      <div className="acc-callout"><CircleAlert size={17} /><span>ยังไม่เชื่อม OAuth · หน้านี้บันทึก mapping เท่านั้น{sourceId === "meta" ? " · หลังเชื่อมจะอ่านสถิติและ Creative แบบ read-only" : ""}</span></div>
       <details className="acc-source-options"><summary>ตัวเลือกการดึงข้อมูล</summary><div className="acc-source-config">
         <label><span>ดึงทุก</span><select value={sourceConfig.syncEveryHours} onChange={(e) => updateSource({ syncEveryHours: Number(e.target.value) })}><option value="1">1 ชั่วโมง</option><option value="3">3 ชั่วโมง</option><option value="6">6 ชั่วโมง</option></select></label>
         <label><span>ย้อนหลัง</span><select value={sourceConfig.backfillDays} onChange={(e) => updateSource({ backfillDays: Number(e.target.value) })}><option value="30">30 วัน</option><option value="90">90 วัน</option><option value="180">180 วัน</option></select></label>

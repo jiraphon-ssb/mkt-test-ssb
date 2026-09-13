@@ -28,6 +28,13 @@
 - เก็บ `source_updated_at`, `ingested_at`, `currency`, `timezone`, `attribution_window`
 - upsert ด้วยคีย์ต้นทางเพื่อให้รันซ้ำได้โดยยอดไม่บวกซ้ำ
 
+### `ad_creatives`
+
+- คีย์: `connection + external_creative_id + external_ad_id` และผูกกลับ `campaign_id`, `ad_group_id`, `creative_id` ใน daily facts
+- เก็บชนิดสื่อ, ข้อความหลัก, headline, description, CTA, destination, permalink และรายการรูป/วิดีโอแบบ metadata
+- เก็บ `source_spec` สำหรับ carousel และ dynamic creative เพื่อ audit แต่ไม่ส่ง raw spec ตรงเข้า UI
+- ไม่เก็บไฟล์ภาพ/วิดีโอหรือ access token ในตาราง; worker ต่อ URL ใหม่และอัปเดต `media_refreshed_at`
+
 ### `business_daily_facts`
 
 - คีย์: `brand + date + order_id`
@@ -59,6 +66,10 @@
 - Backfill 90 วันเมื่อเชื่อมบัญชีครั้งแรก โดยแบ่งช่วงและ retry แบบ exponential backoff
 - เก็บ raw response แบบจำกัดอายุสำหรับ audit และ debugging แต่หน้าเว็บอ่านจาก normalized facts เท่านั้น
 - แสดง `last_success_at`, data freshness และช่องว่างของวันที่บน UI เสมอ
+- หลัง incremental facts สำเร็จ ให้ดึง Ads พร้อม Creative เฉพาะรายการที่เปลี่ยน แล้ว upsert ลง `ad_creatives`
+- ส่งข้อมูลให้หน้าแคมเปญผ่าน `creative_data` ที่ normalize แล้ว; หากยังไม่มี Creative API ให้เว้นฟิลด์นี้และแสดง `รอ Creative API`
+- URL รูป, thumbnail และ preview เป็นข้อมูลชั่วคราว: refresh เป็นรอบและ retry เมื่อได้ 403/404 ห้ามถือเป็น URL ถาวร
+- Ad Preview ต้องสร้างฝั่ง backend และส่งเฉพาะ URL ที่ตรวจสอบแล้ว ห้ามนำ HTML จาก API มา `innerHTML` ในหน้าเว็บ
 
 ## กฎคุณภาพข้อมูล
 

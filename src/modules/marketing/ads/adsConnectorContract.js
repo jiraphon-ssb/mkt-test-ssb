@@ -1,3 +1,5 @@
+import { META_AD_CREATIVE_FIELDS } from "./metaCreativeContract.js";
+
 export const ADS_PROVIDERS = [
   {
     id: "meta", name: "Meta Ads", color: "#1877F2", phase: 1,
@@ -58,5 +60,24 @@ export function buildAdsSyncRequest(providerId, connectionId, options = {}) {
     mode: options.mode ?? "incremental",
     from: options.from ?? null,
     to: options.to ?? null,
+  };
+}
+
+/** งานอ่าน Creative ของ Meta สำหรับ Edge Function; ไม่มี token หรือ URL สื่อถูกส่งเข้า browser */
+export function buildMetaCreativeSyncRequest(connectionId, accountId, options = {}) {
+  if (!connectionId) throw new Error("connectionId is required");
+  const externalAccountId = String(accountId ?? "").trim();
+  if (!externalAccountId.startsWith("act_")) throw new Error("Meta accountId must start with act_");
+  return {
+    provider: "meta",
+    connectionId,
+    resource: "ad_creatives",
+    method: "GET",
+    path: `/${externalAccountId}/ads`,
+    params: {
+      fields: `id,name,campaign_id,adset_id,status,effective_status,updated_time,creative{${META_AD_CREATIVE_FIELDS}}`,
+      limit: Math.min(500, Math.max(1, Number(options.limit) || 100)),
+      after: options.after ?? null,
+    },
   };
 }

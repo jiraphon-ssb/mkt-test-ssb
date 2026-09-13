@@ -71,6 +71,12 @@ describe("campaignRows", () => {
     expect(a.days).toBe(2);
     expect(a.creatives[0].creative).toBe("ชิ้น A");
   });
+  it("พก Creative metadata จาก connector ไปถึงรายละเอียดแคมเปญ", () => {
+    const enriched = card("creative-1", 3, { creative_data: { id: "ad1", creative: { id: "cr1", thumbnail_url: "https://cdn.example/creative.jpg", object_story_spec: { link_data: { message: "ข้อความโฆษณา", link: "https://example.com" } } } } });
+    const [campaign] = campaignRows([enriched], RANGE, opts);
+    expect(campaign.creatives[0].asset).toMatchObject({ provider: "meta", creativeId: "cr1", destinationUrl: "https://example.com" });
+    expect(campaign.creatives[0].asset.media[0].thumbnailUrl).toBe("https://cdn.example/creative.jpg");
+  });
   it("แถวงบแคมเปญ (mock) เก็บ channel แบบไม่ normalize เช่น \"Facebook\" ก็ต้องจับคู่กับแพลตฟอร์ม Meta Ads ได้", () => {
     const cbRaw = [
       { brand_id: "b_td", channel: "Facebook", campaign: "Always-on — คนเคยทัก", month: "2026-07", share: 0.6, objective: "messages", status: "active" },

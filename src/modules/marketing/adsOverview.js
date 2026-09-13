@@ -6,6 +6,7 @@
    ============================================================ */
 
 import { adsRollup, analyticsCards, cardAnchorISO, inRange } from "./mktAnalytics.js";
+import { creativeAssetOf } from "./ads/metaCreativeContract.js";
 
 /** อัตราส่วนแบบปลอดภัย — ตัวหาร 0 หรือค่าว่างคืน null (null ≠ 0) */
 export const share = (a, b) => (a == null || b == null || b <= 0 ? null : a / b);
@@ -673,18 +674,20 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
   const mid = new Date((new Date(range.start).getTime() + new Date(range.end).getTime()) / 2).toISOString();
   const acc = new Map();
   for (const c of adFactRows(cards, range)) {
-    const creative = c.creative ?? c.brief?.creative ?? "ไม่ระบุชิ้นงาน";
+    const asset = creativeAssetOf(c.creative_data ?? c.ad_creative);
+    const creative = c.creative ?? asset?.name ?? c.brief?.creative ?? "ไม่ระบุชิ้นงาน";
     const platform = adPlatformOf(c);
     const key = `${c.brand_id}|${platform}|${creative}`;
     let row = acc.get(key);
     if (!row) {
       row = {
         key, creative, platform, brandId: c.brand_id, brand: names.get(c.brand_id) ?? c.brand_id,
-        campaigns: new Set(), spend: 0, leads: 0, revenue: 0, impressions: 0, clicks: 0, reach: 0,
+        campaigns: new Set(), asset, spend: 0, leads: 0, revenue: 0, impressions: 0, clicks: 0, reach: 0,
         early: { imp: 0, clk: 0 }, late: { imp: 0, clk: 0 }, complete: true,
       };
       acc.set(key, row);
     }
+    if (!row.asset && asset) row.asset = asset;
     const m = c.metrics ?? {};
     if (m.spend == null || m.leads == null || m.revenue == null) row.complete = false;
     row.campaigns.add(c.campaign ?? c.brief?.campaign ?? "ไม่ระบุแคมเปญ");
