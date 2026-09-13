@@ -1,5 +1,6 @@
 /* หน้าแคมเปญ — สไตล์เฉพาะ (prefix cp-) · โครง/สี reuse aw-* ของ AdsWorkspace */
 .cp .cp-search input { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 0 9px; font: inherit; min-width: 180px; }
+.cp .ads-seg-btn { min-height: 24px; display: inline-flex; align-items: center; }
 
 .cp-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .cp-totals > div { display: flex; flex-direction: column; gap: 2px; }
@@ -34,3 +35,21 @@
 .cp-finding { margin: 0 0 6px; font-size: var(--fs-sm); }
 .cp-source { margin: 0; padding-left: 16px; font-size: var(--fs-xs); line-height: 1.6; }
 @media (max-width: 1100px) { .cp-detail-grid { grid-template-columns: minmax(0, 1fr); } }
+
+@media (max-width: 900px) {
+  .cp-table thead { position: absolute; left: -9999px; }
+  .cp-table, .cp-table tbody, .cp-table tr, .cp-table th, .cp-table td { display: block; }
+  .cp-row { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: var(--surface); }
+  .cp-row th, .cp-row td { padding: 4px 0; border: 0; box-shadow: none !important; text-align: left; }
+  .cp-row td[data-label]::before { content: attr(data-label) " "; font-size: var(--fs-xs); color: var(--ink-soft); }
+  .cp-row .num { text-align: left; }
+  .cp-detail td { display: block; }
+  .cp-totals-review { grid-column: span 1; }
+  /* fix: .cp-row ชน .mkt-root .cp-row (calpanel ปฏิทิน ใน mktStyles.css, specificity 0,2,0) ทำให้ th/td
+     ถูก blockify เป็น flex item เรียงแนวนอนแทนที่จะเป็นการ์ด ต้องใช้ selector specificity สูงกว่า
+     (.cp-table tr.cp-row = 0,2,1) เพื่อชนะโดยไม่แก้ mktStyles.css */
+  .cp-table tr.cp-row { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: var(--surface); }
+  .cp .aw-date-range { flex-wrap: wrap; row-gap: 6px; }
+  .cp .aw-date-range label { flex: 1 1 140px; min-width: 0; }
+  .cp .aw-date-range input { width: 100%; min-width: 0; box-sizing: border-box; }
+}
