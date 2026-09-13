@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { campaignRows, NO_CAMPAIGN } from "../src/modules/marketing/adsCampaigns.js";
+import { campaignDecision, SAVED_VIEWS, applyView, campaignTotals, sortCampaigns } from "../src/modules/marketing/adsCampaigns.js";
 
 const RANGE = { start: "2026-07-01T00:00:00.000Z", end: "2026-07-16T00:00:00.000Z" };
 const PREV = { start: "2026-06-16T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z" };
@@ -78,5 +79,66 @@ describe("campaignRows", () => {
     expect(a.budget).toBe(6000);
     expect(a.objective).toBe("messages");
     expect(a.status).toBe("active");
+  });
+});
+
+const base = { spend: 3000, leads: 10, cpl: 300, roas: 3.5, complete: true, days: 5,
+  pace: { remaining: 2000, used: 0.6, expected: 0.5 }, creatives: [{ fatigue: false }] };
+
+describe("campaignDecision", () => {
+  it("ข้อมูลไม่พอ → รอข้อมูล ก่อนกฎอื่นทั้งหมด", () => {
+    expect(campaignDecision({ ...base, days: 2 }).tag).toBe("wait");
+    expect(campaignDecision({ ...base, leads: 3, spend: 200 }).tag).toBe("wait");
+    expect(campaignDecision({ ...base, complete: false }).tag).toBe("wait");
+  });
+  it("ใช้เงินมากไม่มีผล → หยุด · ROAS ต่ำกว่า stopRoas → หยุด", () => {
+    expect(campaignDecision({ ...base, leads: 0, spend: 800, roas: null, days: 4 }).tag).toBe("stop");
+    expect(campaignDecision({ ...base, roas: 0.8 }).tag).toBe("stop");
+  });
+  it("เกณฑ์แบรนด์จากหน้าตั้งค่า: CPL เกิน / ROAS ต่ำกว่าเป้า → ตรวจแก้ พร้อมเหตุผลระบุเป้า", () => {
+    const d = campaignDecision({ ...base, cpl: 450 }, { cpl: 400, roas: 0 });
+    expect(d.tag).toBe("fix");
+    expect(d.why).toContain("400");
+    expect(campaignDecision({ ...base, roas: 3.5 }, { cpl: 0, roas: 4 }).tag).toBe("fix");
+  });
+  it("ครีเอทีฟล้า → ตรวจแก้", () => {
+    expect(campaignDecision({ ...base, creatives: [{ fatigue: true }] }).tag).toBe("fix");
+  });
+  it("ผลดีแต่งบเหลือ 0 หรือใช้เร็วกว่าจังหวะ → ติด Gate ไม่ใช่สเกล", () => {
+    expect(campaignDecision({ ...base, pace: { remaining: 0, used: 1, expected: 0.5 } }).tag).toBe("gate");
+    expect(campaignDecision({ ...base, pace: { remaining: 500, used: 0.9, expected: 0.5 } }).tag).toBe("gate");
+    expect(campaignDecision({ ...base, pace: { remaining: 3000, used: 0.5, expected: 0.5 } }).tag).toBe("scale");
+  });
+  it("ไม่มีงบ (pace.used null) → สเกลได้ตามกฎเดิม (ไม่มี Gate ให้ติด)", () => {
+    expect(campaignDecision({ ...base, pace: { remaining: null, used: null, expected: 0.5 } }).tag).toBe("scale");
+  });
+});
+
+describe("saved views · ยอดรวม · เรียง", () => {
+  const rows = [
+    { ...base, key: "a", spend: 3000, leads: 10, revenue: 10_500, budget: 5000, decision: { tag: "scale" } },
+    { ...base, key: "b", spend: 800, leads: 0, revenue: 0, budget: null, cpl: null, roas: null, decision: { tag: "stop" } },
+    { ...base, key: "c", spend: 1200, leads: 2, revenue: 900, budget: 2000, cpl: 600, roas: 0.75, decision: { tag: "wait" } },
+  ];
+  it("applyView กรองด้วยป้าย · 'ทั้งหมด' คืนทุกแถว", () => {
+    expect(applyView(rows, "all")).toHaveLength(3);
+    expect(applyView(rows, "scale").map((r) => r.key)).toEqual(["a"]);
+    expect(applyView(rows, "spendNoResult").map((r) => r.key)).toEqual(["b"]);
+    expect(SAVED_VIEWS.map((v) => v.key)).toEqual(["all", "scale", "fix", "spendNoResult", "fatigue", "wait", "gate"]);
+  });
+  it("campaignTotals คิดจาก Σ · งบไม่ครบทุกแถว = null · reviewSpend = เงินในแถว fix/stop · waiting = จำนวนรอข้อมูล", () => {
+    const t = campaignTotals(rows);
+    expect(t.count).toBe(3);
+    expect(t.spend).toBe(5000);
+    expect(t.budget).toBeNull();
+    expect(t.cpl).toBeCloseTo(5000 / 12);
+    expect(t.roas).toBeCloseTo(11_400 / 5000);
+    expect(t.reviewSpend).toBe(800);
+    expect(t.waiting).toBe(1);
+    expect(campaignTotals([]).cpl).toBeNull();
+  });
+  it("sortCampaigns: null ท้ายเสมอทั้งสองทิศ", () => {
+    expect(sortCampaigns(rows, "cpl", "asc").map((r) => r.key)).toEqual(["a", "c", "b"]);
+    expect(sortCampaigns(rows, "cpl", "desc").map((r) => r.key)).toEqual(["c", "a", "b"]);
   });
 });
