@@ -10,6 +10,7 @@ import { isoDay, periodRange, sameDatesLastMonth, PERIOD_PRESETS } from "../adsS
 import { fmtMoney } from "../dash/charts/theme.js";
 import { BrandMark } from "../ads/BrandMark.jsx";
 import { CampaignsTable } from "./CampaignsTable.jsx";
+import { CampaignDetail } from "./CampaignDetail.jsx";
 import "../ads/adsWorkspace.css";
 import "./campaigns.css";
 
@@ -66,7 +67,7 @@ export function CampaignsView() {
         {v.brands.map((b) => <button key={b.id} type="button" className={`aw-brand ${brandSel === b.id ? "selected" : ""}`} aria-pressed={brandSel === b.id} onClick={() => setBrandSel(b.id)}><div><BrandMark brand={b} /><strong>{b.name}</strong></div><div><b>{fmtMoney(v.byBrand[b.id]?.spend ?? 0)}</b><small>{v.byBrand[b.id]?.count ?? 0} แคมเปญ</small></div></button>)}
       </aside>
       <div className="aw-content">
-        <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} renderDetail={() => <p className="ads-muted">รายละเอียด (Task 7)</p>} />
+        <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
       </div>
     </div>
   </main>;
