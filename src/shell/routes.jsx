@@ -2,6 +2,7 @@ import {
   ArrowUpRight, ArrowDownLeft, Activity, BarChart3, Target, CheckCheck,
   ShoppingCart, Megaphone, Users, UserRound, LayoutDashboard, HandCoins, ClipboardList,
   CalendarClock, Building2, Store, Sliders, ListTree, Landmark, Shirt, Settings, BookOpen,
+  LayoutList,
 } from "lucide-react";
 
 /* Single source of truth for platform navigation + routing.
@@ -180,6 +181,11 @@ const MARKETING_GROUPS = [
         id: "mkt_ads", path: "/mkt/ads", label: "Overview ads", icon: Megaphone,
         perm: "marketing.dash.view", status: "live", view: "ads",
         purpose: "ค่าแอด · CPL · สัดส่วนรายช่องทาง · แบรนด์ × ช่องทาง · กรวย Reach → Engagement → Leads",
+      },
+      {
+        id: "mkt_campaigns", path: "/mkt/campaigns", label: "แคมเปญ", icon: LayoutList,
+        perm: "marketing.dash.view", status: "live", view: "campaigns",
+        purpose: "แคมเปญทุกแบรนด์×แพลตฟอร์ม · จังหวะงบระดับแคมเปญ · ป้ายสเกล/ตรวจแก้/หยุด · ครีเอทีฟล้า",
       },
     ],
   },

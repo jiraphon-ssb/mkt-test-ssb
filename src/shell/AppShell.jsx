@@ -24,7 +24,8 @@ const NotificationsPage = lazy(() => import("./NotificationsPage.jsx"));
 // Elements that don't depend on the signed-in user (user-bound ones — vendor /
 // cost master / ผังบัญชี — are built inside the component where `user` is known).
 const MODULE_ELEMENTS = {
-  mkt_ads: <MarketingModule />,
+  mkt_ads: <MarketingModule view="ads" />,
+  mkt_campaigns: <MarketingModule view="campaigns" />,
 };
 
 export default function AppShell() {

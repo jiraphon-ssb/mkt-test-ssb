@@ -1,0 +1,2 @@
+/* หน้าแคมเปญ — สไตล์เฉพาะ (prefix cp-) · โครง/สี reuse aw-* ของ AdsWorkspace */
+.cp .cp-search input { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 0 9px; font: inherit; min-width: 180px; }
