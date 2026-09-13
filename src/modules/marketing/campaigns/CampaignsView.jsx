@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards, previousRange } from "../mktAnalytics.js";
-import { adsChannelList, filterByChannel } from "../adsOverview.js";
+import { adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
 import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
 import { isoDay, periodRange, sameDatesLastMonth, PERIOD_PRESETS } from "../adsScope.js";
 import { CampaignsTable } from "./CampaignsTable.jsx";
@@ -23,10 +23,11 @@ export function CampaignsView() {
   const [status, setStatus] = useState("all");
   const [objective, setObjective] = useState("all");
   const [budgetState, setBudgetState] = useState("all");
+  const [revenueBasis, setRevenueBasis] = useState("total");
   const [query, setQuery] = useState("");
 
   const v = useMemo(() => {
-    const scopedAll = analyticsCards(data.cards).filter(inBrandScope);
+    const scopedAll = revenueBasisCards(analyticsCards(data.cards).filter(inBrandScope), revenueBasis, { mockFallback: true });
     const scoped = filterByChannel(scopedAll, channel);
     const range = periodRange(period, customFrom, customTo);
     const before = compare === "lastMonth" ? sameDatesLastMonth(range) : previousRange(range);
@@ -53,7 +54,7 @@ export function CampaignsView() {
       statuses: [...new Set(all.map((r) => r.status))], objectives: [...new Set(all.map((r) => r.objective ?? "unknown"))],
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
     };
-  }, [data, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query]);
+  }, [data, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
@@ -74,6 +75,7 @@ export function CampaignsView() {
         <label className="cp-select"><span>แบรนด์</span><select value={v.selectedBrand} onChange={(e) => setBrandSel(e.target.value)}><option value="all">ทุกแบรนด์</option>{v.brands.map((b) => <option key={b.id} value={b.id}>{b.name} · {v.byBrand[b.id]?.count ?? 0}</option>)}</select></label>
         <label className="cp-select"><span>ช่องทาง</span><select value={channel} onChange={(e) => setChannel(e.target.value)}><option value="all">ทุกช่องทาง</option>{v.channelList.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
         <label className="cp-select cp-compare"><span>เทียบ</span><select value={compare} onChange={(e) => setCompare(e.target.value)}><option value="previous">ช่วงก่อน</option><option value="lastMonth">เดือนก่อน</option></select></label>
+        <div className="cp-basis" role="radiogroup" aria-label="ฐานยอดขาย"><button type="button" role="radio" aria-checked={revenueBasis === "new"} className={revenueBasis === "new" ? "active" : ""} onClick={() => setRevenueBasis("new")}>ยอดใหม่</button><button type="button" role="radio" aria-checked={revenueBasis === "total"} className={revenueBasis === "total" ? "active" : ""} onClick={() => setRevenueBasis("total")}>ยอดรวม</button></div>
         <details className="cp-more-filters"><summary>ตัวกรอง{advancedCount ? ` · ${advancedCount}` : ""}</summary><div>
           <label><span>สถานะ</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">ทั้งหมด</option>{v.statuses.map((x) => <option key={x} value={x}>{x === "active" ? "กำลังรัน" : x === "paused" ? "พักอยู่" : "ไม่ระบุ"}</option>)}</select></label>
           <label><span>เป้าหมาย</span><select value={objective} onChange={(e) => setObjective(e.target.value)}><option value="all">ทั้งหมด</option>{v.objectives.map((x) => <option key={x} value={x}>{x === "unknown" ? "ไม่ระบุ" : x}</option>)}</select></label>
@@ -84,6 +86,6 @@ export function CampaignsView() {
       </div>
     </section>
 
-    <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
+    <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
   </main>;
 }

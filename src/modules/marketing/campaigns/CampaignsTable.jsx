@@ -4,6 +4,7 @@ import { PlatformIcon, platformMeta } from "../ads/PlatformIcon.jsx";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
 import { baseOpts, chartColor, fmtCompact, fmtInt, fmtMoney, fmtPct, SERIES } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
+import { X } from "lucide-react";
 
 const fmtRoas = (x) => (x == null ? "—" : `${x.toFixed(1)}x`);
 const STATUS = { active: "กำลังรัน", paused: "พักอยู่", unknown: "ไม่ระบุสถานะ" };
@@ -34,7 +35,7 @@ function BudgetPace({ row }) {
   </div>;
 }
 
-export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty }) {
+export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, revenueLabel }) {
   const [view, setView] = useState("all");
   const [sortValue, setSortValue] = useState("spend:desc");
   const [columnView, setColumnView] = useState("decision");
@@ -58,18 +59,28 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty })
     return { days, values };
   }, [shown, trendMetric]);
   const emptyText = scopeEmpty ? "ไม่มีข้อมูลแคมเปญในช่วงเวลาหรือช่องทางนี้" : rows.length === 0 ? "ไม่พบแคมเปญตามตัวกรองนี้" : "ไม่มีแคมเปญในกลุ่มนี้";
+  const selected = rows.find((row) => row.key === openKey) ?? null;
+  const focus = [
+    { key: "scale", label: "เพิ่มงบได้", hint: "ผลงานผ่านเกณฑ์", tone: "ok" },
+    { key: "gate", label: "งบติดขัด", hint: "ผลดีแต่งบไม่พอ", tone: "warn" },
+    { key: "fix", label: "ผลเริ่มตก", hint: "ควรตรวจงาน", tone: "bad" },
+    { key: "wait", label: "รอข้อมูล", hint: "ยังสรุปไม่ได้", tone: "muted" },
+  ];
 
   return <section className={`cp-workspace cp-view--${columnView}`}>
+    <div className="cp-focus">
+      <div className="cp-focus-intro"><span>วันนี้ต้องดู</span><strong>{counts.scale + counts.gate + counts.fix}</strong><small>รายการที่ตัดสินใจได้</small></div>
+      {focus.map((item) => <button type="button" key={item.key} className={`cp-focus-card cp-focus--${item.tone} ${view === item.key ? "active" : ""}`} onClick={() => setView(view === item.key ? "all" : item.key)}><span>{item.label}</span><strong className="mono">{counts[item.key]}</strong><small>{item.key === "wait" && counts.wait ? `ส่วนใหญ่ต้องรออย่างน้อย ${Math.max(0, 3 - Math.min(...rows.filter((r) => r.decision.tag === "wait").map((r) => r.days)))} วัน` : item.hint}</small></button>)}
+    </div>
     <div className="cp-summary" aria-label="สรุปแคมเปญตามตัวกรอง">
       <article className="cp-summary-main"><span>ค่าแอด</span><strong className="mono">{fmtMoney(totals.spend)}</strong><small>{totals.count} แคมเปญ · งบที่ตั้ง {totals.budget != null ? fmtMoney(totals.budget) : "—"}</small>{totals.budget != null && totals.budgetRows < totals.count && <em>{totals.budgetRows}/{totals.count} แคมเปญมีงบ</em>}</article>
       <article><span>ผลลัพธ์</span><strong className="mono">{fmtInt(totals.leads)}</strong><small>CPL {totals.cpl != null ? fmtMoney(totals.cpl) : "—"}</small></article>
-      <article><span>ROAS แพลตฟอร์ม</span><strong className="mono">{fmtRoas(totals.roas)}</strong><small>%Ads {totals.pctAds != null ? fmtPct(totals.pctAds, 1) : "—"}</small></article>
-      <article className={totals.reviewSpend > 0 ? "cp-summary-alert" : ""}><span>งบที่ต้องทบทวน</span><strong className="mono">{fmtMoney(totals.reviewSpend)}</strong><small>รอข้อมูล {totals.waiting} แคมเปญ</small></article>
+      <article><span>{revenueLabel}</span><strong className="mono">{fmtMoney(totals.revenue)}</strong><small>ROAS แพลตฟอร์ม {fmtRoas(totals.roas)} · %Ads {totals.pctAds != null ? fmtPct(totals.pctAds, 1) : "—"}</small></article>
     </div>
 
     <div className="cp-list-head">
       <div><h2>รายการแคมเปญ</h2><span>{shown.length} รายการ</span></div>
-      <div className="cp-list-tools"><div className="cp-column-view" role="group" aria-label="ชุดข้อมูล"><button type="button" className={columnView === "decision" ? "active" : ""} aria-pressed={columnView === "decision"} onClick={() => setColumnView("decision")}>ตัดสินใจ</button><button type="button" className={columnView === "analysis" ? "active" : ""} aria-pressed={columnView === "analysis"} onClick={() => setColumnView("analysis")}>วิเคราะห์</button></div><label className="cp-sort-select"><span>เรียง</span><select value={sortValue} onChange={(e) => setSortValue(e.target.value)}>{SORTS.map(([key, dir, label]) => <option key={`${key}:${dir}`} value={`${key}:${dir}`}>{label}</option>)}</select></label></div>
+      <div className="cp-list-tools"><div className="cp-column-view" role="group" aria-label="ชุดข้อมูล"><button type="button" className={columnView === "decision" ? "active" : ""} aria-pressed={columnView === "decision"} onClick={() => setColumnView("decision")}>งานวันนี้</button><button type="button" className={columnView === "analysis" ? "active" : ""} aria-pressed={columnView === "analysis"} onClick={() => setColumnView("analysis")}>ตัวเลขละเอียด</button></div><label className="cp-sort-select"><span>เรียง</span><select value={sortValue} onChange={(e) => setSortValue(e.target.value)}>{SORTS.map(([key, dir, label]) => <option key={`${key}:${dir}`} value={`${key}:${dir}`}>{label}</option>)}</select></label></div>
     </div>
     <div className="cp-views" role="tablist" aria-label="กลุ่มการตัดสินใจ">
       {SAVED_VIEWS.map((s) => <button key={s.key} type="button" role="tab" aria-selected={view === s.key} className={view === s.key ? "active" : ""} onClick={() => setView(s.key)}><span>{s.label}</span><b className="mono">{counts[s.key]}</b></button>)}
@@ -92,9 +103,9 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty })
             <div className="cp-decision" data-label="ควรทำต่อ"><DecisionBadge d={row.decision} /><small>{row.decision.why}</small></div>
             <button type="button" className="cp-expand" aria-expanded={open} aria-label={`${open ? "ซ่อน" : "ดู"}รายละเอียด ${row.name}`} onClick={() => setOpenKey((key) => key === row.key ? null : row.key)}><Icon name="chevron" size={14} /></button>
           </div>
-          {open && <div className="cp-detail">{renderDetail(row)}</div>}
         </article>;
       })}
     </div>}
+    {selected && <><button type="button" className="cp-drawer-backdrop" aria-label="ปิดรายละเอียด" onClick={() => setOpenKey(null)} /><aside className="cp-drawer" aria-label={`รายละเอียด ${selected.name}`}><header><div><span>{selected.brand} · {selected.platform}</span><h2>{selected.name}</h2></div><button type="button" aria-label="ปิดรายละเอียด" onClick={() => setOpenKey(null)}><X size={18} /></button></header><div className="cp-drawer-content">{renderDetail(selected)}</div></aside></>}
   </section>;
 }

@@ -10,7 +10,11 @@ export function CampaignDetail({ row, compareLabel }) {
   const [, label, kind] = METRICS.find((m) => m[0] === metric);
   const data = row.series[metric];
   const fatigued = row.creatives.filter((c) => c.fatigue);
+  const readyDays = Math.max(0, 3 - row.days);
+  const readyResults = Math.max(0, 5 - row.leads);
+  const confidence = !row.complete ? "ข้อมูลไม่ครบ" : readyDays > 0 || readyResults > 0 ? "ยังประเมินไม่ได้" : "พร้อมตัดสินใจ";
   return <div className="cp-detail-body">
+    <section className="cp-readiness" aria-label="ความพร้อมของข้อมูล"><div><span>ความพร้อม</span><strong>{confidence}</strong></div><dl><div><dt>ข้อมูล</dt><dd>{row.complete ? "ครบ" : "รอซิงก์"}</dd></div><div><dt>ระยะเวลา</dt><dd>{row.days} วัน{readyDays ? ` · ขาด ${readyDays}` : " · ผ่าน"}</dd></div><div><dt>ผลลัพธ์</dt><dd>{row.leads}{readyResults ? ` · ขาด ${readyResults}` : " · ผ่าน"}</dd></div></dl></section>
     <div className="cp-detail-primary">
       <section className="cp-trend" aria-label="แนวโน้มรายวัน">
         <header><div><h4>แนวโน้มรายวัน</h4><p>ดูว่าผลงานเริ่มเปลี่ยนตรงวันไหน</p></div><div className="cp-metric-tabs" role="tablist" aria-label="เลือกตัวชี้วัด">{METRICS.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={metric === k} className={metric === k ? "active" : ""} onClick={() => setMetric(k)}>{l}</button>)}</div></header>
@@ -37,6 +41,7 @@ export function CampaignDetail({ row, compareLabel }) {
       <li>งบแคมเปญ = งบแพลตฟอร์ม × สัดส่วน {row.budget == null ? "(ยังไม่ตั้ง)" : ""}</li>
       <li>จังหวะ = ค่าแอดสะสมตั้งแต่วันที่ 1 ถึงวันนี้ ÷ งบเดือน เทียบสัดส่วนวันที่ผ่านไป</li>
       <li>ข้อเสนอแนะใช้กฎกลาง เป้าแบรนด์ และข้อมูลขั้นต่ำ 3 วัน / 5 ผลลัพธ์</li>
+      <li>ยังไม่มีประวัติการแก้ไขจากแพลตฟอร์ม จึงไม่สรุปว่าการเปลี่ยนงบหรือสถานะเป็นสาเหตุของผลงาน</li>
     </ul></details>
   </div>;
 }
