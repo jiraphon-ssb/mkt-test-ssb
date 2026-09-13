@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SAVED_VIEWS, applyView, campaignTotals, sortCampaigns } from "../adsCampaigns.js";
 import { PlatformIcon, platformMeta } from "../ads/PlatformIcon.jsx";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
@@ -60,6 +60,33 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
   }, [shown, trendMetric]);
   const emptyText = scopeEmpty ? "ไม่มีข้อมูลแคมเปญในช่วงเวลาหรือช่องทางนี้" : rows.length === 0 ? "ไม่พบแคมเปญตามตัวกรองนี้" : "ไม่มีแคมเปญในกลุ่มนี้";
   const selected = rows.find((row) => row.key === openKey) ?? null;
+  useEffect(() => {
+    if (!selected) return undefined;
+    const scrollY = window.scrollY;
+    const root = document.documentElement;
+    const previousRootOverflow = root.style.overflow;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    root.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      root.style.overflow = previousRootOverflow;
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [selected]);
   const focus = [
     { key: "scale", label: "เพิ่มงบได้", hint: "ผลงานผ่านเกณฑ์", tone: "ok" },
     { key: "gate", label: "งบติดขัด", hint: "ผลดีแต่งบไม่พอ", tone: "warn" },

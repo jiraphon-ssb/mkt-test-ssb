@@ -102,13 +102,14 @@
 .cp-empty { display: grid; place-items: center; gap: 5px; min-height: 160px; border: 1px dashed var(--line); border-radius: 10px; color: var(--ink-soft); text-align: center; }
 .cp-empty b { color: var(--ink); font-size: 13px; }.cp-empty span { font-size: 10px; }
 
-.cp-drawer-backdrop { position: fixed; z-index: 90; inset: 0; border: 0; background: #05070b80; cursor: default; }
+.cp-drawer-backdrop { position: fixed; z-index: 90; inset: 0; border: 0; background: #00000073; backdrop-filter: blur(1.5px); cursor: default; animation: cp-fade-in .15s ease-out; }
 .cp-drawer { position: fixed; z-index: 91; top: 0; right: 0; bottom: 0; width: min(720px,calc(100vw - 260px)); border-left: 1px solid var(--line); background: var(--surface-2); box-shadow: -18px 0 48px #00000028; overflow: auto; animation: cp-slide-in .18s ease-out; }
 .cp-drawer>header { position: sticky; z-index: 2; top: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 17px 20px; border-bottom: 1px solid var(--line); background: color-mix(in srgb,var(--surface) 94%,transparent); backdrop-filter: blur(12px); }
 .cp-drawer>header span { color: var(--ink-soft); font-size: 9px; }.cp-drawer>header h2 { margin: 4px 0 0; color: var(--ink); font-size: 17px; }
 .mkt-root .cp-drawer>header button { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink-soft); cursor: pointer; }
 .cp-drawer-content { padding: 18px 20px 28px; }
 @keyframes cp-slide-in { from { transform: translateX(18px); opacity: .6; } }
+@keyframes cp-fade-in { from { opacity: 0; } }
 .cp-detail-body { display: grid; gap: 16px; }
 .cp-readiness { display: grid; grid-template-columns: 1fr 2fr; gap: 18px; align-items: center; padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .cp-readiness>div { display: grid; gap: 3px; }.cp-readiness span,.cp-readiness dt { color: var(--ink-soft); font-size: 8px; }.cp-readiness strong { color: var(--ink); font-size: 13px; }
