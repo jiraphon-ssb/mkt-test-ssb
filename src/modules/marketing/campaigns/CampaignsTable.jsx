@@ -62,7 +62,7 @@ function FragmentRow({ r, open, meta, compareLabel, onToggle, renderDetail }) {
   const d = r.delta;
   const deltaTxt = d.spend == null ? "เทียบไม่ได้" : `ค่าแอด ${d.spend >= 0 ? "▲" : "▼"}${Math.abs(d.spend).toFixed(0)}% · CPL ${d.cpl == null ? "—" : `${d.cpl >= 0 ? "▲" : "▼"}${Math.abs(d.cpl).toFixed(0)}%`}`;
   return <>
-    <tr className={`cp-row ${open ? "open" : ""}`}>
+    <tr className={`cp-camp ${open ? "open" : ""}`}>
       <th scope="row" data-label="แคมเปญ" style={{ boxShadow: `inset 3px 0 0 ${meta.color}` }}>
         <div className="cp-name"><PlatformIcon channel={r.platform} size={14} /><b>{r.name}</b></div>
         <small className="ads-muted">{r.brand} · {r.platform} · {r.objective ?? "—"} · {STATUS[r.status]}</small>

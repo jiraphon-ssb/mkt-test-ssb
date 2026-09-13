@@ -8,21 +8,26 @@
 .cp-totals b { font-size: 18px; font-variant-numeric: tabular-nums; }
 .cp-totals b small { font-size: var(--fs-sm); color: var(--ink-soft); font-weight: 500; }
 .cp-totals-review { grid-column: span 2; }
+.cp-totals-review b.ads-over { color: var(--bad-text); }
 .cp-views { margin: 12px 0; flex-wrap: wrap; }
 .cp-views .ads-seg-btn span { margin-left: 4px; color: var(--ink-faint); }
 .cp .ads-table-wrap { border: 0; border-radius: 0; position: relative; }
 .cp-table { min-width: 0; }
+/* แถวแคมเปญใช้ชื่อ .cp-camp (ไม่ใช่ .cp-row) เพราะ mktStyles.css มี .mkt-root .cp-row {display:flex} ของแผงปฏิทินอยู่แล้ว */
 .cp-table thead th { background: none; border-bottom: 1px solid var(--line); padding: 0 10px 6px; white-space: nowrap; }
-.cp-table th, .cp-table td { padding: 8px 10px; vertical-align: middle; }
+.cp-table th, .cp-table td { padding: 8px; vertical-align: middle; }
 .cp-table tbody th { background: none; padding-left: 12px; }
+.cp-table tbody th small { display: block; white-space: normal; line-height: 1.35; max-width: 220px; }
 .cp-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .mkt-root .cp-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; background: none; border: 0; font: inherit; font-weight: 600; color: var(--ink-soft); cursor: pointer; min-height: 24px; }
 .mkt-root .cp-sort:hover { color: var(--ink); }
 .cp-name { display: flex; align-items: center; gap: 6px; }
-.cp-budget { min-width: 150px; }
+.cp-budget { min-width: 112px; }
 .cp-budget .ads-brand-bar { margin: 4px 0 0; }
-.cp-delta { font-size: var(--fs-xs); color: var(--ink-soft); white-space: nowrap; }
-.cp-row.open th, .cp-row.open td, .cp-detail td { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+/* .aw th/.aw td (adsWorkspace.css, ล็อก) บังคับ nowrap — ต้องใช้ selector สูงกว่าเพื่อให้คอลัมน์ยาวตัดบรรทัดได้ */
+.cp-table td.cp-delta { font-size: var(--fs-xs); color: var(--ink-soft); white-space: normal; min-width: 84px; line-height: 1.35; }
+.cp-table th .cp-name b { white-space: normal; line-height: 1.25; }
+.cp-camp.open th, .cp-camp.open td, .cp-detail td { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
 .cp-detail td { padding: 12px 14px 16px; }
 
 .cp-detail-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
@@ -39,16 +44,12 @@
 @media (max-width: 900px) {
   .cp-table thead { position: absolute; left: -9999px; }
   .cp-table, .cp-table tbody, .cp-table tr, .cp-table th, .cp-table td { display: block; }
-  .cp-row { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: var(--surface); }
-  .cp-row th, .cp-row td { padding: 4px 0; border: 0; box-shadow: none !important; text-align: left; }
-  .cp-row td[data-label]::before { content: attr(data-label) " "; font-size: var(--fs-xs); color: var(--ink-soft); }
-  .cp-row .num { text-align: left; }
+  .cp-camp { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: var(--surface); }
+  .cp-camp th, .cp-camp td { padding: 4px 0; border: 0; box-shadow: none !important; text-align: left; }
+  .cp-camp td[data-label]::before { content: attr(data-label) " "; font-size: var(--fs-xs); color: var(--ink-soft); }
+  .cp-camp .num { text-align: left; }
   .cp-detail td { display: block; }
   .cp-totals-review { grid-column: span 1; }
-  /* fix: .cp-row ชน .mkt-root .cp-row (calpanel ปฏิทิน ใน mktStyles.css, specificity 0,2,0) ทำให้ th/td
-     ถูก blockify เป็น flex item เรียงแนวนอนแทนที่จะเป็นการ์ด ต้องใช้ selector specificity สูงกว่า
-     (.cp-table tr.cp-row = 0,2,1) เพื่อชนะโดยไม่แก้ mktStyles.css */
-  .cp-table tr.cp-row { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: var(--surface); }
   .cp .aw-date-range { flex-wrap: wrap; row-gap: 6px; }
   .cp .aw-date-range label { flex: 1 1 140px; min-width: 0; }
   .cp .aw-date-range input { width: 100%; min-width: 0; box-sizing: border-box; }
