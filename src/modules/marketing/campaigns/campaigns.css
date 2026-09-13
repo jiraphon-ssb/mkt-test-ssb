@@ -1,5 +1,5 @@
 /* Campaign decision workspace */
-.cp { max-width: 1680px; padding-top: 22px; }
+.cp { max-width: none; padding-top: 14px; }
 .cp-command,.cp-workspace { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .cp-command { margin-bottom: 16px; }
 .cp-page-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px 14px; }

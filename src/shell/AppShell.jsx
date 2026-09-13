@@ -63,7 +63,7 @@ export default function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onMenu={() => setSidebarOpen(true)} />
 
-        <main className="min-w-0 flex-1 px-5 py-5">
+        <main className={`min-w-0 flex-1 ${pathname.startsWith("/mkt/") ? "p-0" : "px-5 py-5"}`}>
           {/* กันจอขาว: โมดูลพัง/โหลด chunk ไม่ได้ → พังแค่พื้นที่เนื้อหา, key=pathname
               ให้ลองใหม่เมื่อเปลี่ยนหน้า */}
           <ErrorBoundary key={pathname}>
