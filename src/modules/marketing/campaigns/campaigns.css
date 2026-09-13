@@ -23,6 +23,7 @@
 .mkt-root .cp-sort:hover { color: var(--ink); }
 .cp-name { display: flex; align-items: center; gap: 6px; }
 .cp-budget { min-width: 112px; }
+.cp-budget-missing { display: block; margin-top: 4px; white-space: normal; line-height: 1.3; }
 .cp-budget .ads-brand-bar { margin: 4px 0 0; }
 /* .aw th/.aw td (adsWorkspace.css, ล็อก) บังคับ nowrap — ต้องใช้ selector สูงกว่าเพื่อให้คอลัมน์ยาวตัดบรรทัดได้ */
 .cp-table td.cp-delta { font-size: var(--fs-xs); color: var(--ink-soft); white-space: normal; min-width: 84px; line-height: 1.35; }

@@ -5,7 +5,7 @@ import { Settings2 } from "lucide-react";
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards, previousRange } from "../mktAnalytics.js";
 import { adsChannelList, filterByChannel } from "../adsOverview.js";
-import { campaignRows, campaignDecision } from "../adsCampaigns.js";
+import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
 import { isoDay, periodRange, sameDatesLastMonth, PERIOD_PRESETS } from "../adsScope.js";
 import { fmtMoney } from "../dash/charts/theme.js";
 import { BrandMark } from "../ads/BrandMark.jsx";
@@ -32,13 +32,14 @@ export function CampaignsView() {
     const before = compare === "lastMonth" ? sameDatesLastMonth(range) : previousRange(range);
     const brands = (data.brands ?? []).filter((b) => b.active !== false && (brandFilter === "all" || b.id === brandFilter));
     const targets = data.settings?.ads_control?.targets ?? {};
-    const all = campaignRows(scoped, range, { brands, adBudgets: data.ad_budgets ?? [], campaignBudgets: data.campaign_budgets ?? [], today: isoDay(new Date()), prevRange: before })
-      .map((r) => ({ ...r, decision: campaignDecision(r, targets[r.brandId] ?? null) }));
-    const byBrand = Object.fromEntries(brands.map((b) => [b.id, { count: 0, spend: 0 }]));
-    for (const r of all) if (byBrand[r.brandId]) { byBrand[r.brandId].count += 1; byBrand[r.brandId].spend += r.spend; }
+    const all = campaignRows(scoped, range, { brands, adBudgets: data.ad_budgets ?? [], campaignBudgets: data.campaign_budgets ?? [], today: isoDay(new Date()), prevRange: before });
     const q = query.trim().toLowerCase();
-    const rows = all.filter((r) => (brandSel === "all" || r.brandId === brandSel) && (!q || r.name.toLowerCase().includes(q)));
-    return { rows, all, range, before, brands, byBrand, channelList: adsChannelList(scopedAll),
+    const filtered = all.filter((r) => (brandSel === "all" || r.brandId === brandSel) && (!q || r.name.toLowerCase().includes(q)));
+    // spendShare ต้องคิดจากแถวที่กรองแล้ว (แบรนด์/ค้นหา) ไม่ใช่ทั้งขอบเขต ไม่งั้น % ในตารางไม่รวมกันเป็น 100% ของที่เห็น (F11)
+    const rows = withSpendShare(filtered).map((r) => ({ ...r, decision: campaignDecision(r, targets[r.brandId] ?? null) }));
+    const brandSums = campaignsByBrand(all);
+    return { rows, all, range, before, brands, byBrand: brandSums.byBrand, totalSpend: brandSums.total.spend, totalCount: brandSums.total.count,
+      channelList: adsChannelList(scopedAll), scopeEmpty: all.length === 0,
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า" };
   }, [data, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, query]);
 
@@ -46,7 +47,6 @@ export function CampaignsView() {
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
   const changeFrom = (next) => { setCustomFrom(next); setCustomTo(next > shownTo ? next : shownTo); setPeriod("custom"); };
   const changeTo = (next) => { setCustomTo(next); setCustomFrom(next < shownFrom ? next : shownFrom); setPeriod("custom"); };
-  const totalSpend = v.all.reduce((n, r) => n + r.spend, 0);
 
   return <main className="aw cp">
     <section className="aw-toolbar" aria-label="ตัวกรองแคมเปญ">
@@ -63,11 +63,11 @@ export function CampaignsView() {
     <div className="aw-layout">
       <aside className="aw-brands">
         <div className="aw-section-label">แบรนด์ <span>{v.brands.length}</span></div>
-        <button type="button" className={`aw-brand ${brandSel === "all" ? "selected" : ""}`} aria-pressed={brandSel === "all"} onClick={() => setBrandSel("all")}><div><strong>ทุกแบรนด์</strong></div><b>{fmtMoney(totalSpend)}</b><small> ค่าแอด {v.all.length} แคมเปญ</small></button>
+        <button type="button" className={`aw-brand ${brandSel === "all" ? "selected" : ""}`} aria-pressed={brandSel === "all"} onClick={() => setBrandSel("all")}><div><strong>ทุกแบรนด์</strong></div><b>{fmtMoney(v.totalSpend)}</b><small> ค่าแอด {v.totalCount} แคมเปญ</small></button>
         {v.brands.map((b) => <button key={b.id} type="button" className={`aw-brand ${brandSel === b.id ? "selected" : ""}`} aria-pressed={brandSel === b.id} onClick={() => setBrandSel(b.id)}><div><BrandMark brand={b} /><strong>{b.name}</strong></div><div><b>{fmtMoney(v.byBrand[b.id]?.spend ?? 0)}</b><small>{v.byBrand[b.id]?.count ?? 0} แคมเปญ</small></div></button>)}
       </aside>
       <div className="aw-content">
-        <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
+        <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
       </div>
     </div>
   </main>;

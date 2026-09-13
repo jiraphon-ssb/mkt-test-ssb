@@ -9,6 +9,7 @@ import {
 } from "./adsOverview.js";
 
 export const NO_CAMPAIGN = "ไม่ระบุแคมเปญ";
+const DAY_MS = 86_400_000;
 
 const campaignOf = (c) => c.campaign ?? c.brief?.campaign ?? NO_CAMPAIGN;
 
@@ -26,6 +27,9 @@ function rollup(cards) {
 
 export function campaignRows(cards, range, { brands = [], adBudgets = [], campaignBudgets = [], today, prevRange = null } = {}) {
   const month = today.slice(0, 7);
+  /* จังหวะงบต้องคิดจากค่าแอด "เดือนนี้" เสมอ (1 ของเดือน → วันนี้) ไม่ใช่ค่าแอดของช่วงที่เลือกบนจอ
+     ไม่งั้นเลือกช่วงสั้น (เช่น 7 วัน) แล้วจังหวะจะเพี้ยนเทียบกับงบเต็มเดือน — เหมือนที่ Overview ทำ */
+  const monthRange = { start: new Date(`${month}-01T00:00:00`).toISOString(), end: new Date(new Date(`${today}T00:00:00`).getTime() + DAY_MS).toISOString() };
   const brandName = new Map(brands.map((b) => [b.id, b.name]));
   const groups = new Map();
   const groupKey = (c) => `${c.brand_id}|${adPlatformOf(c)}|${campaignOf(c)}`;
@@ -36,13 +40,19 @@ export function campaignRows(cards, range, { brands = [], adBudgets = [], campai
   }
   const prevByKey = new Map();
   if (prevRange) for (const c of adFactRows(cards, prevRange)) { const k = groupKey(c); prevByKey.set(k, [...(prevByKey.get(k) ?? []), c]); }
+  const monthByKey = new Map();
+  for (const c of adFactRows(cards, monthRange)) { const k = groupKey(c); monthByKey.set(k, [...(monthByKey.get(k) ?? []), c]); }
   const scopeSpend = [...groups.values()].reduce((n, g) => n + rollup(g.cards).spend, 0);
 
   return [...groups.values()].map((g) => {
     const m = rollup(g.cards);
     const meta = campaignBudgets.find((r) => r.brand_id === g.brandId && normalizeAdPlatform(r.channel) === g.platform && r.campaign === g.name && r.month === month) ?? null;
     const platformBudget = budgetOf(g.brandId, g.platform, month, adBudgets);
-    const budget = meta && platformBudget != null ? Math.round(platformBudget * meta.share) : null;
+    const rawBudget = meta && platformBudget != null ? Math.round(platformBudget * meta.share) : null;
+    // งบ ≤ 0 (หรือไม่ใช่ตัวเลข) ถือว่าไม่มีงบ — เหมือนไม่มี meta เลย (F9)
+    const budget = rawBudget != null && Number.isFinite(rawBudget) && rawBudget > 0 ? rawBudget : null;
+    const monthCards = monthByKey.get(g.key) ?? [];
+    const monthSpend = monthCards.length ? rollup(monthCards).spend : null;
     const p = rollup(prevByKey.get(g.key) ?? []);
     const prev = { spend: prevRange ? p.spend : null, leads: prevRange ? p.leads : null, cpl: prevRange ? share(p.spend, p.leads) : null, roas: prevRange ? roasOf(p.revenue, p.spend) : null };
     const daily = adsDailySeries(g.cards, range);
@@ -50,7 +60,7 @@ export function campaignRows(cards, range, { brands = [], adBudgets = [], campai
     return {
       key: g.key, brandId: g.brandId, brand: g.brand, platform: g.platform, name: g.name,
       objective: meta?.objective ?? null, status: meta?.status ?? "unknown",
-      spend: m.spend, spendShare: share(m.spend, scopeSpend), budget, pace: budgetPace(m.spend, budget, today),
+      spend: m.spend, spendShare: share(m.spend, scopeSpend), budget, monthSpend, pace: budgetPace(monthSpend, budget, today),
       leads: m.leads, revenue: m.revenue, cpl, roas, pctAds: share(m.spend, m.revenue),
       ...deliveryOf(m),
       complete: m.complete, days: daily.filter((d) => d.spend > 0).length,
@@ -108,18 +118,40 @@ export const SAVED_VIEWS = [
 ];
 export const applyView = (rows, key) => rows.filter(SAVED_VIEWS.find((v) => v.key === key)?.test ?? (() => true));
 
-/** ยอดรวมของ "ทุกแถวที่กรอง" — อัตราส่วนคิดจาก Σ · งบรวมได้ต่อเมื่อทุกแถวมีงบ */
+/** ยอดรวมของ "ทุกแถวที่กรอง" — อัตราส่วนคิดจาก Σ · งบ = Σ ของแถวที่มีงบ (ไม่ต้องครบทุกแถว), null เมื่อไม่มีแถวไหนมีงบเลย */
 export function campaignTotals(rows) {
   const spend = rows.reduce((n, r) => n + r.spend, 0);
   const leads = rows.reduce((n, r) => n + r.leads, 0);
   const revenue = rows.reduce((n, r) => n + r.revenue, 0);
-  const budget = rows.length && rows.every((r) => r.budget != null) ? rows.reduce((n, r) => n + r.budget, 0) : null;
+  const budgetRows = rows.filter((r) => r.budget != null);
+  const budget = budgetRows.length ? budgetRows.reduce((n, r) => n + r.budget, 0) : null;
   return {
-    count: rows.length, spend, budget, leads, revenue,
+    count: rows.length, spend, budget, budgetRows: budgetRows.length, leads, revenue,
     cpl: share(spend, leads), roas: roasOf(revenue, spend), pctAds: share(spend, revenue),
     reviewSpend: rows.filter((r) => ["fix", "stop"].includes(r.decision?.tag)).reduce((n, r) => n + r.spend, 0),
     waiting: rows.filter((r) => r.decision?.tag === "wait").length,
   };
+}
+
+/** ผลรวมค่าแอด/จำนวนแคมเปญ ทั้งรวมและแยกตามแบรนด์ — ย้ายเลขที่เคยบวกในหน้าจอมาไว้ที่นี่ (F8) */
+export function campaignsByBrand(rows) {
+  const total = { spend: 0, count: 0 };
+  const byBrand = {};
+  for (const r of rows) {
+    total.spend += r.spend;
+    total.count += 1;
+    const b = byBrand[r.brandId] ?? (byBrand[r.brandId] = { spend: 0, count: 0 });
+    b.spend += r.spend;
+    b.count += 1;
+  }
+  return { total, byBrand };
+}
+
+/** คิด spendShare ใหม่จาก Σ ค่าแอดของแถวที่ส่งเข้ามาเท่านั้น (เช่นหลังกรองแบรนด์/ค้นหา)
+    ให้ % ในตารางรวมกันได้ 100% ของสิ่งที่เห็นจริงบนจอ (F11) */
+export function withSpendShare(rows) {
+  const total = rows.reduce((n, r) => n + r.spend, 0);
+  return rows.map((r) => ({ ...r, spendShare: share(r.spend, total) }));
 }
 
 /** เรียงคอลัมน์ — null ท้ายเสมอไม่ว่าทิศไหน */

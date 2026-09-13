@@ -16,7 +16,7 @@ function DecisionBadge({ d }) {
   return <span className={`ads-badge ads-badge--${d.tone}`} title={`${d.why} → ${d.next}`}>{d.label}</span>;
 }
 
-export function CampaignsTable({ rows, compareLabel, renderDetail }) {
+export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty }) {
   const [view, setView] = useState("all");
   const [sortKey, setSortKey] = useState("spend");
   const [sortDir, setSortDir] = useState("desc");
@@ -24,12 +24,18 @@ export function CampaignsTable({ rows, compareLabel, renderDetail }) {
   const shown = useMemo(() => sortCampaigns(applyView(rows, view), sortKey, sortDir), [rows, view, sortKey, sortDir]);
   const totals = useMemo(() => campaignTotals(shown), [shown]);
   const counts = useMemo(() => Object.fromEntries(SAVED_VIEWS.map((s) => [s.key, applyView(rows, s.key).length])), [rows]);
+  const emptyText = scopeEmpty
+    ? "ไม่มีข้อมูลแคมเปญในช่วงเวลาหรือช่องทางนี้"
+    : rows.length === 0
+      ? "ไม่พบแคมเปญตามแบรนด์หรือคำค้นนี้"
+      : "ไม่มีแคมเปญในมุมมองนี้";
   const sortBy = (key) => { if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc")); else { setSortKey(key); setSortDir("desc"); } };
 
   return <section className="aw-panel cp-table-panel">
     <div className="cp-totals" aria-label="ยอดรวมของทุกแถวที่กรอง">
       <div><span>แคมเปญ</span><b className="mono">{totals.count}</b></div>
-      <div><span>ค่าแอด / งบ</span><b className="mono">{fmtMoney(totals.spend)}<small> / {totals.budget != null ? fmtMoney(totals.budget) : "—"}</small></b></div>
+      <div><span>ค่าแอด / งบ</span><b className="mono">{fmtMoney(totals.spend)}<small> / {totals.budget != null ? fmtMoney(totals.budget) : "—"}</small></b>
+        {totals.budget != null && totals.budgetRows < totals.count && <small className="ads-muted">· {totals.budgetRows}/{totals.count} แคมเปญมีงบ</small>}</div>
       <div><span>ผลลัพธ์</span><b className="mono">{fmtInt(totals.leads)}</b></div>
       <div><span>CPL</span><b className="mono">{totals.cpl != null ? fmtMoney(totals.cpl) : "—"}</b></div>
       <div><span>ROAS (attr)</span><b className="mono">{fmtRoas(totals.roas)}</b></div>
@@ -39,7 +45,7 @@ export function CampaignsTable({ rows, compareLabel, renderDetail }) {
     <div className="ads-seg cp-views" role="tablist" aria-label="มุมมองที่บันทึกไว้">
       {SAVED_VIEWS.map((s) => <button key={s.key} type="button" role="tab" aria-selected={view === s.key} className={`ads-seg-btn ${view === s.key ? "active" : ""}`} onClick={() => setView(s.key)}>{s.label} <span className="mono">{counts[s.key]}</span></button>)}
     </div>
-    {shown.length === 0 ? <div className="empty-row">ไม่มีแคมเปญในมุมมองนี้</div> : (
+    {shown.length === 0 ? <div className="empty-row">{emptyText}</div> : (
       <div className="ads-table-wrap">
         <table className="ads-decision-table cp-table">
           <caption className="ads-sr-only">แคมเปญตามตัวกรอง — เรียงตาม {COLS.find((c) => c[0] === sortKey)?.[1]}</caption>
@@ -68,7 +74,10 @@ function FragmentRow({ r, open, meta, compareLabel, onToggle, renderDetail }) {
         <small className="ads-muted">{r.brand} · {r.platform} · {r.objective ?? "—"} · {STATUS[r.status]}</small>
       </th>
       <td data-label="ค่าแอด" className="mono num"><b>{fmtMoney(r.spend)}</b><small className="ads-muted"> {r.spendShare != null ? fmtPct(r.spendShare, 0) : ""}</small></td>
-      <td data-label="งบ / จังหวะ" className="cp-budget">{r.budget == null ? <span className="ads-muted">ไม่มีงบแคมเปญ</span> : <>
+      <td data-label="งบ / จังหวะ" className="cp-budget">{r.budget == null ? <span className="ads-muted">ไม่มีงบแคมเปญ</span> : r.monthSpend == null ? <>
+        <span className="mono">{fmtMoney(r.budget)}</span>
+        <small className="ads-muted cp-budget-missing">ไม่มีข้อมูลค่าแอดเดือนนี้</small>
+      </> : <>
         <span className="mono">{fmtMoney(r.budget)} <small className="ads-muted">{fmtPct(r.pace.used, 0)}</small></span>
         <div className="ads-brand-bar" role="img" aria-label={`ใช้ไป ${fmtPct(r.pace.used, 0)} ของงบ · ควรถึง ${fmtPct(r.pace.expected, 0)}`}><i style={{ width: `${Math.min(100, Math.round(r.pace.used * 100))}%`, background: r.pace.used > r.pace.expected + 0.1 ? "var(--warn)" : "var(--ok)" }} /><span className="ads-brand-bar-tick" style={{ left: `${Math.round(r.pace.expected * 100)}%` }} /></div>
       </>}</td>

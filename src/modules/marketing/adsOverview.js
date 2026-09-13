@@ -270,6 +270,13 @@ export function budgetPace(spend, budget, today) {
   const daysInMonth = new Date(y, m, 0).getDate();
   const elapsed = Math.min(Math.max(day, 1), daysInMonth);
   const expected = elapsed / daysInMonth;                 // สัดส่วนวันที่ผ่านไปของเดือน
+  if (spend == null || !Number.isFinite(spend)) {
+    return {
+      used: null, expected, expectedSpend: budget > 0 ? budget * expected : null,
+      vsPace: null, remaining: null, average: null, forecast: null, forecastOver: null,
+      daysLeft: daysInMonth - elapsed, requiredDaily: null, daysToExhaust: null,
+    };
+  }
   const average = spend / elapsed;                         // ค่าแอดเฉลี่ย/วัน จนถึงวันนี้
   const forecast = average * daysInMonth;                  // คาดค่าแอดสิ้นเดือน (ถ้าใช้จังหวะนี้ต่อ)
   const daysLeft = daysInMonth - elapsed;

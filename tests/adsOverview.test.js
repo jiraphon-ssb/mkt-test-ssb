@@ -192,6 +192,14 @@ describe("งบ + จังหวะใช้เงิน", () => {
     expect(p.forecastOver).toBeNull();
     expect(p.forecast).toBeGreaterThan(0);
   });
+  it("budgetPace: ไม่มีข้อมูลค่าแอด → ไม่ตีความเป็นใช้ไปศูนย์", () => {
+    const p = budgetPace(null, 30_000, "2026-07-15");
+    expect(p.used).toBeNull();
+    expect(p.remaining).toBeNull();
+    expect(p.average).toBeNull();
+    expect(p.forecast).toBeNull();
+    expect(p.expectedSpend).toBeCloseTo(30_000 * 15 / 31);
+  });
   it("งบรวมแบรนด์เป็น null ถ้ามีแม้หนึ่งช่องทางที่ยังไม่ตั้งงบ", () => {
     const cards = [
       card({ id: "meta", brief: brief({ channels: ["Facebook"] }), metrics: metrics({ spend: 1000, leads: 2, revenue: 4000 }) }),

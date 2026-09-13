@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { campaignRows, NO_CAMPAIGN } from "../src/modules/marketing/adsCampaigns.js";
-import { campaignDecision, SAVED_VIEWS, applyView, campaignTotals, sortCampaigns } from "../src/modules/marketing/adsCampaigns.js";
+import { campaignDecision, SAVED_VIEWS, applyView, campaignTotals, sortCampaigns, campaignsByBrand, withSpendShare } from "../src/modules/marketing/adsCampaigns.js";
 import { periodRange, sameDatesLastMonth, isoDay, PERIOD_PRESETS } from "../src/modules/marketing/adsScope.js";
 
 const RANGE = { start: "2026-07-01T00:00:00.000Z", end: "2026-07-16T00:00:00.000Z" };
@@ -81,6 +81,34 @@ describe("campaignRows", () => {
     expect(a.objective).toBe("messages");
     expect(a.status).toBe("active");
   });
+  it("จังหวะงบใช้ค่าแอด 'เดือนนี้' เสมอ ไม่ใช่ค่าแอดของช่วงที่เลือก (F1)", () => {
+    const monthCards = [card("m1", 3, {}), card("m2", 5, {}), card("m3", 12, {})];
+    const narrowRange = { start: "2026-07-10T00:00:00.000Z", end: "2026-07-16T00:00:00.000Z" };
+    const [a] = campaignRows(monthCards, narrowRange, opts);
+    expect(a.spend).toBe(1000);        // เฉพาะการ์ดวันที่ 12 อยู่ในช่วงที่เลือก
+    expect(a.monthSpend).toBe(3000);   // รวมทั้งเดือนจนถึงวันนี้ (15 ก.ค.)
+    expect(a.pace.used).toBeCloseTo(3000 / 6000);
+  });
+  it("monthSpend เป็น null เมื่อไม่มีการ์ดของแคมเปญนั้นในเดือนนี้", () => {
+    const outOfMonth = [card("o1", 20, { metrics: { ...card("x", 20).metrics, measured_at: "2026-05-20T09:00:00.000Z" } })];
+    const wideRange = { start: "2026-05-01T00:00:00.000Z", end: "2026-08-01T00:00:00.000Z" };
+    const [a] = campaignRows(outOfMonth, wideRange, opts);
+    expect(a.monthSpend).toBeNull();
+    expect(a.pace.used).toBeNull();
+    expect(a.pace.remaining).toBeNull();
+  });
+  it("การ์ดที่ขาดตัวชี้วัดบางตัว → complete:false และป้ายตัดสินใจเป็นรอข้อมูล (F10a)", () => {
+    const incomplete = card("i1", 3, { metrics: { ...card("x", 3).metrics, spend: null } });
+    const [row] = campaignRows([incomplete], RANGE, opts);
+    expect(row.complete).toBe(false);
+    expect(campaignDecision(row).tag).toBe("wait");
+  });
+  it("งบแคมเปญคำนวณได้ ≤ 0 → budget เป็น null เหมือนไม่มีงบ (F9)", () => {
+    const zeroShareCb = [{ ...cb[0], share: 0 }, cb[1]];
+    const [a] = campaignRows(cards, RANGE, { ...opts, campaignBudgets: zeroShareCb });
+    expect(a.budget).toBeNull();
+    expect(a.pace.used).toBeNull();
+  });
 });
 
 const base = { spend: 3000, leads: 10, cpl: 300, roas: 3.5, complete: true, days: 5,
@@ -127,20 +155,71 @@ describe("saved views · ยอดรวม · เรียง", () => {
     expect(applyView(rows, "spendNoResult").map((r) => r.key)).toEqual(["b"]);
     expect(SAVED_VIEWS.map((v) => v.key)).toEqual(["all", "scale", "fix", "spendNoResult", "fatigue", "wait", "gate"]);
   });
-  it("campaignTotals คิดจาก Σ · งบไม่ครบทุกแถว = null · reviewSpend = เงินในแถว fix/stop · waiting = จำนวนรอข้อมูล", () => {
+  it("campaignTotals คิดจาก Σ · งบ = Σ ของแถวที่มีงบ (ไม่ต้องครบทุกแถว) · reviewSpend = เงินในแถว fix/stop · waiting = จำนวนรอข้อมูล (F2)", () => {
     const t = campaignTotals(rows);
     expect(t.count).toBe(3);
     expect(t.spend).toBe(5000);
-    expect(t.budget).toBeNull();
+    expect(t.budget).toBe(7000);       // Σ ของแถว a (5000) + c (2000) — แถว b ไม่มีงบ
+    expect(t.budgetRows).toBe(2);
     expect(t.cpl).toBeCloseTo(5000 / 12);
     expect(t.roas).toBeCloseTo(11_400 / 5000);
     expect(t.reviewSpend).toBe(800);
     expect(t.waiting).toBe(1);
+    expect(campaignTotals([{ ...base, key: "x", spend: 100, leads: 1, revenue: 0, budget: null }]).budget).toBeNull();
+    expect(campaignTotals([{ ...base, key: "x", spend: 100, leads: 1, revenue: 0, budget: null }]).budgetRows).toBe(0);
     expect(campaignTotals([]).cpl).toBeNull();
   });
   it("sortCampaigns: null ท้ายเสมอทั้งสองทิศ", () => {
     expect(sortCampaigns(rows, "cpl", "asc").map((r) => r.key)).toEqual(["a", "c", "b"]);
     expect(sortCampaigns(rows, "cpl", "desc").map((r) => r.key)).toEqual(["c", "a", "b"]);
+  });
+  it("sortCampaigns: คอลัมน์ชื่อ (string) เรียงด้วย localeCompare ได้ทั้งขึ้น/ลง (F10b)", () => {
+    const named = [{ name: "Banana" }, { name: "Apple" }, { name: "Cherry" }];
+    expect(sortCampaigns(named, "name", "asc").map((r) => r.name)).toEqual(["Apple", "Banana", "Cherry"]);
+    expect(sortCampaigns(named, "name", "desc").map((r) => r.name)).toEqual(["Cherry", "Banana", "Apple"]);
+  });
+  it("applyView: ตรวจแก้ / เสี่ยงล้า / ติด Gate (F10c)", () => {
+    const rows2 = [
+      { key: "f1", decision: { tag: "fix" }, creatives: [] },
+      { key: "f2", decision: { tag: "watch" }, creatives: [{ fatigue: true }] },
+      { key: "f3", decision: { tag: "gate" }, creatives: [] },
+      { key: "f4", decision: { tag: "scale" }, creatives: [] },
+    ];
+    expect(applyView(rows2, "fix").map((r) => r.key)).toEqual(["f1"]);
+    expect(applyView(rows2, "fatigue").map((r) => r.key)).toEqual(["f2"]);
+    expect(applyView(rows2, "gate").map((r) => r.key)).toEqual(["f3"]);
+  });
+  it("campaignTotals.pctAds = Σspend ÷ Σrevenue · revenue รวม 0 = null (F10d)", () => {
+    expect(campaignTotals(rows).pctAds).toBeCloseTo(5000 / 11_400);
+    const zeroRevenue = rows.map((r) => ({ ...r, revenue: 0 }));
+    expect(campaignTotals(zeroRevenue).pctAds).toBeNull();
+  });
+});
+
+describe("campaignsByBrand (F8)", () => {
+  it("รวมค่าแอด/จำนวนแคมเปญ ทั้งรวมและแยกตามแบรนด์", () => {
+    const rows = [
+      { brandId: "b_td", spend: 1000 },
+      { brandId: "b_td", spend: 500 },
+      { brandId: "b_jt", spend: 300 },
+    ];
+    const r = campaignsByBrand(rows);
+    expect(r.total).toEqual({ spend: 1800, count: 3 });
+    expect(r.byBrand.b_td).toEqual({ spend: 1500, count: 2 });
+    expect(r.byBrand.b_jt).toEqual({ spend: 300, count: 1 });
+  });
+});
+
+describe("withSpendShare (F11)", () => {
+  it("คิดสัดส่วนใหม่จากผลรวมของแถวที่ส่งเข้ามาเท่านั้น", () => {
+    const rows = [{ spend: 300 }, { spend: 100 }];
+    const out = withSpendShare(rows);
+    expect(out[0].spendShare).toBeCloseTo(0.75);
+    expect(out[1].spendShare).toBeCloseTo(0.25);
+  });
+  it("ผลรวมเป็น 0 → spendShare เป็น null ทุกแถว", () => {
+    const out = withSpendShare([{ spend: 0 }, { spend: 0 }]);
+    expect(out.every((r) => r.spendShare === null)).toBe(true);
   });
 });
 
