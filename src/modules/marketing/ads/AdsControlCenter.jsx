@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, LoaderCircle, LogOut, Save, Scale, ShieldAlert, Target } from "lucide-react";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { BrandMark } from "./BrandMark.jsx";
@@ -32,6 +33,10 @@ function buildTargets(brands, saved) {
     roas: saved?.[brand.id]?.roas ?? 4,
     pctAds: saved?.[brand.id]?.pctAds ?? 20,
     cpl: saved?.[brand.id]?.cpl ?? 500,
+    inquiries: saved?.[brand.id]?.inquiries ?? 0,
+    qualified: saved?.[brand.id]?.qualified ?? 0,
+    deposits: saved?.[brand.id]?.deposits ?? 0,
+    closed: saved?.[brand.id]?.closed ?? 0,
   }]));
 }
 
@@ -126,20 +131,42 @@ function HealthSummary({ config }) {
   </section>;
 }
 
+/* ช่องเป้าแบ่ง 3 กลุ่ม — 0 = ยังไม่ตั้ง (หน้า Overview/แคมเปญจะแสดง "ยังไม่ตั้งเป้า" แทนการเดา) */
+const TARGET_GROUPS = [
+  ["เงินต่อเดือน", "ใช้คำนวณจังหวะยอดขาย/งบ และถ่วงน้ำหนักเป้าภาพรวม", [
+    ["revenue", "เป้ายอดขาย", "฿", "before", 1000],
+    ["budget", "งบโฆษณา", "฿", "before", 1000],
+  ]],
+  ["ประสิทธิภาพ", "ไม่ขึ้นกับความยาวช่วงเวลาที่เลือก", [
+    ["roas", "ROAS ขั้นต่ำ", "×", "after", 0.1],
+    ["pctAds", "%Ads สูงสุด", "%", "after", 0.1],
+    ["cpl", "CPL สูงสุด", "฿", "before", 10],
+  ]],
+  ["กรวยยอดขายต่อเดือน", "ช่วงสั้นกว่าเดือนจะเฉลี่ยเป้าตามจำนวนวัน", [
+    ["inquiries", "คนทัก", "คน", "after", 1],
+    ["qualified", "Lead", "คน", "after", 1],
+    ["deposits", "มัดจำ", "รายการ", "after", 1],
+    ["closed", "ออเดอร์ปิดแล้ว", "ออเดอร์", "after", 1],
+  ]],
+];
+
 function Targets({ brands, targets, setTargets }) {
   const update = (brandId, key, value) => setTargets((current) => ({ ...current, [brandId]: { ...current[brandId], [key]: value } }));
   return <section className="acc-sheet">
-    <header className="acc-sheet-head"><div><span className="acc-kicker">MONTHLY TARGETS</span><h2>เป้าและเพดานรายแบรนด์</h2><p>ค่าชุดนี้ใช้คำนวณ pace, คาดการณ์สิ้นเดือน และสถานะที่แสดงบนหน้า Overview</p></div></header>
+    <header className="acc-sheet-head"><div><span className="acc-kicker">MONTHLY TARGETS</span><h2>เป้าและเพดานรายแบรนด์</h2><p>ใช้บอกว่าตัวเลขบนหน้า Overview และแคมเปญ "ทำได้เท่าไรจากเป้า" · ภาพรวมทุกแบรนด์รวมจากเป้ารายแบรนด์ · ใส่ 0 = ยังไม่ตั้ง</p></div></header>
     <div className="acc-target-grid">
       {brands.map((brand) => <article className="acc-target-card" key={brand.id}>
         <header><BrandMark brand={brand} size={36} /><div><h3>{brand.name}</h3><span>สกุลเงิน THB · เดือนปัจจุบัน</span></div></header>
-        <div className="acc-field-grid">
-          <label><span>เป้ายอดขาย</span><div className="acc-input-unit"><b>฿</b><input type="number" min="0" value={targets[brand.id]?.revenue ?? 0} onChange={(e) => update(brand.id, "revenue", moneyValue(e.target.value))} /></div></label>
-          <label><span>งบโฆษณา</span><div className="acc-input-unit"><b>฿</b><input type="number" min="0" value={targets[brand.id]?.budget ?? 0} onChange={(e) => update(brand.id, "budget", moneyValue(e.target.value))} /></div></label>
-          <label><span>ROAS ขั้นต่ำ</span><div className="acc-input-unit"><input type="number" min="0" step="0.1" value={targets[brand.id]?.roas ?? 0} onChange={(e) => update(brand.id, "roas", numberValue(e.target.value))} /><b>×</b></div></label>
-          <label><span>%Ads สูงสุด</span><div className="acc-input-unit"><input type="number" min="0" step="0.1" value={targets[brand.id]?.pctAds ?? 0} onChange={(e) => update(brand.id, "pctAds", numberValue(e.target.value))} /><b>%</b></div></label>
-          <label><span>CPL สูงสุด</span><div className="acc-input-unit"><b>฿</b><input type="number" min="0" value={targets[brand.id]?.cpl ?? 0} onChange={(e) => update(brand.id, "cpl", moneyValue(e.target.value))} /></div></label>
-        </div>
+        {TARGET_GROUPS.map(([title, hint, fields]) => <fieldset className="acc-target-group" key={title}>
+          <legend>{title}<small>{hint}</small></legend>
+          <div className="acc-field-grid">
+            {fields.map(([key, label, unit, side, step]) => <label key={key}><span>{label}</span><div className="acc-input-unit">
+              {side === "before" && <b>{unit}</b>}
+              <input type="number" min="0" step={step} value={targets[brand.id]?.[key] ?? 0} onChange={(e) => update(brand.id, key, (step < 1 ? numberValue : moneyValue)(e.target.value))} />
+              {side === "after" && <b>{unit}</b>}
+            </div></label>)}
+          </div>
+        </fieldset>)}
       </article>)}
     </div>
   </section>;
@@ -196,7 +223,7 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const health = adsDataHealth(currentConfig);
   const primaryTabs = [["sources",Link2,"1 · บัญชี"],["targets",Target,"2 · เป้า"],["rules",ShieldAlert,"3 · กฎ"],["reconcile",Scale,"4 · ตรวจยอด"]];
   return <main className="aw acc">
-    <header className="acc-header"><div><a href="/mkt/ads"><ArrowLeft size={15} /> Overview ads</a><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึก</button></header>
+    <header className="acc-header"><div><Link to="/mkt/ads"><ArrowLeft size={15} /> Overview ads</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึก</button></header>
     <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
       {primaryTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}
     </nav>

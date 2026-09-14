@@ -1,5 +1,6 @@
 /* CampaignsView — หน้าตัดสินใจระดับแคมเปญ · ตัวเลขทั้งหมดมาจาก adsCampaigns.js */
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Search, Settings2 } from "lucide-react";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { useApp } from "../useMkt.jsx";
@@ -8,6 +9,7 @@ import { adsChannelList, filterByChannel, revenueBasisCards } from "../adsOvervi
 import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
 import { isoDay, periodRange, sameDatesLastMonth } from "../adsScope.js";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
+import { combineTargets, normalizeTargets, periodForTargets } from "../adsTargets.js";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { CampaignsTable } from "./CampaignsTable.jsx";
 import { CampaignDetail } from "./CampaignDetail.jsx";
@@ -55,12 +57,15 @@ export function CampaignsView() {
     const dataHealth = adsDataHealth(data.settings?.ads_control ?? {});
     return {
       rows, brands, selectedBrand, byBrand: brandSums.byBrand,
+      /* เป้า: แบรนด์ที่เลือก หรือรวมทุกแบรนด์ในขอบเขต — ตัวเลขจริงเทียบใน CampaignsTable (ตามมุมมองที่กรองอยู่) */
+      goalTargets: selectedBrand === "all" ? combineTargets(brands.map((b) => targets[b.id])) : normalizeTargets(targets[selectedBrand]),
+      targetPeriod: periodForTargets({ monthView: period === "mtd", from: isoDay(new Date(range.start)), to: isoDay(new Date(new Date(range.end).getTime() - 1)), today: todayLocal }),
       channelList: adsChannelList(scopedAll), scopeEmpty: all.length === 0, range,
       statuses: [...new Set(all.map((r) => r.status))], objectives: [...new Set(all.map((r) => r.objective ?? "unknown"))],
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
       dataHealth,
     };
-  }, [data, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis]);
+  }, [data, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis, todayLocal]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
@@ -72,7 +77,7 @@ export function CampaignsView() {
     <section className="cp-command" aria-label="ตัวกรองแคมเปญ">
       <header className="cp-page-head">
         <div><h1>แคมเปญ</h1><p>ดูผลงานและเลือกรายการที่ควรทำต่อ</p></div>
-        <div className="cp-page-actions"><span className="aw-demo"><i /> Mock data</span><a className="aw-settings-link" href="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</a></div>
+        <div className="cp-page-actions"><span className="aw-demo"><i /> Mock data</span><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div>
       </header>
       <div className="cp-filters">
         <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
@@ -90,8 +95,8 @@ export function CampaignsView() {
       </div>
     </section>
 
-    <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><a href="/mkt/ads/sync">ดูสถานะ Sync</a></section>
+    <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><Link to="/mkt/ads/sync">ดูสถานะ Sync</Link></section>
 
-    <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
+    <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} goalTargets={v.goalTargets} targetPeriod={v.targetPeriod} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
   </main>;
 }

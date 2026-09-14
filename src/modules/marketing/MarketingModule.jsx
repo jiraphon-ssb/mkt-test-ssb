@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { useLocation } from "react-router-dom";
 import { useApp } from "./useMkt.jsx";
 import { MktStyles, Toaster } from "./mktUi.jsx";
 import { AdsSectionTabs } from "./ads/AdsSectionTabs.jsx";
@@ -11,7 +12,8 @@ const SyncStatusView = lazy(() => import("./ads/SyncStatusView.jsx").then((m) =>
 
 export default function MarketingModule({ view = "ads" }) {
   const { toastState } = useApp();
-  const settingsOpen = view === "ads" && new URLSearchParams(window.location.search).get("panel") === "settings";
+  const { search } = useLocation();
+  const settingsOpen = view === "ads" && new URLSearchParams(search).get("panel") === "settings";
   return (
     <div className="mkt-root">
       <MktStyles />
