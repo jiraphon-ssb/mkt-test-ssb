@@ -84,4 +84,9 @@ describe("0009 เก็บ settings.ads_control ลงฐาน", () => {
     expect(sql).toMatch(/if caller_is_lead and jsonb_typeof\(payload->'settings'->'ads_control'\) = 'object' then/);
     expect(sql).toContain("revoke execute on function public.mkt_save_state(jsonb) from public, anon");
   });
+  it("ปิดการเขียน mkt_settings ตรงผ่าน REST (anon/authenticated) · anon อ่านไม่ได้ · มีเพดานขนาด", () => {
+    expect(sql).toContain("revoke insert, update, delete, truncate on public.mkt_settings from anon, authenticated");
+    expect(sql).toContain("revoke select on public.mkt_settings from anon");
+    expect(sql).toMatch(/pg_column_size\(ads_control\) < \d+/);
+  });
 });

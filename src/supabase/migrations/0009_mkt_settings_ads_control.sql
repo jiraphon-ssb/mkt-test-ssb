@@ -4,7 +4,13 @@
 -- การเขียน: เฉพาะ team_lead (เป้า/mapping บัญชีโฆษณาเป็นค่าระดับผู้ดูแล) ผ่าน wrapper mkt_save_state
 
 alter table public.mkt_settings add column if not exists ads_control jsonb not null default '{}'::jsonb
-  check (jsonb_typeof(ads_control) = 'object');
+  check (jsonb_typeof(ads_control) = 'object' and pg_column_size(ads_control) < 200000);
+
+-- baseline เปิด policy mkt_settings_open ให้ anon/authenticated ทำได้ทุกอย่างผ่าน REST → ข้าม gate team_lead ของ wrapper ได้
+-- ปิดการเขียนตรงจาก client ทั้งหมด (เขียนผ่าน mkt_save_state ซึ่งเป็น SECURITY DEFINER เท่านั้น)
+-- authenticated ยังต้อง SELECT เพราะ mkt_load_state เป็น SECURITY INVOKER · anon ไม่ต้องอ่าน (load_state ถูก revoke จาก anon ใน 0008)
+revoke insert, update, delete, truncate on public.mkt_settings from anon, authenticated;
+revoke select on public.mkt_settings from anon;
 
 create or replace function public.mkt_save_state(payload jsonb)
 returns void language plpgsql security definer set search_path = '' as $$
