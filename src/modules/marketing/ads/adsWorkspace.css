@@ -1,4 +1,4 @@
-.aw { --aw-accent:var(--accent); --bg:var(--color-zinc-950); --surface:var(--color-zinc-900); --surface-2:var(--color-zinc-800); color:var(--ink); background:var(--bg); width:100%; max-width:none; min-height:100%; margin:0; padding:24px 28px 32px; }
+.aw { --aw-accent:var(--accent); --bg:var(--color-zinc-950); --surface:var(--color-zinc-900); --surface-2:var(--color-zinc-800); box-sizing:border-box; color:var(--ink); background:var(--bg); width:100%; max-width:1440px; min-height:100%; margin:0 auto; padding:24px 28px 32px; }
 .aw-toolbar { margin-bottom:22px; overflow:hidden; border:1px solid var(--hairline); border-radius:12px; background:var(--surface); }
 .aw-header { display:flex; justify-content:space-between; align-items:center; gap:18px; margin:0; padding:11px 14px; border:0; background:transparent; }
 .aw-header-actions { display:flex; align-items:center; gap:18px; }

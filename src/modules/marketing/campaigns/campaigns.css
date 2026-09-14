@@ -7,14 +7,15 @@
 .cp-page-head p { margin: 5px 0 0; color: var(--ink-soft); font-size: 11px; }
 .cp-page-actions { display: flex; align-items: center; gap: 14px; }
 .cp-page-actions .aw-demo { margin-left: 0; }
-.cp-filters { display: grid; grid-template-columns: auto auto minmax(138px,.8fr) minmax(138px,.8fr) minmax(115px,.65fr) auto auto minmax(150px,1fr); align-items: center; gap: 9px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 14px 14px; }
+/* flex เหมือนแถบตัวกรองของ Overview/Creative (เดิมเป็น grid ล็อก 8 คอลัมน์สำหรับ preset+จาก–ถึง ที่ถูกรวมเป็นปุ่มวันที่ปุ่มเดียวแล้ว) */
+.cp-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 14px 14px; }
 .cp-filters label { display: flex; align-items: center; gap: 6px; flex-shrink: 0; color: var(--ink-soft); font-size: 10px; white-space: nowrap; }
 .cp-filters select,.cp-filters input { height: 32px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); padding: 0 9px; font: inherit; font-size: 11px; }
 .cp-filters .aw-date-range label>span { position: static; }
 .cp-filters .aw-date-range input { width: 128px; padding-left: 9px; }
 .cp-select { padding-left: 9px; border-left: 1px solid var(--line); }
 .cp-select select { min-width: 118px; }
-.cp-search { flex: 1 1 180px; min-width: 150px; }
+.cp-search { flex: 1 1 180px; min-width: 150px; max-width: 360px; margin-left: auto; }
 .cp-search input { width: 100%; min-width: 0; }
 .cp-more-filters { position: relative; flex-shrink: 0; }
 .cp-more-filters>summary { min-height: 32px; display: flex; align-items: center; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink-soft); font-size: 10px; cursor: pointer; list-style: none; }
@@ -182,7 +183,7 @@
 }
 @media (max-width: 700px) {
   .cp { padding: 12px; }.cp-page-head { align-items: flex-start; }.cp-page-head p,.cp-page-actions .aw-demo { display: none; }
-  .cp-filters { grid-template-columns: 1fr 1fr; }.cp-filters .aw-presets,.cp-filters .aw-date-range,.cp-search { grid-column: 1/-1; width: 100%; }.cp-select { border-left: 0; padding-left: 0; }
+  .cp-filters .drp,.cp-filters .drp .drp-trigger,.cp-search { width: 100%; }.cp-select { border-left: 0; padding-left: 0; }
   .cp-focus { grid-template-columns: 1fr 1fr; }.cp-focus-intro { grid-column: 1/-1; }.cp-focus-card { min-height: 68px; }
   .cp-summary { grid-template-columns: 1fr; }.cp-summary article { min-height: 76px; padding: 12px; border-left: 0; border-top: 1px solid var(--line); }.cp-summary article:first-child { border-top: 0; }.cp-summary strong { font-size: 19px; }.cp-summary em { display: none; }
   .cp-workspace { padding: 12px; }.cp-list-head { align-items: flex-start; }.cp-list-tools { align-items: flex-end!important; flex-direction: column; }.cp-campaign-row { grid-template-columns: repeat(2,1fr) 32px; }

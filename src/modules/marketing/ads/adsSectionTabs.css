@@ -1,5 +1,55 @@
-.ads-section-tabs-wrap { width:100%; margin:0; padding:12px 28px 0; background:var(--color-zinc-950); }
-.ads-section-tabs { display:flex; align-items:center; gap:22px; width:100%; max-width:none; padding:0; overflow-x:auto; border-bottom:1px solid var(--line); background:transparent; scrollbar-width:none; }.ads-section-tabs::-webkit-scrollbar{display:none}
-.ads-section-tabs a { position:relative; display:inline-flex; align-items:center; gap:7px; min-height:42px; padding:0 2px; color:var(--ink-soft); font-size:11px; font-weight:650; text-decoration:none; white-space:nowrap; }.ads-section-tabs a::after { content:""; position:absolute; right:0; bottom:-1px; left:0; height:2px; border-radius:2px 2px 0 0; background:transparent; }.ads-section-tabs a:hover { color:var(--ink); }.ads-section-tabs a.active { color:var(--accent-text); }.ads-section-tabs a.active::after { background:var(--accent); }.ads-section-tabs a.active svg { color:var(--accent); }
-.mkt-root:has(.ads-section-tabs)>.aw { padding-top:12px; }
-@media(max-width:760px){.ads-section-tabs-wrap{padding:8px 16px 0}.ads-section-tabs{gap:0}.ads-section-tabs a{flex:1;justify-content:center;padding-inline:8px}.ads-section-tabs a span{display:none}}
+/* ต้องใช้ specificity (0,2,0): reset `.mkt-root * { margin:0; padding:0 }` ใน mktStyles.css โหลดทีหลังและชนะ (0,1,0)
+   เลย์เอาต์ = เต็มความกว้างเหมือนหน้า Overview เดิม (ไม่ล็อกกล่อง 1440 ชิดซ้าย) และพื้นหลังเฉดเดียวทั้งหน้า */
+.mkt-root:has(> .ads-suite) { min-height:100%; background:var(--color-zinc-950); }
+.mkt-root .ads-suite { box-sizing:border-box; width:100%; max-width:none; min-height:100%; margin:0; padding:18px 28px 32px; background:var(--color-zinc-950); }
+.mkt-root .ads-suite>.aw { max-width:none; margin:0; padding:14px 0 0; }
+.mkt-root .aw.acc { max-width:none; margin:0; }
+/* ── หัวหน้าเดียวกันทุกแท็บ (ต้นแบบ = .cp-command ของหน้าแคมเปญ): การ์ด → แถวชื่อหน้า+ปุ่ม → แถบตัวกรองสีเข้มกว่าคั่นด้วยเส้น
+   ใช้ specificity (0,3,0)+ เพื่อชนะทั้ง reset ของ mkt-root และกฎเดิมใน adsWorkspace.css/creativeLibrary.css/syncStatus.css */
+.mkt-root .ads-suite .aw-toolbar,.mkt-root .ads-suite .cl-command,.mkt-root .ads-suite .sy-header { position:static; margin:0 0 16px; padding:0; overflow:visible; border:1px solid var(--line); border-bottom:1px solid var(--line); border-radius:14px; background:var(--surface); }
+.mkt-root .ads-suite .aw-header,.mkt-root .ads-suite .cl-command>header,.mkt-root .ads-suite .sy-header { display:flex; align-items:center; justify-content:space-between; gap:20px; margin:0; padding:18px 20px 14px; border:0; background:transparent; }
+.mkt-root .ads-suite .sy-header { padding:18px 20px; border:1px solid var(--line); background:var(--surface); }
+.mkt-root .ads-suite .aw-header h1,.mkt-root .ads-suite .cl-command h1,.mkt-root .ads-suite .sy-header h1 { margin:0; font-size:24px; line-height:1.15; letter-spacing:-.025em; }
+.mkt-root .ads-suite .aw-header p,.mkt-root .ads-suite .cl-command>header p,.mkt-root .ads-suite .sy-header p { margin:5px 0 0; color:var(--ink-soft); font-size:11px; }
+.mkt-root .ads-suite .aw-header-actions,.mkt-root .ads-suite .cl-head-actions,.mkt-root .ads-suite .sy-header>div:last-child { display:flex; align-items:center; gap:14px; }
+.mkt-root .ads-suite .aw-header-actions .aw-demo,.mkt-root .ads-suite .cl-head-actions .aw-demo { margin-left:0; }
+.mkt-root .ads-suite .aw-controls,.mkt-root .ads-suite .cl-filters { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin:0; padding:10px 14px; border:0; border-top:1px solid var(--line); border-radius:0 0 14px 14px; background:var(--surface-2); }
+.mkt-root .ads-suite .aw-controls label,.mkt-root .ads-suite .cl-filters>label { display:flex; align-items:center; gap:6px; flex-shrink:0; color:var(--ink-soft); font-size:10px; white-space:nowrap; }
+.mkt-root .ads-suite .cl-filters>label>span { font-size:10px; }
+.mkt-root .ads-suite .aw-controls select,.mkt-root .ads-suite .aw-controls input,.mkt-root .ads-suite .cl-filters select,.mkt-root .ads-suite .cl-filters input { height:32px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); padding:0 9px; font:inherit; font-size:11px; }
+.mkt-root .ads-suite .aw-controls .aw-date-range input { padding-left:37px; }
+.mkt-root .ads-suite .cl-filters .aw-date-range input { padding-left:37px; }
+/* ช่องค้นหาแบบเดียวกันทุกหน้า: ไอคอนซ้าย · ชิดขวา · กว้าง 240px */
+.mkt-root .ads-suite .ads-search { position:relative; display:flex; align-items:center; flex:0 1 240px; min-width:170px; max-width:240px; margin-left:auto; }
+.mkt-root .ads-suite .ads-search>svg { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--ink-soft); pointer-events:none; }
+.mkt-root .ads-suite .ads-search input { box-sizing:border-box; width:100%; height:32px; min-width:0; padding:0 9px 0 29px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); font:inherit; font-size:11px; }
+.mkt-root .ads-suite .ads-search input:focus-visible { outline:none; border-color:var(--aw-accent,var(--accent)); box-shadow:0 0 0 3px color-mix(in srgb,var(--aw-accent,var(--accent)) 22%,transparent); }
+@media(max-width:760px){.mkt-root .ads-suite .ads-search { flex:1 1 100%; max-width:none; margin-left:0; }}
+@media(max-width:760px){.mkt-root .ads-suite .aw-header,.mkt-root .ads-suite .cl-command>header,.mkt-root .ads-suite .sy-header { align-items:flex-start; padding:14px 14px 10px; }.mkt-root .ads-suite .aw-header p,.mkt-root .ads-suite .cl-command>header p,.mkt-root .ads-suite .sy-header p { display:none; }.mkt-root .ads-suite .aw-controls,.mkt-root .ads-suite .cl-filters { padding:10px 12px; }}
+/* ── กลุ่มปุ่มเลือก (segmented) ทุกตัวใช้สูตรเดียวกับ .cp-basis ของหน้าแคมเปญ:
+   กล่องพื้น --surface + ขอบ --line · ปุ่มที่เลือก = พื้น accent 12% ตัวหนังสือ --ink ไม่มีขอบ · สูงรวม 32px เท่า select */
+.mkt-root .ads-suite .aw-presets,.mkt-root .ads-suite .aw-basis,.mkt-root .ads-suite .cp-basis { display:flex; align-items:center; gap:2px; padding:2px; border:1px solid var(--line); border-radius:7px; background:var(--surface); }
+.mkt-root .ads-suite .aw-basis>span { padding:0 4px 0 7px; color:var(--ink-soft); font-size:11px; font-weight:500; }
+.mkt-root .ads-suite .aw-presets button,.mkt-root .ads-suite .aw-basis button,.mkt-root .ads-suite .cp-basis button { min-height:26px; padding:0 9px; border:0; border-radius:5px; background:transparent; color:var(--ink-soft); font:inherit; font-size:11px; font-weight:500; box-shadow:none; cursor:pointer; }
+.mkt-root .ads-suite .aw-presets button:hover,.mkt-root .ads-suite .aw-basis button:hover,.mkt-root .ads-suite .cp-basis button:hover { color:var(--ink); }
+.mkt-root .ads-suite .aw-presets button.active,.mkt-root .ads-suite .aw-basis button.active,.mkt-root .ads-suite .cp-basis button.active { border:0; background:color-mix(in srgb,var(--aw-accent,var(--accent)) 12%,var(--surface)); color:var(--ink); font-weight:700; box-shadow:0 1px 2px #00000012; }
+/* ── dropdown ทุกตัว (select + ปุ่ม "ตัวกรอง") = กล่องเดียวกัน ลูกศรเดียวกัน focus สี accent (ไม่ใช่ฟ้าของเบราว์เซอร์) */
+.mkt-root .ads-suite select,.mkt-root .ads-suite .cp-more-filters>summary { box-sizing:border-box; height:32px; min-height:32px; padding:0 28px 0 9px; border:1px solid var(--line); border-radius:7px; background-color:var(--surface); color:var(--ink); font:inherit; font-size:11px; line-height:30px; appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b8f9c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>"); background-repeat:no-repeat; background-position:right 9px center; cursor:pointer; }
+.mkt-root .ads-suite .cp-more-filters>summary { display:flex; align-items:center; list-style:none; }
+.mkt-root .ads-suite .cp-more-filters>summary::after { content:none; }
+.mkt-root .ads-suite select:hover,.mkt-root .ads-suite .cp-more-filters>summary:hover { border-color:var(--line-strong,var(--ink-faint)); }
+.mkt-root .ads-suite select:focus,.mkt-root .ads-suite select:focus-visible,.mkt-root .ads-suite .cp-more-filters>summary:focus,.mkt-root .ads-suite .cp-more-filters>summary:focus-visible,.mkt-root .ads-suite .cp-more-filters[open]>summary { outline:none; border-color:var(--aw-accent,var(--accent)); box-shadow:0 0 0 3px color-mix(in srgb,var(--aw-accent,var(--accent)) 22%,transparent); }
+.mkt-root .ads-suite .cp-more-filters>div select { width:100%; }
+/* แผงตัวกรองเปิดชิดซ้ายของปุ่ม (เดิม right:0 → ปุ่มอยู่ต้นแถวเมื่อจอแคบแล้วแผงหลุดออกนอกจอด้านซ้าย) */
+.mkt-root .ads-suite .cp-more-filters>div { left:0; right:auto; }
+/* แท็บตัวชี้วัด (ตัวชี้วัดและแนวโน้ม): ให้ข้อความแท็บกับ dropdown "ตัวชี้วัดอื่น" อยู่เส้นกลางเดียวกัน
+   ปุ่มแท็บสูง 34 = ข้อความกึ่งกลางใน 32 + เส้นใต้ 2 · dropdown 32 ชิดบน → กึ่งกลางที่ 16px เท่ากัน */
+.mkt-root .ads-suite .aw-trend-controls .aw-tabs { align-items:flex-start; }
+.mkt-root .ads-suite .aw-trend-controls .aw-tabs>button { display:inline-flex; align-items:center; box-sizing:border-box; height:34px; padding:0; }
+.mkt-root .ads-suite .aw-trend-controls .aw-tabs .dd { align-self:flex-start; margin:0; }
+.mkt-root .ads-suite .aw-trend-controls .aw-tabs .dd .dd-trigger>span { font-size:12px; margin-left:0; }
+.ads-section-tabs-wrap { width:100%; margin:0; padding:0; }
+.ads-section-tabs { display:flex; align-items:center; gap:3px; width:max-content; max-width:100%; padding:4px; overflow-x:auto; border:1px solid var(--line); border-radius:9px; background:var(--surface); scrollbar-width:none; }.ads-section-tabs::-webkit-scrollbar{display:none}
+/* สีลิงก์: ต้องใช้ specificity สูงกว่า rule ลิงก์ของแพลตฟอร์ม ไม่งั้นแท็บที่ไม่ active กลายเป็นสีม่วงของลิงก์ทั่วไป */
+.mkt-root .ads-section-tabs-wrap .ads-section-tabs a { display:inline-flex; align-items:center; gap:7px; min-height:32px; padding:0 11px; border:1px solid transparent; border-radius:6px; color:var(--ink-soft); font-size:11px; font-weight:650; text-decoration:none; white-space:nowrap; }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a svg { color:var(--ink-soft); }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a:hover { color:var(--ink); background:var(--surface-2); }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a:hover svg { color:var(--ink); }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a.active { border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent-text); }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a.active svg { color:var(--accent); }
+@media(max-width:760px){.mkt-root .ads-suite{padding:12px 16px 24px}.mkt-root .ads-suite>.aw{padding-top:12px}.ads-section-tabs{width:100%}.ads-section-tabs a{flex:0 0 auto;justify-content:center;padding-inline:8px}}

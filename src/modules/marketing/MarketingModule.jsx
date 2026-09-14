@@ -15,10 +15,12 @@ export default function MarketingModule({ view = "ads" }) {
   return (
     <div className="mkt-root">
       <MktStyles />
-      {!settingsOpen && <AdsSectionTabs />}
-      <Suspense fallback={<div className="empty">กำลังโหลด…</div>}>
-        {view === "campaigns" ? <CampaignsView /> : view === "creatives" ? <CreativeLibraryView /> : view === "sync" ? <SyncStatusView /> : <AdsView />}
-      </Suspense>
+      <div className={settingsOpen ? "" : "ads-suite"}>
+        {!settingsOpen && <AdsSectionTabs />}
+        <Suspense fallback={<div className="empty">กำลังโหลด…</div>}>
+          {view === "campaigns" ? <CampaignsView /> : view === "creatives" ? <CreativeLibraryView /> : view === "sync" ? <SyncStatusView /> : <AdsView />}
+        </Suspense>
+      </div>
       <Toaster />
       {toastState && <div className={`toast on ${toastState.kind}`} key={toastState.id}>{toastState.msg}</div>}
     </div>
