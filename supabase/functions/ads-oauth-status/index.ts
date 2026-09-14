@@ -1,4 +1,4 @@
-import { corsHeaders, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { corsHeaders, json, publicErrorCode, requireTeamLead } from "../_shared/adsOAuth.ts";
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
@@ -22,7 +22,8 @@ Deno.serve(async (request) => {
     }));
     return json(request, { authorizations: safeAuthorizations, accounts: accounts ?? [] });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "OAUTH_STATUS_FAILED";
+    console.error("[ads-oauth-status]", error instanceof Error ? error.message : error);
+    const code = publicErrorCode(error, "OAUTH_STATUS_FAILED");
     return json(request, { error: code }, code === "AUTH_REQUIRED" ? 401 : code === "TEAM_LEAD_REQUIRED" ? 403 : 500);
   }
 });

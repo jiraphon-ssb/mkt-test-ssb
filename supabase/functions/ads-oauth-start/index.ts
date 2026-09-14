@@ -1,4 +1,4 @@
-import { corsHeaders, env, json, randomState, requireTeamLead, safeReturnTo, sha256, graphVersion } from "../_shared/adsOAuth.ts";
+import { corsHeaders, env, graphVersion, json, publicErrorCode, randomState, requireTeamLead, safeReturnTo, sha256 } from "../_shared/adsOAuth.ts";
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
@@ -22,7 +22,8 @@ Deno.serve(async (request) => {
     authorize.searchParams.set("state", state);
     return json(request, { authorizeUrl: authorize.toString(), expiresIn: 600, scopes: ["ads_read"] });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "OAUTH_START_FAILED";
+    console.error("[ads-oauth-start]", error instanceof Error ? error.message : error);
+    const code = publicErrorCode(error, "OAUTH_START_FAILED");
     return json(request, { error: code }, code === "AUTH_REQUIRED" ? 401 : code === "TEAM_LEAD_REQUIRED" ? 403 : 500);
   }
 });

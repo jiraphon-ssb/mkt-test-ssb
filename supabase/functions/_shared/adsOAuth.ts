@@ -1,4 +1,6 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.9";
+import { safeReturnTo as pickReturnTo, publicErrorCode } from "./returnTo.js";
+export { publicErrorCode };
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -19,8 +21,9 @@ export function corsHeaders(request: Request) {
   const origin = request.headers.get("origin") ?? "";
   const allowed = (Deno.env.get("ADS_ALLOWED_ORIGINS") ?? "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174")
     .split(",").map((item) => item.trim()).filter(Boolean);
+  // origin ที่ไม่อยู่ใน allowlist = ไม่ส่ง ACAO เลย (ไม่ fallback ไป allowed[0] ที่ซ่อน misconfig)
   return {
-    "Access-Control-Allow-Origin": allowed.includes(origin) ? origin : allowed[0] ?? "",
+    ...(allowed.includes(origin) ? { "Access-Control-Allow-Origin": origin } : {}),
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Vary": "Origin",
@@ -83,9 +86,9 @@ export async function decryptToken(ciphertext: string, iv: string) {
   return decoder.decode(plain);
 }
 
+/** ทางกลับต้องอยู่ใน ADS_APP_ORIGIN เท่านั้น — ตรวจด้วย URL parser (ดู returnTo.js + เทส) ไม่ใช่ string prefix */
 export function safeReturnTo(value: unknown) {
-  const path = typeof value === "string" ? value.trim() : "";
-  return path.startsWith("/") && !path.startsWith("//") ? path : "/mkt/ads?panel=settings";
+  return pickReturnTo(value, env("ADS_APP_ORIGIN"));
 }
 
 export function appRedirect(path: string, params: Record<string,string>) {

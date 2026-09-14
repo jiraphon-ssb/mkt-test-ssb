@@ -6,9 +6,11 @@
 
 ฐานจริงของโปรเจกต์นี้ใช้ schema `mkt_*` (id เป็น text, ไม่มีตาราง `profiles`/`brands`) migration 0005–0007 จึงถูกปรับให้อ้าง `mkt_brand` / `mkt_profile` และตรวจสิทธิ์ผ่าน `mkt_is_team_lead()` — **ห้ามรัน 0001–0004** บนฐานนี้ (เป็น schema คนละสาย)
 
-รัน `src/supabase/migrations/0005_ads_data.sql` → `0006_ad_creatives.sql` → `0007_meta_oauth.sql` ตามลำดับใน SQL Editor (หรือคัดลอกเข้า `supabase/migrations/` ด้วยชื่อ timestamp แล้ว `supabase db push`)
+รัน `src/supabase/migrations/0005_ads_data.sql` → `0006_ad_creatives.sql` → `0007_meta_oauth.sql` → `0008_harden_mkt_save_state.sql` ตามลำดับ (สำเนาแบบ timestamp อยู่ใน `supabase/migrations/` สำหรับ `supabase db push`) · rollback: `src/supabase/migrations/rollback/0005-0008_down.sql`
 
-จากนั้น **ผูกผู้ใช้ Auth กับโปรไฟล์ทีม** (ทำใน SQL Editor ด้วยสิทธิ์ผู้ดูแล — client เปลี่ยนคอลัมน์นี้เองไม่ได้ มี trigger กันไว้):
+ผลข้างเคียงที่ตั้งใจของ 0008: `mkt_save_state`/`mkt_load_state` **เรียกด้วย anon key ไม่ได้อีก** — แอปต้องรันโหมด `VITE_AUTH_MODE=supabase` และล็อกอินก่อน (โหมด no-login ใช้ได้กับ mock/localStorage เท่านั้น) · คนที่ไม่ใช่ `team_lead` บันทึกสถานะได้แต่เปลี่ยน role/active ของโปรไฟล์ไม่ได้
+
+จากนั้น **ผูกผู้ใช้ Auth กับโปรไฟล์ทีม** — ทำใน SQL Editor (รันเป็น `postgres`) หรือด้วย service role · client (anon/authenticated) แก้ `auth_user_id` / `role` / `active` ตรงๆ ไม่ได้ มี trigger `mkt_profile_guard_privileges` กันทั้ง insert · update · delete:
 
 ```sql
 update mkt_profile

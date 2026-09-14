@@ -30,3 +30,6 @@ dist-ssr
 
 # เครื่องมือผู้ช่วยเขียนโค้ด (ตั้งค่าเฉพาะเครื่อง)
 .claude/
+
+# release gate marker (deploy-gate hook)
+.release-ok

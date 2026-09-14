@@ -1,4 +1,4 @@
-import { adminClient, appRedirect, encryptToken, env, graph, graphVersion, safeReturnTo, sha256 } from "../_shared/adsOAuth.ts";
+import { adminClient, appRedirect, encryptToken, env, graph, graphVersion, publicErrorCode, safeReturnTo, sha256 } from "../_shared/adsOAuth.ts";
 
 async function allAdAccounts(token: string) {
   const rows: Record<string,unknown>[] = [];
@@ -25,7 +25,10 @@ Deno.serve(async (request) => {
       .eq("state_hash", await sha256(rawState)).is("used_at", null).gt("expires_at", new Date().toISOString()).maybeSingle();
     if (stateError || !state) throw new Error("STATE_INVALID_OR_EXPIRED");
     returnTo = safeReturnTo(state.return_to);
-    await db.from("ad_oauth_states").update({ used_at: new Date().toISOString() }).eq("state_hash", state.state_hash).is("used_at", null);
+    // ใช้ state ได้ครั้งเดียวแบบ atomic: ถ้า update ไม่โดนแถว (มีคนใช้ไปพร้อมกัน) ให้หยุด
+    const { data: consumed } = await db.from("ad_oauth_states").update({ used_at: new Date().toISOString() })
+      .eq("state_hash", state.state_hash).is("used_at", null).select("state_hash").maybeSingle();
+    if (!consumed) throw new Error("STATE_INVALID_OR_EXPIRED");
     const providerError = url.searchParams.get("error_description") || url.searchParams.get("error");
     if (providerError) throw new Error(providerError);
     const code = url.searchParams.get("code");
@@ -75,7 +78,8 @@ Deno.serve(async (request) => {
     }
     return appRedirect(returnTo, { oauth: "success", accounts: String(accounts.length) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "OAUTH_CALLBACK_FAILED";
-    return appRedirect(returnTo, { oauth: "error", reason: message.slice(0, 120) });
+    // รหัสที่ออกไปถึงเบราว์เซอร์มีแค่ชุดที่กำหนด (ข้อความ Postgres/Meta อยู่ใน log ฝั่ง server เท่านั้น)
+    console.error("[ads-oauth-callback]", error instanceof Error ? error.message : error);
+    return appRedirect(returnTo, { oauth: "error", reason: publicErrorCode(error, "OAUTH_CALLBACK_FAILED") });
   }
 });
