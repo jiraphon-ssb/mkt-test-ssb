@@ -5,6 +5,7 @@ import { BrandMark } from "./BrandMark.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, validateAdsConnection } from "./adsConnectorContract.js";
 import { adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
+import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
 
 const SOURCE_DETAILS = {
   meta: "Spend · Delivery · Messaging",
@@ -179,6 +180,14 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const initial = useMemo(() => saved ?? {}, [saved]);
   const requestedTab = new URLSearchParams(window.location.search).get("tab");
   const [tab, setTab] = useState(["sources", "targets", "rules", "reconcile"].includes(requestedTab) ? requestedTab : "sources");
+  /* กลับจาก Meta OAuth: callback แนบ ?oauth=success|error มา → แจ้งผลครั้งเดียวแล้วล้าง param ออกจาก URL */
+  useEffect(() => {
+    const result = oauthResultMessage(window.location.search);
+    if (!result) return;
+    toast?.(result.text, result.kind);
+    setTab(result.tab);
+    window.history.replaceState(null, "", stripOAuthParams(window.location.href));
+  }, [toast]);
   const [config, setConfig] = useState(() => ({ mappings: initial.mappings ?? {}, sources: initial.sources ?? {} }));
   const [targets, setTargets] = useState(() => buildTargets(brands, initial.targets));
   const [rules, setRules] = useState(() => ({ ...DEFAULT_RULES, reconciliationTolerance: 1, ...(initial.rules ?? {}) }));

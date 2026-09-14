@@ -1,0 +1,47 @@
+/* ตรวจว่า migration ของ ads (0005–0007) และ Edge Functions อ้างอิงเฉพาะสิ่งที่มีบนฐานจริง (mkt_* baseline) หรือสร้างเองก่อนใช้
+   — กันเคส push แล้วพังเพราะอ้าง brands/profiles/my_role() ที่ไม่มีในโปรเจกต์นี้ */
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+
+const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+const baseline = read("supabase/migrations/20260914000000_remote_baseline.sql");
+const migrations = ["0005_ads_data.sql", "0006_ad_creatives.sql", "0007_meta_oauth.sql"].map((f) => [f, read(`src/supabase/migrations/${f}`)]);
+const tables = (sql) => [...sql.matchAll(/create table (?:if not exists )?([a-z_]+)/g)].map((m) => m[1]);
+const remoteTables = new Set(tables(baseline));
+
+describe("ads migrations vs ฐานจริง", () => {
+  it("baseline ของฐานจริงมีแต่ mkt_* (ไม่มี profiles/brands)", () => {
+    expect(remoteTables.has("mkt_brand")).toBe(true);
+    expect(remoteTables.has("mkt_profile")).toBe(true);
+    expect(remoteTables.has("brands")).toBe(false);
+    expect(remoteTables.has("profiles")).toBe(false);
+  });
+  it("ทุก foreign key ใน 0005–0007 ชี้ไปตารางที่มีจริง หรือที่สร้างก่อนหน้าในชุดเดียวกัน หรือ auth.users", () => {
+    const known = new Set([...remoteTables, "auth.users"]);
+    for (const [file, sql] of migrations) {
+      for (const t of tables(sql)) known.add(t);
+      for (const m of sql.matchAll(/references ([a-z_.]+)\(/g)) expect(known.has(m[1]), `${file}: references ${m[1]} ที่ยังไม่มี`).toBe(true);
+    }
+  });
+  it("ไม่ใช้ my_role() · touch_updated_at และ mkt_is_team_lead ถูกสร้างก่อนใช้", () => {
+    const all = migrations.map(([, s]) => s.replace(/--[^\n]*/g, "")).join("\n");   // ตัดคอมเมนต์ SQL ออกก่อนตรวจ
+    expect(all.includes("my_role()")).toBe(false);
+    expect(all.indexOf("create or replace function touch_updated_at")).toBeLessThan(all.indexOf("execute function touch_updated_at"));
+    expect(all.indexOf("create or replace function mkt_is_team_lead")).toBeLessThan(all.indexOf("mkt_is_team_lead()"));
+    expect(all).toContain("alter table mkt_profile add column if not exists auth_user_id uuid");
+  });
+  it("มี trigger กัน client เปลี่ยน auth_user_id เอง (ยกระดับสิทธิ์) · RLS เปิดทุกตาราง ads · ไม่มี policy เขียน facts จาก client", () => {
+    const sql = migrations[0][1];
+    expect(sql).toContain("create trigger mkt_profile_guard_auth_link before update on mkt_profile");
+    expect(sql).toMatch(/'role', ''\) <> 'service_role'/);
+    for (const t of ["ad_connections", "ad_sync_runs", "ad_daily_facts", "business_daily_facts", "ad_targets", "ad_rules"]) expect(sql).toContain(`alter table ${t} enable row level security`);
+    expect(/create policy \w+ on ad_daily_facts for (all|insert|update)/.test(sql)).toBe(false);
+    expect(/create policy \w+ on ad_sync_runs for (all|insert|update)/.test(sql)).toBe(false);
+  });
+  it("Edge Function ตรวจสิทธิ์จาก mkt_profile.auth_user_id ไม่ใช่ profiles", () => {
+    const fn = read("supabase/functions/_shared/adsOAuth.ts");
+    expect(fn).toContain('from("mkt_profile")');
+    expect(fn).toContain('eq("auth_user_id"');
+    expect(fn.includes('from("profiles")')).toBe(false);
+  });
+});

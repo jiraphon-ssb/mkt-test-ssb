@@ -4,7 +4,19 @@
 
 ## 1. เตรียมฐานข้อมูล
 
-รัน migration ตามลำดับถึง `src/supabase/migrations/0007_meta_oauth.sql` ใน Supabase SQL Editor หรือ migration pipeline ของ environment นั้น
+ฐานจริงของโปรเจกต์นี้ใช้ schema `mkt_*` (id เป็น text, ไม่มีตาราง `profiles`/`brands`) migration 0005–0007 จึงถูกปรับให้อ้าง `mkt_brand` / `mkt_profile` และตรวจสิทธิ์ผ่าน `mkt_is_team_lead()` — **ห้ามรัน 0001–0004** บนฐานนี้ (เป็น schema คนละสาย)
+
+รัน `src/supabase/migrations/0005_ads_data.sql` → `0006_ad_creatives.sql` → `0007_meta_oauth.sql` ตามลำดับใน SQL Editor (หรือคัดลอกเข้า `supabase/migrations/` ด้วยชื่อ timestamp แล้ว `supabase db push`)
+
+จากนั้น **ผูกผู้ใช้ Auth กับโปรไฟล์ทีม** (ทำใน SQL Editor ด้วยสิทธิ์ผู้ดูแล — client เปลี่ยนคอลัมน์นี้เองไม่ได้ มี trigger กันไว้):
+
+```sql
+update mkt_profile
+set auth_user_id = '<auth-user-uuid>'
+where id = '<mkt_profile.id เช่น u_xxx>' and role = 'team_lead';
+```
+
+Edge Functions และ RLS ของตาราง ads จะถือว่าเป็น `team_lead` เฉพาะแถวที่ `auth_user_id` ตรงกับผู้ล็อกอิน และ `active = true`
 
 ## 2. ตั้งค่า Meta App
 

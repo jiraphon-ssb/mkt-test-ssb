@@ -1,11 +1,49 @@
 -- Ads data foundation: connections, normalized facts, targets, rules and sync audit.
 -- Provider access tokens are deliberately absent. Edge Functions must keep encrypted
 -- credentials in server-side secrets or a dedicated vault.
+--
+-- ปรับให้เข้ากับ schema ที่ deploy จริง (mkt_* · id เป็น text · ไม่มี profiles/brands/my_role()):
+--   brand_id  → text references mkt_brand(id)
+--   updated_by → text references mkt_profile(id)
+--   สิทธิ์ team_lead ตรวจผ่าน mkt_is_team_lead() ซึ่งอ่าน mkt_profile.auth_user_id (ผูกกับ auth.users)
+
+-- 0) สะพานสิทธิ์ + helper ที่ฐาน mkt_* ยังไม่มี
+alter table mkt_profile add column if not exists auth_user_id uuid unique references auth.users(id) on delete set null;
+comment on column mkt_profile.auth_user_id is 'ผูกผู้ใช้ Supabase Auth กับโปรไฟล์ทีม — ใช้ตรวจสิทธิ์ team_lead ใน RLS และ Edge Functions';
+
+create or replace function touch_updated_at() returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+-- ห้าม client (anon/authenticated) เปลี่ยน auth_user_id เอง — เปลี่ยนได้เฉพาะ service_role (SQL editor/ผู้ดูแล)
+-- ไม่งั้นคนที่มี anon key จะผูกตัวเองเข้ากับโปรไฟล์ team_lead แล้วยกระดับสิทธิ์ได้
+create or replace function mkt_guard_auth_link() returns trigger as $$
+begin
+  if new.auth_user_id is distinct from old.auth_user_id
+     and coalesce(current_setting('request.jwt.claims', true)::jsonb->>'role', '') <> 'service_role' then
+    raise exception 'auth_user_id เปลี่ยนได้เฉพาะผู้ดูแลระบบ (service_role)';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+create trigger mkt_profile_guard_auth_link before update on mkt_profile
+  for each row execute function mkt_guard_auth_link();
+
+-- security invoker (ไม่ bypass RLS) — mkt_profile อ่านได้อยู่แล้วตาม policy ของ schema นี้ · (select auth.uid()) ให้ planner cache ค่าเดียวต่อ query
+create or replace function mkt_is_team_lead() returns boolean as $$
+  select exists (
+    select 1 from mkt_profile p
+    where p.auth_user_id = (select auth.uid()) and p.active and p.role = 'team_lead'
+  );
+$$ language sql stable security invoker;
 
 create table ad_connections (
   id uuid primary key default gen_random_uuid(),
   provider text not null check (provider in ('meta','google','tiktok','shopee')),
-  brand_id uuid not null references brands(id) on delete cascade,
+  brand_id text not null references mkt_brand(id) on delete cascade,
   external_account_id text not null,
   account_name text not null default '',
   currency text not null default 'THB' check (length(currency) = 3),
@@ -64,7 +102,7 @@ create index ad_daily_facts_connection_idx on ad_daily_facts(connection_id, fact
 
 create table business_daily_facts (
   id uuid primary key default gen_random_uuid(),
-  brand_id uuid not null references brands(id) on delete cascade,
+  brand_id text not null references mkt_brand(id) on delete cascade,
   fact_date date not null,
   source text not null check (source in ('crm','pos','shopee','manual')),
   external_record_id text not null,
@@ -82,32 +120,32 @@ create table business_daily_facts (
 
 create table ad_targets (
   id uuid primary key default gen_random_uuid(),
-  brand_id uuid not null references brands(id) on delete cascade,
+  brand_id text not null references mkt_brand(id) on delete cascade,
   target_month date not null check (target_month = date_trunc('month', target_month)::date),
   revenue_target numeric(18,4) not null default 0,
   spend_budget numeric(18,4) not null default 0,
   min_roas numeric(10,4),
   max_ads_percent numeric(10,4),
   max_cpl numeric(18,4),
-  updated_by uuid references profiles(id),
+  updated_by text references mkt_profile(id),
   updated_at timestamptz not null default now(),
   unique(brand_id, target_month)
 );
 
 create table ad_rules (
   id uuid primary key default gen_random_uuid(),
-  brand_id uuid references brands(id) on delete cascade,
+  brand_id text references mkt_brand(id) on delete cascade,
   rule_key text not null,
   threshold numeric(18,4) not null,
   window_size integer,
   enabled boolean not null default true,
   severity text not null default 'warning' check (severity in ('info','warning','critical')),
-  updated_by uuid references profiles(id),
+  updated_by text references mkt_profile(id),
   updated_at timestamptz not null default now()
 );
 
 create unique index ad_rules_scope_key_uidx
-  on ad_rules(coalesce(brand_id, '00000000-0000-0000-0000-000000000000'::uuid), rule_key);
+  on ad_rules(coalesce(brand_id, ''), rule_key);
 
 create trigger ad_connections_touch before update on ad_connections
   for each row execute function touch_updated_at();
@@ -120,14 +158,14 @@ alter table ad_targets enable row level security;
 alter table ad_rules enable row level security;
 
 create policy ads_connections_read on ad_connections for select using (true);
-create policy ads_connections_admin on ad_connections for all using (my_role() = 'team_lead') with check (my_role() = 'team_lead');
+create policy ads_connections_admin on ad_connections for all to authenticated using (mkt_is_team_lead()) with check (mkt_is_team_lead());
 create policy ads_sync_read on ad_sync_runs for select using (true);
 create policy ads_facts_read on ad_daily_facts for select using (true);
 create policy business_facts_read on business_daily_facts for select using (true);
 create policy ads_targets_read on ad_targets for select using (true);
-create policy ads_targets_admin on ad_targets for all using (my_role() = 'team_lead') with check (my_role() = 'team_lead');
+create policy ads_targets_admin on ad_targets for all to authenticated using (mkt_is_team_lead()) with check (mkt_is_team_lead());
 create policy ads_rules_read on ad_rules for select using (true);
-create policy ads_rules_admin on ad_rules for all using (my_role() = 'team_lead') with check (my_role() = 'team_lead');
+create policy ads_rules_admin on ad_rules for all to authenticated using (mkt_is_team_lead()) with check (mkt_is_team_lead());
 
 -- ad_daily_facts, business_daily_facts and ad_sync_runs are written by service-role
 -- Edge Functions only. There is intentionally no authenticated-client write policy.

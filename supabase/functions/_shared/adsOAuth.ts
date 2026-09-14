@@ -17,7 +17,7 @@ export function adminClient() {
 
 export function corsHeaders(request: Request) {
   const origin = request.headers.get("origin") ?? "";
-  const allowed = (Deno.env.get("ADS_ALLOWED_ORIGINS") ?? "http://127.0.0.1:5174,http://localhost:5174")
+  const allowed = (Deno.env.get("ADS_ALLOWED_ORIGINS") ?? "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174")
     .split(",").map((item) => item.trim()).filter(Boolean);
   return {
     "Access-Control-Allow-Origin": allowed.includes(origin) ? origin : allowed[0] ?? "",
@@ -41,9 +41,10 @@ export async function requireTeamLead(request: Request) {
   const db = adminClient();
   const { data: authData, error: authError } = await db.auth.getUser(jwt);
   if (authError || !authData.user) throw new Error("AUTH_REQUIRED");
-  const { data: profile } = await db.from("profiles").select("role,active").eq("id", authData.user.id).maybeSingle();
+  // สิทธิ์อ่านจาก mkt_profile (schema ที่ deploy จริง) ผ่านคอลัมน์ auth_user_id — ดู migration 0005
+  const { data: profile } = await db.from("mkt_profile").select("id,role,active").eq("auth_user_id", authData.user.id).maybeSingle();
   if (!profile?.active || profile.role !== "team_lead") throw new Error("TEAM_LEAD_REQUIRED");
-  return { db, user: authData.user };
+  return { db, user: authData.user, profile };
 }
 
 function bytesToBase64(bytes: Uint8Array) {
