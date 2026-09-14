@@ -324,7 +324,7 @@ const CAMPAIGNS = ["Always-on — คนเคยทัก", "Prospecting — �
 export const CAMPAIGN_META = {
   "Always-on — คนเคยทัก":         { objective: "messages", status: "active", share: 0.45 },
   "Prospecting — กลุ่มใหม่":      { objective: "leads",    status: "active", share: 0.35 },
-  "Remarketing — คนดูแล้วไม่ทัก": { objective: "messages", status: "paused", share: 0.20 },
+  "Remarketing — คนดูแล้วไม่ทัก": { objective: "messages", status: "active", share: 0.20 },
 };
 
 /** สัดส่วนงบ/objective/สถานะ ต่อ แบรนด์×แพลตฟอร์ม×แคมเปญ ของเดือนที่ anchor อยู่ */
@@ -395,75 +395,82 @@ export function buildMonthAds(anchorMs = Date.now()) {
     return out;
   };
 
-  /** แจกยอดรวมลงวัน แล้วบังคับให้ผลรวมเท่าเดิมเป๊ะ (เกจงบต้องไม่เพี้ยน) */
-  const emit = (r, dates, total, tag) => {
+  /** แจกยอดรวมลงวัน → แล้วแจกต่อลงแคมเปญตามสัดส่วน (CAMPAIGN_META.share) — บังคับผลรวมเท่าเดิมเป๊ะทั้งสองชั้น (เกจงบต้องไม่เพี้ยน)
+      ทุกแคมเปญมีการ์ดทุกวันเหมือน daily facts จริง · วันสุดท้ายแบบ partial (วันนี้ = ครึ่งวัน) เมื่อ partialLast */
+  const slug = (txt) => String(txt).replace(/[^a-z0-9]+/gi, "").toLowerCase();
+  const emit = (r, dates, total, tag, partialLast = false) => {
     if (dates.length === 0 || total <= 0) return;
-    const w = dates.map(() => 0.7 + rnd() * 0.6);
+    const w = dates.map((_, i) => (0.7 + rnd() * 0.6) * (partialLast && i === dates.length - 1 ? 0.5 : 1));
     const sw = w.reduce((a, b) => a + b, 0);
+    const campaigns = Object.entries(CAMPAIGN_META);
     let spent = 0;
     dates.forEach((date, i) => {
       const last = i === dates.length - 1;
-      const spend = last ? total - spent : Math.round((total * w[i]) / sw);
-      spent += spend;
-      if (spend <= 0) return;
-      /* ครีเอทีฟหมุนไปทีละใบ · ยิ่งปลายเดือน ตัวที่ decay สูงจะ CTR ตกและความถี่ขึ้น */
-      const cr = CREATIVES[i % CREATIVES.length];
+      const daySpend = last ? total - spent : Math.round((total * w[i]) / sw);
+      spent += daySpend;
+      if (daySpend <= 0) return;
+      /* ยิ่งปลายเดือน ครีเอทีฟที่ decay สูงจะ CTR ตกและความถี่ขึ้น */
       const wear = dates.length > 1 ? i / (dates.length - 1) : 0;
-      const leads = Math.max(1, Math.round(spend / r.cpl));
-      const reach = Math.round(spend * 16);
-      const impressions = Math.round(reach * (cr.freq + cr.decay * wear * 1.6));
-      const clicks = Math.max(1, Math.round(impressions * cr.ctr * (1 - cr.decay * wear)));
-      const engagement = Math.max(1, Math.round(reach * r.er));
-      const revenue = Math.round(spend * r.roas * cr.roasMul);
-      const newRevenue = Math.round(revenue * 0.62);
       const measuredMs = Math.min(now.getTime() - HOUR, date.getTime());
-      cards.push({
-        id: `ma_${tag}_${r.brand}_${i}`,
-        /* แคมเปญย่อยใต้แพลตฟอร์ม (mock) — วนให้แต่ละใบตกอยู่คนละแคมเปญ */
-        campaign: CAMPAIGNS[i % CAMPAIGNS.length],
-        creative: cr.name,
-        track: "project",
-        status: "measured",
-        brand_id: r.brand,
-        owner_id: "u_fai",
-        title: `ads — ${r.title}`,
-        pillar: null,
-        is_realtime: false,
-        plan_confirmed: true,
-        brief: backfillBrief({
-          format: "image", size: "1080x1350", channels: [r.channel],
-          publish_at: null,
-          deadline_review: new Date(measuredMs - 3 * DAY).toISOString().slice(0, 10),
-        }),
-        draft_link: "https://drive.google.com/file/mock-ads",
-        self_check: selfCheck(),
-        first_pass: true,
-        entered_review_at: null,
-        archived: true,
-        metrics: {
-          reach, impressions, clicks, link_clicks: clicks, engagement, leads,
-          conversions: leads,
-          orders: null,
-          spend,
-          cpl: spend / leads,
-          revenue,
-          new_revenue: newRevenue,
-          measured_at: new Date(measuredMs).toISOString(),
-        },
-        created_at: new Date(measuredMs - 10 * DAY).toISOString(),
-        updated_at: new Date(measuredMs).toISOString(),
+      let dayLeft = daySpend;
+      campaigns.forEach(([campaign, meta], k) => {
+        const spend = k === campaigns.length - 1 ? dayLeft : Math.round(daySpend * meta.share);
+        dayLeft -= spend;
+        if (spend <= 0) return;
+        const cr = CREATIVES[(i + k) % CREATIVES.length];
+        const leads = Math.max(1, Math.round(spend / r.cpl));
+        const reach = Math.round(spend * 16);
+        const impressions = Math.round(reach * (cr.freq + cr.decay * wear * 1.6));
+        const clicks = Math.max(1, Math.round(impressions * cr.ctr * (1 - cr.decay * wear)));
+        const engagement = Math.max(1, Math.round(reach * r.er));
+        const revenue = Math.round(spend * r.roas * cr.roasMul);
+        const newRevenue = Math.round(revenue * 0.62);
+        cards.push({
+          id: `ma_${tag}_${r.brand}_${slug(r.channel)}_${i}_${k}`,
+          campaign,
+          creative: cr.name,
+          track: "project",
+          status: "measured",
+          brand_id: r.brand,
+          owner_id: "u_fai",
+          title: `ads — ${r.title}`,
+          pillar: null,
+          is_realtime: false,
+          plan_confirmed: true,
+          brief: backfillBrief({
+            format: "image", size: "1080x1350", channels: [r.channel],
+            publish_at: null,
+            deadline_review: new Date(measuredMs - 3 * DAY).toISOString().slice(0, 10),
+          }),
+          draft_link: "https://drive.google.com/file/mock-ads",
+          self_check: selfCheck(),
+          first_pass: true,
+          entered_review_at: null,
+          archived: true,
+          metrics: {
+            reach, impressions, clicks, link_clicks: clicks, engagement, leads,
+            conversions: leads,
+            orders: null,
+            spend,
+            cpl: spend / leads,
+            revenue,
+            new_revenue: newRevenue,
+            measured_at: new Date(measuredMs).toISOString(),
+          },
+          created_at: new Date(measuredMs - 10 * DAY).toISOString(),
+          updated_at: new Date(measuredMs).toISOString(),
+        });
       });
     });
   };
 
   for (const r of MONTH_ADS) {
     const total = Math.round(r.budget * r.used);
-    /* เดือนนี้: ทุกวันจนถึงเมื่อวาน — ผลรวมต้องเท่า budget × used พอดี (เกจอ้างอิงตัวนี้) */
-    const curDates = datesOf(firstOfMonth, Math.max(1, dayNow - 1), 1);
-    emit(r, curDates, total, "cur");
-    /* เดือนก่อน: อัตราต่อวันเท่าเดือนนี้ × ตัวคูณของแบรนด์ → เทียบ "ณ วันเดียวกัน" ได้จริง */
-    const perDay = total / curDates.length;
-    emit(r, datesOf(firstOfPrev, daysInPrev, 2), Math.round(perDay * (r.prev ?? 1) * daysInPrev), "prev");
+    /* เดือนนี้: ทุกวันรวมวันนี้ (ครึ่งวัน) — ผลรวมต้องเท่า budget × used พอดี (เกจอ้างอิงตัวนี้) */
+    emit(r, datesOf(firstOfMonth, dayNow, 1), total, "cur", true);
+    /* เดือนก่อน: ทุกวัน อัตราต่อวันเท่าเดือนนี้ × ตัวคูณของแบรนด์ → เทียบ "ณ วันเดียวกัน" ได้จริง */
+    const perDay = total / Math.max(1, dayNow - 0.5);
+    emit(r, datesOf(firstOfPrev, daysInPrev, 1), Math.round(perDay * (r.prev ?? 1) * daysInPrev), "prev");
   }
   return cards;
 }

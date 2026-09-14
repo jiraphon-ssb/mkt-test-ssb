@@ -8,7 +8,7 @@ import {
   SEED_SIZE_PRESETS, SEED_SHOT_TYPES, SEED_VIDEO_LENGTHS, ALL_SELF_CHECK_KEYS,
   SEED_SCHEDULER_TOOLS, emptyRun,
 } from "../mktEngine.js";
-export const DATA_VERSION = "ssb-cp-v22";  /* v22 = งบ/objective/สถานะระดับแคมเปญ */
+export const DATA_VERSION = "ssb-cp-v23";  /* v23 = การ์ดแอด mock รายวันครบทุกแคมเปญ รวมวันนี้ */
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 function iso(offsetMs) {

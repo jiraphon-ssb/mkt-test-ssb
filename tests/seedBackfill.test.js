@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildBackfill, mondayOf, BACKFILL_WEEKS, buildCampaignBudgets, CAMPAIGN_META } from "../src/modules/marketing/data/seedBackfill.js";
+import { buildBackfill, buildMonthAds, mondayOf, BACKFILL_WEEKS, buildCampaignBudgets, CAMPAIGN_META } from "../src/modules/marketing/data/seedBackfill.js";
 import { buildSeed } from "../src/modules/marketing/data/seed.js";
 import { analyticsCards, ideaToPublishedCycle, kpiSummary, lastCompletedWeeks, publishHeatmap, stageFlows, weeklySeries, weeksRange, adsRollup, } from "../src/modules/marketing/mktAnalytics.js";
 import { brandAverageER, engagementRate, isStuck } from "../src/modules/marketing/mktRules.js";
@@ -179,5 +179,25 @@ describe("seed รวม backfill แล้วยังไม่พังเร�
   it("การ์ดที่เห็นบนบอร์ด (ไม่ archived) ไม่มี bf_ เลย", () => {
     const onBoard = analyticsCards(seed.cards).filter((c) => !c.archived);
     expect(onBoard.some((c) => c.id.startsWith("bf_"))).toBe(false);
+  });
+});
+
+describe("buildMonthAds — การ์ดแอด mock ต้องใช้กับระบบช่วงวันที่ได้จริง", () => {
+  const ANCHOR = new Date(2026, 8, 14, 10, 0, 0).getTime();   // 14 ก.ย. 2026 10:00 local
+  const cards = buildMonthAds(ANCHOR);
+  const day = (c) => { const d = new Date(c.metrics.measured_at); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  it("ทุกแคมเปญมีการ์ดทุกวันของเดือนนี้ รวมวันนี้ · เดือนก่อนครบทุกวัน", () => {
+    const cur = cards.filter((c) => c.id.startsWith("ma_cur_b_jt_metaads_"));
+    for (const name of Object.keys(CAMPAIGN_META)) {
+      const days = new Set(cur.filter((c) => c.campaign === name).map(day));
+      expect(days.size).toBe(14);
+      expect(days.has("2026-09-14")).toBe(true);
+    }
+    expect(new Set(cards.filter((c) => c.id.startsWith("ma_prev_b_jt_metaads_")).map(day)).size).toBe(31);
+  });
+  it("ผลรวมค่าแอดเดือนนี้ต่อแพลตฟอร์ม = budget × used เป๊ะ (เกจงบอ้างอิง) · id ไม่ซ้ำ", () => {
+    const spend = cards.filter((c) => c.id.startsWith("ma_cur_b_jt_metaads_")).reduce((n, c) => n + c.metrics.spend, 0);
+    expect(spend).toBe(Math.round(30_000 * 0.45));
+    expect(new Set(cards.map((c) => c.id)).size).toBe(cards.length);
   });
 });
