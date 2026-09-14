@@ -1,33 +1,15 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards, previousRange } from "../mktAnalytics.js";
-import { adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, change, filterByChannel, paceStatus, revenueBasisCards } from "../adsOverview.js";
+import { adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, change, filterByChannel, paceStatus, revenueBasisCards, share } from "../adsOverview.js";
 import { fmtCompact, fmtInt, fmtMoney, fmtPct } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
 import { PlatformIcon, platformMeta } from "./PlatformIcon.jsx";
 import { AdsWorkspace } from "./AdsWorkspace.jsx";
-
-const isoDay = (d) => {
-  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-const atMidnight = (s) => new Date(`${s}T00:00:00`).toISOString();
-const addDaysLocal = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-function periodRange(key, from, to, now = new Date()) {
-  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let start = day, end = addDaysLocal(day, 1);
-  if (key === "yesterday") { start = addDaysLocal(day, -1); end = day; }
-  if (key === "7d") start = addDaysLocal(day, -6);
-  if (key === "mtd") start = new Date(day.getFullYear(), day.getMonth(), 1);
-  if (key === "lastMonth") { start = new Date(day.getFullYear(), day.getMonth() - 1, 1); end = new Date(day.getFullYear(), day.getMonth(), 1); }
-  if (key === "custom" && from && to) return { start: atMidnight(from), end: atMidnight(isoDay(addDaysLocal(new Date(`${to}T00:00:00`), 1))) };
-  return { start: start.toISOString(), end: end.toISOString() };
-}
-function sameDatesLastMonth(range) {
-  const start = new Date(range.start), end = new Date(range.end);
-  start.setMonth(start.getMonth() - 1); end.setMonth(end.getMonth() - 1);
-  return { start: start.toISOString(), end: end.toISOString() };
-}
+import { Dropdown } from "../ui/Dropdown.jsx";
+import { DateRangePicker } from "../ui/DateRangePicker.jsx";
+import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
+import { isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
 
 const fmtRoas = (value) => value == null ? "—" : `${value.toFixed(1)}x`;
 const GAUGE_TONE = { emerald: "var(--ok)", amber: "var(--warn)", rose: "var(--bad)", zinc: "var(--ink-soft)" };
@@ -112,10 +94,40 @@ function Sparkline({ values, tone = "zinc", lower = false, word = true }) {
   );
 }
 
-function ChannelCard({ c }) {
+/* การ์ดแพลตฟอร์มโหมด "ช่วงที่เลือก": ยอดของช่วงล้วน ไม่มีงบ/จังหวะรายเดือน (ไม่มีความหมายกับช่วงสั้น) */
+function ChannelCardRange({ c }) {
+  const meta = platformMeta(c.key);
+  const d = c.delivery;
+  return (
+    <div className="ads-chan-card" style={{ borderTopColor: meta.color }}>
+      <div className="ads-chan-head">
+        <span className="ads-chan-name"><PlatformIcon channel={c.key} size={15} /><b>{c.key}</b></span>
+        <span className="ads-badge ads-badge--zinc">ช่วงที่เลือก</span>
+      </div>
+      <div className="ads-chan-main">
+        <div className="ads-chan-top">
+          <span className="ads-chan-spend mono">ค่าแอด <b>{fmtMoney(c.spend)}</b></span>
+          <span className="ads-chan-pct mono"><span className="ads-chan-pctads">%Ads <b>{c.pctAds != null ? fmtPct(c.pctAds, 1) : "—"}</b></span></span>
+        </div>
+        <dl className="ads-metrics">
+          <div><dt>ยอดขาย</dt><dd className="mono">{fmtMoney(c.revenue)}</dd></div>
+          <div><dt>ROAS</dt><dd className="mono">{fmtRoas(c.roas)}</dd></div>
+          <div><dt>ลีด</dt><dd className="mono">{fmtInt(c.leads)}</dd></div>
+          <div><dt>CPL</dt><dd className="mono">{c.cpl != null ? fmtMoney(c.cpl) : "—"}</dd></div>
+          <div><dt>CTR</dt><dd className="mono">{d.ctr != null ? fmtPct(d.ctr, 2) : "—"}</dd></div>
+          <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${d.frequency.toFixed(1)}x` : "—"}</dd></div>
+        </dl>
+        <p className="ads-chan-support ads-muted">งบ/จังหวะรายเดือนดูได้เมื่อเลือกช่วง "เดือนนี้"</p>
+      </div>
+    </div>
+  );
+}
+
+function ChannelCard({ c, monthView = true }) {
+  const [openDetail, setOpenDetail] = useState(false);
   const st = paceStatus(c.pace);
   const meta = platformMeta(c.key);
-  const [openDetail, setOpenDetail] = useState(false);
+  if (!monthView) return <ChannelCardRange c={c} />;
   const d = c.delivery;
   return (
     <div className="ads-chan-card" style={{ borderTopColor: meta.color }}>
@@ -237,40 +249,39 @@ export function AdsView() {
     const brands = (data.brands ?? []).filter((brand) => brand.active !== false && (brandFilter === "all" || brand.id === brandFilter));
     const today = isoDay(new Date());
     const monthRange = periodRange("mtd", null, null);
-    const brandTotals = adsByBrandChannel(scopedAll, monthRange, brands, data.ad_budgets ?? [], today, data.sales_targets ?? [], sameDatesLastMonth(monthRange));
-    const filteredBrands = channel === "all" ? brandTotals : adsByBrandChannel(scoped, monthRange, brands, data.ad_budgets ?? [], today, data.sales_targets ?? [], sameDatesLastMonth(monthRange));
+    /* โหมดช่วงเวลา: "เดือนนี้" = ยอด + เป้า + จังหวะรายเดือน · ช่วงอื่น (วันนี้/7 วัน/กำหนดเอง) = ทุกยอดคิดจากช่วงที่เลือกล้วน
+       และเทียบกับช่วงก่อน — เป้า/จังหวะรายเดือนไม่มีความหมายกับช่วง 1 วันหรือ 7 วัน จึงไม่แสดง */
+    const monthView = period === "mtd";
+    const sumRange = monthView ? monthRange : range;
+    const prevRange = monthView ? sameDatesLastMonth(monthRange) : before;
+    const brandTotals = adsByBrandChannel(scopedAll, sumRange, brands, data.ad_budgets ?? [], today, data.sales_targets ?? [], prevRange);
+    const filteredBrands = channel === "all" ? brandTotals : adsByBrandChannel(scoped, sumRange, brands, data.ad_budgets ?? [], today, data.sales_targets ?? [], prevRange);
     const filteredById = new Map(filteredBrands.map((brand) => [brand.id, brand]));
+    const summary = adsCompanySummary(brandTotals, today);
+    const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));
     return {
       scoped,
       range,
       before,
+      monthView,
+      rangeLabel: rangeLabel(shownFrom, shownTo),
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
       revenueBasis,
       channelList: adsChannelList(scopedAll),
-      summary: adsCompanySummary(brandTotals, today),
-      brands: brandTotals.map((brand) => ({ ...brand, channels: filteredById.get(brand.id)?.channels ?? [] })),
+      summary,
+      brands: brandTotals.map((brand) => ({ ...brand, revShare: share(brand.revenue, summary.revenue), spendShare: share(brand.spend, summary.spend), channels: filteredById.get(brand.id)?.channels ?? [] })),
       pipelines: Object.fromEntries(brands.map((brand) => [brand.id, adsSalePipeline(scoped.filter((card) => card.brand_id === brand.id), range, before)])),
     };
   }, [data, inBrandScope, period, customFrom, customTo, compare, brandFilter, channel, revenueBasis]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
-  const changeFrom = (next) => {
-    setCustomFrom(next);
-    setCustomTo(next > shownTo ? next : shownTo);
-    setPeriod("custom");
-  };
-  const changeTo = (next) => {
-    setCustomTo(next);
-    setCustomFrom(next < shownFrom ? next : shownFrom);
-    setPeriod("custom");
-  };
+  const changeRange = ({ period: nextPeriod, from, to }) => { setPeriod(nextPeriod); setCustomFrom(from); setCustomTo(to); };
 
   return <AdsWorkspace v={v} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
-    <div className="aw-presets" role="group" aria-label="ช่วงเวลาด่วน">{[["today","วันนี้"],["7d","7 วัน"],["mtd","เดือนนี้"]].map(([key,label]) => <button type="button" key={key} className={period === key ? "active" : ""} aria-pressed={period === key} onClick={() => setPeriod(key)}>{label}</button>)}</div>
-    <div className="aw-date-range"><label><span>จาก</span><input aria-label="วันที่เริ่มต้น" type="date" value={shownFrom} max={shownTo} onChange={(event) => changeFrom(event.target.value)} /></label><b>–</b><label><span>ถึง</span><input aria-label="วันที่สิ้นสุด" type="date" value={shownTo} min={shownFrom} max={todayLocal} onChange={(event) => changeTo(event.target.value)} /></label></div>
-    <div className="aw-basis" role="radiogroup" aria-label="ฐานยอดขาย"><span>คิดจาก</span>{[["new","ยอดใหม่"],["total","ยอดรวม"]].map(([key,label]) => <button type="button" role="radio" aria-checked={revenueBasis === key} key={key} className={revenueBasis === key ? "active" : ""} onClick={() => setRevenueBasis(key)}>{label}</button>)}</div>
-    <label className="aw-filter"><span>ช่องทาง</span><select value={channel} onChange={(event) => setChannel(event.target.value)}><option value="all">ทั้งหมด</option>{v.channelList.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-    <label className="aw-filter"><span>เทียบ</span><select value={compare} onChange={(event) => setCompare(event.target.value)}><option value="previous">ช่วงก่อน</option><option value="lastMonth">เดือนก่อน</option></select></label>
+    <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
+    <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
+    <Dropdown label="ช่องทาง" options={[["all", "ทั้งหมด"], ...v.channelList.map((item) => [item, item])]} value={channel} onChange={setChannel} />
+    <Dropdown label="เทียบ" options={[["previous", "ช่วงก่อน"], ["lastMonth", "เดือนก่อน"]]} value={compare} onChange={setCompare} />
   </>} />;
 }

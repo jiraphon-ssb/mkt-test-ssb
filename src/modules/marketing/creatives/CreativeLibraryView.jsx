@@ -3,9 +3,11 @@ import { ExternalLink, Film, Image as ImageIcon, Search, Settings2, X } from "lu
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards } from "../mktAnalytics.js";
 import { adsCreativeRows } from "../adsOverview.js";
-import { isoDay, periodRange, PERIOD_PRESETS } from "../adsScope.js";
+import { isoDay, periodRange } from "../adsScope.js";
+import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { fmtMoney, fmtPct } from "../dash/charts/theme.js";
 import { PlatformIcon } from "../ads/PlatformIcon.jsx";
+import { Dropdown } from "../ui/Dropdown.jsx";
 import { filterCreativeLibrary, creativeLibrarySummary } from "./creativeLibrary.js";
 import "../ads/adsWorkspace.css";
 import "./creativeLibrary.css";
@@ -64,8 +66,8 @@ export function CreativeLibraryView() {
   const toShown = isoDay(new Date(new Date(v.range.end).getTime() - 1));
   return <main className="aw cl">
     <section className="cl-command"><header><div><h1>Creative Library</h1><p>ดูชิ้นงานที่ทำเงิน ชิ้นที่เริ่มล้า และเลือกมาเทียบกัน</p></div><div className="cl-head-actions"><span className="aw-demo"><i /> Mock data</span><a className="aw-settings-link" href="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</a></div></header>
-      <div className="cl-filters"><div className="aw-presets">{PERIOD_PRESETS.map(([key, label]) => <button type="button" key={key} className={period === key ? "active" : ""} onClick={() => setPeriod(key)}>{label}</button>)}</div><div className="aw-date-range"><label><span>จาก</span><input type="date" value={fromShown} max={toShown} onChange={(event) => { setFrom(event.target.value); setPeriod("custom"); }} /></label><b>–</b><label><span>ถึง</span><input type="date" value={toShown} min={fromShown} max={today} onChange={(event) => { setTo(event.target.value); setPeriod("custom"); }} /></label></div>
-        <label><span>แบรนด์</span><select value={brand} onChange={(event) => setBrand(event.target.value)}><option value="all">ทุกแบรนด์</option>{v.brands.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>ช่องทาง</span><select value={platform} onChange={(event) => setPlatform(event.target.value)}><option value="all">ทุกช่องทาง</option>{v.platforms.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>สถานะ</span><select value={state} onChange={(event) => setState(event.target.value)}><option value="all">ทั้งหมด</option><option value="fatigue">เริ่มล้า</option><option value="ready">มีสื่อแล้ว</option><option value="waiting">รอสื่อ</option></select></label><label><span>เรียงตาม</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="spend">ค่าแอดสูงสุด</option><option value="roas">ROAS สูงสุด</option><option value="cpl">CPL ต่ำสุด</option><option value="ctr">CTR สูงสุด</option><option value="frequency">เห็นซ้ำสูงสุด</option></select></label><label className="cl-search"><Search size={14} /><input type="search" aria-label="ค้นหาครีเอทีฟ" placeholder="ค้นหาชิ้นงานหรือแคมเปญ" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <div className="cl-filters"><DateRangePicker period={period} from={fromShown} to={toShown} max={today} onChange={({ period: nextPeriod, from: nextFrom, to: nextTo }) => { setPeriod(nextPeriod); setFrom(nextFrom); setTo(nextTo); }} />
+        <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((item) => [item.id, item.name])]} value={brand} onChange={setBrand} /><Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.platforms.map((item) => [item, item])]} value={platform} onChange={setPlatform} /><Dropdown label="สถานะ" options={[["all", "ทั้งหมด"], ["fatigue", "เริ่มล้า"], ["ready", "มีสื่อแล้ว"], ["waiting", "รอสื่อ"]]} value={state} onChange={setState} /><Dropdown label="เรียง" options={[["spend", "ค่าแอดสูงสุด"], ["roas", "ROAS สูงสุด"], ["cpl", "CPL ต่ำสุด"], ["ctr", "CTR สูงสุด"], ["frequency", "เห็นซ้ำสูงสุด"]]} value={sort} onChange={setSort} /><label className="cl-search ads-search"><Search size={14} aria-hidden="true" /><input type="search" aria-label="ค้นหาครีเอทีฟ" placeholder="ค้นหาชิ้นงานหรือแคมเปญ" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       </div>
     </section>
     <section className="cl-summary"><div><span>ชิ้นงานในช่วงนี้</span><b>{v.summary.count}</b></div><div><span>ค่าแอดรวม</span><b>{metric(v.summary.spend, "money")}</b></div><div><span>มีภาพ/วิดีโอแล้ว</span><b>{v.summary.withMedia}</b></div><div className={v.summary.tired ? "warn" : ""}><span>เริ่มล้า</span><b>{v.summary.tired}</b></div></section>

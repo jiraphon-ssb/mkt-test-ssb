@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, Save, Scale, ShieldAlert, Target } from "lucide-react";
 import { BrandMark } from "./BrandMark.jsx";
+import { Dropdown } from "../ui/Dropdown.jsx";
 import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, validateAdsConnection } from "./adsConnectorContract.js";
 import { adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
 
@@ -61,10 +62,10 @@ function Connections({ brands, config, setConfig }) {
       <header className="acc-sheet-head"><div><span className="acc-kicker">บัญชีและแบรนด์</span><h2>{source.name}</h2><p>ใส่บัญชีและจับคู่กับแบรนด์ให้ถูกต้อง</p></div><a href={source.doc} target="_blank" rel="noreferrer">เอกสาร API <ExternalLink size={14} /></a></header>
       <div className="acc-callout"><CircleAlert size={17} /><span>ยังไม่เชื่อม OAuth · หน้านี้บันทึก mapping เท่านั้น{sourceId === "meta" ? " · หลังเชื่อมจะอ่านสถิติและ Creative แบบ read-only" : ""}</span></div>
       <details className="acc-source-options"><summary>ตัวเลือกการดึงข้อมูล</summary><div className="acc-source-config">
-        <label><span>ดึงทุก</span><select value={sourceConfig.syncEveryHours} onChange={(e) => updateSource({ syncEveryHours: Number(e.target.value) })}><option value="1">1 ชั่วโมง</option><option value="3">3 ชั่วโมง</option><option value="6">6 ชั่วโมง</option></select></label>
-        <label><span>ย้อนหลัง</span><select value={sourceConfig.backfillDays} onChange={(e) => updateSource({ backfillDays: Number(e.target.value) })}><option value="30">30 วัน</option><option value="90">90 วัน</option><option value="180">180 วัน</option></select></label>
-        <label><span>Attribution</span><select value={sourceConfig.attribution} onChange={(e) => updateSource({ attribution: e.target.value })}><option value="platform_default">ตามแพลตฟอร์ม</option><option value="7d_click_1d_view">7d click / 1d view</option><option value="1d_click">1d click</option></select></label>
-        <label><span>Lead event</span><select value={sourceConfig.leadEvent ?? source.leadEvents[0]} onChange={(e) => updateSource({ leadEvent: e.target.value })}>{source.leadEvents.map((event) => <option key={event}>{event}</option>)}</select></label>
+        <label><span>ดึงทุก</span><Dropdown className="dd--block" ariaLabel="ดึงทุก" options={[["1", "1 ชั่วโมง"], ["3", "3 ชั่วโมง"], ["6", "6 ชั่วโมง"]]} value={String(sourceConfig.syncEveryHours)} onChange={(value) => updateSource({ syncEveryHours: Number(value) })} /></label>
+        <label><span>ย้อนหลัง</span><Dropdown className="dd--block" ariaLabel="ย้อนหลัง" options={[["30", "30 วัน"], ["90", "90 วัน"], ["180", "180 วัน"]]} value={String(sourceConfig.backfillDays)} onChange={(value) => updateSource({ backfillDays: Number(value) })} /></label>
+        <label><span>Attribution</span><Dropdown className="dd--block" ariaLabel="Attribution" options={[["platform_default", "ตามแพลตฟอร์ม"], ["7d_click_1d_view", "7d click / 1d view"], ["1d_click", "1d click"]]} value={sourceConfig.attribution} onChange={(value) => updateSource({ attribution: value })} /></label>
+        <label><span>Lead event</span><Dropdown className="dd--block" ariaLabel="Lead event" options={source.leadEvents.map((event) => [event, event])} value={sourceConfig.leadEvent ?? source.leadEvents[0]} onChange={(value) => updateSource({ leadEvent: value })} /></label>
       </div></details>
       <div className="acc-mapping-head"><span>แบรนด์</span><span>{source.accountLabel}</span><span>Timezone / เงิน</span><span>สถานะ</span></div>
       {brands.map((brand) => {
@@ -72,7 +73,7 @@ function Connections({ brands, config, setConfig }) {
         return <div className="acc-mapping-row" key={brand.id}>
           <div className="acc-brand-cell"><BrandMark brand={brand} size={30} /><strong>{brand.name}</strong></div>
           <label><span>{source.accountLabel}</span><input value={row.accountId ?? ""} onChange={(event) => updateMapping(brand.id, { accountId: event.target.value })} placeholder={`${source.accountPrefix}000000000`} /></label>
-          <div className="acc-locale"><label><span>Timezone</span><select value={row.timezone ?? sourceConfig.timezone} onChange={(event) => updateMapping(brand.id, { timezone: event.target.value })}><option>Asia/Bangkok</option><option>UTC</option></select></label><label><span>Currency</span><select value={row.currency ?? sourceConfig.currency} onChange={(event) => updateMapping(brand.id, { currency: event.target.value })}><option>THB</option><option>USD</option></select></label></div>
+          <div className="acc-locale"><label><span>Timezone</span><Dropdown className="dd--block" ariaLabel={`Timezone ${brand.name}`} options={[["Asia/Bangkok", "Asia/Bangkok"], ["UTC", "UTC"]]} value={row.timezone ?? sourceConfig.timezone} onChange={(value) => updateMapping(brand.id, { timezone: value })} /></label><label><span>Currency</span><Dropdown className="dd--block" ariaLabel={`Currency ${brand.name}`} options={[["THB", "THB"], ["USD", "USD"]]} value={row.currency ?? sourceConfig.currency} onChange={(value) => updateMapping(brand.id, { currency: value })} /></label></div>
           <div className="acc-connection-state"><span className="acc-state">ยังไม่เชื่อม OAuth</span>{row.enabled && <small className={validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "ok" : "bad"}>{validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "Mapping พร้อม" : "กรอกไม่ครบ"}</small>}<label className="acc-enable"><input type="checkbox" checked={Boolean(row.enabled)} onChange={(event) => updateMapping(brand.id, { enabled: event.target.checked })} /><span>เตรียมดึง</span></label></div>
         </div>;
       })}

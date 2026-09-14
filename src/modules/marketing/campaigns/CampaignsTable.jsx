@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { SAVED_VIEWS, applyView, campaignTotals, sortCampaigns } from "../adsCampaigns.js";
 import { PlatformIcon, platformMeta } from "../ads/PlatformIcon.jsx";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
-import { baseOpts, chartColor, fmtCompact, fmtInt, fmtMoney, fmtPct, SERIES } from "../dash/charts/theme.js";
+import { baseOpts, chartColor, dayLabel, fmtCompact, fmtInt, fmtMoney, fmtPct, lineSeries, SERIES } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
 import { X } from "lucide-react";
+import { Dropdown } from "../ui/Dropdown.jsx";
 
 const fmtRoas = (x) => (x == null ? "—" : `${x.toFixed(1)}x`);
 const STATUS = { active: "กำลังรัน", paused: "พักอยู่", unknown: "ไม่ระบุสถานะ" };
@@ -49,7 +50,9 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
     const days = [...new Set(shown.flatMap((r) => r.series?.days ?? []))].sort();
     const point = (row, key, day) => { const i = row.series?.days?.indexOf(day) ?? -1; return i >= 0 ? row.series?.[key]?.[i] : null; };
     const values = days.map((day) => {
-      if (trendMetric === "spend" || trendMetric === "leads") return shown.reduce((n, r) => n + (point(r, trendMetric, day) ?? 0), 0);
+      // วันที่ทุกแคมเปญไม่มีข้อมูล (เช่น วันนี้ที่ยังไม่ sync) = null ให้กราฟเว้นช่อง ไม่ใช่ 0 ที่ดูเหมือนยอดตกฮวบ
+      if (trendMetric === "spend" || trendMetric === "leads") { const vals = shown.map((r) => point(r, trendMetric, day)); return vals.every((v) => v == null) ? null : vals.reduce((n, v) => n + (v ?? 0), 0); }
+      if (shown.every((r) => point(r, "spend", day) == null)) return null;
       const spend = shown.reduce((n, r) => n + (point(r, "spend", day) ?? 0), 0);
       const leads = shown.reduce((n, r) => n + (point(r, "leads", day) ?? 0), 0);
       if (trendMetric === "cpl") return leads > 0 ? spend / leads : null;
@@ -107,13 +110,13 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
 
     <div className="cp-list-head">
       <div><h2>รายการแคมเปญ</h2><span>{shown.length} รายการ</span></div>
-      <div className="cp-list-tools"><div className="cp-column-view" role="group" aria-label="ชุดข้อมูล"><button type="button" className={columnView === "decision" ? "active" : ""} aria-pressed={columnView === "decision"} onClick={() => setColumnView("decision")}>งานวันนี้</button><button type="button" className={columnView === "analysis" ? "active" : ""} aria-pressed={columnView === "analysis"} onClick={() => setColumnView("analysis")}>ตัวเลขละเอียด</button></div><label className="cp-sort-select"><span>เรียง</span><select value={sortValue} onChange={(e) => setSortValue(e.target.value)}>{SORTS.map(([key, dir, label]) => <option key={`${key}:${dir}`} value={`${key}:${dir}`}>{label}</option>)}</select></label></div>
+      <div className="cp-list-tools"><div className="cp-column-view" role="group" aria-label="ชุดข้อมูล"><button type="button" className={columnView === "decision" ? "active" : ""} aria-pressed={columnView === "decision"} onClick={() => setColumnView("decision")}>งานวันนี้</button><button type="button" className={columnView === "analysis" ? "active" : ""} aria-pressed={columnView === "analysis"} onClick={() => setColumnView("analysis")}>ตัวเลขละเอียด</button></div><Dropdown label="เรียง" align="end" options={SORTS.map(([key, dir, label]) => [`${key}:${dir}`, label])} value={sortValue} onChange={setSortValue} /></div>
     </div>
     <div className="cp-views" role="tablist" aria-label="กลุ่มการตัดสินใจ">
       {SAVED_VIEWS.map((s) => <button key={s.key} type="button" role="tab" aria-selected={view === s.key} className={view === s.key ? "active" : ""} onClick={() => setView(s.key)}><span>{s.label}</span><b className="mono">{counts[s.key]}</b></button>)}
     </div>
 
-    {shown.length > 0 && <details className="cp-overview-trend"><summary>ดูแนวโน้มรวมของ {shown.length} แคมเปญ</summary><div><header><div className="cp-metric-tabs" role="tablist" aria-label="ตัวชี้วัดกราฟรวม">{TREND_METRICS.map(([key, label]) => <button type="button" role="tab" aria-selected={trendMetric === key} className={trendMetric === key ? "active" : ""} key={key} onClick={() => setTrendMetric(key)}>{label}</button>)}</div><span>รายวัน · ตามช่วงที่เลือก</span></header><ChartBox type="line" height={190} ariaLabel={`แนวโน้ม${TREND_METRICS.find(([key]) => key === trendMetric)?.[1]}รวม`} data={{ labels: trend.days.map((d) => Number(d.slice(-2))), datasets: [{ label: TREND_METRICS.find(([key]) => key === trendMetric)?.[1], data: trend.values, borderColor: SERIES.blue, backgroundColor: "rgba(111,140,245,.10)", borderWidth: 2, tension: .25, pointRadius: 2, spanGaps: false, fill: true }] }} options={baseOpts({ scales: { y: { grid: { color: chartColor.line(), drawTicks: false }, border: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 11 }, callback: (v) => trendMetric === "roas" ? `${Number(v).toFixed(1)}x` : fmtCompact(v) } } } })} /></div></details>}
+    {shown.length > 0 && <details className="cp-overview-trend"><summary>ดูแนวโน้มรวมของ {shown.length} แคมเปญ</summary><div><header><div className="cp-metric-tabs" role="tablist" aria-label="ตัวชี้วัดกราฟรวม">{TREND_METRICS.map(([key, label]) => <button type="button" role="tab" aria-selected={trendMetric === key} className={trendMetric === key ? "active" : ""} key={key} onClick={() => setTrendMetric(key)}>{label}</button>)}</div><span>รายวัน · ตามช่วงที่เลือก</span></header><ChartBox type="line" height={190} ariaLabel={`แนวโน้ม${TREND_METRICS.find(([key]) => key === trendMetric)?.[1]}รวม`} data={{ labels: trend.days.map(dayLabel), datasets: [{ label: TREND_METRICS.find(([key]) => key === trendMetric)?.[1], data: trend.values, borderColor: SERIES.blue, backgroundColor: "rgba(111,140,245,.10)", fill: true, ...lineSeries(trend.days.length) }] }} options={baseOpts({ scales: { x: { grid: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } }, y: { beginAtZero: true, grid: { color: chartColor.line(), drawTicks: false }, border: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 11 }, callback: (v) => trendMetric === "roas" ? `${Number(v).toFixed(1)}x` : fmtCompact(v) } } }, plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y == null ? "—" : trendMetric === "roas" ? `${c.parsed.y.toFixed(1)}x` : trendMetric === "leads" ? fmtInt(c.parsed.y) : fmtMoney(c.parsed.y)}` } } } })} /></div></details>}
 
     {shown.length === 0 ? <div className="cp-empty"><b>{emptyText}</b><span>ลองเปลี่ยนช่วงเวลา แบรนด์ ช่องทาง หรือกลุ่มการตัดสินใจ</span></div> : <div className="cp-campaign-list">
       <div className="cp-list-labels" aria-hidden="true"><span>แคมเปญ</span><span>ค่าแอด</span><span>ผลลัพธ์</span><span>ประสิทธิภาพ</span><span>งบเดือน / จังหวะ</span><span>ควรทำต่อ</span><span /></div>

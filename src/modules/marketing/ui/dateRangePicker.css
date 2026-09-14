@@ -1,0 +1,56 @@
+/* DateRangePicker (ui/DateRangePicker.jsx) — ปุ่มระดับเดียวกับ Dropdown (32px) · popover แบบ Ads Manager: ช่วงสำเร็จรูปซ้าย ปฏิทิน 2 เดือนขวา
+   ใช้ specificity .mkt-root … เพื่อชนะ reset ของ mkt-root */
+.mkt-root .drp { position:relative; display:inline-flex; flex-shrink:0; }
+.mkt-root .drp .drp-trigger { display:inline-flex; align-items:center; gap:8px; box-sizing:border-box; height:32px; padding:0 9px 0 10px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); font:inherit; font-size:11px; white-space:nowrap; cursor:pointer; transition:border-color .12s; }
+.mkt-root .drp .drp-trigger>span { color:var(--ink-soft); }.mkt-root .drp .drp-trigger b { color:var(--ink); font-weight:700; }
+.mkt-root .drp .drp-trigger>svg:first-child { color:var(--ink-soft); }.mkt-root .drp .drp-trigger>svg:last-child { color:var(--ink-faint); transition:transform .15s; }
+.mkt-root .drp .drp-trigger:hover { border-color:var(--ink-faint); }
+.mkt-root .drp.drp--open .drp-trigger,.mkt-root .drp .drp-trigger:focus-visible { outline:none; border-color:var(--aw-accent,var(--accent)); box-shadow:0 0 0 3px color-mix(in srgb,var(--aw-accent,var(--accent)) 22%,transparent); }
+.mkt-root .drp.drp--open .drp-trigger>svg:last-child { transform:rotate(180deg); }
+
+.mkt-root .drp-pop { position:absolute; z-index:40; top:calc(100% + 6px); left:0; display:flex; border:1px solid var(--line); border-radius:12px; background:var(--surface); box-shadow:var(--shadow-lg); animation:drp-in .12s ease-out; }
+.mkt-root .drp-presets { display:flex; flex-direction:column; gap:2px; width:168px; padding:12px 8px; border-right:1px solid var(--line); }
+.mkt-root .drp-presets-title { padding:2px 10px 8px; color:var(--ink-soft); font-size:10px; font-weight:700; letter-spacing:.04em; }
+.mkt-root .drp-preset { display:flex; align-items:center; gap:9px; min-height:30px; padding:0 10px; border-radius:7px; background:transparent; color:var(--ink); font:inherit; font-size:11px; text-align:left; cursor:pointer; }
+.mkt-root .drp-preset i { flex:none; width:14px; height:14px; border:1.5px solid var(--ink-faint); border-radius:50%; background:transparent; transition:border-color .12s, box-shadow .12s; }
+.mkt-root .drp-preset:hover { background:var(--surface-2); }
+.mkt-root .drp-preset.is-on { background:color-mix(in srgb,var(--aw-accent,var(--accent)) 10%,var(--surface)); font-weight:700; }
+.mkt-root .drp-preset.is-on i { border-color:var(--aw-accent,var(--accent)); box-shadow:inset 0 0 0 3.5px var(--surface), inset 0 0 0 8px var(--aw-accent,var(--accent)); }
+.mkt-root .drp-preset:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:-2px; }
+
+.mkt-root .drp-cal { display:flex; flex-direction:column; padding:12px 14px 10px; }
+.mkt-root .drp-months { display:flex; gap:22px; }
+.mkt-root .drp-month header { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:8px; }
+.mkt-root .drp-month strong { flex:1; text-align:center; font-size:12px; }
+.mkt-root .drp-nav,.mkt-root .drp-nav-spacer { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:7px; color:var(--ink-soft); background:transparent; cursor:pointer; }
+.mkt-root .drp-nav:hover { color:var(--ink); background:var(--surface-2); }.mkt-root .drp-nav:disabled { color:var(--ink-faint); opacity:.4; cursor:default; }
+.mkt-root .drp-grid { display:grid; grid-template-columns:repeat(7,34px); gap:2px 0; }
+.mkt-root .drp-wd { height:26px; line-height:26px; text-align:center; color:var(--ink-soft); font-size:10px; }
+.mkt-root .drp-empty { height:32px; }
+.mkt-root .drp-day { height:32px; border-radius:7px; background:transparent; color:var(--ink); font:inherit; font-size:12px; font-variant-numeric:tabular-nums; cursor:pointer; transition:background .08s; }
+.mkt-root .drp-day:hover:not(:disabled) { background:var(--surface-2); }
+.mkt-root .drp-day:disabled { color:var(--ink-faint); opacity:.45; cursor:default; }
+.mkt-root .drp-day.is-today { box-shadow:inset 0 0 0 1px var(--ink-faint); }
+.mkt-root .drp-day.in-range { border-radius:0; background:color-mix(in srgb,var(--aw-accent,var(--accent)) 16%,var(--surface)); }
+.mkt-root .drp-day.is-start,.mkt-root .drp-day.is-end { background:var(--aw-accent,var(--accent)); color:var(--on-accent); font-weight:700; box-shadow:none; }
+.mkt-root .drp-day.is-start:not(.is-end) { border-radius:7px 0 0 7px; }.mkt-root .drp-day.is-end:not(.is-start) { border-radius:0 7px 7px 0; }
+.mkt-root .drp-day.is-start:hover,.mkt-root .drp-day.is-end:hover { background:var(--accent-deep,var(--aw-accent)); }
+.mkt-root .drp-day:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:-2px; }
+
+.mkt-root .drp-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+.mkt-root .drp-summary { font-size:12px; font-weight:700; }.mkt-root .drp-summary small { color:var(--ink-soft); font-size:11px; font-weight:500; }
+.mkt-root .drp-actions { display:flex; gap:8px; }
+.mkt-root .drp-btn { min-height:30px; padding:0 12px; border:1px solid var(--line); border-radius:7px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:11px; font-weight:600; cursor:pointer; }
+.mkt-root .drp-btn:hover { border-color:var(--ink-faint); }
+.mkt-root .drp-btn--primary { border-color:var(--aw-accent,var(--accent)); background:var(--aw-accent,var(--accent)); color:var(--on-accent); }
+.mkt-root .drp-btn--primary:hover { background:var(--accent-deep,var(--aw-accent)); }
+.mkt-root .drp-btn:disabled { opacity:.5; cursor:default; }
+@keyframes drp-in { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .mkt-root .drp-pop { animation:none; } }
+@media (max-width: 860px) {
+  .mkt-root .drp-pop { flex-direction:column; left:auto; right:0; max-width:calc(100vw - 32px); }
+  .mkt-root .drp-presets { flex-direction:row; flex-wrap:wrap; width:auto; border-right:0; border-bottom:1px solid var(--line); }
+  .mkt-root .drp-presets-title { width:100%; }
+  .mkt-root .drp-month:last-child { display:none; }
+  .mkt-root .drp-month header .drp-nav-spacer:last-child { display:none; }
+}

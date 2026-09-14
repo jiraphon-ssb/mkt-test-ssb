@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ExternalLink, Film, Images } from "lucide-react";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
-import { baseOpts, chartColor, fmtCompact, fmtMoney, fmtPct, SERIES } from "../dash/charts/theme.js";
+import { baseOpts, chartColor, dayLabel, fmtCompact, fmtMoney, fmtPct, lineSeries, SERIES } from "../dash/charts/theme.js";
 
 const METRICS = [["spend", "ค่าแอด", "money"], ["leads", "ผลลัพธ์", "int"], ["cpl", "CPL", "money"], ["roas", "ROAS", "roas"]];
 const fmt = (kind, v) => (v == null ? "—" : kind === "money" ? fmtMoney(v) : kind === "roas" ? `${v.toFixed(1)}x` : String(Math.round(v)));
@@ -47,8 +47,8 @@ export function CampaignDetail({ row, compareLabel }) {
       <section className="cp-trend" aria-label="แนวโน้มรายวัน">
         <header><div><h4>แนวโน้มรายวัน</h4><p>ดูว่าผลงานเริ่มเปลี่ยนตรงวันไหน</p></div><div className="cp-metric-tabs" role="tablist" aria-label="เลือกตัวชี้วัด">{METRICS.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={metric === k} className={metric === k ? "active" : ""} onClick={() => setMetric(k)}>{l}</button>)}</div></header>
         <ChartBox type="line" height={190} ariaLabel={`${label} รายวันของ ${row.name}`}
-          data={{ labels: row.series.days.map((d) => Number(d.slice(-2))), datasets: [{ label, data, borderColor: SERIES.blue, backgroundColor: "rgba(111,140,245,.10)", borderWidth: 2, tension: .25, pointRadius: 2, spanGaps: false, fill: true }] }}
-          options={baseOpts({ scales: { y: { grid: { color: chartColor.line(), drawTicks: false }, border: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 11 }, callback: (v) => (kind === "roas" ? `${Number(v).toFixed(1)}x` : fmtCompact(v)) } } }, plugins: { tooltip: { callbacks: { title: (i) => `วันที่ ${i[0]?.label}`, label: (c) => `${label} ${fmt(kind, c.parsed.y)}` } } } })} />
+          data={{ labels: row.series.days.map(dayLabel), datasets: [{ label, data, borderColor: SERIES.blue, backgroundColor: "rgba(111,140,245,.10)", fill: true, ...lineSeries(row.series.days.length) }] }}
+          options={baseOpts({ scales: { x: { grid: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } }, y: { beginAtZero: true, grid: { color: chartColor.line(), drawTicks: false }, border: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 11 }, callback: (v) => (kind === "roas" ? `${Number(v).toFixed(1)}x` : fmtCompact(v)) } } }, plugins: { tooltip: { callbacks: { title: (i) => i[0]?.label ?? "", label: (c) => `${label} ${fmt(kind, c.parsed.y)}` } } } })} />
       </section>
 
       <aside className={`cp-next cp-next--${row.decision.tone}`} aria-label="ข้อเสนอแนะ">

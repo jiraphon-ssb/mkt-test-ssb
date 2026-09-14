@@ -256,6 +256,18 @@ export function adsDailySeries(cards, range) {
     }));
 }
 
+/** เติมวันที่ไม่มีข้อมูลในช่วงให้ครบทุกวัน (ทุกค่าเป็น null ไม่ใช่ 0) — กราฟรายวันต้องมีแกนเวลาจริง ไม่ยุบวันที่หายไปให้ชิดกัน */
+const EMPTY_DAY = { spend: null, leads: null, revenue: null, impressions: null, clicks: null, reach: null, cpl: null, roas: null, ctr: null, cpc: null, cpm: null, frequency: null };
+export function fillDailySeries(series, range) {
+  const byDay = new Map(series.map((d) => [d.day, d]));
+  const out = [];
+  for (const t = new Date(range.start); t < new Date(range.end); t.setDate(t.getDate() + 1)) {
+    const k = dayKey(t.toISOString());
+    out.push(byDay.get(k) ?? { day: k, ...EMPTY_DAY });
+  }
+  return out;
+}
+
 /* ---------- งบราย แบรนด์×ช่องทาง×เดือน ---------- */
 /** งบที่ตั้งไว้ของช่องทางนั้นในเดือนนั้น — ไม่มี = null (ไม่เดา) */
 export function budgetOf(brandId, channel, month, adBudgets = []) {
@@ -355,7 +367,9 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
       const revTarget = salesTargetOf(b.id, month, salesTargets);
       const pace = budgetPace(spend, budget, asOf);
       /* เทียบเดือนก่อน — ยอดขายล้วน (ค่าแอดอยู่ชั้นแพลตฟอร์ม จะได้ไม่ซ้ำกัน) */
-      const prevRevenue = prevMonthRange ? adsChannelBreakdown(mine, prevMonthRange).reduce((n, c) => n + c.revenue, 0) : null;
+      const prevRows = prevMonthRange ? adsChannelBreakdown(mine, prevMonthRange) : null;
+      const prevRevenue = prevRows ? prevRows.reduce((n, c) => n + c.revenue, 0) : null;
+      const prevSpend = prevRows ? prevRows.reduce((n, c) => n + c.spend, 0) : null;
       return {
         id: b.id, name: b.name, color: b.color, logo: b.logo, spend, revenue, leads,
         revTarget,
@@ -364,6 +378,8 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
         revPace: revenuePace(revenue, revTarget, pace.expected),
         prevRevenue,
         revChangePct: change(revenue, prevRevenue),
+        prevSpend,
+        spendChangePct: change(spend, prevSpend),
         roasSeries: adsDailySeries(mine, monthRange).map((d) => d.roas),
         roas: roasOf(revenue, spend),
         pctAds: share(spend, revenue),   // ค่าแอดกี่ % ของยอดขายแบรนด์ (รวมทุกแพลตฟอร์ม)
@@ -595,6 +611,7 @@ export function adsCompanySummary(brandRows, today) {
   const revTarget = allOrNull((r) => r.revTarget);
   const budget = allOrNull((r) => r.budget);
   const prevRevenue = allOrNull((r) => r.prevRevenue);
+  const prevSpend = allOrNull((r) => r.prevSpend);
   /* กลุ่มสถานะจังหวะทำยอด — ปัญหาขึ้นก่อน (rose → amber → emerald → zinc) ข้ามกลุ่มว่าง */
   const byTone = new Map();
   for (const r of brandRows) {
@@ -612,6 +629,8 @@ export function adsCompanySummary(brandRows, today) {
     revPctOfExpected: share(revenue, revPace.expectedSpend),
     prevRevenue,
     revChangePct: change(revenue, prevRevenue),
+    prevSpend,
+    spendChangePct: change(spend, prevSpend),
     spend, budget,
     pace: budgetPace(spend, budget, asOf),
     byStatus: ["rose", "amber", "emerald", "zinc"].map((t) => byTone.get(t)).filter(Boolean),

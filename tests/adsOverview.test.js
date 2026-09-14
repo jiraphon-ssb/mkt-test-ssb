@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   adsByBrandChannel, adsByChannel, adsChannelList, adsCompanyPaceChart, adsCompanySummary, adsSpendShareByBrand, adsDecisionRows, adsFunnel, adsKpis, adsWeekly,
-  adsCreativeRows, adsDailyRevenue, adsDailySeries, adsMetricBoard, adsSalePipeline, adsSalesPace, decideAction, adsSalesVsTarget, budgetOf, deliveryOf, revenuePace, budgetPace, change, filterByChannel, normalizeAdPlatform, paceGroup, paceStatus, revenueBasisCards, roasOf, salesTargetOf, share,
+  adsCreativeRows, adsDailyRevenue, adsDailySeries, fillDailySeries, adsMetricBoard, adsSalePipeline, adsSalesPace, decideAction, adsSalesVsTarget, budgetOf, deliveryOf, revenuePace, budgetPace, change, filterByChannel, normalizeAdPlatform, paceGroup, paceStatus, revenueBasisCards, roasOf, salesTargetOf, share,
 } from "../src/modules/marketing/adsOverview.js";
 
 /* ศุกร์ 24 ก.ค. 2026 — สัปดาห์เริ่มจันทร์ 20 ก.ค. (ชุดเดียวกับ mktAnalytics.test.js) */
@@ -210,6 +210,21 @@ describe("งบ + จังหวะใช้เงิน", () => {
     expect(brand.spend).toBe(1500);
     expect(brand.budget).toBeNull();
     expect(paceStatus(brand.pace).text).toBe("ยังไม่ตั้งงบ");
+  });
+  it("โหมดช่วงที่เลือก: adsByBrandChannel/adsCompanySummary ให้ prevSpend + spendChangePct เทียบช่วงก่อน", () => {
+    const cards = [
+      card({ id: "now", brief: brief({ publish_at: null }), metrics: metrics({ spend: 2000, leads: 4, revenue: 8000, measured_at: "2026-07-23T09:00:00.000Z" }) }),
+      card({ id: "prev", brief: brief({ publish_at: null }), metrics: metrics({ spend: 1000, leads: 2, revenue: 5000, measured_at: "2026-07-16T09:00:00.000Z" }) }),
+    ];
+    const PREV = { start: "2026-07-13T00:00:00.000Z", end: "2026-07-20T00:00:00.000Z" };
+    const rows = adsByBrandChannel(cards, RANGE, [{ id: "b_td", name: "TEAMDEE" }], [], "2026-07-24", [], PREV);
+    expect(rows[0].spend).toBe(2000);
+    expect(rows[0].prevSpend).toBe(1000);
+    expect(rows[0].spendChangePct).toBe(100);
+    expect(rows[0].revChangePct).toBe(60);
+    const s = adsCompanySummary(rows, "2026-07-24");
+    expect(s.prevSpend).toBe(1000);
+    expect(s.spendChangePct).toBe(100);
   });
   it("paceStatus: เกินงบ/ใช้เร็ว/ตามแผน/ใช้ช้า/ยังไม่ตั้งงบ — สีคู่กับคำ", () => {
     expect(paceStatus({ used: null, expected: 0.5 }).text).toBe("ยังไม่ตั้งงบ");
@@ -434,6 +449,12 @@ describe("ข้อมูลเฉพาะชั้นแพลตฟอร์�
     expect(rows[0].cpl).toBeNull();
     expect(rows[1].cpl).toBe(200);
     expect(rows[1].roas).toBe(4);
+    const filled = fillDailySeries(rows, { start: "2026-07-01T00:00:00.000Z", end: "2026-07-06T00:00:00.000Z" });
+    expect(filled.map((d) => d.day)).toEqual(["2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05"]);
+    expect(filled[0].spend).toBeNull();    // วันไม่มีข้อมูล = null ไม่ใช่ 0
+    expect(filled[0].cpl).toBeNull();
+    expect(filled[1].spend).toBe(1000);
+    expect(filled[3].cpl).toBe(200);
   });
   it("การ์ดช่องทางพก delivery + แคมเปญย่อย · การ์ดแบรนด์พกเทียบเดือนก่อน", () => {
     const mk = (id, campaign, spend, revenue) => card({

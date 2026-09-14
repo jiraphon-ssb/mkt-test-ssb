@@ -4,7 +4,7 @@
    งบแคมเปญ = งบแพลตฟอร์ม × สัดส่วน (mock) · ROAS ที่นี่คือ attribution (revenue ของแคมเปญ ÷ spend)
    ============================================================ */
 import {
-  ACTION_RULES, adFactRows, adPlatformOf, adsCreativeRows, adsDailySeries, budgetOf, budgetPace,
+  ACTION_RULES, adFactRows, adPlatformOf, adsCreativeRows, adsDailySeries, fillDailySeries, budgetOf, budgetPace,
   change, decideAction, deliveryOf, normalizeAdPlatform, roasOf, share,
 } from "./adsOverview.js";
 
@@ -65,7 +65,7 @@ export function campaignRows(cards, range, { brands = [], adBudgets = [], campai
       ...deliveryOf(m),
       complete: m.complete, days: daily.filter((d) => d.spend > 0).length,
       prev, delta: { spend: change(m.spend, prev.spend), leads: change(m.leads, prev.leads), cpl: change(cpl, prev.cpl), roas: change(roas, prev.roas) },
-      series: { days: daily.map((d) => d.day), spend: daily.map((d) => d.spend), leads: daily.map((d) => d.leads), cpl: daily.map((d) => d.cpl), roas: daily.map((d) => d.roas) },
+      series: (() => { const full = fillDailySeries(daily, range); return { days: full.map((d) => d.day), spend: full.map((d) => d.spend), leads: full.map((d) => d.leads), cpl: full.map((d) => d.cpl), roas: full.map((d) => d.roas) }; })(),
       creatives: adsCreativeRows(g.cards, range, brands, ACTION_RULES),
     };
   }).sort((a, b) => b.spend - a.spend);

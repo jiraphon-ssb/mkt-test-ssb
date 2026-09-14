@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { campaignRows, NO_CAMPAIGN } from "../src/modules/marketing/adsCampaigns.js";
 import { campaignDecision, SAVED_VIEWS, applyView, campaignTotals, sortCampaigns, campaignsByBrand, withSpendShare } from "../src/modules/marketing/adsCampaigns.js";
-import { periodRange, sameDatesLastMonth, isoDay, PERIOD_PRESETS } from "../src/modules/marketing/adsScope.js";
+import { periodRange, sameDatesLastMonth, isoDay, PERIOD_PRESETS, monthGrid, rangeLabel, daysInclusive } from "../src/modules/marketing/adsScope.js";
 
 const RANGE = { start: "2026-07-01T00:00:00.000Z", end: "2026-07-16T00:00:00.000Z" };
 const PREV = { start: "2026-06-16T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z" };
@@ -65,9 +65,12 @@ describe("campaignRows", () => {
     expect(rows[0].budget).toBeNull();
     expect(rows[0].status).toBe("unknown");
   });
-  it("series รายวันมีเฉพาะวันที่มีการ์ด และพก creatives", () => {
+  it("series รายวันครบทุกวันในช่วง (วันไม่มีการ์ด = null) · days นับเฉพาะวันที่มีค่าแอด · พก creatives", () => {
     const [a] = campaignRows(cards, RANGE, opts);
-    expect(a.series.days).toEqual(["2026-07-03", "2026-07-05"]);
+    expect(a.series.days[0]).toBe("2026-07-01");
+    expect(a.series.days).toContain("2026-07-03");
+    expect(a.series.spend[a.series.days.indexOf("2026-07-02")]).toBeNull();
+    expect(a.series.spend[a.series.days.indexOf("2026-07-03")]).toBeGreaterThan(0);
     expect(a.days).toBe(2);
     expect(a.creatives[0].creative).toBe("ชิ้น A");
   });
@@ -243,5 +246,27 @@ describe("adsScope", () => {
     const r = sameDatesLastMonth(periodRange("mtd", null, null, NOW));
     expect(isoDay(new Date(r.start))).toBe("2026-08-01");
   });
-  it("มี preset 3 ตัวตามหน้า Overview", () => { expect(PERIOD_PRESETS.map((p) => p[0])).toEqual(["today", "7d", "mtd"]); });
+  it("preset ครบชุดแบบ Ads Manager และ periodRange รองรับทุก key", () => {
+    expect(PERIOD_PRESETS.map((p) => p[0])).toEqual(["today", "yesterday", "7d", "14d", "30d", "mtd", "lastMonth"]);
+    expect(isoDay(new Date(periodRange("14d", null, null, NOW).start))).toBe("2026-08-30");
+    expect(isoDay(new Date(periodRange("30d", null, null, NOW).start))).toBe("2026-08-14");
+    const y = periodRange("yesterday", null, null, NOW);
+    expect([isoDay(new Date(y.start)), isoDay(new Date(y.end))]).toEqual(["2026-09-11", "2026-09-12"]);
+    const lm = periodRange("lastMonth", null, null, NOW);
+    expect([isoDay(new Date(lm.start)), isoDay(new Date(lm.end))]).toEqual(["2026-08-01", "2026-09-01"]);
+  });
+  it("monthGrid: ก.ย. 2026 เริ่มวันอังคาร · 7 คอลัมน์ · เติม null หัว/ท้าย", () => {
+    const g = monthGrid(2026, 8);
+    expect(g[0]).toEqual([null, null, "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05"]);
+    expect(g.every((w) => w.length === 7)).toBe(true);
+    expect(g.at(-1).slice(0, 3)).toEqual(["2026-09-27", "2026-09-28", "2026-09-29"]);
+    expect(g.flat().filter(Boolean).length).toBe(30);
+  });
+  it("rangeLabel ย่อเดือน/ปีที่ซ้ำ · daysInclusive นับรวมหัวท้าย", () => {
+    expect(rangeLabel("2026-09-01", "2026-09-14")).toBe("1 – 14 ก.ย. 2026");
+    expect(rangeLabel("2026-08-28", "2026-09-14")).toBe("28 ส.ค. – 14 ก.ย. 2026");
+    expect(rangeLabel("2025-12-28", "2026-01-03")).toBe("28 ธ.ค. 2025 – 3 ม.ค. 2026");
+    expect(rangeLabel("2026-09-14", "2026-09-14")).toBe("14 ก.ย. 2026");
+    expect(daysInclusive("2026-09-01", "2026-09-14")).toBe(14);
+  });
 });

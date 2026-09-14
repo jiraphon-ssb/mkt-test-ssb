@@ -1,0 +1,24 @@
+/* Dropdown (ui/Dropdown.jsx) — กล่องปุ่มเท่า select ของระบบ (32px · --surface · ขอบ --line) · เมนูเป็นการ์ดลอย
+   ใช้ specificity .mkt-root … เพื่อชนะ reset ของ mkt-root */
+.mkt-root .dd { position:relative; display:inline-flex; flex-shrink:0; }
+.mkt-root .dd .dd-trigger { display:inline-flex; align-items:center; gap:8px; box-sizing:border-box; height:32px; min-width:130px; padding:0 9px 0 11px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink-soft); font:inherit; font-size:11px; font-weight:600; white-space:nowrap; cursor:pointer; transition:border-color .12s, color .12s, background .12s; }
+.mkt-root .dd .dd-trigger>span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+/* ป้ายชื่ออยู่ในกล่อง: "แบรนด์ · ทุกแบรนด์" — ป้ายสีจางน้ำหนักปกติ ค่าที่เลือกหนา (ระบบเดียวกับปุ่มวันที่) */
+.mkt-root .dd .dd-trigger em.dd-label { font-style:normal; font-weight:500; color:var(--ink-soft); }
+.mkt-root .dd .dd-trigger b { font-weight:700; color:inherit; }
+.mkt-root .dd .dd-trigger svg { flex:none; color:var(--ink-faint); transition:transform .15s; }
+.mkt-root .dd .dd-trigger:hover { color:var(--ink); border-color:var(--ink-faint); }
+.mkt-root .dd.dd--active .dd-trigger { color:var(--ink); }
+.mkt-root .dd.dd--open .dd-trigger,.mkt-root .dd .dd-trigger:focus-visible { outline:none; border-color:var(--aw-accent,var(--accent)); box-shadow:0 0 0 3px color-mix(in srgb,var(--aw-accent,var(--accent)) 22%,transparent); }
+.mkt-root .dd.dd--open .dd-trigger svg { transform:rotate(180deg); }
+.mkt-root .dd-menu { position:absolute; z-index:30; top:calc(100% + 6px); min-width:100%; max-height:320px; margin:0; padding:5px; overflow:auto; list-style:none; border:1px solid var(--line); border-radius:10px; background:var(--surface); box-shadow:var(--shadow-lg); animation:dd-in .12s ease-out; }
+.mkt-root .dd-menu--start { left:0; }.mkt-root .dd-menu--end { right:0; }
+.mkt-root .dd-item { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:32px; padding:0 10px; border-radius:6px; color:var(--ink); font-size:11px; white-space:nowrap; cursor:pointer; }
+.mkt-root .dd-item:hover,.mkt-root .dd-item:focus-visible { outline:none; background:var(--surface-2); }
+.mkt-root .dd-item.is-selected { background:color-mix(in srgb,var(--aw-accent,var(--accent)) 12%,var(--surface)); font-weight:700; }
+.mkt-root .dd-item.is-selected svg { color:var(--aw-accent,var(--accent)); }
+.mkt-root .dd.dd--block,.mkt-root .dd.dd--block .dd-trigger { width:100%; min-width:0; }
+/* ในแถวตัวกรอง: ปุ่มไม่ต้องกว้างขั้นต่ำ 130 ให้พอดีข้อความ (ยังคง 32px) */
+.mkt-root .aw-controls .dd .dd-trigger,.mkt-root .cp-filters .dd .dd-trigger,.mkt-root .cl-filters .dd .dd-trigger { min-width:104px; }
+@keyframes dd-in { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .mkt-root .dd-menu { animation:none; } .mkt-root .dd .dd-trigger svg { transition:none; } }

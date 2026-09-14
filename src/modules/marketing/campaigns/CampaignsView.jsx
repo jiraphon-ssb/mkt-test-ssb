@@ -1,11 +1,14 @@
 /* CampaignsView — หน้าตัดสินใจระดับแคมเปญ · ตัวเลขทั้งหมดมาจาก adsCampaigns.js */
 import { useMemo, useState } from "react";
-import { Settings2 } from "lucide-react";
+import { Search, Settings2 } from "lucide-react";
+import { Dropdown } from "../ui/Dropdown.jsx";
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards, previousRange } from "../mktAnalytics.js";
 import { adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
 import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
-import { isoDay, periodRange, sameDatesLastMonth, PERIOD_PRESETS } from "../adsScope.js";
+import { isoDay, periodRange, sameDatesLastMonth } from "../adsScope.js";
+import { DateRangePicker } from "../ui/DateRangePicker.jsx";
+import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { CampaignsTable } from "./CampaignsTable.jsx";
 import { CampaignDetail } from "./CampaignDetail.jsx";
 import { adsDataHealth } from "../ads/adsDataHealth.js";
@@ -61,8 +64,7 @@ export function CampaignsView() {
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
-  const changeFrom = (next) => { setCustomFrom(next); setCustomTo(next > shownTo ? next : shownTo); setPeriod("custom"); };
-  const changeTo = (next) => { setCustomTo(next); setCustomFrom(next < shownFrom ? next : shownFrom); setPeriod("custom"); };
+  const changeRange = ({ period: nextPeriod, from, to }) => { setPeriod(nextPeriod); setCustomFrom(from); setCustomTo(to); };
   const advancedCount = [status, objective, budgetState].filter((x) => x !== "all").length;
   const clearAdvanced = () => { setStatus("all"); setObjective("all"); setBudgetState("all"); };
 
@@ -73,19 +75,18 @@ export function CampaignsView() {
         <div className="cp-page-actions"><span className="aw-demo"><i /> Mock data</span><a className="aw-settings-link" href="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</a></div>
       </header>
       <div className="cp-filters">
-        <div className="aw-presets" role="group" aria-label="ช่วงเวลาด่วน">{PERIOD_PRESETS.map(([key, label]) => <button type="button" key={key} className={period === key ? "active" : ""} aria-pressed={period === key} onClick={() => setPeriod(key)}>{label}</button>)}</div>
-        <div className="aw-date-range"><label><span>จาก</span><input aria-label="วันที่เริ่มต้น" type="date" value={shownFrom} max={shownTo} onChange={(e) => changeFrom(e.target.value)} /></label><b>–</b><label><span>ถึง</span><input aria-label="วันที่สิ้นสุด" type="date" value={shownTo} min={shownFrom} max={todayLocal} onChange={(e) => changeTo(e.target.value)} /></label></div>
-        <label className="cp-select"><span>แบรนด์</span><select value={v.selectedBrand} onChange={(e) => setBrandSel(e.target.value)}><option value="all">ทุกแบรนด์</option>{v.brands.map((b) => <option key={b.id} value={b.id}>{b.name} · {v.byBrand[b.id]?.count ?? 0}</option>)}</select></label>
-        <label className="cp-select"><span>ช่องทาง</span><select value={channel} onChange={(e) => setChannel(e.target.value)}><option value="all">ทุกช่องทาง</option>{v.channelList.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-        <label className="cp-select cp-compare"><span>เทียบ</span><select value={compare} onChange={(e) => setCompare(e.target.value)}><option value="previous">ช่วงก่อน</option><option value="lastMonth">เดือนก่อน</option></select></label>
-        <div className="cp-basis" role="radiogroup" aria-label="ฐานยอดขาย"><button type="button" role="radio" aria-checked={revenueBasis === "new"} className={revenueBasis === "new" ? "active" : ""} onClick={() => setRevenueBasis("new")}>ยอดใหม่</button><button type="button" role="radio" aria-checked={revenueBasis === "total"} className={revenueBasis === "total" ? "active" : ""} onClick={() => setRevenueBasis("total")}>ยอดรวม</button></div>
+        <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
+        <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((b) => [b.id, `${b.name} · ${v.byBrand[b.id]?.count ?? 0}`])]} value={v.selectedBrand} onChange={setBrandSel} />
+        <Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.channelList.map((c) => [c, c])]} value={channel} onChange={setChannel} />
+        <Dropdown label="เทียบ" options={[["previous", "ช่วงก่อน"], ["lastMonth", "เดือนก่อน"]]} value={compare} onChange={setCompare} />
+        <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
         <details className="cp-more-filters"><summary>ตัวกรอง{advancedCount ? ` · ${advancedCount}` : ""}</summary><div>
-          <label><span>สถานะ</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">ทั้งหมด</option>{v.statuses.map((x) => <option key={x} value={x}>{x === "active" ? "กำลังรัน" : x === "paused" ? "พักอยู่" : "ไม่ระบุ"}</option>)}</select></label>
-          <label><span>เป้าหมาย</span><select value={objective} onChange={(e) => setObjective(e.target.value)}><option value="all">ทั้งหมด</option>{v.objectives.map((x) => <option key={x} value={x}>{x === "unknown" ? "ไม่ระบุ" : x}</option>)}</select></label>
-          <label><span>งบแคมเปญ</span><select value={budgetState} onChange={(e) => setBudgetState(e.target.value)}><option value="all">ทั้งหมด</option><option value="set">ตั้งงบแล้ว</option><option value="missing">ยังไม่ตั้งงบ</option></select></label>
+          <label><span>สถานะ</span><Dropdown className="dd--block" ariaLabel="สถานะ" options={[["all", "ทั้งหมด"], ...v.statuses.map((x) => [x, x === "active" ? "กำลังรัน" : x === "paused" ? "พักอยู่" : "ไม่ระบุ"])]} value={status} onChange={setStatus} /></label>
+          <label><span>เป้าหมาย</span><Dropdown className="dd--block" ariaLabel="เป้าหมาย" options={[["all", "ทั้งหมด"], ...v.objectives.map((x) => [x, x === "unknown" ? "ไม่ระบุ" : x])]} value={objective} onChange={setObjective} /></label>
+          <label><span>งบแคมเปญ</span><Dropdown className="dd--block" ariaLabel="งบแคมเปญ" options={[["all", "ทั้งหมด"], ["set", "ตั้งงบแล้ว"], ["missing", "ยังไม่ตั้งงบ"]]} value={budgetState} onChange={setBudgetState} /></label>
           {advancedCount > 0 && <button type="button" onClick={clearAdvanced}>ล้างตัวกรอง</button>}
         </div></details>
-        <label className="cp-search"><span className="ads-sr-only">ค้นหา</span><input aria-label="ค้นหาแคมเปญ" type="search" placeholder="ค้นหาชื่อแคมเปญ" value={query} onChange={(e) => setQuery(e.target.value)} /></label>
+        <label className="cp-search ads-search"><Search size={14} aria-hidden="true" /><input aria-label="ค้นหาแคมเปญ" type="search" placeholder="ค้นหาชื่อแคมเปญ" value={query} onChange={(e) => setQuery(e.target.value)} /></label>
       </div>
     </section>
 
