@@ -2,17 +2,26 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
-## [Unreleased]
+## [0.3.0] — 2026-09-14
 
 ### feat
-- ads: Meta Pilot — ดึง Insights รายวันระดับ ad ลง `ad_daily_facts` (Edge Function `ads-sync`) · สร้าง `ad_connections` จาก mapping ตอนบันทึกตั้งค่า (`ads-connections`) · ปุ่ม "ดึงข้อมูลตอนนี้" ในหน้าสถานะ Sync
-- ads: ตัวเลือกแหล่งข้อมูล ข้อมูลจำลอง / Meta Pilot (team_lead) บนภาพรวม · แคมเปญ · Creative พร้อมแถบสถานะ (บัญชี · ช่วงข้อมูล · อัปเดตล่าสุด · วันนี้ยังไม่สิ้นสุด) แทนป้าย Mock data
+- ads: Meta Insights sync worker and connection linking (91bfada)
+- ads: Meta Pilot data source switch on ads pages (a1d784c)
+  - ดึง Insights รายวันระดับ ad ลง `ad_daily_facts` (Edge Function `ads-sync`) · สร้าง `ad_connections` จาก mapping ตอนบันทึกตั้งค่า (`ads-connections`) · ปุ่ม "ดึงข้อมูลตอนนี้" ในหน้าสถานะ Sync
+  - ตัวเลือกแหล่งข้อมูล ข้อมูลจำลอง / Meta Pilot (team_lead) บนภาพรวม · แคมเปญ · Creative พร้อมแถบสถานะ (บัญชี · ช่วงข้อมูล · อัปเดตล่าสุด · วันนี้ยังไม่สิ้นสุด) แทนป้าย Mock data
 
 ### fix
-- ads: ยอดขายที่ไม่รู้ (null) ไม่ถูกนับเป็น ฿0 อีกต่อไป ทั้งช่องทาง แคมเปญ แบรนด์ ภาพรวม Creative และกราฟรายวัน
+- ads: keep unknown revenue as null instead of 0 in rollups (0268b88) — ยอดขายที่ไม่รู้ (null) ไม่ถูกนับเป็น ฿0 อีกต่อไป ทั้งช่องทาง แคมเปญ แบรนด์ ภาพรวม Creative และกราฟรายวัน
 
-### ฐานข้อมูล (ยังไม่ apply)
-- migration 0010: `ad_connections.authorization_id` · `ad_daily_facts.link_clicks` · `ad_sync_runs.triggered_by/summary` · กันรันซ้อน · RPC `ads_replace_daily_facts` (service_role) · ปิดการเขียน `ad_connections`/facts/runs จาก client (ถอด policy `ads_connections_admin`)
+### docs
+- ads: Meta Pilot sync spec, plan and setup guide (56bb141)
+
+### ฐานข้อมูล
+- migration 0010 (`20260914163737_ads_sync_worker` · dry-run บนฐานเทสใน transaction ที่ rollback ผ่านครบ): `ad_connections.authorization_id` · `ad_daily_facts.link_clicks` · `ad_sync_runs.triggered_by/summary` · กันรันซ้อน · RPC `ads_replace_daily_facts` (service_role) · ปิดการเขียน `ad_connections`/facts/runs จาก client (ถอด policy `ads_connections_admin`)
+- Edge Functions ใหม่: `ads-connections` · `ads-sync` (บังคับ JWT + team_lead)
+
+### security
+- security review 2026-09-14 (commit c4e147a..56bb141): ไม่พบช่องโหว่ระดับ high/medium · ข้อสังเกตต่ำกว่าเกณฑ์: team_lead ทุกคน sync/ปิด connection ที่ใช้ token ของ team_lead อื่นได้ (ตามดีไซน์ทีมเดียว) · ตรวจ host ของ paging แต่ไม่ตรวจ protocol
 
 ## [0.2.0] — 2026-09-14
 
