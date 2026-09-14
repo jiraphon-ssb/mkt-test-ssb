@@ -90,3 +90,39 @@ describe("0009 เก็บ settings.ads_control ลงฐาน", () => {
     expect(sql).toMatch(/pg_column_size\(ads_control\) < \d+/);
   });
 });
+
+describe("0010 ads sync worker", () => {
+  const sql = readFileSync(new URL("../src/supabase/migrations/0010_ads_sync_worker.sql", import.meta.url), "utf8");
+  const code = sql.replace(/--[^\n]*/g, "");
+  it("connection ผูก authorization (set null เมื่อ token ถูกลบ) · facts มี link_clicks · run มีคนสั่ง/สรุป", () => {
+    expect(code).toMatch(/alter table public\.ad_connections add column if not exists authorization_id uuid\s+references public\.ad_provider_authorizations\(id\) on delete set null/);
+    expect(code).toContain("alter table public.ad_daily_facts add column if not exists link_clicks bigint");
+    expect(code).toMatch(/summary jsonb not null default '\{\}'::jsonb\s+check \(jsonb_typeof\(summary\) = 'object' and pg_column_size\(summary\) < \d+\)/);
+  });
+  it("กันรันซ้อน: unique partial index ต่อ connection เฉพาะ run ที่ยังไม่จบ", () => {
+    expect(code).toMatch(/create unique index if not exists ad_sync_runs_one_active_uidx\s+on public\.ad_sync_runs\(connection_id\) where status in \('queued', 'running'\)/);
+  });
+  it("client เขียน ad_connections / facts / runs ไม่ได้ (เขียนผ่าน Edge Function เท่านั้น)", () => {
+    expect(code).toContain("drop policy if exists ads_connections_admin on public.ad_connections");
+    for (const t of ["ad_connections", "ad_daily_facts", "ad_sync_runs"]) {
+      expect(code).toContain(`revoke insert, update, delete, truncate on public.${t} from anon, authenticated`);
+    }
+  });
+  it("RPC แทนที่ยอด: invoker · search_path ว่าง · เฉพาะ service_role · ตรวจช่วง/run ก่อนลบ", () => {
+    expect(code).toMatch(/function public\.ads_replace_daily_facts\([\s\S]*?\) returns integer\s+language plpgsql security invoker set search_path = ''/);
+    expect(code).toContain("revoke execute on function public.ads_replace_daily_facts(uuid, uuid, text, date, date, jsonb, jsonb) from public, anon, authenticated");
+    expect(code).toContain("grant execute on function public.ads_replace_daily_facts(uuid, uuid, text, date, date, jsonb, jsonb) to service_role");
+    const body = code.slice(code.indexOf("create or replace function public.ads_replace_daily_facts"));
+    for (const guard of ["LEVEL_INVALID", "SYNC_RANGE_INVALID", "RUN_NOT_RUNNING", "ROW_OUTSIDE_RANGE"]) {
+      expect(body.indexOf(guard), guard).toBeGreaterThan(-1);
+      expect(body.indexOf(guard), guard).toBeLessThan(body.indexOf("delete from public.ad_daily_facts"));
+    }
+    expect(body.indexOf("delete from public.ad_daily_facts")).toBeLessThan(body.indexOf("insert into public.ad_daily_facts"));
+    expect(body).toMatch(/set status = 'success', rows_written = written/);
+  });
+  it("มี rollback ของ 0010", () => {
+    const down = readFileSync(new URL("../src/supabase/migrations/rollback/0005-0008_down.sql", import.meta.url), "utf8");
+    expect(down).toContain("drop function if exists public.ads_replace_daily_facts");
+    expect(down).toContain("alter table public.ad_connections drop column if exists authorization_id");
+  });
+});

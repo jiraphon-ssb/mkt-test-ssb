@@ -45,3 +45,19 @@ commit;
 --   แล้ว: alter table public.mkt_settings drop column if exists ads_control;
 --   supabase migration repair --status reverted <version ของ 0009>
 -- ============================================================
+
+-- ============================================================
+-- 0010 rollback (รันก่อน 0009/0005 ถ้าถอยทั้งหมด)
+-- begin;
+--   drop function if exists public.ads_replace_daily_facts(uuid, uuid, text, date, date, jsonb, jsonb);
+--   drop index if exists public.ad_sync_runs_one_active_uidx;
+--   drop index if exists public.ad_sync_runs_triggered_by_idx;
+--   alter table public.ad_sync_runs drop column if exists summary, drop column if exists triggered_by;
+--   alter table public.ad_daily_facts drop column if exists link_clicks;
+--   drop index if exists public.ad_connections_authorization_idx;
+--   alter table public.ad_connections drop column if exists authorization_id;
+--   grant insert, update, delete on public.ad_connections to authenticated;
+--   create policy ads_connections_admin on public.ad_connections for all to authenticated using (mkt_is_team_lead()) with check (mkt_is_team_lead());
+-- commit;
+--   supabase migration repair --status reverted <version ของ 0010>
+-- ============================================================
