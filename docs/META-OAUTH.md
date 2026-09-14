@@ -76,6 +76,31 @@ supabase functions deploy ads-oauth-callback --no-verify-jwt
 
 ปุ่ม `ยกเลิก` เรียก Meta เพิกถอน permission แล้วลบ token ที่เข้ารหัสและรายชื่อบัญชีออกจากฐานข้อมูล
 
+## 6. ดึงยอดจริง (Meta Pilot)
+
+ต้องมี migration `0010_ads_sync_worker.sql` และ deploy 2 ฟังก์ชันเพิ่ม (ทั้งคู่บังคับ JWT + `team_lead`)
+
+```bash
+supabase functions deploy ads-connections
+supabase functions deploy ads-sync
+```
+
+| ขั้น | เกิดอะไรขึ้น |
+|---|---|
+| ตั้งค่า → บัญชี → เปิด "เตรียมดึง" → บันทึก | `ads-connections` สร้าง/อัปเดต `ad_connections` เฉพาะบัญชีที่ผู้บันทึกเชื่อม OAuth เอง · บัญชีที่ปิด mapping = `disabled` (ยอดเก่ายังอยู่) · เหตุผลที่ผูกไม่ได้ขึ้นในแถวแบรนด์ |
+| สถานะ Sync → ดึงข้อมูลตอนนี้ | `ads-sync` ทีละบัญชี · ครั้งแรก = ย้อนหลังตาม "ย้อนหลัง" ในตั้งค่า · ครั้งต่อไป = 3 วันล่าสุดตาม timezone บัญชี |
+| ภาพรวม / แคมเปญ / Creative → ข้อมูล · Meta Pilot | เห็นเฉพาะ `team_lead` · ตัดการ์ดแอดจำลองออกทั้งหมดก่อนแสดงยอดจริง |
+
+กติกาของ worker (`supabase/functions/_shared/metaInsights.js` · `adsSyncJob.js` — มีเทส)
+
+- Insights รายวัน `level=ad` ขอเป็นก้อนละ 7 วัน ตามทุกหน้า · rate limit/ชั่วคราว retry แบบ backoff สูงสุด 4 ครั้ง · token/สิทธิ์เสีย หยุดทันที
+- ผลลัพธ์ = lead event ที่เลือกในตั้งค่า · ยอดขาย = มูลค่า purchase ที่ Meta attribute (บัญชีที่ไม่เคยมี purchase = ไม่รู้ ไม่ใช่ ฿0)
+- ได้ข้อมูลไม่ครบหรือแถวผิดรูป = run `failed` และไม่แตะยอดเดิม · เขียนผ่าน RPC `ads_replace_daily_facts` (ลบ+ใส่ช่วงวันใน transaction เดียว เรียกได้เฉพาะ service_role)
+- รันซ้อนบัญชีเดียวกันไม่ได้ (unique index) · run ค้างเกิน 15 นาทีถูกปิดเป็น `STALE_RUN` ก่อนเริ่มรอบใหม่
+
+ข้อจำกัดที่รู้ตอนนี้: บัญชีใหญ่มากที่ backfill 90–180 วันอาจเกินเวลาของ Edge Function หรือขนาด payload → ลดจำนวนวันย้อนหลังในตั้งค่าก่อน · ยังไม่มี cron (กดดึงเอง)
+
 ## ขอบเขตของขั้นนี้
 
-OAuth และ account discovery พร้อมแล้ว งาน Sync Insights/Creative และการสร้าง `ad_connections` จาก mapping เป็นขั้นถัดไป ต้องผ่านการเทียบยอด 7 และ 30 วันก่อนเปลี่ยนจาก Mock data เป็นข้อมูลจริง
+OAuth · account discovery · สร้าง `ad_connections` · ดึง Insights รายวัน · สลับหน้า ads เป็นยอดจริง (Pilot) พร้อมแล้ว
+ขั้นถัดไป: เทียบยอด 7 และ 30 วันกับ Ads Manager และสุขภาพข้อมูลจากฐานจริง · Creative worker → `ad_creatives` · cron · เปิดให้ทุกคนเห็นยอดจริงหลังตรวจยอดผ่าน
