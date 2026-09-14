@@ -1,0 +1,69 @@
+/* useAdsData — แหล่งการ์ดแอดของทุกหน้า ads (ภาพรวม · แคมเปญ · Creative)
+   ข้อมูลจำลอง = การ์ดเดิม · Meta Pilot = ยอดจริงจาก ad_daily_facts (เฉพาะ team_lead · ต้องมี Supabase)
+   ตัวเลือกจำไว้ในเครื่อง (localStorage) · ยอดจริงเก็บใน cache ระดับโมดูล ไม่โหลดซ้ำทุกครั้งที่สลับหน้า */
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { apiClient } from "../../../foundation/data/apiClient.js";
+import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
+import { useApp } from "../useMkt.jsx";
+import { isoDay } from "../adsScope.js";
+import { adsCardsForSource, factsLoadRange, factsToAdCards, normalizeAdsSource, pilotSummary } from "./adsFacts.js";
+
+const STORAGE_KEY = "ssb.ads.source";
+const EMPTY = { status: "idle", facts: [], connections: [], error: null, loadedAt: null };
+let cache = EMPTY;
+let inflight = null;
+const listeners = new Set();
+const publish = (next) => { cache = next; listeners.forEach((fn) => fn(next)); };
+
+function readSource() {
+  try { return normalizeAdsSource(window.localStorage.getItem(STORAGE_KEY)); } catch { return "mock"; }
+}
+
+export async function loadPilotFacts({ force = false } = {}) {
+  if (inflight) return inflight;
+  if (!force && cache.status === "ready") return cache;
+  publish({ ...cache, status: "loading", error: null });
+  inflight = (async () => {
+    try {
+      const range = factsLoadRange(isoDay(new Date()));
+      const [connections, facts] = await Promise.all([apiClient.ads.connections(), apiClient.ads.facts(range)]);
+      publish({ status: "ready", facts, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });
+    } catch (error) {
+      publish({ ...EMPTY, status: "error", error });
+    } finally {
+      inflight = null;
+    }
+    return cache;
+  })();
+  return inflight;
+}
+
+export function useAdsData() {
+  const { data } = useApp();
+  const { user, demo } = useAuth();
+  const canPilot = !demo && user?.role === "team_lead";
+  const [chosen, setChosen] = useState(readSource);
+  const source = canPilot ? chosen : "mock";
+  const [pilot, setPilot] = useState(cache);
+
+  useEffect(() => { listeners.add(setPilot); return () => { listeners.delete(setPilot); }; }, []);
+  useEffect(() => { if (source === "meta_pilot") loadPilotFacts(); }, [source]);
+
+  const setSource = useCallback((next) => {
+    const value = normalizeAdsSource(next);
+    setChosen(value);
+    try { window.localStorage.setItem(STORAGE_KEY, value); } catch { /* storage ถูกปิด — ใช้ค่าในหน่วยความจำ */ }
+  }, []);
+
+  const today = isoDay(new Date());
+  const realCards = useMemo(() => factsToAdCards(pilot.facts, pilot.connections, { today }), [pilot, today]);
+  const cards = useMemo(() => source === "mock" ? data.cards : adsCardsForSource(data.cards, "meta_pilot", realCards), [source, data.cards, realCards]);
+  const summary = useMemo(() => pilotSummary(pilot.connections, pilot.facts, { today }), [pilot, today]);
+
+  return {
+    source, setSource, canPilot, cards,
+    mockFallback: source === "mock",                   // ยอดใหม่ 62% เป็นค่าจำลอง — ห้ามใช้กับข้อมูลจริง
+    pilot: { status: pilot.status, error: pilot.error, loadedAt: pilot.loadedAt, summary },
+    reload: () => loadPilotFacts({ force: true }),
+  };
+}

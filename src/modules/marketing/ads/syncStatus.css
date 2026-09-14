@@ -12,3 +12,6 @@
 .spin { animation:sy-spin .8s linear infinite; }@keyframes sy-spin{to{transform:rotate(360deg)}}
 @media(max-width:1000px){.sy-kpis,.sy-sources{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.sy-header{display:grid}.sy-header>div:last-child{flex-wrap:wrap}.sy-kpis,.sy-sources{grid-template-columns:1fr}.sy-panel{padding:12px}}
+.mkt-root .sy-header button.sy-sync-now { border-color:transparent; background:var(--aw-accent,var(--accent)); color:var(--on-accent); }
+.mkt-root .sy-header button:disabled { opacity:.5; cursor:not-allowed; }
+.mkt-root .sy-header button:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }

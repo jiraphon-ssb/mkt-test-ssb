@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, LoaderCircle, LogOut, Save, Scale, ShieldAlert, Target } from "lucide-react";
 import { apiClient } from "../../../foundation/data/apiClient.js";
+import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { BrandMark } from "./BrandMark.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, validateAdsConnection } from "./adsConnectorContract.js";
 import { adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
 import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
+import { applyConnectionResult, enabledMetaMappings } from "./adsConnectionSync.js";
+import { adsErrorText } from "./adsSyncMessages.js";
 
 const SOURCE_DETAILS = {
   meta: "Spend · Delivery · Messaging",
@@ -116,7 +119,7 @@ function Connections({ brands, config, setConfig, toast }) {
           <div className="acc-brand-cell"><BrandMark brand={brand} size={30} /><strong>{brand.name}</strong></div>
           <label><span>{source.accountLabel}</span><input list={sourceId === "meta" ? "meta-oauth-accounts" : undefined} value={row.accountId ?? ""} onChange={(event) => { const accountId = event.target.value; const account = accountById.get(accountId); updateMapping(brand.id, { accountId, authorizationId: account?.authorization_id ?? row.authorizationId, oauthStatus: account ? "connected" : row.oauthStatus, accountName: account?.account_name ?? row.accountName }); }} placeholder={sourceId === "meta" && oauth.accounts.length ? "เลือกบัญชีที่เชื่อมแล้ว" : `${source.accountPrefix}000000000`} /></label>
           <div className="acc-locale"><label><span>Timezone</span><Dropdown className="dd--block" ariaLabel={`Timezone ${brand.name}`} options={[["Asia/Bangkok", "Asia/Bangkok"], ["UTC", "UTC"]]} value={row.timezone ?? sourceConfig.timezone} onChange={(value) => updateMapping(brand.id, { timezone: value })} /></label><label><span>Currency</span><Dropdown className="dd--block" ariaLabel={`Currency ${brand.name}`} options={[["THB", "THB"], ["USD", "USD"]]} value={row.currency ?? sourceConfig.currency} onChange={(value) => updateMapping(brand.id, { currency: value })} /></label></div>
-          <div className="acc-connection-state"><span className={`acc-state ${accountById.has(row.accountId) ? "ready" : ""}`}>{accountById.has(row.accountId) ? "OAuth เชื่อมแล้ว" : "ยังไม่เชื่อมบัญชีนี้"}</span>{row.enabled && <small className={validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "ok" : "bad"}>{validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "Mapping พร้อม" : "กรอกไม่ครบ"}</small>}<label className="acc-enable"><input type="checkbox" checked={Boolean(row.enabled)} onChange={(event) => updateMapping(brand.id, { enabled: event.target.checked })} /><span>เตรียมดึง</span></label></div>
+          <div className="acc-connection-state"><span className={`acc-state ${accountById.has(row.accountId) ? "ready" : ""}`}>{accountById.has(row.accountId) ? "OAuth เชื่อมแล้ว" : "ยังไม่เชื่อมบัญชีนี้"}</span>{row.enabled && <small className={validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "ok" : "bad"}>{validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "Mapping พร้อม" : "กรอกไม่ครบ"}</small>}{row.connectionError && <small className="bad" role="alert">{adsErrorText(row.connectionError)}</small>}<label className="acc-enable"><input type="checkbox" checked={Boolean(row.enabled)} onChange={(event) => updateMapping(brand.id, { enabled: event.target.checked })} /><span>เตรียมดึง</span></label></div>
         </div>;
       })}
       {sourceId === "meta" && <datalist id="meta-oauth-accounts">{oauth.accounts.map((account) => <option key={`${account.authorization_id}:${account.external_account_id}`} value={account.external_account_id}>{account.account_name || account.external_account_id}</option>)}</datalist>}
@@ -218,12 +221,35 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const [config, setConfig] = useState(() => ({ mappings: initial.mappings ?? {}, sources: initial.sources ?? {} }));
   const [targets, setTargets] = useState(() => buildTargets(brands, initial.targets));
   const [rules, setRules] = useState(() => ({ ...DEFAULT_RULES, reconciliationTolerance: 1, ...(initial.rules ?? {}) }));
-  const save = () => { onSave({ mappings: config.mappings, sources: config.sources, targets, rules, updatedAt: new Date().toISOString() }); toast?.("บันทึกการตั้งค่าค่าแอดแล้ว", "ok"); };
+  const { demo } = useAuth();
+  const [linking, setLinking] = useState(false);
+  /* บันทึก settings ก่อนเสมอ แล้วค่อยให้ backend สร้าง ad_connections จาก mapping Meta (ตรวจบัญชีกับ OAuth ของผู้บันทึก)
+     ผูกไม่สำเร็จ = ค่าที่กรอกยังอยู่ครบ แจ้งเหตุผลรายแบรนด์ในแถว mapping */
+  const save = async () => {
+    const next = { mappings: config.mappings, sources: config.sources, targets, rules, updatedAt: new Date().toISOString() };
+    onSave(next);
+    const meta = next.mappings?.meta ?? {};
+    const touchesMeta = Object.keys(enabledMetaMappings(next)).length > 0 || Object.values(meta).some((row) => row?.connectionId);
+    if (demo || !touchesMeta) { toast?.("บันทึกการตั้งค่าค่าแอดแล้ว", "ok"); return; }
+    setLinking(true);
+    try {
+      const result = await apiClient.ads.saveConnections(meta, next.sources?.meta ?? {});
+      const merged = applyConnectionResult(next, result);
+      setConfig((current) => ({ ...current, mappings: merged.mappings }));
+      onSave({ ...next, mappings: merged.mappings });
+      const ready = Object.values(merged.mappings.meta ?? {}).filter((row) => row?.enabled && row.connectionId && !row.connectionError).length;
+      toast?.(result.errors.length ? `บันทึกแล้ว · ผูกบัญชี Meta ได้ ${ready} · มีปัญหา ${result.errors.length} แบรนด์` : `บันทึกแล้ว · ผูกบัญชี Meta พร้อมดึงข้อมูล ${ready} แบรนด์`, result.errors.length ? "bad" : "ok");
+    } catch (error) {
+      toast?.(`บันทึกค่าแล้ว แต่ผูกบัญชีกับระบบดึงข้อมูลไม่สำเร็จ · ${adsErrorText(error, "ลองบันทึกอีกครั้ง")}`, "bad");
+    } finally {
+      setLinking(false);
+    }
+  };
   const currentConfig = { ...config, rules };
   const health = adsDataHealth(currentConfig);
   const primaryTabs = [["sources",Link2,"1 · บัญชี"],["targets",Target,"2 · เป้า"],["rules",ShieldAlert,"3 · กฎ"],["reconcile",Scale,"4 · ตรวจยอด"]];
   return <main className="aw acc">
-    <header className="acc-header"><div><Link to="/mkt/ads"><ArrowLeft size={15} /> Overview ads</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div><button type="button" className="acc-save" onClick={save}><Save size={16} /> บันทึก</button></header>
+    <header className="acc-header"><div><Link to="/mkt/ads"><ArrowLeft size={15} /> Overview ads</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div><button type="button" className="acc-save" onClick={save} disabled={linking} aria-busy={linking}>{linking ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} {linking ? "กำลังผูกบัญชี…" : "บันทึก"}</button></header>
     <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
       {primaryTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}
     </nav>

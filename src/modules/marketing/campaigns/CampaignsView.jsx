@@ -14,11 +14,14 @@ import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { CampaignsTable } from "./CampaignsTable.jsx";
 import { CampaignDetail } from "./CampaignDetail.jsx";
 import { adsDataHealth } from "../ads/adsDataHealth.js";
+import { useAdsData } from "../ads/useAdsData.js";
+import { AdsSourceControl, AdsSourceNotice } from "../ads/AdsSourceControl.jsx";
 import "../ads/adsWorkspace.css";
 import "./campaigns.css";
 
 export function CampaignsView() {
   const { data, inBrandScope, brandFilter } = useApp();
+  const ads = useAdsData();
   const todayLocal = isoDay(new Date());
   const [period, setPeriod] = useState("mtd");
   const [customFrom, setCustomFrom] = useState(todayLocal.slice(0, 8) + "01");
@@ -33,7 +36,7 @@ export function CampaignsView() {
   const [query, setQuery] = useState("");
 
   const v = useMemo(() => {
-    const scopedAll = revenueBasisCards(analyticsCards(data.cards).filter(inBrandScope), revenueBasis, { mockFallback: true });
+    const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
     const range = periodRange(period, customFrom, customTo);
     const before = compare === "lastMonth" ? sameDatesLastMonth(range) : previousRange(range);
@@ -65,7 +68,7 @@ export function CampaignsView() {
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
       dataHealth,
     };
-  }, [data, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis, todayLocal]);
+  }, [data, ads.cards, ads.mockFallback, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis, todayLocal]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
@@ -77,8 +80,9 @@ export function CampaignsView() {
     <section className="cp-command" aria-label="ตัวกรองแคมเปญ">
       <header className="cp-page-head">
         <div><h1>แคมเปญ</h1><p>ดูผลงานและเลือกรายการที่ควรทำต่อ</p></div>
-        <div className="cp-page-actions"><span className="aw-demo"><i /> Mock data</span><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div>
+        <div className="cp-page-actions"><AdsSourceControl ads={ads} /><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div>
       </header>
+      <AdsSourceNotice ads={ads} />
       <div className="cp-filters">
         <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
         <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((b) => [b.id, `${b.name} · ${v.byBrand[b.id]?.count ?? 0}`])]} value={v.selectedBrand} onChange={setBrandSel} />
@@ -95,7 +99,8 @@ export function CampaignsView() {
       </div>
     </section>
 
-    <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><Link to="/mkt/ads/sync">ดูสถานะ Sync</Link></section>
+    {/* โหมด Meta Pilot: สถานะข้อมูลอยู่ในแถบแหล่งข้อมูลแล้ว · กล่องนี้อ่านจาก settings (ข้อมูลจำลอง) จะขัดกัน — สุขภาพจากฐานจริงทำในรอบถัดไป */}
+    {ads.source === "mock" && <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><Link to="/mkt/ads/sync">ดูสถานะ Sync</Link></section>}
 
     <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} goalTargets={v.goalTargets} targetPeriod={v.targetPeriod} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} />} />
   </main>;

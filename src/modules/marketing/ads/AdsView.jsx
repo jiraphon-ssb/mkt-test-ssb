@@ -10,6 +10,7 @@ import { Dropdown } from "../ui/Dropdown.jsx";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
+import { useAdsData } from "./useAdsData.js";
 import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues } from "../adsTargets.js";
 import { GoalLine } from "../ui/GoalLine.jsx";
 
@@ -236,6 +237,7 @@ function ChannelCard({ c, monthView = true }) {
 
 export function AdsView() {
   const { data, inBrandScope, brandFilter, updateAdsControl, toast } = useApp();
+  const ads = useAdsData();
   const todayLocal = isoDay(new Date());
   const [period, setPeriod] = useState("mtd");
   const [customFrom, setCustomFrom] = useState(todayLocal.slice(0, 8) + "01");
@@ -245,7 +247,7 @@ export function AdsView() {
   const [revenueBasis, setRevenueBasis] = useState("total");
 
   const v = useMemo(() => {
-    const scopedAll = revenueBasisCards(analyticsCards(data.cards).filter(inBrandScope), revenueBasis, { mockFallback: true });
+    const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
     const range = periodRange(period, customFrom, customTo);
     const before = compare === "lastMonth" ? sameDatesLastMonth(range) : previousRange(range);
@@ -286,13 +288,13 @@ export function AdsView() {
       overallPipeline,
       goals,
     };
-  }, [data, inBrandScope, period, customFrom, customTo, compare, brandFilter, channel, revenueBasis]);
+  }, [data, ads.cards, ads.mockFallback, inBrandScope, period, customFrom, customTo, compare, brandFilter, channel, revenueBasis]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
   const changeRange = ({ period: nextPeriod, from, to }) => { setPeriod(nextPeriod); setCustomFrom(from); setCustomTo(to); };
 
-  return <AdsWorkspace v={v} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
+  return <AdsWorkspace v={v} ads={ads} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
     <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
     <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
     <Dropdown label="ช่องทาง" options={[["all", "ทั้งหมด"], ...v.channelList.map((item) => [item, item])]} value={channel} onChange={setChannel} />

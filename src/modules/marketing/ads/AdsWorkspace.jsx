@@ -8,13 +8,14 @@ import './adsWorkspace.css';
 import { WorkspaceTrends } from './WorkspaceTrends.jsx';
 import { AdsControlCenter } from './AdsControlCenter.jsx';
 import { GoalLine } from '../ui/GoalLine.jsx';
+import { AdsSourceControl, AdsSourceNotice } from './AdsSourceControl.jsx';
 
 const money = n => n == null ? '—' : fmtMoney(n);
 const pct = n => n == null ? '—' : fmtPct(n, 1);
 function Track({ value, expected, label, tone }) {
   return <div className="aw-track" role="img" aria-label={`${label}: ${pct(value)} · จังหวะวันนี้ ${pct(expected)}`}><i className={tone} style={{width:`${Math.max(0,Math.min(100,(value ?? 0)*100))}%`}} />{expected != null && <em style={{left:`${Math.min(100,expected*100)}%`}} />}</div>;
 }
-export function AdsWorkspace({ v, controls, ChannelCard, SalePipeline, settings, updateAdsControl, toast }) {
+export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, settings, updateAdsControl, toast }) {
   const { search } = useLocation();
   const [selected, setSelected] = useState(null);
   const [tab, setTab] = useState('platform');
@@ -35,7 +36,7 @@ export function AdsWorkspace({ v, controls, ChannelCard, SalePipeline, settings,
     return <AdsControlCenter brands={v.brands} saved={settings?.ads_control} onSave={updateAdsControl} toast={toast}/>;
   }
   return <main className="aw">
-    <section className="aw-toolbar" aria-label="ตัวกรองรายงาน"><header className="aw-header"><div><h1>Overview ads</h1><p>ยอดขาย งบ และประสิทธิภาพรวมทุกแบรนด์</p></div><div className="aw-header-actions"><span className="aw-demo"><i/> Mock data</span><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15}/> ตั้งค่า</Link></div></header><div className="aw-controls">{controls}</div></section>
+    <section className="aw-toolbar" aria-label="ตัวกรองรายงาน"><header className="aw-header"><div><h1>Overview ads</h1><p>ยอดขาย งบ และประสิทธิภาพรวมทุกแบรนด์</p></div><div className="aw-header-actions"><AdsSourceControl ads={ads}/><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15}/> ตั้งค่า</Link></div></header><AdsSourceNotice ads={ads}/><div className="aw-controls">{controls}</div></section>
     <div className="aw-layout">
       <aside className="aw-brands"><div className="aw-section-label">พอร์ตแบรนด์ <span>{v.brands.length}</span></div><p>{mv ? `${revenueLabel}และเป้ารวมเดือนปัจจุบัน` : `${revenueLabel} · ${v.rangeLabel}`}</p>{<button type="button" className={`aw-brand ${overview?'selected':''}`} aria-pressed={overview} onClick={()=>setSelected(null)}><div><strong>ภาพรวมทุกแบรนด์</strong><span>↗</span></div><b>{money(s.revenue)}</b><small> {mv ? `${revenueLabel}เดือนปัจจุบัน` : v.rangeLabel}</small></button>}{v.brands.map(x=>{const st=mv?salesPaceStatus(x.revPace.pctOfExpected):chg(x.revChangePct);return <button key={x.id} type="button" className={`aw-brand ${x.id===b?.id?'selected':''}`} onClick={()=>setSelected(x.id)} aria-pressed={x.id===b?.id}><div><BrandMark brand={x}/><strong>{x.name}</strong><span>↗</span></div><div><b>{money(x.revenue)}</b><small>{mv ? `${pct(x.revPct)} ของเป้ารวม` : `${pct(x.revShare)} ของยอดรวม`}</small></div>{mv ? <Track value={x.revPct} expected={x.pace.expected} label={x.name} tone={st.tone}/> : <Track value={x.revShare} label={x.name} tone="zinc"/>}<small className={st.tone}>{st.text}</small></button>})}<div className="aw-key">{mv ? 'ขีดบนแถบ = จังหวะที่ควรถึงวันนี้' : 'แถบ = สัดส่วนของยอดรวมในช่วงที่เลือก'}</div></aside>
       {b ? <div className="aw-content">

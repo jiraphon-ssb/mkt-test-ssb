@@ -2400,6 +2400,15 @@ const marketing = {
   },
 };
 
+/** Edge Function ตอบ { error: CODE } — ดึงรหัสออกมาเป็น message (แสดงผลแปลไทยที่หน้าจอ) */
+async function adsFunctionError(error, fallback) {
+  try {
+    const body = await error?.context?.json?.();
+    if (body?.error) { const e = new Error(body.error); e.code = body.error; return e; }
+  } catch { /* body ไม่ใช่ JSON */ }
+  const e = new Error(fallback); e.code = fallback; return e;
+}
+
 /** Ads connectors — browser receives OAuth URLs and sync status only.
  * Provider tokens stay inside Edge Functions/server secrets. */
 const adsData = {
@@ -2428,11 +2437,34 @@ const adsData = {
     if (error) throw error;
     return data;
   },
-  async sync(connectionId, mode = "incremental") {
+  /** mode: "auto" (ครั้งแรก = backfill ไม่งั้น incremental) · "incremental" · "backfill" */
+  async sync(connectionId, mode = "auto") {
     const db = requireSupabase();
     const { data, error } = await db.functions.invoke("ads-sync", { body: { connectionId, mode } });
-    if (error) throw error;
+    if (error) throw await adsFunctionError(error, "SYNC_FAILED");
     return data;
+  },
+  /** สร้าง/อัปเดต/ปิด ad_connections จาก mapping ของหน้าตั้งค่า (ตรวจบัญชีฝั่ง server) */
+  async saveConnections(mappings, source) {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-connections", { body: { mappings, source } });
+    if (error) throw await adsFunctionError(error, "CONNECTIONS_SAVE_FAILED");
+    return { connections: data?.connections ?? [], errors: data?.errors ?? [], disabled: data?.disabled ?? [] };
+  },
+  /** ยอดรายวันระดับ ad · PostgREST ตัดที่ 1000 แถว/ครั้ง → อ่านเป็นหน้าจนหมด */
+  async facts({ from, to }) {
+    const db = requireSupabase();
+    const page = 1000, rows = [];
+    for (let offset = 0; offset < 200000; offset += page) {
+      const { data, error } = await db.from("ad_daily_facts")
+        .select("connection_id,fact_date,level,campaign_id,campaign_name,ad_group_id,ad_group_name,ad_id,ad_name,spend,reach,impressions,clicks,link_clicks,leads,attributed_conversions,attributed_value,attribution_window")
+        .eq("level", "ad").gte("fact_date", from).lte("fact_date", to)
+        .order("fact_date").order("id").range(offset, offset + page - 1);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if (!data || data.length < page) break;
+    }
+    return rows;
   },
   async recentSyncs(limit = 20) {
     const db = requireSupabase();

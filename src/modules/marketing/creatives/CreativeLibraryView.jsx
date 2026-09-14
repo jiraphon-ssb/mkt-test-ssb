@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, Film, Image as ImageIcon, Search, Settings2, X } from "lucide-react";
 import { useApp } from "../useMkt.jsx";
+import { useAdsData } from "../ads/useAdsData.js";
+import { AdsSourceControl, AdsSourceNotice } from "../ads/AdsSourceControl.jsx";
 import { analyticsCards } from "../mktAnalytics.js";
 import { adsCreativeRows } from "../adsOverview.js";
 import { isoDay, periodRange } from "../adsScope.js";
@@ -42,6 +44,7 @@ function CompareTray({ rows, onRemove, onClear }) {
 
 export function CreativeLibraryView() {
   const { data, inBrandScope, brandFilter, toast } = useApp();
+  const ads = useAdsData();
   const today = isoDay(new Date());
   const [period, setPeriod] = useState("mtd");
   const [from, setFrom] = useState(today.slice(0, 8) + "01");
@@ -54,19 +57,19 @@ export function CreativeLibraryView() {
   const [selected, setSelected] = useState([]);
   const v = useMemo(() => {
     const range = periodRange(period, from, to);
-    const cards = analyticsCards(data.cards).filter(inBrandScope);
+    const cards = analyticsCards(ads.cards).filter(inBrandScope);
     const brands = (data.brands ?? []).filter((item) => item.active !== false && (brandFilter === "all" || item.id === brandFilter));
     const all = adsCreativeRows(cards, range, brands);
     const platforms = [...new Set(all.map((row) => row.platform))].sort();
     const rows = filterCreativeLibrary(all, { brand, platform, state, sort, query });
     return { rows, all, brands, platforms, summary: creativeLibrarySummary(rows), range };
-  }, [data, inBrandScope, brandFilter, period, from, to, brand, platform, state, sort, query]);
+  }, [data, ads.cards, inBrandScope, brandFilter, period, from, to, brand, platform, state, sort, query]);
   const chosen = selected.map((key) => v.all.find((row) => row.key === key)).filter(Boolean);
   const toggle = (key) => setSelected((current) => current.includes(key) ? current.filter((item) => item !== key) : current.length >= 4 ? (toast?.("เทียบได้สูงสุด 4 ชิ้น", "bad"), current) : [...current, key]);
   const fromShown = isoDay(new Date(v.range.start));
   const toShown = isoDay(new Date(new Date(v.range.end).getTime() - 1));
   return <main className="aw cl">
-    <section className="cl-command"><header><div><h1>Creative Library</h1><p>ดูชิ้นงานที่ทำเงิน ชิ้นที่เริ่มล้า และเลือกมาเทียบกัน</p></div><div className="cl-head-actions"><span className="aw-demo"><i /> Mock data</span><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div></header>
+    <section className="cl-command"><header><div><h1>Creative Library</h1><p>ดูชิ้นงานที่ทำเงิน ชิ้นที่เริ่มล้า และเลือกมาเทียบกัน</p></div><div className="cl-head-actions"><AdsSourceControl ads={ads} /><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div></header><AdsSourceNotice ads={ads} />
       <div className="cl-filters"><DateRangePicker period={period} from={fromShown} to={toShown} max={today} onChange={({ period: nextPeriod, from: nextFrom, to: nextTo }) => { setPeriod(nextPeriod); setFrom(nextFrom); setTo(nextTo); }} />
         <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((item) => [item.id, item.name])]} value={brand} onChange={setBrand} /><Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.platforms.map((item) => [item, item])]} value={platform} onChange={setPlatform} /><Dropdown label="สถานะ" options={[["all", "ทั้งหมด"], ["fatigue", "เริ่มล้า"], ["ready", "มีสื่อแล้ว"], ["waiting", "รอสื่อ"]]} value={state} onChange={setState} /><Dropdown label="เรียง" options={[["spend", "ค่าแอดสูงสุด"], ["roas", "ROAS สูงสุด"], ["cpl", "CPL ต่ำสุด"], ["ctr", "CTR สูงสุด"], ["frequency", "เห็นซ้ำสูงสุด"]]} value={sort} onChange={setSort} /><label className="cl-search ads-search"><Search size={14} aria-hidden="true" /><input type="search" aria-label="ค้นหาครีเอทีฟ" placeholder="ค้นหาชิ้นงานหรือแคมเปญ" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       </div>
