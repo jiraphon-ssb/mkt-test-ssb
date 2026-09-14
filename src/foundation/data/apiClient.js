@@ -2416,6 +2416,18 @@ const adsData = {
     if (!data?.authorizeUrl) throw new Error("OAuth URL was not returned");
     return data.authorizeUrl;
   },
+  async oauthStatus(provider = "meta") {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-oauth-status", { body: { provider } });
+    if (error) throw error;
+    return { authorizations: data?.authorizations ?? [], accounts: data?.accounts ?? [] };
+  },
+  async disconnectOAuth(authorizationId, revoke = true) {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-oauth-disconnect", { body: { authorizationId, revoke } });
+    if (error) throw error;
+    return data;
+  },
   async sync(connectionId, mode = "incremental") {
     const db = requireSupabase();
     const { data, error } = await db.functions.invoke("ads-sync", { body: { connectionId, mode } });
