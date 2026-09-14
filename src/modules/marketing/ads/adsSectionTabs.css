@@ -48,6 +48,32 @@
 .mkt-root .ads-suite .aw-trend-controls .aw-tabs>button { display:inline-flex; align-items:center; box-sizing:border-box; height:34px; padding:0; }
 .mkt-root .ads-suite .aw-trend-controls .aw-tabs .dd { align-self:flex-start; margin:0; }
 .mkt-root .ads-suite .aw-trend-controls .aw-tabs .dd .dd-trigger>span { font-size:12px; margin-left:0; }
+/* หน้าตั้งค่า: กลุ่มช่องเป้าในการ์ดแบรนด์ */
+.mkt-root .acc-target-group { margin:0 0 14px; padding:0; border:0; }
+.mkt-root .acc-target-group:last-child { margin-bottom:0; }
+.mkt-root .acc-target-group legend { display:flex; align-items:baseline; gap:8px; width:100%; margin:0 0 8px; padding:10px 0 0; border-top:1px solid var(--line); color:var(--ink); font-size:11px; font-weight:700; }
+.mkt-root .acc-target-group:first-of-type legend { padding-top:0; border-top:0; }
+.mkt-root .acc-target-group legend small { color:var(--ink-soft); font-size:10px; font-weight:400; }
+.mkt-root .acc-target-group .acc-input-unit b { white-space:nowrap; }
+
+/* เป้าบนหน้า Overview/แคมเปญ: "เป้า X · ทำได้ Y% · สถานะ" + แถบความคืบหน้า */
+.mkt-root .ads-goal { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-top:6px; font-size:10px; line-height:1.4; color:var(--ink-soft); }
+.mkt-root .ads-goal b { font-weight:700; }
+.mkt-root .ads-goal .emerald { color:var(--ok-text); }.mkt-root .ads-goal .amber { color:var(--warn-text); }.mkt-root .ads-goal .rose { color:var(--bad-text); }.mkt-root .ads-goal .zinc { color:var(--ink-faint); }
+.mkt-root .ads-goal-bar { position:relative; flex:1 1 100%; height:4px; border-radius:99px; background:var(--surface-2); overflow:hidden; }
+.mkt-root .ads-goal-bar i { position:absolute; inset:0 auto 0 0; border-radius:99px; background:var(--ink-faint); }
+.mkt-root .ads-goal-bar i.emerald { background:var(--ok); }.mkt-root .ads-goal-bar i.amber { background:var(--warn); }.mkt-root .ads-goal-bar i.rose { background:var(--bad); }
+.mkt-root .ads-goal-bar em { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--ink); opacity:.55; }
+.mkt-root .ads-suite .aw-efficiency>div:not(:first-child) { flex-wrap:wrap; }
+.mkt-root .ads-suite .aw-efficiency .ads-goal { flex:1 1 100%; margin-top:8px; }
+.mkt-root .ads-suite .aw-efficiency .ads-goal b,.mkt-root .ads-pipe .ads-goal b,.mkt-root .cp-summary .ads-goal b { font-size:inherit; line-height:inherit; font-family:inherit; letter-spacing:0; }
+.mkt-root .cp-summary .ads-goal { margin-top:4px; }
+.mkt-root .ads-pipe-item .ads-goal { grid-column:1/-1; }
+
+/* การ์ด "ประสิทธิภาพ" ขึ้นก่อน "งบโฆษณา/ค่าแอด" — เน้น ROAS/%Ads ก่อนงบ · คอลัมน์แคบอยู่ซ้าย · จอแคบซ้อนเป็นอันแรก */
+.mkt-root .ads-suite .aw-middle { grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); }
+.mkt-root .ads-suite .aw-middle>.aw-efficiency { order:-1; }
+@media(max-width:1100px){ .mkt-root .ads-suite .aw-middle { grid-template-columns:1fr; } }
 .ads-section-tabs-wrap { width:100%; margin:0; padding:0; }
 .ads-section-tabs { display:flex; align-items:center; gap:3px; width:max-content; max-width:100%; padding:4px; overflow-x:auto; border:1px solid var(--line); border-radius:9px; background:var(--surface); scrollbar-width:none; }.ads-section-tabs::-webkit-scrollbar{display:none}
 /* สีลิงก์: ต้องใช้ specificity สูงกว่า rule ลิงก์ของแพลตฟอร์ม ไม่งั้นแท็บที่ไม่ active กลายเป็นสีม่วงของลิงก์ทั่วไป */

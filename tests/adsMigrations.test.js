@@ -73,3 +73,15 @@ describe("ads migrations vs ฐานจริง", () => {
     expect(fn.includes('from("profiles")')).toBe(false);
   });
 });
+
+describe("0009 เก็บ settings.ads_control ลงฐาน", () => {
+  const sql = readFileSync(new URL("../src/supabase/migrations/0009_mkt_settings_ads_control.sql", import.meta.url), "utf8");
+  it("เพิ่มคอลัมน์ jsonb object · wrapper ยังกันสิทธิ์ครบเหมือน 0008 · เขียน ads_control เฉพาะ team_lead", () => {
+    expect(sql).toContain("alter table public.mkt_settings add column if not exists ads_control jsonb not null default '{}'::jsonb");
+    expect(sql).toMatch(/if \(select auth\.uid\(\)\) is null then[\s\S]*AUTH_REQUIRED/);
+    expect(sql).toMatch(/security definer set search_path = ''/);
+    expect(sql).toMatch(/update public\.mkt_profile p set auth_user_id = s\.auth_user_id/);
+    expect(sql).toMatch(/if caller_is_lead and jsonb_typeof\(payload->'settings'->'ads_control'\) = 'object' then/);
+    expect(sql).toContain("revoke execute on function public.mkt_save_state(jsonb) from public, anon");
+  });
+});

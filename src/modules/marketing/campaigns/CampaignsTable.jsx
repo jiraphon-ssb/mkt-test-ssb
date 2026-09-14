@@ -6,6 +6,8 @@ import { baseOpts, chartColor, dayLabel, fmtCompact, fmtInt, fmtMoney, fmtPct, l
 import { Icon } from "../mktIcon.jsx";
 import { X } from "lucide-react";
 import { Dropdown } from "../ui/Dropdown.jsx";
+import { GoalLine } from "../ui/GoalLine.jsx";
+import { goalsFor } from "../adsTargets.js";
 
 const fmtRoas = (x) => (x == null ? "—" : `${x.toFixed(1)}x`);
 const STATUS = { active: "กำลังรัน", paused: "พักอยู่", unknown: "ไม่ระบุสถานะ" };
@@ -36,7 +38,7 @@ function BudgetPace({ row }) {
   </div>;
 }
 
-export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, revenueLabel }) {
+export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, revenueLabel, goalTargets = null, targetPeriod = null }) {
   const [view, setView] = useState("all");
   const [sortValue, setSortValue] = useState("spend:desc");
   const [columnView, setColumnView] = useState("decision");
@@ -45,6 +47,8 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
   const [sortKey, sortDir] = sortValue.split(":");
   const shown = useMemo(() => sortCampaigns(applyView(rows, view), sortKey, sortDir), [rows, view, sortKey, sortDir]);
   const totals = useMemo(() => campaignTotals(shown), [shown]);
+  /* ผลลัพธ์ของแคมเปญ = คนทักจากโฆษณา → เทียบเป้าคนทัก · CPL/ROAS/%Ads เทียบเป้าอัตราส่วน */
+  const goals = useMemo(() => goalTargets ? goalsFor({ inquiries: totals.leads, cpl: totals.cpl, roas: totals.roas, pctAds: totals.pctAds }, goalTargets, targetPeriod) : null, [totals, goalTargets, targetPeriod]);
   const counts = useMemo(() => Object.fromEntries(SAVED_VIEWS.map((s) => [s.key, applyView(rows, s.key).length])), [rows]);
   const trend = useMemo(() => {
     const days = [...new Set(shown.flatMap((r) => r.series?.days ?? []))].sort();
@@ -104,8 +108,8 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
     </div>
     <div className="cp-summary" aria-label="สรุปแคมเปญตามตัวกรอง">
       <article className="cp-summary-main"><span>ค่าแอด</span><strong className="mono">{fmtMoney(totals.spend)}</strong><small>{totals.count} แคมเปญ · งบที่ตั้ง {totals.budget != null ? fmtMoney(totals.budget) : "—"}</small>{totals.budget != null && totals.budgetRows < totals.count && <em>{totals.budgetRows}/{totals.count} แคมเปญมีงบ</em>}</article>
-      <article><span>ผลลัพธ์</span><strong className="mono">{fmtInt(totals.leads)}</strong><small>CPL {totals.cpl != null ? fmtMoney(totals.cpl) : "—"}</small></article>
-      <article><span>{revenueLabel}</span><strong className="mono">{fmtMoney(totals.revenue)}</strong><small>ROAS แพลตฟอร์ม {fmtRoas(totals.roas)} · %Ads {totals.pctAds != null ? fmtPct(totals.pctAds, 1) : "—"}</small></article>
+      <article><span>ผลลัพธ์</span><strong className="mono">{fmtInt(totals.leads)}</strong><small>CPL {totals.cpl != null ? fmtMoney(totals.cpl) : "—"}</small>{goals && <><GoalLine metric="inquiries" goal={goals.inquiries} /><GoalLine metric="cpl" goal={goals.cpl} compact /></>}</article>
+      <article><span>{revenueLabel}</span><strong className="mono">{fmtMoney(totals.revenue)}</strong><small>ROAS แพลตฟอร์ม {fmtRoas(totals.roas)} · %Ads {totals.pctAds != null ? fmtPct(totals.pctAds, 1) : "—"}</small>{goals && <><GoalLine metric="roas" goal={goals.roas} compact /><GoalLine metric="pctAds" goal={goals.pctAds} compact /></>}</article>
     </div>
 
     <div className="cp-list-head">

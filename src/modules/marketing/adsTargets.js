@@ -1,0 +1,100 @@
+/* ============================================================
+   adsTargets — เป้าของตัวชี้วัดโฆษณา (pure · มีเทสใน tests/adsTargets.test.js)
+   ค่าที่หน้าตั้งค่าเก็บ: settings.ads_control.targets[brandId] = {
+     revenue, budget,                 ← เป้าเงิน (ใช้เป็นน้ำหนักตอนรวมภาพรวม)
+     roas (×), pctAds (%), cpl (฿),   ← เป้าอัตราส่วน — ไม่ขึ้นกับความยาวช่วง
+     inquiries, qualified, deposits, closed  ← เป้ายอดนับ "ต่อเดือน" ของกรวยยอดขาย }
+   ดี/แย่ตัดสินจากเป้า ไม่ใช่จากการเทียบช่วงก่อนอย่างเดียว
+   ============================================================ */
+
+export const TARGET_METRICS = [
+  { key: "roas", label: "ROAS", kind: "ratio", better: "higher", setting: "roas" },
+  { key: "pctAds", label: "%Ads", kind: "ratio", better: "lower", setting: "pctAds", scale: 0.01 },
+  { key: "cpl", label: "CPL", kind: "ratio", better: "lower", setting: "cpl" },
+  { key: "inquiries", label: "คนทัก", kind: "count", better: "higher", setting: "inquiries" },
+  { key: "qualified", label: "Lead", kind: "count", better: "higher", setting: "qualified" },
+  { key: "deposits", label: "มัดจำ", kind: "count", better: "higher", setting: "deposits" },
+  { key: "closed", label: "ออเดอร์ปิดแล้ว", kind: "count", better: "higher", setting: "closed" },
+];
+const METRIC_BY_KEY = Object.fromEntries(TARGET_METRICS.map((m) => [m.key, m]));
+
+const positive = (v) => {
+  const n = Number(v);
+  return v != null && v !== "" && Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/** ค่าจากหน้าตั้งค่า → หน่วยเดียวกับตัวชี้วัด · 0/ว่าง/ติดลบ = ยังไม่ตั้ง (null) */
+export function normalizeTargets(raw) {
+  return Object.fromEntries(TARGET_METRICS.map((m) => {
+    const v = positive(raw?.[m.setting]);
+    return [m.key, v == null ? null : v * (m.scale ?? 1)];
+  }));
+}
+
+/* น้ำหนักตอนรวมอัตราส่วน: ROAS ถ่วงด้วยงบ · %Ads ถ่วงด้วยเป้ายอดขาย · CPL ถ่วงด้วยเป้าคนทัก */
+const WEIGHT_OF = { roas: "budget", pctAds: "revenue", cpl: "inquiries" };
+
+/** เป้าภาพรวมจากเป้ารายแบรนด์ (ค่าดิบจากหน้าตั้งค่า) — แบรนด์ไหนไม่ได้ตั้งตัวใด เป้ารวมตัวนั้น = null */
+export function combineTargets(rawList = []) {
+  const list = rawList.map((raw) => ({ raw: raw ?? {}, t: normalizeTargets(raw) }));
+  const out = { coverage: { brands: list.length }, missing: {} };
+  for (const m of TARGET_METRICS) {
+    const missing = list.filter((b) => b.t[m.key] == null).length;
+    out.missing[m.key] = missing;
+    if (!list.length || missing > 0) { out[m.key] = null; continue; }
+    if (m.kind === "count") { out[m.key] = list.reduce((n, b) => n + b.t[m.key], 0); continue; }
+    const weights = list.map((b) => positive(b.raw[WEIGHT_OF[m.key]]));
+    const useWeights = weights.every((w) => w != null);
+    const sw = useWeights ? weights.reduce((a, b) => a + b, 0) : list.length;
+    out[m.key] = list.reduce((n, b, i) => n + b.t[m.key] * (useWeights ? weights[i] : 1), 0) / sw;
+  }
+  return out;
+}
+
+const tone3 = (ratio, texts) => (ratio >= 1 ? ["emerald", texts[0]] : ratio >= 0.9 ? ["amber", texts[1]] : ["rose", texts[2]]);
+
+/** ทำได้เท่าไรจากเป้า
+    period: { mode: "month", elapsed: 0–1 } — ยอดนับเทียบเป้าเดือน แต่ตัดสินจากจังหวะที่ควรถึงวันนี้
+            { mode: "range", rangeDays, monthDays } — ยอดนับใช้เป้าเดือนเฉลี่ยตามจำนวนวันในช่วง
+    อัตราส่วน (ROAS/%Ads/CPL) ใช้เป้าตรงๆ ไม่ขึ้นกับช่วง */
+export function targetProgress(metric, value, target, period = { mode: "month", elapsed: 1 }) {
+  if (target == null) return { state: "unset", tone: "zinc", text: "ยังไม่ตั้งเป้า", target: null };
+  const m = typeof metric === "string" ? METRIC_BY_KEY[metric] : metric;
+  if (m.kind === "count") {
+    const monthTarget = target;
+    const goal = period.mode === "range" ? target * (period.rangeDays / period.monthDays) : target;
+    const expected = period.mode === "range" ? goal : target * (period.elapsed ?? 1);
+    if (value == null) return { state: "nodata", tone: "zinc", text: "ยังไม่มีข้อมูล", target: goal, monthTarget, expected };
+    const ratio = expected > 0 ? value / expected : 1;
+    const [tone, text] = tone3(ratio, period.mode === "range" ? ["ถึงเป้า", "ใกล้เป้า", "ต่ำกว่าเป้า"] : ["ตามเป้า", "ใกล้เป้า", "ช้ากว่าเป้า"]);
+    return { state: "set", tone, text, target: goal, monthTarget, expected, pct: value / goal, gap: value - goal };
+  }
+  if (value == null) return { state: "nodata", tone: "zinc", text: "ยังไม่มีข้อมูล", target };
+  const pct = value / target;
+  const [tone, text] = m.better === "lower"
+    ? (pct <= 1 ? ["emerald", "อยู่ในเป้า"] : pct <= 1.1 ? ["amber", "เกินเป้าเล็กน้อย"] : ["rose", "เกินเป้า"])
+    : tone3(pct, ["ถึงเป้า", "ใกล้เป้า", "ต่ำกว่าเป้า"]);
+  return { state: "set", tone, text, target, pct, gap: value - target };
+}
+
+/** จับคู่ค่าจริง {key: value} กับเป้า (normalize แล้ว) ทุกตัวชี้วัด → {key: progress} */
+export function goalsFor(values = {}, targets = {}, period) {
+  return Object.fromEntries(TARGET_METRICS.map((m) => [m.key, targetProgress(m, values[m.key] ?? null, targets[m.key] ?? null, period)]));
+}
+
+/** ช่วงที่เลือกบนจอ → period ของ targetProgress
+    "เดือนนี้" = โหมดเดือน (elapsed = สัดส่วนวันที่ผ่านไปของเดือน) · ช่วงอื่น = เฉลี่ยเป้าเดือนตามจำนวนวันในช่วง (อิงเดือนของวันสุดท้าย) */
+export function periodForTargets({ monthView, from, to, today }) {
+  const dayOf = (iso) => new Date(`${iso}T00:00:00`);
+  if (monthView) {
+    const t = dayOf(today);
+    const monthDays = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+    return { mode: "month", elapsed: Math.min(t.getDate(), monthDays) / monthDays, monthDays };
+  }
+  const end = dayOf(to);
+  const rangeDays = Math.round((end - dayOf(from)) / 86_400_000) + 1;
+  return { mode: "range", rangeDays, monthDays: new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate() };
+}
+
+/** ดึงค่าจาก items ของ adsSalePipeline → {key: value} สำหรับ goalsFor */
+export const pipelineValues = (pipeline) => Object.fromEntries((pipeline?.items ?? []).map((it) => [it.key, it.value]));

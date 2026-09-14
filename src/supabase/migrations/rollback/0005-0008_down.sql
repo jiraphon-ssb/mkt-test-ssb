@@ -38,3 +38,10 @@ commit;
 
 -- หลัง rollback: mark ทั้ง 4 เวอร์ชันว่า reverted ไม่งั้น db push รอบถัดไปจะข้ามไฟล์
 --   supabase migration repair --status reverted 20260914072735 20260914072204 20260914072202 20260914072200
+
+-- ============================================================
+-- 0009 rollback (รันก่อนส่วนบนถ้าถอยทั้งหมด): คืน wrapper ของ 0008 แล้วลบคอลัมน์ ads_control
+--   ถอยเฉพาะ 0009: รัน src/supabase/migrations/0008_harden_mkt_save_state.sql ส่วน "create or replace function public.mkt_save_state" อีกครั้ง
+--   แล้ว: alter table public.mkt_settings drop column if exists ads_control;
+--   supabase migration repair --status reverted <version ของ 0009>
+-- ============================================================

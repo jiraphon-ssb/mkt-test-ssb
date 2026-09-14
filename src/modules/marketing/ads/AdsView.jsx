@@ -10,6 +10,8 @@ import { Dropdown } from "../ui/Dropdown.jsx";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
+import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues } from "../adsTargets.js";
+import { GoalLine } from "../ui/GoalLine.jsx";
 
 const fmtRoas = (value) => value == null ? "—" : `${value.toFixed(1)}x`;
 const GAUGE_TONE = { emerald: "var(--ok)", amber: "var(--warn)", rose: "var(--bad)", zinc: "var(--ink-soft)" };
@@ -28,7 +30,7 @@ const fmtMetric = (fmt, v) => {
 
 /** การ์ดตัวชี้วัดหนึ่งใบ — สรุปไม่ได้ = ขีด พร้อมเหตุผล ไม่ใช่ศูนย์
     ใบที่มีข้อมูลกดได้ → เปิดกราฟรายวันเต็มตัวใต้กริด */
-function SalePipeline({ items, worstKey = null, row = false, title = true }) {
+function SalePipeline({ items, worstKey = null, row = false, title = true, goals = null }) {
   return (
     <div className={`ads-pipe ${row ? "ads-pipe--row" : ""}`}>
       {!row && title && <span className="ads-pipe-title">Sale pipeline</span>}
@@ -59,6 +61,7 @@ function SalePipeline({ items, worstKey = null, row = false, title = true }) {
               <span className="ads-pipe-conv">{it.convPlaceholder}</span>
             ) : null}
             {it.sub && <span className="ads-pipe-sub">{it.sub}</span>}
+            {goals?.[it.key] && <GoalLine metric={it.key} goal={goals[it.key]} />}
           </div>
         );
       })}
@@ -259,6 +262,15 @@ export function AdsView() {
     const filteredById = new Map(filteredBrands.map((brand) => [brand.id, brand]));
     const summary = adsCompanySummary(brandTotals, today);
     const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));
+    const pipelines = Object.fromEntries(brands.map((brand) => [brand.id, adsSalePipeline(scoped.filter((card) => card.brand_id === brand.id), range, before)]));
+    const overallPipeline = adsSalePipeline(scoped, range, before);
+    /* เป้าจากหน้าตั้งค่า → "ทำได้เท่าไรจากเป้า" ทั้งภาพรวมและรายแบรนด์ · %Ads ใช้ค่าเดียวกับที่การ์ดแสดง */
+    const savedTargets = data.settings?.ads_control?.targets ?? {};
+    const targetPeriod = periodForTargets({ monthView, from: shownFrom, to: shownTo, today });
+    const goals = {
+      overall: goalsFor({ ...pipelineValues(overallPipeline), pctAds: share(summary.spend, summary.revenue) }, combineTargets(brands.map((brand) => savedTargets[brand.id])), targetPeriod),
+      byBrand: Object.fromEntries(brandTotals.map((brand) => [brand.id, goalsFor({ ...pipelineValues(pipelines[brand.id]), pctAds: brand.pctAds }, normalizeTargets(savedTargets[brand.id]), targetPeriod)])),
+    };
     return {
       scoped,
       range,
@@ -270,7 +282,9 @@ export function AdsView() {
       channelList: adsChannelList(scopedAll),
       summary,
       brands: brandTotals.map((brand) => ({ ...brand, revShare: share(brand.revenue, summary.revenue), spendShare: share(brand.spend, summary.spend), channels: filteredById.get(brand.id)?.channels ?? [] })),
-      pipelines: Object.fromEntries(brands.map((brand) => [brand.id, adsSalePipeline(scoped.filter((card) => card.brand_id === brand.id), range, before)])),
+      pipelines,
+      overallPipeline,
+      goals,
     };
   }, [data, inBrandScope, period, customFrom, customTo, compare, brandFilter, channel, revenueBasis]);
 
