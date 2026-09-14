@@ -2,6 +2,25 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
+## [0.2.0] — 2026-09-14
+
+### feat
+- ads: targets for ROAS, %Ads, CPL and sales funnel with progress on every ads page (b984c83)
+  - หน้าตั้งค่า: เป้ารายแบรนด์ 3 กลุ่ม — เงินต่อเดือน · ประสิทธิภาพ · กรวยยอดขายต่อเดือน (คนทัก · Lead · มัดจำ · ออเดอร์ปิดแล้ว)
+  - Overview ภาพรวม + รายแบรนด์ และแถบสรุปหน้าแคมเปญ แสดง "ทำได้กี่ % จากเป้า" พร้อมสถานะ ถึง/ใกล้/ต่ำกว่าเป้า
+  - การ์ดประสิทธิภาพขึ้นก่อนการ์ดงบ
+
+### fix
+- ads: navigate to ads settings without reloading the app — ค่าที่บันทึกไม่หายเมื่อออกจากหน้าตั้งค่า (b81660a)
+- auth: grant marketing permissions from mkt_profile in supabase auth mode (5350065)
+
+### ฐานข้อมูล
+- migration 0009: `mkt_settings.ads_control` เก็บ mapping · เป้า · กฎ ลงฐาน (เขียนได้เฉพาะ team_lead)
+
+### security
+- `mkt_settings`: ปิดการเขียนตรงผ่าน REST จาก anon/authenticated (เขียนผ่าน `mkt_save_state` เท่านั้น) · anon อ่านไม่ได้ · เพดานขนาด `ads_control`
+- ความเสี่ยงที่ยอมรับ (Medium): ผู้ใช้ที่ล็อกอินแต่ไม่ใช่ team_lead ยังอ่าน `ads_control` (account id, เป้า) ได้ — ไม่มี token
+
 ## [0.1.0] — 2026-09-14
 
 รีลีสแรกของชุด **Ads** (Overview · แคมเปญ · Creative · สถานะ Sync) บน Content Pipeline — ข้อมูลยังเป็น mock ทั้งหมด รีลีสนี้เตรียมฐานข้อมูลและ Meta OAuth (อ่านอย่างเดียว) สำหรับขั้น Pilot
