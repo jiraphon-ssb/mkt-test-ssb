@@ -192,7 +192,7 @@ function adsChannelBreakdown(cards, range) {
     const m = r.card.metrics ?? {};
     row.spend += r.spend;
     row.leads += r.leads;
-    row.revenue += m.revenue ?? 0;
+    row.revenue = row.revenue == null || m.revenue == null ? null : row.revenue + m.revenue;   // ไม่รู้แม้ใบเดียว = รวมไม่ได้ (null ≠ ฿0)
     row.impressions += m.impressions ?? 0;
     row.clicks += m.clicks ?? m.link_clicks ?? 0;
     row.reach += m.reach ?? 0;
@@ -201,7 +201,7 @@ function adsChannelBreakdown(cards, range) {
     const cur = row.camp.get(name) ?? { name, spend: 0, leads: 0, revenue: 0 };
     cur.spend += r.spend;
     cur.leads += r.leads;
-    cur.revenue += m.revenue ?? 0;
+    cur.revenue = cur.revenue == null || m.revenue == null ? null : cur.revenue + m.revenue;
     row.camp.set(name, cur);
   }
   return [...acc.values()].map(({ camp, ...row }) => ({
@@ -237,7 +237,7 @@ export function adsDailySeries(cards, range) {
     const m = c.metrics ?? {};
     cur.spend += m.spend ?? 0;
     cur.leads += m.leads ?? 0;
-    cur.revenue += m.revenue ?? 0;
+    cur.revenue = cur.revenue == null || m.revenue == null ? null : cur.revenue + m.revenue;
     cur.impressions += m.impressions ?? 0;
     cur.clicks += m.clicks ?? m.link_clicks ?? 0;
     cur.reach += m.reach ?? 0;
@@ -358,7 +358,8 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
         })
         .sort((x, y) => y.spend - x.spend);
       const spend = channels.reduce((n, c) => n + c.spend, 0);
-      const revenue = channels.reduce((n, c) => n + c.revenue, 0);
+      const sumRevenue = (rows) => rows.some((c) => c.revenue == null) ? null : rows.reduce((n, c) => n + c.revenue, 0);
+      const revenue = sumRevenue(channels);
       const leads = channels.reduce((n, c) => n + c.leads, 0);
       // ยอดงบรวมใช้ได้ต่อเมื่อทุกช่องทางมีงบ ห้ามรวมเฉพาะช่องที่กรอกแล้วเพราะจะทำให้ pace แบรนด์เพี้ยน
       const budget = channels.length > 0 && channels.every((c) => c.budget != null)
@@ -368,7 +369,7 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
       const pace = budgetPace(spend, budget, asOf);
       /* เทียบเดือนก่อน — ยอดขายล้วน (ค่าแอดอยู่ชั้นแพลตฟอร์ม จะได้ไม่ซ้ำกัน) */
       const prevRows = prevMonthRange ? adsChannelBreakdown(mine, prevMonthRange) : null;
-      const prevRevenue = prevRows ? prevRows.reduce((n, c) => n + c.revenue, 0) : null;
+      const prevRevenue = prevRows ? sumRevenue(prevRows) : null;
       const prevSpend = prevRows ? prevRows.reduce((n, c) => n + c.spend, 0) : null;
       return {
         id: b.id, name: b.name, color: b.color, logo: b.logo, spend, revenue, leads,
@@ -606,7 +607,7 @@ export function adsCompanySummary(brandRows, today) {
   const allOrNull = (pick) => (brandRows.length > 0 && brandRows.every((r) => pick(r) != null)
     ? brandRows.reduce((n, r) => n + pick(r), 0)
     : null);
-  const revenue = total((r) => r.revenue);
+  const revenue = brandRows.some((r) => r.revenue == null) ? null : total((r) => r.revenue);
   const spend = total((r) => r.spend);
   const revTarget = allOrNull((r) => r.revTarget);
   const budget = allOrNull((r) => r.budget);
@@ -712,7 +713,7 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     row.campaigns.add(c.campaign ?? c.brief?.campaign ?? "ไม่ระบุแคมเปญ");
     row.spend += m.spend ?? 0;
     row.leads += m.leads ?? 0;
-    row.revenue += m.revenue ?? 0;
+    row.revenue = row.revenue == null || m.revenue == null ? null : row.revenue + m.revenue;
     row.impressions += m.impressions ?? 0;
     row.clicks += m.clicks ?? m.link_clicks ?? 0;
     row.reach += m.reach ?? 0;

@@ -226,6 +226,25 @@ describe("งบ + จังหวะใช้เงิน", () => {
     expect(s.prevSpend).toBe(1000);
     expect(s.spendChangePct).toBe(100);
   });
+  it("ยอดขายไม่รู้ (revenue null) ต้องเป็น null ทั้งช่องทาง/แคมเปญ/แบรนด์/ภาพรวม ไม่ใช่ ฿0 (ข้อมูลจริงจาก Meta ที่ไม่มี purchase)", () => {
+    const cards = [
+      card({ id: "a", campaign: "Sofa", brief: brief({ channels: ["Meta Ads"], publish_at: null }), metrics: metrics({ spend: 1000, leads: 10, revenue: null }) }),
+      card({ id: "b", campaign: "Sofa", brief: brief({ channels: ["Meta Ads"], publish_at: null }), metrics: metrics({ spend: 500, leads: 5, revenue: null }) }),
+    ];
+    const rows = adsByBrandChannel(cards, RANGE, [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jk", name: "JK" }], [], "2026-07-24", [], PREV);
+    const td = rows.find((r) => r.id === "b_td");
+    expect(td.spend).toBe(1500);
+    expect(td.channels[0].revenue).toBeNull();
+    expect(td.channels[0].campaigns[0].revenue).toBeNull();
+    expect(td.channels[0].roas).toBeNull();
+    expect(td.revenue).toBeNull();
+    expect(td.roas).toBeNull();
+    expect(td.pctAds).toBeNull();
+    expect(rows.find((r) => r.id === "b_jk").revenue).toBe(0);          // แบรนด์ที่ไม่มีงานยิงแอดเลย = 0 ตามเดิม
+    expect(adsCompanySummary(rows, "2026-07-24").revenue).toBeNull();
+    const mixed = [cards[0], card({ id: "c", brief: brief({ channels: ["Meta Ads"], publish_at: null }), metrics: metrics({ spend: 100, leads: 1, revenue: 900 }) })];
+    expect(adsByBrandChannel(mixed, RANGE, [{ id: "b_td", name: "TEAMDEE" }], [], "2026-07-24")[0].revenue).toBeNull();   // มีบางใบไม่รู้ = รวมไม่ได้
+  });
   it("paceStatus: เกินงบ/ใช้เร็ว/ตามแผน/ใช้ช้า/ยังไม่ตั้งงบ — สีคู่กับคำ", () => {
     expect(paceStatus({ used: null, expected: 0.5 }).text).toBe("ยังไม่ตั้งงบ");
     expect(paceStatus({ used: 1.1, expected: 0.5, remaining: -1 }).text).toBe("เกินงบ");

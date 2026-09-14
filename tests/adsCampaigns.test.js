@@ -270,3 +270,17 @@ describe("adsScope", () => {
     expect(daysInclusive("2026-09-01", "2026-09-14")).toBe(14);
   });
 });
+
+describe("ยอดขายไม่รู้ (ข้อมูลจริงจาก Meta ที่ไม่มี purchase)", () => {
+  it("revenue null ต้องเป็น null ทั้งแถวแคมเปญและยอดรวม ไม่ใช่ ฿0 · ROAS/%Ads = null", () => {
+    const unknown = [card("u1", 3, { metrics: { ...card("x", 3).metrics, revenue: null } }), card("u2", 5, { metrics: { ...card("x", 5).metrics, revenue: null } })];
+    const [row] = campaignRows(unknown, RANGE, opts);
+    expect(row.spend).toBe(2000);
+    expect(row.revenue).toBeNull();
+    expect(row.roas).toBeNull();
+    expect(row.pctAds).toBeNull();
+    const totals = campaignTotals([row, campaignRows(cards, RANGE, opts)[0]]);
+    expect(totals.revenue).toBeNull();
+    expect(totals.roas).toBeNull();
+  });
+});

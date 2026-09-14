@@ -19,7 +19,8 @@ function rollup(cards) {
   for (const c of cards) {
     const m = c.metrics ?? {};
     if (m.spend == null || m.leads == null || m.revenue == null) t.complete = false;
-    t.spend += m.spend ?? 0; t.leads += m.leads ?? 0; t.revenue += m.revenue ?? 0;
+    t.spend += m.spend ?? 0; t.leads += m.leads ?? 0;
+    t.revenue = t.revenue == null || m.revenue == null ? null : t.revenue + m.revenue;   // ไม่รู้แม้ใบเดียว = null ไม่ใช่ ฿0
     t.impressions += m.impressions ?? 0; t.clicks += m.clicks ?? m.link_clicks ?? 0; t.reach += m.reach ?? 0;
   }
   return t;
@@ -122,7 +123,7 @@ export const applyView = (rows, key) => rows.filter(SAVED_VIEWS.find((v) => v.ke
 export function campaignTotals(rows) {
   const spend = rows.reduce((n, r) => n + r.spend, 0);
   const leads = rows.reduce((n, r) => n + r.leads, 0);
-  const revenue = rows.reduce((n, r) => n + r.revenue, 0);
+  const revenue = rows.some((r) => r.revenue == null) ? null : rows.reduce((n, r) => n + r.revenue, 0);
   const budgetRows = rows.filter((r) => r.budget != null);
   const budget = budgetRows.length ? budgetRows.reduce((n, r) => n + r.budget, 0) : null;
   return {
