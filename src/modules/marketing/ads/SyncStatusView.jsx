@@ -6,7 +6,9 @@ import { apiClient } from "../../../foundation/data/apiClient.js";
 import { useApp } from "../useMkt.jsx";
 import { adsDataHealth, normalizeSyncRuns, syncAccountRows } from "./adsDataHealth.js";
 import { ADS_PROVIDERS } from "./adsConnectorContract.js";
-import { applyConnectionResult, applyReconciliation, latestReconcileByConnection, runSyncQueue } from "./adsConnectionSync.js";
+import { applyConnectionResult, applyCoverage, applyReconciliation, latestReconcileByConnection, runSyncJobs, syncCreativesFor } from "./adsConnectionSync.js";
+import { missingDaysOf, planSyncJobs } from "../../../../supabase/functions/_shared/adsBackfill.js";
+import { todayInTimeZone } from "../../../../supabase/functions/_shared/metaInsights.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
 import "./adsWorkspace.css";
@@ -36,11 +38,14 @@ export function SyncStatusView() {
   /* สถานะ connection จริงจากฐาน (last_success_at / last_error_code) ทับ mapping ใน settings — ไม่บันทึกกลับ ใช้แสดงผลเท่านั้น */
   const [dbConnections, setDbConnections] = useState(null);
   const [reconRuns, setReconRuns] = useState([]);
+  const [coverageRuns, setCoverageRuns] = useState([]);
   const saved = data.settings?.ads_control;
   const config = useMemo(() => {
     const merged = dbConnections ? applyConnectionResult(saved ?? {}, { connections: dbConnections }) : (saved ?? {});
-    return applyReconciliation(merged, latestReconcileByConnection(reconRuns));
-  }, [saved, dbConnections, reconRuns]);
+    // ช่องว่างวันที่จากประวัติ run จริง (ไม่นับ 3 วันล่าสุดที่ยอดยังขยับ)
+    const missing = new Map((dbConnections ?? []).map((c) => [c.id, missingDaysOf(coverageRuns.filter((r) => r.connection_id === c.id), todayInTimeZone(new Date(), c.timezone), c.config?.backfillDays)]));
+    return applyReconciliation(applyCoverage(merged, missing), latestReconcileByConnection(reconRuns));
+  }, [saved, dbConnections, reconRuns, coverageRuns]);
   const [syncing, setSyncing] = useState(null);
   const [reconciling, setReconciling] = useState(false);
   const brands = useMemo(() => (data.brands ?? []).filter((brand) => brand.active !== false), [data.brands]);
@@ -53,11 +58,13 @@ export function SyncStatusView() {
   const refresh = async () => {
     setLoading(true);
     try {
-      const [runsFromDb, connections, recons] = await Promise.all([
-        apiClient.ads.recentSyncs(20), canSync ? apiClient.ads.connections() : Promise.resolve(null), apiClient.ads.reconciliations().catch(() => []),
+      const [runsFromDb, connections, recons, coverage] = await Promise.all([
+        apiClient.ads.recentSyncs(20), canSync ? apiClient.ads.connections() : Promise.resolve(null),
+        apiClient.ads.reconciliations().catch(() => []), canSync ? apiClient.ads.syncCoverage().catch(() => []) : Promise.resolve([]),
       ]);
       setRemoteRuns(normalizeSyncRuns(runsFromDb));
       setReconRuns(recons ?? []);
+      setCoverageRuns(coverage ?? []);
       if (connections) setDbConnections(connections.filter((c) => c.provider === "meta"));
     }
     catch { setRemoteRuns(normalizeSyncRuns(data.ad_sync_runs ?? config.syncRuns ?? [])); }
@@ -79,22 +86,43 @@ export function SyncStatusView() {
       setReconciling(false);
     }
   };
+  /* ดึงยอด: หาช่องว่างวันที่จากประวัติ run → แบ่งก้อน ≤10 วัน (กันเพดาน 546) → ดึง Creative ต่อ → โหลดยอดใหม่ */
   const syncNow = async () => {
     if (!syncable.length || syncing) return;
-    setSyncing({ done: 0, total: syncable.length });
-    const results = await runSyncQueue(syncable.map((row) => row.connectionId), (id) => apiClient.ads.sync(id, "auto"), (done, total) => setSyncing({ done, total }));
-    setSyncing(null);
-    const failed = results.filter((item) => !item.ok);
-    const rows = results.reduce((sum, item) => sum + item.rowsWritten, 0);
-    toast?.(failed.length ? `ดึงสำเร็จ ${results.length - failed.length}/${results.length} บัญชี · ${adsErrorText(failed[0].code, "บางบัญชีดึงไม่สำเร็จ")}` : `ดึงข้อมูลแล้ว ${results.length} บัญชี · ${rows.toLocaleString("th-TH")} แถว`, failed.length ? "bad" : "ok");
-    await Promise.all([refresh(), loadPilotFacts({ force: true })]);
+    setSyncing({ phase: "plan", done: 0, total: 0 });
+    try {
+      const ids = new Set(syncable.map((row) => row.connectionId));
+      const [connections, coverage] = await Promise.all([apiClient.ads.connections(), apiClient.ads.syncCoverage()]);
+      const targets = connections.filter((c) => ids.has(c.id));
+      const jobs = planSyncJobs({ connections: targets, runs: coverage, todayOf: (tz) => todayInTimeZone(new Date(), tz) });
+      const result = await runSyncJobs(jobs, (id, mode, range) => apiClient.ads.sync(id, mode, range), (done, total) => setSyncing({ phase: "facts", done, total }));
+      const okAccounts = Object.entries(result.byConnection).filter(([, s]) => s.ok > 0).map(([id]) => id);
+      let creatives = 0, creativeError = null;
+      for (const [index, id] of okAccounts.entries()) {
+        setSyncing({ phase: "creatives", done: index, total: okAccounts.length });
+        const out = await syncCreativesFor(id, (connectionId, offset) => apiClient.ads.syncCreatives(connectionId, offset));
+        creatives += out.saved;
+        creativeError ??= out.error;
+      }
+      const rows = Object.values(result.byConnection).reduce((n, s) => n + s.rowsWritten, 0);
+      const firstError = Object.values(result.byConnection).find((s) => s.firstError)?.firstError;
+      toast?.(result.failed
+        ? `ดึงสำเร็จ ${result.total - result.failed}/${result.total} ช่วง · ${adsErrorText(firstError, "บางช่วงดึงไม่สำเร็จ")} · กดดึงอีกครั้งจะเติมเฉพาะช่วงที่ขาด`
+        : `ดึงข้อมูลแล้ว ${result.total} ช่วง · ${rows.toLocaleString("th-TH")} แถว · Creative ${creatives.toLocaleString("th-TH")} ชิ้น${creativeError ? ` (${adsErrorText(creativeError, "ดึง Creative ไม่ครบ")})` : ""}`,
+      result.failed ? "bad" : "ok");
+    } catch (error) {
+      toast?.(adsErrorText(error, "ดึงข้อมูลไม่สำเร็จ"), "bad");
+    } finally {
+      setSyncing(null);
+      await Promise.all([refresh(), loadPilotFacts({ force: true })]);
+    }
   };
   useEffect(() => { if (connected || canSync) refresh(); else setRemoteRuns(normalizeSyncRuns(data.ad_sync_runs ?? config.syncRuns ?? [])); }, [connected, canSync]); // eslint-disable-line react-hooks/exhaustive-deps
   const runs = remoteRuns ?? normalizeSyncRuns(data.ad_sync_runs ?? config.syncRuns ?? []);
   const ready = accounts.filter((row) => row.reconciliation?.ready).length;
   const problems = accounts.filter((row) => ["error", "missing", "stale"].includes(row.state)).length;
   return <main className="aw sy">
-    <header className="sy-header"><div><h1>สถานะ Sync</h1><p>ดูว่าข้อมูลมาครบ สดพอ และตรงกับต้นทางหรือยัง</p></div><div><span className={`acc-health-pill ${health.state}`}>{health.label}</span><button type="button" onClick={refresh} disabled={loading || !(connected || canSync)}><RefreshCw size={14} className={loading ? "spin" : ""} />{loading ? "กำลังตรวจ" : "ตรวจใหม่"}</button>{canSync && <button type="button" onClick={reconcileNow} disabled={!syncable.length || reconciling || Boolean(syncing)} aria-busy={reconciling} title="เทียบค่าแอด 7 และ 30 วัน (จบเมื่อวาน) กับ Meta"><Scale size={14} className={reconciling ? "spin" : ""} />{reconciling ? "กำลังตรวจยอด" : "ตรวจยอด"}</button>}{canSync && <button type="button" className="sy-sync-now" onClick={syncNow} disabled={!syncable.length || Boolean(syncing)} aria-busy={Boolean(syncing)} title={syncable.length ? "ครั้งแรกดึงย้อนหลังตามที่ตั้งไว้ · ครั้งต่อไปดึง 3 วันล่าสุด" : "ต้องเชื่อม OAuth และบันทึก mapping Meta ก่อน"}><Download size={14} className={syncing ? "spin" : ""} />{syncing ? `กำลังดึง ${syncing.done}/${syncing.total}` : "ดึงข้อมูลตอนนี้"}</button>}<Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div></header>
+    <header className="sy-header"><div><h1>สถานะ Sync</h1><p>ดูว่าข้อมูลมาครบ สดพอ และตรงกับต้นทางหรือยัง</p></div><div><span className={`acc-health-pill ${health.state}`}>{health.label}</span><button type="button" onClick={refresh} disabled={loading || !(connected || canSync)}><RefreshCw size={14} className={loading ? "spin" : ""} />{loading ? "กำลังตรวจ" : "ตรวจใหม่"}</button>{canSync && <button type="button" onClick={reconcileNow} disabled={!syncable.length || reconciling || Boolean(syncing)} aria-busy={reconciling} title="เทียบค่าแอด 7 และ 30 วัน (จบเมื่อวาน) กับ Meta"><Scale size={14} className={reconciling ? "spin" : ""} />{reconciling ? "กำลังตรวจยอด" : "ตรวจยอด"}</button>}{canSync && <button type="button" className="sy-sync-now" onClick={syncNow} disabled={!syncable.length || Boolean(syncing)} aria-busy={Boolean(syncing)} title={syncable.length ? "เติมช่วงวันที่ขาดทีละ 10 วัน + 3 วันล่าสุด แล้วดึง Creative" : "ต้องเชื่อม OAuth และบันทึก mapping Meta ก่อน"}><Download size={14} className={syncing ? "spin" : ""} />{syncing ? syncing.phase === "plan" ? "กำลังวางแผน…" : syncing.phase === "creatives" ? `กำลังดึง Creative ${syncing.done + 1}/${syncing.total}` : `กำลังดึง ${syncing.done}/${syncing.total} ช่วง` : "ดึงข้อมูลตอนนี้"}</button>}<Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div></header>
     <section className="sy-kpis"><div><span>Mapping เปิดใช้</span><b>{accounts.length}</b><small>{accounts.filter((row) => row.connected).length} เชื่อม OAuth แล้ว</small></div><div><span>พร้อมเปิดใช้</span><b>{ready}</b><small>ผ่านตรวจยอด 7 และ 30 วัน</small></div><div className={problems ? "bad" : ""}><span>ต้องแก้</span><b>{problems}</b><small>ข้อมูลขาด ล่าช้า หรือ Sync ผิดพลาด</small></div><div><span>ตรวจสถานะล่าสุด</span><b className="sy-time">{checkedAt ? when(checkedAt) : "ยังไม่ได้ตรวจ backend"}</b><small>หน้านี้ไม่สร้างสถานะสำเร็จจำลอง</small></div></section>
     <section className="sy-sources">{ADS_PROVIDERS.map((provider) => { const source = health.sources.find((item) => item.provider === provider.id); return <SourceSummary key={provider.id} source={{ ...source, color: provider.color }} rowCount={accounts.filter((row) => row.providerId === provider.id).length} />; })}</section>
     <section className="sy-panel"><header><div><h2>บัญชีที่ต้องดู</h2><p>เรียงจากสถานะที่ต้องแก้ก่อน</p></div><Link to="/mkt/ads?panel=settings&tab=sources">จัดการบัญชี <ArrowRight size={13} /></Link></header>{accounts.length ? <div className="sy-accounts"><div className="sy-account-row head"><span>บัญชี</span><span>สถานะ</span><span>Sync ล่าสุด</span><span>ช่องว่าง</span><span>ตรวจยอด / Creative</span><span /></div>{[...accounts].sort((a, b) => ({ error: 5, missing: 4, stale: 3, waiting: 2, syncing: 1, healthy: 0 }[b.state] - ({ error: 5, missing: 4, stale: 3, waiting: 2, syncing: 1, healthy: 0 }[a.state]))).map((row) => <AccountRow key={row.key} row={row} />)}</div> : <div className="sy-empty"><Database size={25} /><strong>ยังไม่มีบัญชีที่เปิดใช้</strong><span>เพิ่ม Account ID และเปิด “เตรียมดึง” ในหน้าตั้งค่าก่อน</span><Link to="/mkt/ads?panel=settings&tab=sources">ไปตั้งค่าบัญชี</Link></div>}</section>

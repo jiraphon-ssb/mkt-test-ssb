@@ -73,3 +73,61 @@ export function applyReconciliation(config = {}, latest = new Map()) {
   }
   return { ...config, mappings: { ...(config.mappings ?? {}), meta } };
 }
+
+const STOP_ACCOUNT_CODES = new Set(["META_TOKEN_INVALID", "META_PERMISSION", "AUTHORIZATION_NOT_READY", "CONNECTION_NOT_READY", "CONNECTION_NOT_FOUND"]);
+
+/** คิวดึงยอดแบบแบ่งก้อน (planSyncJobs) · ทีละก้อนตามลำดับ · บัญชีที่ token/สิทธิ์เสียข้ามก้อนที่เหลือ */
+export async function runSyncJobs(jobs = [], sync, onProgress = () => {}) {
+  const byConnection = {};
+  const stopped = new Set();
+  let done = 0, failed = 0;
+  for (const job of jobs) {
+    const summary = byConnection[job.connectionId] ??= { jobs: 0, ok: 0, failed: 0, rowsWritten: 0, firstError: null };
+    summary.jobs += 1;
+    if (stopped.has(job.connectionId)) {
+      summary.failed += 1; failed += 1;
+    } else {
+      try {
+        const data = await sync(job.connectionId, job.mode, { from: job.from, to: job.to });
+        summary.ok += 1;
+        summary.rowsWritten += Number(data?.rowsWritten) || 0;
+      } catch (error) {
+        const code = error?.code ?? error?.message ?? "SYNC_FAILED";
+        summary.failed += 1; failed += 1;
+        summary.firstError ??= code;
+        if (STOP_ACCOUNT_CODES.has(code)) stopped.add(job.connectionId);
+      }
+    }
+    done += 1;
+    onProgress(done, jobs.length);
+  }
+  return { byConnection, failed, total: jobs.length };
+}
+
+/** จำนวนวันที่ขาด (missingDaysOf) → mapping.missingDays ให้ syncAccountRows/adsDataHealth ใช้ */
+export function applyCoverage(config = {}, missingByConnection = new Map()) {
+  if (!missingByConnection.size) return config;
+  const meta = { ...(config.mappings?.meta ?? {}) };
+  for (const [brandId, row] of Object.entries(meta)) {
+    if (row?.connectionId && missingByConnection.has(row.connectionId)) meta[brandId] = { ...row, missingDays: missingByConnection.get(row.connectionId) };
+  }
+  return { ...config, mappings: { ...(config.mappings ?? {}), meta } };
+}
+
+/** ดึง creative ของบัญชีหนึ่งจนครบ (Edge Function คืน nextOffset) · ไม่ throw — คืนผลที่ได้ + รหัส error */
+export async function syncCreativesFor(connectionId, call, maxRounds = 10) {
+  let offset = 0, saved = 0, skipped = 0, rounds = 0;
+  while (rounds < maxRounds) {
+    rounds += 1;
+    try {
+      const data = await call(connectionId, offset);
+      saved += Number(data?.saved) || 0;
+      skipped += Number(data?.skipped) || 0;
+      if (data?.nextOffset == null) break;
+      offset = data.nextOffset;
+    } catch (error) {
+      return { saved, skipped, rounds, error: error?.code ?? error?.message ?? "CREATIVE_SYNC_FAILED" };
+    }
+  }
+  return { saved, skipped, rounds, error: null };
+}

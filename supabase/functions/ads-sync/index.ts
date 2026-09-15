@@ -3,9 +3,10 @@
 import { activeMemberUserIds, corsHeaders, decryptToken, graphVersion, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { collectMetaFacts, pickSyncMode, publicSyncCode, syncFailureStatus } from "../_shared/adsSyncJob.js";
 import { syncError, syncRange, todayInTimeZone } from "../_shared/metaInsights.js";
+import { validateExplicitRange } from "../_shared/adsBackfill.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const STALE_RUN_MINUTES = 15;
+const STALE_RUN_MINUTES = 8;   // Edge Function ถูกตัดที่ ~150–400 วินาที · run ที่เกิน 8 นาทีตายแน่แล้ว
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const statusFor = (code: string) => ({
@@ -44,7 +45,9 @@ Deno.serve(async (request) => {
 
     const mode = pickSyncMode(body.mode, connection);
     const config = connection.config ?? {};
-    const range = syncRange(mode, todayInTimeZone(new Date(), connection.timezone), config.backfillDays ?? 30);
+    const today = todayInTimeZone(new Date(), connection.timezone);
+    // client สั่งเป็นก้อน ≤14 วัน (planSyncJobs) → ไม่ชนเพดาน 546 · ไม่ส่งช่วงมา = โหมดเดิม
+    const range = validateExplicitRange(body, today) ?? syncRange(mode, today, config.backfillDays ?? 30);
 
     // run ที่ค้าง (function ตายกลางทาง) ปิดเป็น failed ก่อน ไม่งั้น unique index กันรันใหม่ตลอดไป
     await db.from("ad_sync_runs").update({ status: "failed", error_code: "STALE_RUN", finished_at: new Date().toISOString() })

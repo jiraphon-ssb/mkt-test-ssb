@@ -9,7 +9,7 @@ import { isoDay } from "../adsScope.js";
 import { adsCardsForSource, factsLoadRange, factsToAdCards, normalizeAdsSource, pilotSummary } from "./adsFacts.js";
 
 const STORAGE_KEY = "ssb.ads.source";
-const EMPTY = { status: "idle", facts: [], connections: [], error: null, loadedAt: null };
+const EMPTY = { status: "idle", facts: [], creatives: [], connections: [], error: null, loadedAt: null };
 let cache = EMPTY;
 let inflight = null;
 const listeners = new Set();
@@ -26,8 +26,10 @@ export async function loadPilotFacts({ force = false } = {}) {
   inflight = (async () => {
     try {
       const range = factsLoadRange(isoDay(new Date()));
-      const [connections, facts] = await Promise.all([apiClient.ads.connections(), apiClient.ads.facts(range)]);
-      publish({ status: "ready", facts, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });
+      const [connections, facts, creatives] = await Promise.all([
+        apiClient.ads.connections(), apiClient.ads.facts(range), apiClient.ads.creatives().catch(() => []),   // creative ไม่มี = ยังดูยอดได้
+      ]);
+      publish({ status: "ready", facts, creatives, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });
     } catch (error) {
       publish({ ...EMPTY, status: "error", error });
     } finally {
@@ -56,7 +58,7 @@ export function useAdsData() {
   }, []);
 
   const today = isoDay(new Date());
-  const realCards = useMemo(() => factsToAdCards(pilot.facts, pilot.connections, { today }), [pilot, today]);
+  const realCards = useMemo(() => factsToAdCards(pilot.facts, pilot.connections, { today, creatives: pilot.creatives ?? [] }), [pilot, today]);
   const cards = useMemo(() => source === "mock" ? data.cards : adsCardsForSource(data.cards, "meta_pilot", realCards), [source, data.cards, realCards]);
   const summary = useMemo(() => pilotSummary(pilot.connections, pilot.facts, { today }), [pilot, today]);
 

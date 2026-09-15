@@ -2412,7 +2412,7 @@ async function adsFunctionError(error, fallback) {
 const adsData = {
   async connections() {
     const db = requireSupabase();
-    const { data, error } = await db.from("ad_connections").select("id,provider,brand_id,external_account_id,account_name,currency,timezone,status,last_success_at,last_error_code,last_error_at").order("provider").order("account_name");
+    const { data, error } = await db.from("ad_connections").select("id,provider,brand_id,external_account_id,account_name,currency,timezone,status,config,last_success_at,last_error_code,last_error_at").order("provider").order("account_name");
     if (error) throw error;
     return data;
   },
@@ -2436,9 +2436,10 @@ const adsData = {
     return data;
   },
   /** mode: "auto" (ครั้งแรก = backfill ไม่งั้น incremental) · "incremental" · "backfill" */
-  async sync(connectionId, mode = "auto") {
+  async sync(connectionId, mode = "auto", range = null) {
     const db = requireSupabase();
-    const { data, error } = await db.functions.invoke("ads-sync", { body: { connectionId, mode } });
+    const body = range?.from && range?.to ? { connectionId, mode, from: range.from, to: range.to } : { connectionId, mode };
+    const { data, error } = await db.functions.invoke("ads-sync", { body });
     if (error) throw await adsFunctionError(error, "SYNC_FAILED");
     return data;
   },
@@ -2478,6 +2479,40 @@ const adsData = {
       .eq("mode", "reconcile").order("started_at", { ascending: false }).limit(limit);
     if (error) throw error;
     return data;
+  },
+  /** run ดึงยอดที่สำเร็จ (range_from/range_to) — ใช้หาช่องว่างวันที่ (planSyncJobs / missingDaysOf) */
+  async syncCoverage() {
+    const db = requireSupabase();
+    const rows = [];
+    for (let offset = 0; offset < 20000; offset += 1000) {
+      const { data, error } = await db.from("ad_sync_runs").select("connection_id,mode,status,range_from,range_to")
+        .eq("status", "success").in("mode", ["backfill", "incremental"]).order("started_at", { ascending: false }).range(offset, offset + 999);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
+    }
+    return rows;
+  },
+  /** ดึง creative ของบัญชี — รอบละ ≤100 ad คืน nextOffset */
+  async syncCreatives(connectionId, offset = 0) {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-creatives", { body: { connectionId, offset } });
+    if (error) throw await adsFunctionError(error, "CREATIVE_SYNC_FAILED");
+    return data;
+  },
+  /** creative ที่ worker เก็บไว้ (อ่านอย่างเดียว) */
+  async creatives() {
+    const db = requireSupabase();
+    const rows = [];
+    for (let offset = 0; offset < 20000; offset += 1000) {
+      const { data, error } = await db.from("ad_creatives")
+        .select("connection_id,provider,external_creative_id,external_ad_id,name,format,primary_text,headline,description,call_to_action,destination_url,permalink_url,preview_url,effective_story_id,instagram_media_id,media_assets,source_updated_at")
+        .order("external_ad_id").range(offset, offset + 999);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
+    }
+    return rows;
   },
   async recentSyncs(limit = 20) {
     const db = requireSupabase();

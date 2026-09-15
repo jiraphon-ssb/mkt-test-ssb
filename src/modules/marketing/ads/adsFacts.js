@@ -18,8 +18,29 @@ const localNoonISO = (iso) => { const [y, m, d] = iso.split("-").map(Number); re
 /* ใบงาน ads ทุกใบ (track project) — ตรงกับ isAdsCard ที่ adsRollup ใช้ · ตัดทั้งหมดในโหมดข้อมูลจริง */
 const isAdCard = (card) => card?.track === "project";
 
-export function factsToAdCards(facts = [], connections = [], { today } = {}) {
+/** แถว ad_creatives → รูปที่ creativeAssetOf / Creative Library อ่าน (URL ถูกกรองอีกชั้นใน creativeAssetOf) */
+export function creativeAssetFromRow(row) {
+  if (!row) return null;
+  return {
+    provider: row.provider ?? "meta",
+    creativeId: row.external_creative_id || null,
+    adId: row.external_ad_id || null,
+    name: row.name || "ไม่ระบุชื่อครีเอทีฟ",
+    format: row.format ?? "unknown",
+    media: Array.isArray(row.media_assets) ? row.media_assets : [],
+    copy: { primaryText: row.primary_text ?? null, headline: row.headline ?? null, description: row.description ?? null, callToAction: row.call_to_action ?? null },
+    destinationUrl: row.destination_url ?? null,
+    permalinkUrl: row.permalink_url ?? null,
+    previewUrl: row.preview_url ?? null,
+    storyId: row.effective_story_id ?? null,
+    instagramMediaId: row.instagram_media_id ?? null,
+    sourceUpdatedAt: row.source_updated_at ?? null,
+  };
+}
+
+export function factsToAdCards(facts = [], connections = [], { today, creatives = [] } = {}) {
   const live = new Map(connections.filter((c) => c.status !== "disabled").map((c) => [c.id, c]));
+  const creativeByAd = new Map(creatives.map((row) => [`${row.connection_id}|${row.external_ad_id}`, row]));
   const tracksValue = new Set(facts.filter((f) => f.attributed_value != null).map((f) => f.connection_id));
   const cards = [];
   for (const f of facts) {
@@ -44,6 +65,7 @@ export function factsToAdCards(facts = [], connections = [], { today } = {}) {
       ad_group: f.ad_group_name || f.ad_group_id || null,
       ad_id: f.ad_id ?? "",
       creative: f.ad_name || f.ad_id || null,
+      creative_data: creativeAssetFromRow(creativeByAd.get(`${f.connection_id}|${f.ad_id}`)),
       account_id: connection.external_account_id,
       fact_date: f.fact_date,
       provisional: f.fact_date === today,

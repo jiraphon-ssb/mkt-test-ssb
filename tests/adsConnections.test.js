@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { planConnections } from "../supabase/functions/_shared/adsConnections.js";
 import { applyConnectionResult, enabledMetaMappings } from "../src/modules/marketing/ads/adsConnectionSync.js";
 
@@ -188,5 +188,61 @@ describe("ผลตรวจยอดจาก run โหมด reconcile → ma
     const after = adsDataHealth(merged);
     expect(after.state).toBe("healthy");
     expect(after.goLive).toBe(true);
+  });
+});
+
+import { runSyncJobs, applyCoverage, syncCreativesFor } from "../src/modules/marketing/ads/adsConnectionSync.js";
+describe("runSyncJobs — คิวดึงยอดแบบแบ่งก้อน", () => {
+  it("ทำทีละก้อนตามลำดับ · ส่งช่วงวันไปกับคำขอ · ก้อนพังไม่หยุดก้อนอื่น · สรุปผลต่อบัญชี", async () => {
+    const jobs = [
+      { connectionId: "a", mode: "backfill", from: "2026-09-06", to: "2026-09-15" },
+      { connectionId: "a", mode: "backfill", from: "2026-08-27", to: "2026-09-05" },
+      { connectionId: "b", mode: "incremental", from: "2026-09-13", to: "2026-09-15" },
+    ];
+    const calls = [];
+    const sync = async (id, mode, range) => {
+      calls.push([id, mode, range.from, range.to]);
+      if (range.from === "2026-08-27") throw Object.assign(new Error("x"), { code: "SYNC_FAILED" });
+      return { rowsWritten: 5 };
+    };
+    const progress = [];
+    const out = await runSyncJobs(jobs, sync, (done, total) => progress.push(`${done}/${total}`));
+    expect(calls).toEqual([["a", "backfill", "2026-09-06", "2026-09-15"], ["a", "backfill", "2026-08-27", "2026-09-05"], ["b", "incremental", "2026-09-13", "2026-09-15"]]);
+    expect(progress).toEqual(["1/3", "2/3", "3/3"]);
+    expect(out.byConnection).toEqual({
+      a: { jobs: 2, ok: 1, failed: 1, rowsWritten: 5, firstError: "SYNC_FAILED" },
+      b: { jobs: 1, ok: 1, failed: 0, rowsWritten: 5, firstError: null },
+    });
+    expect(out.failed).toBe(1);
+  });
+  it("บัญชีเจอ token เสีย/สิทธิ์ไม่พอ = ข้ามก้อนที่เหลือของบัญชีนั้น (ยิงต่อก็พังซ้ำ)", async () => {
+    const jobs = [1, 2, 3].map((n) => ({ connectionId: "a", mode: "backfill", from: `2026-09-0${n}`, to: `2026-09-0${n}` }));
+    const sync = vi.fn(async () => { throw Object.assign(new Error("x"), { code: "META_TOKEN_INVALID" }); });
+    const out = await runSyncJobs(jobs, sync);
+    expect(sync).toHaveBeenCalledTimes(1);
+    expect(out.byConnection.a).toMatchObject({ jobs: 3, failed: 3, firstError: "META_TOKEN_INVALID" });
+  });
+});
+
+describe("applyCoverage — ช่อง 'ช่องว่าง' ในหน้าสถานะ Sync มาจากประวัติ run จริง", () => {
+  it("ใส่ missingDays ต่อแบรนด์ตาม connectionId · แถวที่ไม่รู้ไม่แตะ", () => {
+    const config = { mappings: { meta: { td: { connectionId: "c1" }, jk: { connectionId: "c2" }, x: {} } } };
+    const out = applyCoverage(config, new Map([["c1", 0], ["c2", 3]]));
+    expect(out.mappings.meta.td.missingDays).toBe(0);
+    expect(out.mappings.meta.jk.missingDays).toBe(3);
+    expect(out.mappings.meta.x.missingDays).toBeUndefined();
+  });
+});
+
+describe("syncCreativesFor — ดึง creative ต่อเนื่องจน nextOffset = null", () => {
+  it("วนตาม offset · รวมจำนวนที่บันทึก · มีเพดานรอบกันวนไม่รู้จบ", async () => {
+    const call = vi.fn(async (id, offset) => offset === 0 ? { saved: 90, skipped: 1, nextOffset: 100 } : { saved: 40, skipped: 0, nextOffset: null });
+    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 130, skipped: 1, rounds: 2, error: null });
+    const loop = vi.fn(async () => ({ saved: 1, skipped: 0, nextOffset: 100 }));
+    expect((await syncCreativesFor("c1", loop, 3)).rounds).toBe(3);
+  });
+  it("พังกลางทาง = คืนสิ่งที่ได้แล้ว + รหัส error (ไม่ throw ให้คิวหลักล้ม)", async () => {
+    const call = vi.fn().mockResolvedValueOnce({ saved: 50, skipped: 0, nextOffset: 100 }).mockRejectedValueOnce(Object.assign(new Error("x"), { code: "META_RATE_LIMIT" }));
+    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 50, skipped: 0, rounds: 2, error: "META_RATE_LIMIT" });
   });
 });

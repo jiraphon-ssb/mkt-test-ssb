@@ -135,32 +135,39 @@ export function isRetryableMetaError(status, payload) {
 }
 
 /** ดึงทุกหน้า · retry แบบ backoff เฉพาะ rate limit/ชั่วคราว · พลาดหน้าไหน = throw ทั้งก้อน */
-export async function fetchAllPages(firstUrl, { fetch, token, sleep, maxRetries = 4, maxPages = 200, baseDelayMs = 2000, maxDelayMs = 60_000 }) {
+/** เรียก Graph หนึ่งครั้ง · retry แบบ backoff เฉพาะ rate limit/ชั่วคราว · token อยู่ใน header · host ต้องเป็น graph.facebook.com */
+export async function fetchGraphJson(url, { fetch, token, sleep, maxRetries = 4, baseDelayMs = 2000, maxDelayMs = 60_000 }) {
+  if (new URL(url).hostname !== GRAPH_HOST) throw syncError("META_PAGING_INVALID");
+  let retries = 0;
+  for (let attempt = 0; ; attempt++) {
+    let status = 0, body = null, failed;
+    try {
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      status = response.status;
+      body = await response.json().catch(() => null);
+      failed = !response.ok || body?.error;
+    } catch {
+      failed = true; status = 503; body = null;                       // network error = ชั่วคราว
+    }
+    if (!failed) return { payload: body, retries };
+    if (!isRetryableMetaError(status, body) || attempt >= maxRetries) throw syncError(metaErrorCode(status, body), body?.error?.message);
+    retries++;
+    await sleep(Math.min(maxDelayMs, baseDelayMs * 2 ** attempt));
+  }
+}
+
+/** ดึงทุกหน้า · พลาดหน้าไหน = throw ทั้งก้อน */
+export async function fetchAllPages(firstUrl, { maxPages = 200, ...opts }) {
   const rows = [];
   let url = firstUrl, pages = 0, retries = 0;
   while (url) {
     if (pages >= maxPages) throw syncError("META_TOO_MANY_PAGES");
-    if (new URL(url).hostname !== GRAPH_HOST) throw syncError("META_PAGING_INVALID");
-    let payload;
-    for (let attempt = 0; ; attempt++) {
-      let status = 0, body = null, failed;
-      try {
-        const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        status = response.status;
-        body = await response.json().catch(() => null);
-        failed = !response.ok || body?.error;
-      } catch {
-        failed = true; status = 503; body = null;                       // network error = ชั่วคราว
-      }
-      if (!failed) { payload = body; break; }
-      if (!isRetryableMetaError(status, body) || attempt >= maxRetries) throw syncError(metaErrorCode(status, body), body?.error?.message);
-      retries++;
-      await sleep(Math.min(maxDelayMs, baseDelayMs * 2 ** attempt));
-    }
-    if (!Array.isArray(payload?.data)) throw syncError("META_RESPONSE_INVALID");
-    rows.push(...payload.data);
+    const result = await fetchGraphJson(url, opts);
+    retries += result.retries;
+    if (!Array.isArray(result.payload?.data)) throw syncError("META_RESPONSE_INVALID");
+    rows.push(...result.payload.data);
     pages++;
-    url = payload.paging?.next ?? null;
+    url = result.payload.paging?.next ?? null;
   }
   return { rows, pages, retries };
 }
