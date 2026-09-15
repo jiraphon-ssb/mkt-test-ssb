@@ -2,15 +2,23 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
-## [Unreleased]
+## [0.6.0] — 2026-09-15
 
 ### feat
-- ads: backfill แบ่งช่วงและเติมช่องว่างอัตโนมัติ — "ดึงข้อมูลตอนนี้" ดูประวัติ run ที่สำเร็จ หาช่วงวันที่ขาดในหน้าต่าง (อย่างน้อย 31 วันเพื่อตรวจยอด 30 วัน · สูงสุด 180) แล้วดึงทีละก้อน ≤10 วัน + 3 วันล่าสุดเสมอ → บัญชีใหญ่เก็บ 90–180 วันได้โดยไม่ชนเพดาน Edge Function (HTTP 546) · ก้อนที่พังเติมเองรอบถัดไป
-- ads: Creative worker — Edge Function `ads-creatives` ดึง creative (ภาพย่อ 600px, ข้อความ, CTA, ลิงก์) ของโฆษณาที่มีค่าแอดใน 30 วัน สูงสุด 400 ชิ้นเรียงตามค่าแอด ทีละ 100 → `ad_creatives` · Creative Library โหมด Meta Pilot แสดงภาพจริง
-- ads: ช่อง "ช่องว่าง" ในหน้าสถานะ Sync นับจากประวัติ run จริง
+- ads: chunked gap-filling backfill and Meta creative worker (8be952e)
+  - backfill แบ่งช่วงและเติมช่องว่างอัตโนมัติ — "ดึงข้อมูลตอนนี้" ดูประวัติ run ที่สำเร็จ หาช่วงวันที่ขาดในหน้าต่าง (อย่างน้อย 31 วันเพื่อตรวจยอด 30 วัน · สูงสุด 180) แล้วดึงทีละก้อน ≤10 วัน + 3 วันล่าสุดเสมอ → บัญชีใหญ่เก็บ 90–180 วันได้โดยไม่ชนเพดาน Edge Function (HTTP 546) · ก้อนที่พังเติมเองรอบถัดไป
+  - Creative worker — Edge Function `ads-creatives` ดึง creative (ภาพย่อ 600px, ข้อความ, CTA, ลิงก์) ของโฆษณาที่มีค่าแอดใน 30 วัน สูงสุด 400 ชิ้นเรียงตามค่าแอด ทีละ 100 → `ad_creatives` · Creative Library โหมด Meta Pilot แสดงภาพจริง
+  - ช่อง "ช่องว่าง" ในหน้าสถานะ Sync นับจากประวัติ run จริง
 
 ### fix
 - ads: `ads-sync` รับช่วงวันจาก client (≤14 วัน/ครั้ง · ไม่เกินวันนี้ · ไม่เก่ากว่า 180 วัน ตรวจฝั่ง server) · run ค้างถูกปิดหลัง 8 นาที (เดิม 15)
+- ads: send Meta token only over https to graph.facebook.com (2891f52)
+
+### security
+- review 2026-09-15 (backfill แบ่งช่วง + ads-creatives): ไม่พบช่องโหว่ระดับ high/medium · แก้ตามข้อสังเกต: token ส่งเฉพาะ https · ยอมรับ: `ad_creatives` อ่านได้โดยผู้ล็อกอินทุกคน (ข้อความโฆษณาสาธารณะ + URL รูป ไม่มี token · ชั้นเดียวกับ facts)
+
+### Edge Functions
+- deploy ใหม่: `ads-sync` · `ads-creatives` (ตัวใหม่) · ทุก function ที่ใช้ `_shared/metaInsights.js` (`ads-reconcile`) เพื่อให้ได้การตรวจ https
 
 ## [0.5.0] — 2026-09-15
 
