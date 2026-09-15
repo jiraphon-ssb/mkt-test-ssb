@@ -137,7 +137,8 @@ export function isRetryableMetaError(status, payload) {
 /** ดึงทุกหน้า · retry แบบ backoff เฉพาะ rate limit/ชั่วคราว · พลาดหน้าไหน = throw ทั้งก้อน */
 /** เรียก Graph หนึ่งครั้ง · retry แบบ backoff เฉพาะ rate limit/ชั่วคราว · token อยู่ใน header · host ต้องเป็น graph.facebook.com */
 export async function fetchGraphJson(url, { fetch, token, sleep, maxRetries = 4, baseDelayMs = 2000, maxDelayMs = 60_000 }) {
-  if (new URL(url).hostname !== GRAPH_HOST) throw syncError("META_PAGING_INVALID");
+  const target = new URL(url);
+  if (target.protocol !== "https:" || target.hostname !== GRAPH_HOST) throw syncError("META_PAGING_INVALID");   // token ไปเฉพาะ https://graph.facebook.com
   let retries = 0;
   for (let attempt = 0; ; attempt++) {
     let status = 0, body = null, failed;

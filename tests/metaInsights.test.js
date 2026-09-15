@@ -177,6 +177,11 @@ describe("fetchAllPages", () => {
     const fetch = vi.fn().mockResolvedValueOnce(res(200, { data: [{ n: 1 }], paging: { next: "https://evil.example/steal" } }));
     await expect(fetchAllPages(first, { fetch, token: "T", sleep: async () => {} })).rejects.toMatchObject({ code: "META_PAGING_INVALID" });
   });
+  it("paging.next เป็น http (ไม่เข้ารหัส) = หยุด ไม่ส่ง token แบบ plaintext", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(res(200, { data: [{ n: 1 }], paging: { next: "http://graph.facebook.com/v26.0/next" } }));
+    await expect(fetchAllPages(first, { fetch, token: "T", sleep: async () => {} })).rejects.toMatchObject({ code: "META_PAGING_INVALID" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it("เกินจำนวนหน้าสูงสุด = throw ไม่วนไม่รู้จบ", async () => {
     const fetch = vi.fn().mockResolvedValue(res(200, { data: [{ n: 1 }], paging: { next: "https://graph.facebook.com/v26.0/loop" } }));
     await expect(fetchAllPages(first, { fetch, token: "T", sleep: async () => {}, maxPages: 3 })).rejects.toMatchObject({ code: "META_TOO_MANY_PAGES" });
