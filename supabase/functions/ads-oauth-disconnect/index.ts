@@ -1,10 +1,10 @@
-import { corsHeaders, decryptToken, graph, json, publicErrorCode, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { corsHeaders, decryptToken, graph, json, publicErrorCode, requireMember } from "../_shared/adsOAuth.ts";
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
   try {
-    const { db, user } = await requireTeamLead(request);
+    const { db, user } = await requireMember(request);
     const { authorizationId, revoke = true } = await request.json().catch(() => ({}));
     if (!authorizationId) return json(request, { error: "AUTHORIZATION_ID_REQUIRED" }, 400);
     const { data: authorization } = await db.from("ad_provider_authorizations")
@@ -21,6 +21,6 @@ Deno.serve(async (request) => {
   } catch (error) {
     console.error("[ads-oauth-disconnect]", error instanceof Error ? error.message : error);
     const code = publicErrorCode(error, "DISCONNECT_FAILED");
-    return json(request, { error: code }, code === "AUTH_REQUIRED" ? 401 : code === "TEAM_LEAD_REQUIRED" ? 403 : 500);
+    return json(request, { error: code }, code === "AUTH_REQUIRED" ? 401 : code === "TEAM_LEAD_REQUIRED" || code === "MEMBER_REQUIRED" ? 403 : 500);
   }
 });

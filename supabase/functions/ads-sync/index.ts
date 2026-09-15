@@ -1,6 +1,6 @@
 /* ads-sync — ดึง Meta Insights รายวันของ connection เดียว แล้วแทนที่ยอดช่วงนั้นใน ad_daily_facts
    สิทธิ์: team_lead (verify_jwt) · token ถอดรหัสฝั่ง server เท่านั้น · ข้อมูลไม่ครบ = run failed และไม่เขียนยอด */
-import { corsHeaders, decryptToken, graphVersion, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { activeMemberUserIds, corsHeaders, decryptToken, graphVersion, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { collectMetaFacts, pickSyncMode, publicSyncCode, syncFailureStatus } from "../_shared/adsSyncJob.js";
 import { syncError, syncRange, todayInTimeZone } from "../_shared/metaInsights.js";
 
@@ -36,8 +36,10 @@ Deno.serve(async (request) => {
     if (connection.status === "disabled" || !connection.authorization_id) throw syncError("CONNECTION_NOT_READY");
 
     const { data: authorization } = await db.from("ad_provider_authorizations")
-      .select("id,token_ciphertext,token_iv,status,expires_at").eq("id", connection.authorization_id).maybeSingle();
+      .select("id,user_id,token_ciphertext,token_iv,status,expires_at").eq("id", connection.authorization_id).maybeSingle();
     if (!authorization || authorization.status !== "connected") throw syncError("AUTHORIZATION_NOT_READY");
+    // เจ้าของ token ต้องยังเป็นสมาชิกที่ active — คนออกจากทีมแล้ว token ไม่ถูกใช้ต่อ
+    if (!(await activeMemberUserIds(db)).has(authorization.user_id)) throw syncError("AUTHORIZATION_NOT_READY");
     if (authorization.expires_at && new Date(authorization.expires_at).getTime() <= Date.now()) throw syncError("META_TOKEN_INVALID");
 
     const mode = pickSyncMode(body.mode, connection);

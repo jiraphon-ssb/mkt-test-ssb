@@ -1,7 +1,7 @@
 /* ads-connections — team_lead บันทึก mapping แบรนด์ ↔ บัญชี Meta แล้วสร้าง/อัปเดต/ปิด ad_connections
-   client เขียน ad_connections ตรงไม่ได้ (migration 0010) · ยอมเฉพาะบัญชีที่ผู้เรียกเชื่อม OAuth ไว้เอง */
-import { corsHeaders, json, publicErrorCode, requireTeamLead } from "../_shared/adsOAuth.ts";
-import { planConnections } from "../_shared/adsConnections.js";
+   client เขียน ad_connections ตรงไม่ได้ (migration 0010) · ยอมเฉพาะบัญชีที่อยู่ใน OAuth ของสมาชิกทีมที่ยังใช้ได้ */
+import { activeMemberUserIds, corsHeaders, json, publicErrorCode, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { liveTeamAccounts, planConnections } from "../_shared/adsConnections.js";
 
 const CONNECTION_FIELDS = "id,provider,brand_id,external_account_id,account_name,currency,timezone,status,config,last_success_at,last_error_code,last_error_at";
 
@@ -14,18 +14,20 @@ Deno.serve(async (request) => {
     const mappings = body?.mappings && typeof body.mappings === "object" && !Array.isArray(body.mappings) ? body.mappings : null;
     if (!mappings || Object.keys(mappings).length > 200) return json(request, { error: "MAPPINGS_INVALID" }, 400);
 
+    // บัญชีจาก OAuth ของทุกคนในทีมที่ยังใช้ได้ (สมาชิกเชื่อมเอง · team_lead ผูกกับแบรนด์) — token ของผู้บันทึกได้ก่อนถ้าซ้ำ
     const { data: authorizations, error: authError } = await db.from("ad_provider_authorizations")
-      .select("id,expires_at").eq("user_id", user.id).eq("provider", "meta").eq("status", "connected");
+      .select("id,user_id,status,expires_at,last_verified_at").eq("provider", "meta").eq("status", "connected");
     if (authError) throw authError;
-    const liveIds = (authorizations ?? []).filter((a) => !a.expires_at || new Date(a.expires_at).getTime() > Date.now()).map((a) => a.id);
+    const liveIds = (authorizations ?? []).map((a) => a.id);
     const { data: accounts, error: accountError } = liveIds.length
       ? await db.from("ad_authorized_accounts").select("authorization_id,external_account_id,account_name,account_status,currency,timezone").in("authorization_id", liveIds)
       : { data: [], error: null };
     if (accountError) throw accountError;
+    const teamAccounts = liveTeamAccounts(accounts ?? [], authorizations ?? [], { callerUserId: user.id, activeUserIds: await activeMemberUserIds(db) });
     const { data: existing, error: existingError } = await db.from("ad_connections").select("id,provider,brand_id,external_account_id,status").eq("provider", "meta");
     if (existingError) throw existingError;
 
-    const plan = planConnections({ mappings, source: body.source ?? {}, authorizedAccounts: accounts ?? [], existing: existing ?? [] });
+    const plan = planConnections({ mappings, source: body.source ?? {}, authorizedAccounts: teamAccounts, existing: existing ?? [] });
     if (plan.upserts.length) {
       const { error } = await db.from("ad_connections").upsert(plan.upserts, { onConflict: "provider,external_account_id" });
       if (error) throw error;

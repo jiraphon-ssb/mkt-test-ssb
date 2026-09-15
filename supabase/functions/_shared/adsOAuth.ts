@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.110.9";
-import { safeReturnTo as pickReturnTo, publicErrorCode } from "./returnTo.js";
+import { parseOrigins, publicErrorCode, requestAppOrigin, resolveReturnUrl, returnTarget } from "./returnTo.js";
 export { publicErrorCode };
 
 const encoder = new TextEncoder();
@@ -17,10 +17,20 @@ export function adminClient() {
   });
 }
 
+export function allowedOrigins() {
+  return parseOrigins(Deno.env.get("ADS_ALLOWED_ORIGINS") ?? "http://localhost:5173,http://127.0.0.1:5173");
+}
+
+/** origin ค่าเริ่มของแอป (ใช้เมื่อคำขอไม่มี Origin ที่อยู่ใน allowlist) */
+export function appOrigin() {
+  const origin = parseOrigins(env("ADS_APP_ORIGIN"))[0];
+  if (!origin) throw new Error("ADS_APP_ORIGIN must be an http(s) origin");
+  return origin;
+}
+
 export function corsHeaders(request: Request) {
   const origin = request.headers.get("origin") ?? "";
-  const allowed = (Deno.env.get("ADS_ALLOWED_ORIGINS") ?? "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174")
-    .split(",").map((item) => item.trim()).filter(Boolean);
+  const allowed = allowedOrigins();
   // origin ที่ไม่อยู่ใน allowlist = ไม่ส่ง ACAO เลย (ไม่ fallback ไป allowed[0] ที่ซ่อน misconfig)
   return {
     ...(allowed.includes(origin) ? { "Access-Control-Allow-Origin": origin } : {}),
@@ -37,17 +47,34 @@ export function json(request: Request, body: unknown, status = 200) {
   });
 }
 
-export async function requireTeamLead(request: Request) {
+/** สมาชิกทีม = ผู้ใช้ Auth ที่ผูกกับ mkt_profile ที่ active (role ใดก็ได้) — เชื่อม/ดู/ยกเลิก Meta ของตัวเองได้ */
+export async function requireMember(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   const jwt = authorization.replace(/^Bearer\s+/i, "");
   if (!jwt) throw new Error("AUTH_REQUIRED");
   const db = adminClient();
   const { data: authData, error: authError } = await db.auth.getUser(jwt);
   if (authError || !authData.user) throw new Error("AUTH_REQUIRED");
-  // สิทธิ์อ่านจาก mkt_profile (schema ที่ deploy จริง) ผ่านคอลัมน์ auth_user_id — ดู migration 0005
-  const { data: profile } = await db.from("mkt_profile").select("id,role,active").eq("auth_user_id", authData.user.id).maybeSingle();
-  if (!profile?.active || profile.role !== "team_lead") throw new Error("TEAM_LEAD_REQUIRED");
-  return { db, user: authData.user, profile };
+  // สิทธิ์อ่านจาก mkt_profile (schema ที่ deploy จริง) ผ่านคอลัมน์ auth_user_id — ดู migration 0005 (client แก้ role/active/auth_user_id ไม่ได้)
+  const { data: profile } = await db.from("mkt_profile").select("id,display_name,role,active").eq("auth_user_id", authData.user.id).maybeSingle();
+  if (!profile?.active) throw new Error("MEMBER_REQUIRED");
+  return { db, user: authData.user, profile, isLead: profile.role === "team_lead" };
+}
+
+/** auth user id ของสมาชิกที่โปรไฟล์ยัง active — ใช้กรอง token ของคนที่ออกจากทีมแล้ว */
+export async function activeMemberUserIds(db: ReturnType<typeof adminClient>) {
+  const { data, error } = await db.from("mkt_profile").select("auth_user_id").eq("active", true).not("auth_user_id", "is", null);
+  if (error) throw error;
+  return new Set((data ?? []).map((row) => row.auth_user_id as string));
+}
+
+/** ผูกบัญชีกับแบรนด์ · สั่งดึงข้อมูล = team_lead เท่านั้น */
+export async function requireTeamLead(request: Request) {
+  const member = await requireMember(request).catch((error) => {
+    throw error instanceof Error && error.message === "MEMBER_REQUIRED" ? new Error("TEAM_LEAD_REQUIRED") : error;
+  });
+  if (!member.isLead) throw new Error("TEAM_LEAD_REQUIRED");
+  return member;
 }
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -86,13 +113,13 @@ export async function decryptToken(ciphertext: string, iv: string) {
   return decoder.decode(plain);
 }
 
-/** ทางกลับต้องอยู่ใน ADS_APP_ORIGIN เท่านั้น — ตรวจด้วย URL parser (ดู returnTo.js + เทส) ไม่ใช่ string prefix */
-export function safeReturnTo(value: unknown) {
-  return pickReturnTo(value, env("ADS_APP_ORIGIN"));
+/** ทางกลับ = origin ของหน้าที่กดเชื่อม (ต้องอยู่ใน ADS_ALLOWED_ORIGINS) + path ในโมดูล — ตรวจด้วย URL parser (returnTo.js + เทส) */
+export function oauthReturnTarget(request: Request, path: unknown) {
+  return returnTarget(path, requestAppOrigin(request.headers.get("origin"), allowedOrigins(), appOrigin()));
 }
 
-export function appRedirect(path: string, params: Record<string,string>) {
-  const url = new URL(safeReturnTo(path), env("ADS_APP_ORIGIN"));
+export function appRedirect(stored: unknown, params: Record<string,string>) {
+  const url = new URL(resolveReturnUrl(stored, allowedOrigins(), appOrigin()));
   Object.entries(params).forEach(([key,value]) => url.searchParams.set(key,value));
   return Response.redirect(url.toString(), 302);
 }

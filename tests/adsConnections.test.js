@@ -120,3 +120,33 @@ describe("runSyncQueue", () => {
     expect(progress).toEqual(["1/3", "2/3", "3/3"]);
   });
 });
+
+import { liveTeamAccounts } from "../supabase/functions/_shared/adsConnections.js";
+describe("liveTeamAccounts — team_lead ผูกบัญชีที่สมาชิกคนใดคนหนึ่งเชื่อม OAuth ไว้", () => {
+  const NOW = Date.parse("2026-09-15T10:00:00Z");
+  const auths = [
+    { id: "au-lead", user_id: "lead", status: "connected", expires_at: "2026-11-01T00:00:00Z", last_verified_at: "2026-09-10T00:00:00Z" },
+    { id: "au-fai", user_id: "fai", status: "connected", expires_at: null, last_verified_at: "2026-09-14T00:00:00Z" },
+    { id: "au-old", user_id: "old", status: "connected", expires_at: "2026-09-01T00:00:00Z", last_verified_at: "2026-08-01T00:00:00Z" },
+    { id: "au-rev", user_id: "rev", status: "revoked", expires_at: null, last_verified_at: "2026-09-15T00:00:00Z" },
+  ];
+  const acc = (authorization_id, external_account_id) => ({ authorization_id, external_account_id, account_name: external_account_id, account_status: 1 });
+  it("ตัด authorization ที่หมดอายุ/ถูกยกเลิก · บัญชีซ้ำเลือก token ของผู้เรียกก่อน ไม่งั้นตัวที่ยืนยันล่าสุด", () => {
+    const out = liveTeamAccounts([acc("au-lead", "act_1"), acc("au-fai", "act_1"), acc("au-fai", "act_2"), acc("au-old", "act_3"), acc("au-rev", "act_4")], auths, { callerUserId: "lead", now: NOW });
+    expect(out.map((a) => [a.external_account_id, a.authorization_id])).toEqual([["act_1", "au-lead"], ["act_2", "au-fai"]]);
+    const other = liveTeamAccounts([acc("au-lead", "act_1"), acc("au-fai", "act_1")], auths, { callerUserId: "someone", now: NOW });
+    expect(other[0].authorization_id).toBe("au-fai");
+  });
+});
+
+describe("liveTeamAccounts — สมาชิกที่ถูกปิดโปรไฟล์ token ใช้ต่อไม่ได้", () => {
+  it("activeUserIds ระบุ = ตัด authorization ของผู้ใช้ที่ไม่อยู่ในรายชื่อ", () => {
+    const auths = [
+      { id: "a1", user_id: "active", status: "connected", expires_at: null, last_verified_at: "2026-09-10T00:00:00Z" },
+      { id: "a2", user_id: "left", status: "connected", expires_at: null, last_verified_at: "2026-09-14T00:00:00Z" },
+    ];
+    const accounts = [{ authorization_id: "a1", external_account_id: "act_1" }, { authorization_id: "a2", external_account_id: "act_2" }, { authorization_id: "a2", external_account_id: "act_1" }];
+    const out = liveTeamAccounts(accounts, auths, { activeUserIds: new Set(["active"]) });
+    expect(out.map((a) => [a.external_account_id, a.authorization_id])).toEqual([["act_1", "a1"]]);
+  });
+});

@@ -47,3 +47,24 @@ export function planConnections({ mappings = {}, source = {}, authorizedAccounts
     .map((c) => c.id);
   return { upserts, disable, errors };
 }
+
+/** บัญชีโฆษณาจาก OAuth ของทุกคนในทีมที่ยังใช้ได้ · บัญชีเดียวกันหลายคนเชื่อม: ใช้ token ของผู้เรียกก่อน ไม่งั้นตัวที่ยืนยันล่าสุด */
+export function liveTeamAccounts(accounts = [], authorizations = [], { callerUserId = null, now = Date.now(), activeUserIds = null } = {}) {
+  const live = new Map(authorizations
+    // activeUserIds: ผู้ใช้ที่ยังมีโปรไฟล์ทีม active — คนที่ออก/ถูกปิดโปรไฟล์ token ไม่ถูกใช้ผูกหรือดึงข้อมูล
+    .filter((a) => a.status === "connected" && (!a.expires_at || Date.parse(a.expires_at) > now) && (!activeUserIds || activeUserIds.has(a.user_id)))
+    .map((a) => [a.id, a]));
+  const rank = (account) => {
+    const auth = live.get(account.authorization_id);
+    return [auth.user_id === callerUserId ? 1 : 0, Date.parse(auth.last_verified_at ?? "") || 0];
+  };
+  const best = new Map();
+  for (const account of accounts) {
+    if (!live.has(account.authorization_id)) continue;
+    const current = best.get(account.external_account_id);
+    if (!current) { best.set(account.external_account_id, account); continue; }
+    const [a1, a2] = rank(account), [c1, c2] = rank(current);
+    if (a1 > c1 || (a1 === c1 && a2 > c2)) best.set(account.external_account_id, account);
+  }
+  return [...best.values()];
+}

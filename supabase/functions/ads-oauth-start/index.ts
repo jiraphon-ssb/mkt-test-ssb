@@ -1,14 +1,14 @@
-import { corsHeaders, env, graphVersion, json, publicErrorCode, randomState, requireTeamLead, safeReturnTo, sha256 } from "../_shared/adsOAuth.ts";
+import { corsHeaders, env, graphVersion, json, oauthReturnTarget, publicErrorCode, randomState, requireMember, sha256 } from "../_shared/adsOAuth.ts";
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
   try {
-    const { db, user } = await requireTeamLead(request);
+    const { db, user } = await requireMember(request);
     const body = await request.json().catch(() => ({}));
     if (body.provider !== "meta") return json(request, { error: "PROVIDER_NOT_SUPPORTED" }, 400);
     const state = randomState();
-    const returnTo = safeReturnTo(body.returnTo);
+    const returnTo = oauthReturnTarget(request, body.returnTo);
     const { error } = await db.from("ad_oauth_states").insert({
       state_hash: await sha256(state), provider: "meta", user_id: user.id, return_to: returnTo,
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
@@ -24,6 +24,6 @@ Deno.serve(async (request) => {
   } catch (error) {
     console.error("[ads-oauth-start]", error instanceof Error ? error.message : error);
     const code = publicErrorCode(error, "OAUTH_START_FAILED");
-    return json(request, { error: code }, code === "AUTH_REQUIRED" ? 401 : code === "TEAM_LEAD_REQUIRED" ? 403 : 500);
+    return json(request, { error: code }, code === "AUTH_REQUIRED" ? 401 : code === "TEAM_LEAD_REQUIRED" || code === "MEMBER_REQUIRED" ? 403 : 500);
   }
 });

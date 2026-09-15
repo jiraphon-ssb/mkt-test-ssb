@@ -19,9 +19,37 @@ export function safeReturnTo(value, appOrigin) {
 export const PUBLIC_ERROR_CODES = new Set([
   "STATE_MISSING", "STATE_INVALID_OR_EXPIRED", "CODE_MISSING", "TOKEN_EXCHANGE_FAILED",
   "ADS_READ_NOT_GRANTED", "ACCOUNT_DISCOVERY_FAILED", "access_denied",
-  "AUTH_REQUIRED", "TEAM_LEAD_REQUIRED", "PROVIDER_NOT_SUPPORTED", "AUTHORIZATION_ID_REQUIRED", "NOT_FOUND", "METHOD_NOT_ALLOWED",
+  "AUTH_REQUIRED", "TEAM_LEAD_REQUIRED", "MEMBER_REQUIRED", "PROVIDER_NOT_SUPPORTED", "AUTHORIZATION_ID_REQUIRED", "NOT_FOUND", "METHOD_NOT_ALLOWED",
 ]);
 export function publicErrorCode(error, fallback) {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return PUBLIC_ERROR_CODES.has(message) ? message : fallback;
+}
+
+/* ── หลาย origin: แอปเปิดได้ทั้ง Vercel และ localhost → กลับไปหน้าที่กดเชื่อมจริง
+   ขั้น start เก็บ origin ของคำขอ (ต้องอยู่ใน ADS_ALLOWED_ORIGINS) · ขั้น callback ตรวจซ้ำอีกรอบก่อน redirect */
+export function parseOrigins(csv) {
+  return String(csv ?? "").split(",").map((item) => item.trim()).filter(Boolean).flatMap((item) => {
+    try { const url = new URL(item); return /^https?:$/.test(url.protocol) ? [url.origin] : []; } catch { return []; }
+  });
+}
+
+export function requestAppOrigin(origin, allowed, fallback) {
+  return typeof origin === "string" && allowed.includes(origin) ? origin : fallback;
+}
+
+export function returnTarget(path, origin) {
+  return `${origin}${safeReturnTo(path, origin)}`;
+}
+
+export function resolveReturnUrl(stored, allowed, fallback) {
+  if (typeof stored === "string" && /^https?:\/\//i.test(stored)) {
+    let url = null;
+    try { url = new URL(stored); } catch { url = null; }
+    if (url && !url.username && !url.password && allowed.includes(url.origin)) {
+      return `${url.origin}${safeReturnTo(url.pathname + url.search + url.hash, url.origin)}`;
+    }
+    return `${fallback}${DEFAULT_RETURN_TO}`;
+  }
+  return `${fallback}${safeReturnTo(stored, fallback)}`;
 }

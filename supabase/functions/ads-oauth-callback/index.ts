@@ -1,4 +1,4 @@
-import { adminClient, appRedirect, encryptToken, env, graph, graphVersion, publicErrorCode, safeReturnTo, sha256 } from "../_shared/adsOAuth.ts";
+import { adminClient, appRedirect, encryptToken, env, graph, graphVersion, publicErrorCode, sha256 } from "../_shared/adsOAuth.ts";
 
 async function allAdAccounts(token: string) {
   const rows: Record<string,unknown>[] = [];
@@ -18,13 +18,13 @@ Deno.serve(async (request) => {
   const rawState = url.searchParams.get("state") ?? "";
   const db = adminClient();
   const fallback = "/mkt/ads?panel=settings";
-  let returnTo = fallback;
+  let returnTo: unknown = fallback;
   try {
     if (!rawState) throw new Error("STATE_MISSING");
     const { data: state, error: stateError } = await db.from("ad_oauth_states").select("*")
       .eq("state_hash", await sha256(rawState)).is("used_at", null).gt("expires_at", new Date().toISOString()).maybeSingle();
     if (stateError || !state) throw new Error("STATE_INVALID_OR_EXPIRED");
-    returnTo = safeReturnTo(state.return_to);
+    returnTo = state.return_to;   // appRedirect ตรวจ origin กับ allowlist + path ซ้ำอีกรอบ
     // ใช้ state ได้ครั้งเดียวแบบ atomic: ถ้า update ไม่โดนแถว (มีคนใช้ไปพร้อมกัน) ให้หยุด
     const { data: consumed } = await db.from("ad_oauth_states").update({ used_at: new Date().toISOString() })
       .eq("state_hash", state.state_hash).is("used_at", null).select("state_hash").maybeSingle();
