@@ -2,14 +2,20 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
-## [Unreleased]
+## [0.4.0] — 2026-09-15
 
 ### feat
-- ads: สมาชิกทีมทุกคน (โปรไฟล์ active ที่ผูกผู้ใช้ Auth) เชื่อม / ดู / ยกเลิก Meta ของตัวเองได้ · team_lead เห็นและผูกบัญชีที่ทุกคนในทีมเชื่อมไว้ · ผูกแบรนด์ บันทึกตั้งค่า และดึงข้อมูลยังเป็นของ team_lead
+- ads: let every team member connect their own Meta account (d07edd3) — สมาชิกทีมทุกคน (โปรไฟล์ active ที่ผูกผู้ใช้ Auth) เชื่อม / ดู / ยกเลิก Meta ของตัวเองได้ · team_lead เห็นและผูกบัญชีที่ทุกคนในทีมเชื่อมไว้ · ผูกแบรนด์ บันทึกตั้งค่า และดึงข้อมูลยังเป็นของ team_lead
 - ads: OAuth พากลับไปหน้าเดิมที่กดเชื่อมได้หลาย origin (Vercel + localhost) ตาม `ADS_ALLOWED_ORIGINS`
 
 ### fix
-- ads: ข้อความผิดพลาดของ Edge Function เป็นภาษาไทยตามสาเหตุ (เช่น เรียกระบบหลังบ้านไม่ได้เพราะ origin ไม่อยู่ในรายชื่อ) แทน "ต้องเปิด Supabase Auth และ deploy OAuth Functions ก่อน"
+- ads: role-aware ads settings and readable Edge Function errors (5562e41) — ข้อความผิดพลาดของ Edge Function เป็นภาษาไทยตามสาเหตุ (เช่น เรียกระบบหลังบ้านไม่ได้เพราะ origin ไม่อยู่ในรายชื่อ) แทน "ต้องเปิด Supabase Auth และ deploy OAuth Functions ก่อน"
+
+### docs
+- ads: member Meta connection, onboarding and multi-origin setup (e955122)
+
+### Edge Functions (deploy ใหม่ทั้ง 6 ตัว · ไม่มี migration)
+- `ads-oauth-start` · `ads-oauth-status` · `ads-oauth-disconnect` · `ads-oauth-callback` · `ads-connections` · `ads-sync`
 
 ### security
 - review 2026-09-15 (สิทธิ์สมาชิก + หลาย origin): ไม่พบช่องโหว่ระดับ high/medium · แก้ตามข้อสังเกต: token ของสมาชิกที่โปรไฟล์ไม่ active แล้วไม่ถูกใช้ผูกบัญชีหรือดึงข้อมูล · ความเสี่ยงที่ยอมรับ: OAuth state ผูกกับผู้ใช้ฝั่ง server ไม่ผูกกับเบราว์เซอร์ (มีมาก่อน M1 · ตอนนี้สมาชิกเริ่ม OAuth ได้ด้วย)
