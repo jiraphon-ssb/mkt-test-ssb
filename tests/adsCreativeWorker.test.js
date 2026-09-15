@@ -28,7 +28,10 @@ describe("buildAdsByIdsUrl", () => {
     expect(url.searchParams.get("ids")).toBe("11,22");
     const fields = url.searchParams.get("fields");
     expect(fields).toMatch(/^id,name,campaign_id,adset_id,updated_time,creative\.thumbnail_width\(600\)\.thumbnail_height\(600\)\{/);
-    expect(fields).toContain("object_story_spec");
+    expect(fields).toContain("thumbnail_url");
+    expect(fields).toContain("image_url");
+    expect(fields).not.toContain("object_story_spec");     // สเปกก้อนใหญ่ทำให้ Meta ตอบ "ลดปริมาณข้อมูล"
+    expect(fields).not.toContain("asset_feed_spec");
     expect(url.searchParams.has("access_token")).toBe(false);
     expect(new URL(buildAdsByIdsUrl({ version: "v26.0", ids: ["11"], largeThumbnails: false })).searchParams.get("fields")).toContain(",creative{");
   });
@@ -78,15 +81,16 @@ describe("factsToAdCards ผูก creative", () => {
 describe("fetchAdsByIds", () => {
   const res = (body, status = 200) => ({ ok: status < 300, status, json: async () => body });
   const opts = (fetch) => ({ fetch, token: "T", sleep: async () => {}, version: "v26.0" });
-  it("แบ่งคำขอละ 50 · รวมผลที่ Meta ตอบเป็น object ตาม id", async () => {
+  it("แบ่งคำขอชุดละ 25 (ค่าเริ่ม ลดภาระต่อคำขอ) · รวมผลที่ Meta ตอบเป็น object ตาม id", async () => {
     const ids = Array.from({ length: 60 }, (_, i) => String(i + 1));
     const fetch = vi.fn(async (url) => {
       const asked = new URL(url).searchParams.get("ids").split(",");
       return res(Object.fromEntries(asked.map((id) => [id, graphAd(id)])));
     });
     const out = await fetchAdsByIds(ids, opts(fetch));
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(out.ads.length).toBe(60);
+    expect(out.processed).toBe(60);
     expect(out.skipped).toEqual([]);
   });
   it("Meta ไม่รับ modifier ภาพย่อ (#100) → ลองแบบไม่มี modifier แล้วจำไว้ใช้ต่อ", async () => {
@@ -109,5 +113,44 @@ describe("fetchAdsByIds", () => {
     expect(out.skipped).toEqual(["99"]);
     const dead = vi.fn(async () => res({ error: { code: 190 } }, 401));
     await expect(fetchAdsByIds(["11"], opts(dead))).rejects.toMatchObject({ code: "META_TOKEN_INVALID" });
+  });
+});
+
+describe("fetchAdsByIds — Meta ตอบว่าขอข้อมูลมากเกิน / ขัดข้อง", () => {
+  const res = (body, status = 200) => ({ ok: status < 300, status, json: async () => body });
+  const tooMuch = () => res({ error: { code: 1, message: "Please reduce the amount of data you're asking for, then retry your request" } }, 500);
+  it("แบ่งครึ่งจนขนาดที่ Meta รับได้ · ไม่ถอยเรื่องภาพย่อใหญ่เพราะไม่ใช่ต้นเหตุ · ได้ครบทุกตัว", async () => {
+    const fetch = vi.fn(async (url) => {
+      const asked = new URL(url).searchParams.get("ids").split(",");
+      if (asked.length > 5) return tooMuch();
+      return res(Object.fromEntries(asked.map((id) => [id, graphAd(id)])));
+    });
+    const ids = Array.from({ length: 20 }, (_, i) => String(i + 1));
+    const out = await fetchAdsByIds(ids, { fetch, token: "T", sleep: async () => {}, version: "v26.0", batchSize: 20 });
+    expect(out.ads.map((a) => a.id).sort((a, b) => a - b)).toEqual(ids);
+    expect(out.skipped).toEqual([]);
+    expect(out.largeThumbnails).toBe(true);
+    expect(out.processed).toBe(20);
+    expect(out.lastError).toMatch(/reduce the amount of data/);
+  });
+  it("ขัดข้องถาวร (code 2 ทุกครั้ง) = ไม่รอ retry ยาว · ไล่ลงทีละตัวแล้วข้าม · ไม่ทำให้ทั้งงานล้ม", async () => {
+    const sleep = vi.fn(async () => {});
+    const fetch = vi.fn(async () => res({ error: { code: 2, is_transient: true, message: "Service temporarily unavailable" } }, 500));
+    const out = await fetchAdsByIds(["11", "22"], { fetch, token: "T", sleep, version: "v26.0" });
+    expect(out.ads).toEqual([]);
+    expect(out.skipped.sort()).toEqual(["11", "22"]);
+    expect(sleep.mock.calls.every(([ms]) => ms <= 1000)).toBe(true);
+  });
+  it("rate limit = หยุดทั้งงาน (ยิงต่อยิ่งโดนจำกัดนาน)", async () => {
+    const fetch = vi.fn(async () => res({ error: { code: 17, message: "User request limit reached" } }, 400));
+    await expect(fetchAdsByIds(["11"], { fetch, token: "T", sleep: async () => {}, version: "v26.0" })).rejects.toMatchObject({ code: "META_RATE_LIMIT" });
+  });
+  it("เกินงบเวลา = หยุดก่อนเริ่มชุดถัดไป · processed บอกว่าทำไปถึงไหน (ให้ client เรียกต่อ)", async () => {
+    let t = 0;
+    const fetch = vi.fn(async (url) => { t += 40_000; const asked = new URL(url).searchParams.get("ids").split(","); return res(Object.fromEntries(asked.map((id) => [id, graphAd(id)]))); });
+    const ids = Array.from({ length: 10 }, (_, i) => String(i + 1));
+    const out = await fetchAdsByIds(ids, { fetch, token: "T", sleep: async () => {}, version: "v26.0", batchSize: 2, deadline: 90_000, now: () => t });
+    expect(out.processed).toBe(6);
+    expect(out.ads.length).toBe(6);
   });
 });

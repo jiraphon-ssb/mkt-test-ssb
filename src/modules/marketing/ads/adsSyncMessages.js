@@ -24,6 +24,7 @@ const TEXT = {
   CREATIVE_SYNC_FAILED: "ดึง Creative ไม่สำเร็จ ยอดยังอยู่ครบ ลองใหม่ภายหลัง",
   SYNC_RANGE_INVALID: "ช่วงวันที่ขอดึงไม่ถูกต้อง",
   AD_IDS_INVALID: "รหัสโฆษณาในฐานผิดรูป ข้าม Creative ชุดนี้",
+  META_TOO_MUCH_DATA: "Meta ขอให้ลดปริมาณข้อมูลต่อคำขอ ลองดึงช่วงสั้นลง",
   ACCOUNT_NOT_AUTHORIZED: "บัญชีนี้ไม่อยู่ในบัญชีที่คุณเชื่อม OAuth",
   ACCOUNT_MAPPED_TWICE: "บัญชีเดียวกันผูกหลายแบรนด์ ยอดจะนับซ้ำ",
   ACCOUNT_NOT_ACTIVE: "บัญชีโฆษณานี้ถูกปิดใช้งานใน Meta",

@@ -127,6 +127,8 @@ export function metaErrorCode(status, payload) {
   if (code === 190 || status === 401) return "META_TOKEN_INVALID";
   if (code === 10 || (code >= 200 && code < 300) || status === 403) return "META_PERMISSION";
   if (RATE_LIMIT_CODES.has(code) || (code >= 80000 && code <= 80014) || status === 429) return "META_RATE_LIMIT";
+  // code 1 แบบนี้คือคำขอหนักเกิน ยิงซ้ำก็พัง → ต้องลดขนาดคำขอแทนการรอ
+  if (code === 1 && /reduce the amount of data/i.test(String(payload?.error?.message ?? ""))) return "META_TOO_MUCH_DATA";
   if (payload?.error?.is_transient || code === 1 || code === 2 || status >= 500) return "META_TEMPORARY";
   return "META_API_ERROR";
 }

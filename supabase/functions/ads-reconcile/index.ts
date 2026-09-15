@@ -72,7 +72,7 @@ Deno.serve(async (request) => {
         if (runError) throw runError;
         results.push({ connectionId: connection.id, brandId: connection.brand_id, ok: true, summary });
       } catch (error) {
-        console.error("[ads-reconcile]", connection.id, error instanceof Error ? error.message : error);
+        console.error("[ads-reconcile]", connection.id, error instanceof Error ? error.message : error, (error as { detail?: string })?.detail ?? "");
         fail(publicSyncCode(error, "RECONCILE_FAILED"));
       }
     }

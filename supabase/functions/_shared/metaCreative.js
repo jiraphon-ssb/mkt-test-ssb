@@ -86,6 +86,11 @@ export function creativeAssetOf(value) {
 
 /* ── worker ─────────────────────────────────────────────────────────── */
 export const MAX_IDS_PER_REQUEST = 50;
+/* field เบาที่หน้าจอใช้จริง — ไม่ขอ object_story_spec/asset_feed_spec (ก้อนใหญ่ ทำให้ Meta ตอบ "ลดปริมาณข้อมูล" เมื่อขอหลาย ad) */
+export const META_CREATIVE_LIGHT_FIELDS = [
+  "id", "name", "object_type", "body", "title", "image_url", "thumbnail_url", "video_id", "link_url", "object_url",
+  "call_to_action_type", "effective_object_story_id", "effective_instagram_media_id", "instagram_permalink_url",
+].join(",");
 
 /** ad_id ที่มีค่าแอดมากสุดก่อน (creative ที่คนดูบ่อยได้ภาพก่อน) · ตัด id ที่ไม่ใช่ตัวเลข */
 export function rankAdIdsBySpend(facts = [], limit = 400) {
@@ -104,7 +109,7 @@ export function buildAdsByIdsUrl({ version, ids, largeThumbnails = true }) {
   const url = new URL(`https://graph.facebook.com/${version}/`);
   url.searchParams.set("ids", ids.join(","));
   const creative = largeThumbnails ? "creative.thumbnail_width(600).thumbnail_height(600)" : "creative";
-  url.searchParams.set("fields", `id,name,campaign_id,adset_id,updated_time,${creative}{${META_AD_CREATIVE_FIELDS}}`);
+  url.searchParams.set("fields", `id,name,campaign_id,adset_id,updated_time,${creative}{${META_CREATIVE_LIGHT_FIELDS}}`);
   return url.toString();
 }
 
@@ -143,37 +148,38 @@ export function creativeRowFromAd(ad, connectionId, now = new Date().toISOString
   };
 }
 
-/** ดึง ad หลายตัวทีละ 50 · Meta ไม่รับ modifier ภาพย่อ → ลองแบบไม่มีแล้วจำไว้
-    ก้อนพังเพราะบาง id เข้าไม่ได้ → ไล่ทีละ id ข้ามตัวที่พัง · token/สิทธิ์เสีย = throw ทันที */
-export async function fetchAdsByIds(ids, { version, ...opts }) {
+/* error ที่แก้ได้ด้วยการลดขนาดคำขอ / ข้าม ad ตัวที่มีปัญหา · rate limit/token/สิทธิ์ = หยุดทั้งงาน */
+const SPLITTABLE = new Set(["META_API_ERROR", "META_TEMPORARY", "META_TOO_MUCH_DATA", "META_RESPONSE_INVALID"]);
+
+/** ดึง ad หลายตัวเป็นชุด (ค่าเริ่ม 25) · ชุดพัง → ลองแบบไม่ขอภาพย่อใหญ่ → แบ่งครึ่งจนเหลือทีละตัว → ตัวที่ยังพังข้าม
+    retry ชั่วคราวแค่ 1 ครั้ง (ไม่เสียเวลา 30 วินาทีกับ error ถาวร) · เกินงบเวลา = หยุดก่อนชุดถัดไป คืน processed ให้ client เรียกต่อ */
+export async function fetchAdsByIds(ids, { version, batchSize = 25, deadline = Infinity, now = Date.now, maxRetries = 1, baseDelayMs = 1000, ...opts }) {
   const ads = [], skipped = [];
-  let largeThumbnails = true;
-  const get = async (chunk, large) => {
-    const { payload } = await fetchGraphJson(buildAdsByIdsUrl({ version, ids: chunk, largeThumbnails: large }), opts);
+  let largeThumbnails = true, lastError = null, processed = 0;
+  const graphOpts = { ...opts, maxRetries, baseDelayMs, maxDelayMs: baseDelayMs };
+  const get = async (group, large) => {
+    const { payload } = await fetchGraphJson(buildAdsByIdsUrl({ version, ids: group, largeThumbnails: large }), graphOpts);
     if (!payload || typeof payload !== "object") throw syncError("META_RESPONSE_INVALID");
     return Object.values(payload).filter((item) => item && typeof item === "object" && item.id);
   };
-  for (let i = 0; i < ids.length; i += MAX_IDS_PER_REQUEST) {
-    const chunk = ids.slice(i, i + MAX_IDS_PER_REQUEST);
-    try {
-      ads.push(...await get(chunk, largeThumbnails));
-      continue;
-    } catch (error) {
-      if (error?.code !== "META_API_ERROR") throw error;
-    }
+  const note = (error) => { if (!SPLITTABLE.has(error?.code)) throw error; lastError = error.detail ?? error.code; };
+  const fetchGroup = async (group) => {
+    if (now() >= deadline) { skipped.push(...group); return; }
+    try { ads.push(...await get(group, largeThumbnails)); return; } catch (error) { note(error); }
     if (largeThumbnails) {
-      try {
-        ads.push(...await get(chunk, false));
-        largeThumbnails = false;                      // modifier คือปัญหา → ใช้แบบไม่มีต่อไป
-        continue;
-      } catch (error) {
-        if (error?.code !== "META_API_ERROR") throw error;
-      }
+      try { ads.push(...await get(group, false)); largeThumbnails = false; return; } catch (error) { note(error); }
     }
-    for (const id of chunk) {                           // บาง id เข้าไม่ได้ → ทีละตัว
-      try { ads.push(...await get([id], largeThumbnails)); }
-      catch (error) { if (error?.code !== "META_API_ERROR") throw error; skipped.push(id); }
-    }
+    if (group.length === 1) { skipped.push(group[0]); return; }
+    const mid = Math.ceil(group.length / 2);
+    await fetchGroup(group.slice(0, mid));
+    await fetchGroup(group.slice(mid));
+  };
+  const size = Math.max(1, Math.min(MAX_IDS_PER_REQUEST, batchSize));
+  for (let i = 0; i < ids.length; i += size) {
+    if (now() >= deadline) break;
+    const chunk = ids.slice(i, i + size);
+    await fetchGroup(chunk);
+    processed += chunk.length;
   }
-  return { ads, skipped, largeThumbnails };
+  return { ads, skipped, largeThumbnails, processed, lastError };
 }

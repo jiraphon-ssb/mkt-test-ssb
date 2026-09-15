@@ -115,7 +115,7 @@ export function applyCoverage(config = {}, missingByConnection = new Map()) {
 }
 
 /** ดึง creative ของบัญชีหนึ่งจนครบ (Edge Function คืน nextOffset) · ไม่ throw — คืนผลที่ได้ + รหัส error */
-export async function syncCreativesFor(connectionId, call, maxRounds = 10) {
+export async function syncCreativesFor(connectionId, call, maxRounds = 20) {   // งบเวลาต่อรอบทำให้บางรอบได้น้อยกว่า 100 ชิ้น
   let offset = 0, saved = 0, skipped = 0, rounds = 0;
   while (rounds < maxRounds) {
     rounds += 1;

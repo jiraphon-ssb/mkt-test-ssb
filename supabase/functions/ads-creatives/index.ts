@@ -8,6 +8,7 @@ import { creativeRowFromAd, fetchAdsByIds, rankAdIdsBySpend } from "../_shared/m
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PER_CALL = 100;
+const TIME_BUDGET_MS = 90_000;   // เผื่อก่อนเพดาน Edge Function (~150 วินาที) · เกินแล้วคืน nextOffset ให้ client เรียกต่อ
 const MAX_ADS = 400;
 const WINDOW_DAYS = 30;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,6 +16,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
+  const startedAt = Date.now();
   try {
     const { db } = await requireTeamLead(request);
     const body = await request.json().catch(() => ({}));
@@ -48,18 +50,20 @@ Deno.serve(async (request) => {
     if (!ids.length) return json(request, { total: ranked.length, processed: 0, saved: 0, skipped: 0, nextOffset: null });
 
     const token = await decryptToken(authorization.token_ciphertext, authorization.token_iv);
-    const { ads, skipped } = await fetchAdsByIds(ids, { version: graphVersion(), fetch, token, sleep });
+    const { ads, skipped, processed, lastError } = await fetchAdsByIds(ids, { version: graphVersion(), fetch, token, sleep, deadline: startedAt + TIME_BUDGET_MS });
+    // ข้อความ error ของ Meta (ไม่มี token) ไว้วินิจฉัยใน log ฝั่ง server เท่านั้น
+    if (lastError) console.error("[ads-creatives] meta", connection.id, `skipped=${skipped.length}`, String(lastError).slice(0, 300));
     const now = new Date().toISOString();
     const rows = ads.map((ad) => creativeRowFromAd(ad, connection.id, now)).filter(Boolean);
     for (let i = 0; i < rows.length; i += 200) {
       const { error } = await db.from("ad_creatives").upsert(rows.slice(i, i + 200), { onConflict: "connection_id,external_creative_id,external_ad_id" });
       if (error) { console.error("[ads-creatives] write", error.message); throw syncError("SYNC_WRITE_FAILED"); }
     }
-    const next = offset + ids.length;
-    return json(request, { total: ranked.length, processed: ids.length, saved: rows.length, skipped: skipped.length, nextOffset: next < ranked.length ? next : null });
+    const next = offset + processed;
+    return json(request, { total: ranked.length, processed, saved: rows.length, skipped: skipped.length, nextOffset: processed > 0 && next < ranked.length ? next : null });
   } catch (error) {
     const code = publicSyncCode(error, "CREATIVE_SYNC_FAILED");
-    console.error("[ads-creatives]", code, error instanceof Error ? error.message : error);
+    console.error("[ads-creatives]", code, error instanceof Error ? error.message : error, (error as { detail?: string })?.detail ?? "");
     const status = code === "AUTH_REQUIRED" ? 401 : code === "TEAM_LEAD_REQUIRED" ? 403 : code === "CONNECTION_NOT_FOUND" ? 404
       : ["CONNECTION_ID_REQUIRED"].includes(code) ? 400 : ["CONNECTION_NOT_READY", "AUTHORIZATION_NOT_READY", "PROVIDER_NOT_SUPPORTED"].includes(code) ? 409 : 502;
     return json(request, { error: code }, status);

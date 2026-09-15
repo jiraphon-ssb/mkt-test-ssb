@@ -2,6 +2,16 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
+## [Unreleased]
+
+### fix
+- ads: Creative worker ดึงภาพไม่ได้ (ทุกคำขอขึ้น `META_TEMPORARY`) — ขอ creative 50 ad พร้อมสเปกโฆษณาก้อนใหญ่ต่อคำขอหนักเกินที่ Meta รับ
+  - ขอเฉพาะ field ที่หน้าจอใช้ (ภาพย่อ ภาพเต็ม ข้อความ หัวข้อ CTA ลิงก์) ตัด `object_story_spec`/`asset_feed_spec`
+  - ชุดละ 25 · ชุดพัง → ลองแบบไม่ขอภาพย่อใหญ่ → แบ่งครึ่งจนเหลือทีละตัว → ตัวที่พังข้าม
+  - แยก error "ลดปริมาณข้อมูล" (`META_TOO_MUCH_DATA`) ไม่ retry · error ชั่วคราว retry 1 ครั้ง 1 วินาที (เดิม 4 ครั้งรวม ~30 วินาที)
+  - งบเวลา 90 วินาทีต่อคำขอ แล้วคืน nextOffset ให้หน้าเว็บเรียกต่อ
+  - บันทึกข้อความ error ของ Meta ลง log ฝั่ง server (ไม่มี token) ใน `ads-creatives` · `ads-sync` · `ads-reconcile`
+
 ## [0.6.0] — 2026-09-15
 
 ### feat

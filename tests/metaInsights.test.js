@@ -118,6 +118,12 @@ describe("ข้อผิดพลาดของ Meta", () => {
     expect(metaErrorCode(500, { error: { code: 1, is_transient: true } })).toBe("META_TEMPORARY");
     expect(metaErrorCode(400, { error: { code: 100 } })).toBe("META_API_ERROR");
   });
+  it("Meta ขอให้ลดปริมาณข้อมูล (code 1) = META_TOO_MUCH_DATA ไม่ retry (ยิงซ้ำก็พังเหมือนเดิม)", () => {
+    const payload = { error: { code: 1, message: "Please reduce the amount of data you're asking for, then retry your request" } };
+    expect(metaErrorCode(500, payload)).toBe("META_TOO_MUCH_DATA");
+    expect(isRetryableMetaError(500, payload)).toBe(false);
+    expect(metaErrorCode(500, { error: { code: 1, message: "An unknown error occurred" } })).toBe("META_TEMPORARY");
+  });
   it("retry เฉพาะ rate limit / ชั่วคราว ไม่ retry token หรือสิทธิ์", () => {
     expect(isRetryableMetaError(400, { error: { code: 4 } })).toBe(true);
     expect(isRetryableMetaError(503, {})).toBe(true);

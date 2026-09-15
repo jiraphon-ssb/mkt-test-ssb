@@ -72,7 +72,7 @@ Deno.serve(async (request) => {
     return json(request, { runId, mode, from: range.from, to: range.to, rowsWritten: written, summary });
   } catch (error) {
     const code = publicSyncCode(error);
-    console.error("[ads-sync]", code, error instanceof Error ? error.message : error);
+    console.error("[ads-sync]", code, error instanceof Error ? error.message : error, (error as { detail?: string })?.detail ?? "");
     if (db && runId) {
       await db.from("ad_sync_runs").update({ status: "failed", error_code: code, error_detail: code, finished_at: new Date().toISOString() }).eq("id", runId);
     }
