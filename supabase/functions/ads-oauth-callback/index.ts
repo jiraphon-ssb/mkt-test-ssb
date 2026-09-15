@@ -2,7 +2,7 @@ import { adminClient, appRedirect, encryptToken, env, graph, graphVersion, publi
 
 async function allAdAccounts(token: string) {
   const rows: Record<string,unknown>[] = [];
-  let url: string | null = `https://graph.facebook.com/${graphVersion()}/me/adaccounts?fields=id,name,account_status,currency,timezone_name,business&limit=200`;
+  let url: string | null = `https://graph.facebook.com/${graphVersion()}/me/adaccounts?fields=id,name,account_status,currency,timezone_name&limit=200`;
   while (url) {
     const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     const payload = await response.json();
@@ -72,7 +72,7 @@ Deno.serve(async (request) => {
       const { error: accountError } = await db.from("ad_authorized_accounts").insert(accounts.map((account) => ({
         authorization_id: authorization.id, external_account_id: String(account.id), account_name: account.name ?? "",
         account_status: account.account_status ?? null, currency: account.currency ?? null,
-        timezone: account.timezone_name ?? null, business_id: account.business?.id ?? null,
+        timezone: account.timezone_name ?? null, business_id: null,   // field business ต้องใช้สิทธิ์ business_management ซึ่งระบบไม่ขอ (อ่านอย่างเดียว)
       })));
       if (accountError) throw accountError;
     }

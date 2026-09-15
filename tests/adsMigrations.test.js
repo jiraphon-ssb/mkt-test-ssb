@@ -126,3 +126,12 @@ describe("0010 ads sync worker", () => {
     expect(down).toContain("alter table public.ad_connections drop column if exists authorization_id");
   });
 });
+
+describe("ads-oauth-callback ขอเฉพาะ field ที่สิทธิ์ ads_read อ่านได้", () => {
+  it("ไม่ขอ field business ของ ad account (ต้องใช้ business_management ซึ่งเราไม่ขอ)", () => {
+    const fn = readFileSync(new URL("../supabase/functions/ads-oauth-callback/index.ts", import.meta.url), "utf8");
+    const fields = fn.match(/adaccounts\?fields=([^&"`]+)/)?.[1]?.split(",") ?? [];
+    expect(fields).toEqual(expect.arrayContaining(["id", "name", "account_status", "currency", "timezone_name"]));
+    expect(fields).not.toContain("business");
+  });
+});

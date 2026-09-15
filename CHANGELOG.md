@@ -2,6 +2,14 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
+## [0.4.1] — 2026-09-15
+
+### fix
+- ads: drop the `business` field from Meta ad-account discovery — ต้องใช้สิทธิ์ `business_management` ซึ่งระบบไม่ขอ ทำให้เชื่อมบัญชีแล้วขึ้น `OAUTH_CALLBACK_FAILED` ทั้งที่ token ถูกต้อง · เก็บ `business_id` เป็นค่าว่าง (ไม่มีส่วนไหนใช้) · เพิ่มเทสกันขอ field เกินสิทธิ์ `ads_read`
+
+### Edge Functions
+- deploy ใหม่: `ads-oauth-callback`
+
 ## [0.4.0] — 2026-09-15
 
 ### feat
