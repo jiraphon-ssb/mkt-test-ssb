@@ -2,7 +2,7 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
-## [Unreleased]
+## [0.7.0] — 2026-09-16
 
 ### fix
 - ads: บันทึกเป้ายอดขาย/งบในหน้าตั้งค่าแล้วตัวเลขไม่เปลี่ยน
@@ -13,12 +13,20 @@
 ## [Unreleased]
 
 ### feat
+- ads: real creative media, Meta ad previews and pagination (7ba0807)
 - ads: ตัวอย่างโฆษณาจริงจาก Meta — กดภาพบนการ์ด Creative เปิดหน้าต่างตัวอย่าง (Ad Preview API · สิทธิ์ ads_read) เล่นคลิปได้ เลือกตำแหน่ง Facebook มือถือ/คอม · Instagram ฟีด/สตอรี่ · Edge Function ใหม่ `ads-preview` คืนเฉพาะ src ของ iframe ที่ตรวจแล้ว
 - ads: ลิงก์โพสต์บนการ์ดและหน้าตัวอย่าง — Facebook จาก story id · Instagram จาก permalink · หน้าปลายทาง
 - ads: แบ่งหน้า — Creative Library 12/24/48 ชิ้นต่อหน้า (ค่าเริ่ม 12 · หารลงตัวกับกริด 4/3/2 คอลัมน์) · ตารางแคมเปญ 10/20/50 (ค่าเริ่ม 20) · กลับหน้า 1 เมื่อตัวกรอง/การเรียงเปลี่ยน · จำขนาดหน้า · ยอดรวมยังนับทุกหน้า · เลือกเทียบข้ามหน้าได้
 
 ### fix
 - ads: ภาพบนการ์ด Creative เป็นโลโก้เพจแทนคอนเทนต์ — ขอสเปกโฆษณา (ภาพปกวิดีโอ/ภาพลิงก์/carousel) กลับมา โดยตัดทิ้งเป็นขั้นที่สองถ้า Meta ว่าหนักเกิน · ใช้ภาพของตัวโฆษณาก่อนภาพย่อระดับ creative
+- ads: derive monthly budget and revenue targets from saved settings (6fa928f)
+
+### security
+- review 2026-09-16: ไม่พบช่องโหว่ · src ของ iframe ตรวจทั้ง server และ browser ยอมเฉพาะ preview_iframe.php ของ facebook.com · ลิงก์โพสต์สร้างจาก id ที่ตรวจรูปแบบ · sandbox ไม่ให้สิทธิ์เข้าถึง origin ของแอป
+
+### Edge Functions
+- deploy ใหม่: `ads-creatives` · `ads-preview` (ตัวใหม่)
 
 ## [0.6.2] — 2026-09-16
 
