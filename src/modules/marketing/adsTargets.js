@@ -6,6 +6,7 @@
      inquiries, qualified, deposits, closed  ← เป้ายอดนับ "ต่อเดือน" ของกรวยยอดขาย }
    ดี/แย่ตัดสินจากเป้า ไม่ใช่จากการเทียบช่วงก่อนอย่างเดียว
    ============================================================ */
+import { normalizeAdPlatform } from "./adsOverview.js";
 
 export const TARGET_METRICS = [
   { key: "roas", label: "ROAS", kind: "ratio", better: "higher", setting: "roas" },
@@ -98,3 +99,37 @@ export function periodForTargets({ monthView, from, to, today }) {
 
 /** ดึงค่าจาก items ของ adsSalePipeline → {key: value} สำหรับ goalsFor */
 export const pipelineValues = (pipeline) => Object.fromEntries((pipeline?.items ?? []).map((it) => [it.key, it.value]));
+
+/* ── งบ/เป้ายอดขายรายเดือน: หน้าตั้งค่าคือความจริงชุดเดียว ───────────────
+   ฐานไม่มีตาราง ad_budgets/sales_targets (โหลดใหม่ = ค่า mock) → คำนวณแถวของเดือนนี้จาก targets ตอนอ่านทุกครั้ง
+   ลงเฉพาะแพลตฟอร์มที่มีค่าแอดจริงเดือนนี้ (ตามสัดส่วนแผนเดิม · ไม่มีแผนเดิม = เท่ากัน) → ผลรวมแบรนด์เท่าค่าที่ตั้งเป๊ะ */
+const slug = (text) => String(text).replace(/[^a-z0-9]+/gi, "").toLowerCase();
+
+function allocate(rows, targets, field, prefix, month, channelsByBrand) {
+  let out = rows;
+  for (const [brandId, raw] of Object.entries(targets ?? {})) {
+    const wanted = positive(raw?.[field]);
+    if (wanted == null) continue;
+    const channels = channelsByBrand.get(brandId)?.length ? channelsByBrand.get(brandId) : ["Meta Ads"];
+    const mine = out.filter((r) => r.brand_id === brandId && r.month === month);
+    const weights = channels.map((ch) => mine.filter((r) => normalizeAdPlatform(r.channel) === ch).reduce((n, r) => n + (Number(r.amount) || 0), 0));
+    const totalWeight = weights.reduce((n, w) => n + w, 0);
+    let allocated = 0;
+    const next = channels.map((channel, i) => {
+      const last = i === channels.length - 1;
+      const share = totalWeight > 0 ? weights[i] / totalWeight : 1 / channels.length;
+      const amount = last ? Math.round(wanted) - allocated : Math.floor(wanted * share);
+      allocated += amount;
+      return { id: `${prefix}_${brandId}_${slug(channel)}_${month}`, brand_id: brandId, channel, month, amount };
+    });
+    out = [...out.filter((r) => !(r.brand_id === brandId && r.month === month)), ...next];
+  }
+  return out;
+}
+
+export function plansFromTargets({ targets = {}, adBudgets = [], salesTargets = [], month, channelsByBrand = new Map() }) {
+  return {
+    adBudgets: allocate(adBudgets, targets, "budget", "budget", month, channelsByBrand),
+    salesTargets: allocate(salesTargets, targets, "revenue", "revenue", month, channelsByBrand),
+  };
+}

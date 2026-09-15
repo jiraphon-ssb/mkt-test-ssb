@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards, previousRange } from "../mktAnalytics.js";
-import { adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, change, filterByChannel, paceStatus, revenueBasisCards, share } from "../adsOverview.js";
+import { adChannelsByBrand, adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, change, filterByChannel, paceStatus, revenueBasisCards, share } from "../adsOverview.js";
 import { fmtCompact, fmtInt, fmtMoney, fmtPct } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
 import { PlatformIcon, platformMeta } from "./PlatformIcon.jsx";
@@ -11,7 +11,7 @@ import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
 import { useAdsData } from "./useAdsData.js";
-import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues } from "../adsTargets.js";
+import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues, plansFromTargets } from "../adsTargets.js";
 import { GoalLine } from "../ui/GoalLine.jsx";
 
 const fmtRoas = (value) => value == null ? "—" : `${value.toFixed(1)}x`;
@@ -259,8 +259,13 @@ export function AdsView() {
     const monthView = period === "mtd";
     const sumRange = monthView ? monthRange : range;
     const prevRange = monthView ? sameDatesLastMonth(monthRange) : before;
-    const brandTotals = adsByBrandChannel(scopedAll, sumRange, brands, data.ad_budgets ?? [], today, data.sales_targets ?? [], prevRange);
-    const filteredBrands = channel === "all" ? brandTotals : adsByBrandChannel(scoped, sumRange, brands, data.ad_budgets ?? [], today, data.sales_targets ?? [], prevRange);
+    /* งบ/เป้ายอดขายเดือนนี้มาจากหน้าตั้งค่า (ads_control.targets ในฐาน) — แบ่งเฉพาะแพลตฟอร์มที่มีค่าแอดจริง */
+    const plans = plansFromTargets({
+      targets: data.settings?.ads_control?.targets ?? {}, adBudgets: data.ad_budgets ?? [], salesTargets: data.sales_targets ?? [],
+      month: today.slice(0, 7), channelsByBrand: adChannelsByBrand(scopedAll, monthRange),
+    });
+    const brandTotals = adsByBrandChannel(scopedAll, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
+    const filteredBrands = channel === "all" ? brandTotals : adsByBrandChannel(scoped, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
     const filteredById = new Map(filteredBrands.map((brand) => [brand.id, brand]));
     const summary = adsCompanySummary(brandTotals, today);
     const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));

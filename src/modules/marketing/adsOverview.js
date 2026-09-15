@@ -68,6 +68,18 @@ export function adPlatformOf(c) {
 
 const resultLabelOf = (platform) => platform === "Shopee Ads" ? "ออเดอร์" : platform === "Google Ads" ? "คอนเวอร์ชัน" : "ลีด";
 
+/** แพลตฟอร์มที่มีค่าแอดในช่วง ต่อแบรนด์ → Map(brandId → [platform เรียงชื่อ]) (ใช้แบ่งงบ/เป้าจากหน้าตั้งค่า) */
+export function adChannelsByBrand(cards, range) {
+  const acc = new Map();
+  for (const c of adFactRows(cards, range)) {
+    const platform = adPlatformOf(c);
+    if (!platform || !(c.metrics?.spend > 0)) continue;
+    if (!acc.has(c.brand_id)) acc.set(c.brand_id, new Set());
+    acc.get(c.brand_id).add(platform);
+  }
+  return new Map([...acc].map(([brand, set]) => [brand, [...set].sort()]));
+}
+
 /** กรองการ์ดเฉพาะช่องทางที่เลือก — "all" = ไม่กรอง · กรองเฉพาะใบ ads (ใบอื่นปล่อยผ่าน
     เพื่อให้ตัวเลข reach/engagement ที่ไม่ใช่ ads ไม่หายไปโดยไม่ตั้งใจ) */
 export function filterByChannel(cards, channel) {

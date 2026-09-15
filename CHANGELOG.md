@@ -2,6 +2,14 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
+## [Unreleased]
+
+### fix
+- ads: บันทึกเป้ายอดขาย/งบในหน้าตั้งค่าแล้วตัวเลขไม่เปลี่ยน
+  - สาเหตุ 1: ฐานไม่มีตาราง `ad_budgets`/`sales_targets` — `mkt_save_state` ไม่เก็บ และทุกครั้งที่โหลดหน้า store เติมค่า mock กลับ → ค่าที่บันทึกหายหลังรีเฟรช และคนอื่นไม่เห็น
+  - สาเหตุ 2: งบถูกกระจายตามแพลตฟอร์มในแผน mock (เช่น JUNTAKARN = Meta+Shopee+TikTok) → โหมด Meta Pilot เห็นงบแค่ส่วนของ Meta
+  - แก้: `settings.ads_control.targets` (เก็บในฐานแล้ว · migration 0009) เป็นความจริงชุดเดียว · หน้าภาพรวมและแคมเปญคำนวณงบ/เป้าเดือนนี้จาก targets ตอนอ่าน (`plansFromTargets`) แบ่งเฉพาะแพลตฟอร์มที่มีค่าแอดจริง ผลรวมเท่าค่าที่ตั้งเป๊ะ · `updateAdsControl` ไม่เขียนทับแผน mock อีก
+
 ## [0.6.2] — 2026-09-16
 
 ### fix

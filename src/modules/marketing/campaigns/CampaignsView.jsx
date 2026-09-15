@@ -5,11 +5,11 @@ import { Search, Settings2 } from "lucide-react";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards, previousRange } from "../mktAnalytics.js";
-import { adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
+import { adChannelsByBrand, adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
 import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
 import { isoDay, periodRange, sameDatesLastMonth } from "../adsScope.js";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
-import { combineTargets, normalizeTargets, periodForTargets } from "../adsTargets.js";
+import { combineTargets, normalizeTargets, periodForTargets, plansFromTargets } from "../adsTargets.js";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { CampaignsTable } from "./CampaignsTable.jsx";
 import { CampaignDetail } from "./CampaignDetail.jsx";
@@ -43,8 +43,10 @@ export function CampaignsView() {
     const brands = (data.brands ?? []).filter((b) => b.active !== false && (brandFilter === "all" || b.id === brandFilter));
     const selectedBrand = brandSel === "all" || brands.some((b) => b.id === brandSel) ? brandSel : "all";
     const targets = data.settings?.ads_control?.targets ?? {};
+    const month = isoDay(new Date()).slice(0, 7);
+    const { adBudgets } = plansFromTargets({ targets, adBudgets: data.ad_budgets ?? [], month, channelsByBrand: adChannelsByBrand(scopedAll, periodRange("mtd", null, null)) });
     const all = campaignRows(scoped, range, {
-      brands, adBudgets: data.ad_budgets ?? [], campaignBudgets: data.campaign_budgets ?? [],
+      brands, adBudgets, campaignBudgets: data.campaign_budgets ?? [],
       today: isoDay(new Date()), prevRange: before,
     });
     const q = query.trim().toLowerCase();
