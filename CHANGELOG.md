@@ -2,12 +2,21 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
-## [Unreleased]
+## [0.5.0] — 2026-09-15
 
 ### feat
-- ads: ตรวจยอดอัตโนมัติ (ข้อ 4) — Edge Function `ads-reconcile` เทียบค่าแอด 7/30 วัน (จบเมื่อวาน ตาม timezone บัญชี) ระหว่าง `ad_daily_facts` กับ Meta ระดับบัญชี · เกณฑ์ = "ผลต่างยอดที่ยอมรับ" ในหน้ากฎ (ค่าเริ่ม 1%) · ผลเก็บเป็น `ad_sync_runs` โหมด reconcile ไม่มี migration ใหม่
+- ads: automatic 7/30-day spend reconciliation against Meta (00d5b76) — ตรวจยอดอัตโนมัติ (ข้อ 4) — Edge Function `ads-reconcile` เทียบค่าแอด 7/30 วัน (จบเมื่อวาน ตาม timezone บัญชี) ระหว่าง `ad_daily_facts` กับ Meta ระดับบัญชี · เกณฑ์ = "ผลต่างยอดที่ยอมรับ" ในหน้ากฎ (ค่าเริ่ม 1%) · ผลเก็บเป็น `ad_sync_runs` โหมด reconcile ไม่มี migration ใหม่
 - ads: ปุ่ม "ตรวจยอด" ในหน้าสถานะ Sync และ "ตรวจยอดตอนนี้" ในแท็บตรวจยอด (team_lead) · ผ่านครบสองหน้าต่างทุกบัญชี = ปลดป้าย "รอตรวจยอด" → สถานะข้อมูลปกติ / พร้อมเปิดใช้
 - กติกา: Meta = ยอดอ้างอิง · Meta เป็น 0 ผ่านเฉพาะฝั่งเราเป็น 0 · เทียบไม่ได้ = failed · ไม่ตรวจระหว่างบัญชีนั้นกำลัง sync
+
+### fix
+- ads: handle incomparable diff in reconcile UI and honor tolerance 0 (a6f37e4)
+
+### security
+- review 2026-09-15 (ads-reconcile): ไม่พบช่องโหว่ระดับ high/medium · แก้ตามข้อสังเกต: UI ไม่พังเมื่อ % ต่างเทียบไม่ได้ · tolerance 0 ใช้ได้จริง · หมายเหตุยอมรับ: ยอดรวมใน summary อ่านได้โดยผู้ล็อกอินทุกคน (ชั้นเดียวกับ facts ที่อ่านได้อยู่แล้ว)
+
+### Edge Functions
+- deploy ใหม่: `ads-reconcile`
 
 ## [0.4.1] — 2026-09-15
 
