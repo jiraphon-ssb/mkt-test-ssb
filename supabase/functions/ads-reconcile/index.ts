@@ -27,7 +27,8 @@ Deno.serve(async (request) => {
 
     // tolerance จากกฎในหน้าตั้งค่า (settings.ads_control.rules) — ไม่มีค่า = 1%
     const { data: settings } = await db.from("mkt_settings").select("ads_control").eq("id", 1).maybeSingle();
-    const tolerance = Math.max(0, Number(settings?.ads_control?.rules?.reconciliationTolerance)) || 1;
+    const raw = Number(settings?.ads_control?.rules?.reconciliationTolerance);
+    const tolerance = Number.isFinite(raw) && raw >= 0 ? raw : 1;   // 0 = ต้องตรงเป๊ะ ก็เป็นค่าที่ตั้งได้
     const activeUsers = await activeMemberUserIds(db);
 
     const results: Record<string, unknown>[] = [];

@@ -42,6 +42,8 @@ describe("compareSpend", () => {
     expect(compareSpend(0, 0, 1)).toEqual({ localSpend: 0, remoteSpend: 0, diffPct: 0, status: "passed" });
     expect(compareSpend(5, 0, 1)).toMatchObject({ diffPct: null, status: "failed" });
     expect(compareSpend(NaN, 100, 1).status).toBe("failed");
+    expect(compareSpend(100, 100, 0).status).toBe("passed");     // tolerance 0 = ต้องตรงเป๊ะ
+    expect(compareSpend(100.01, 100, 0).status).toBe("failed");
   });
 });
 

@@ -199,7 +199,7 @@ function Rules({ rules, setRules }) {
 const money = (value) => value == null ? "—" : `฿${Math.round(value).toLocaleString("th-TH")}`;
 function CheckCell({ check }) {
   if (check.status === "pending") return <div className="acc-check pending"><strong>ยังตรวจไม่ได้</strong><small>รอข้อมูลจาก API</small></div>;
-  return <div className={`acc-check ${check.status}`}><strong>{check.status === "passed" ? "ตรงกัน" : "ยอดไม่ตรง"}</strong><small>{money(check.local)} / {money(check.remote)} · ต่าง {check.diffPct.toFixed(2)}%</small></div>;
+  return <div className={`acc-check ${check.status}`}><strong>{check.status === "passed" ? "ตรงกัน" : "ยอดไม่ตรง"}</strong><small>{money(check.local)} / {money(check.remote)} · {check.diffPct == null ? "เทียบ % ไม่ได้" : `ต่าง ${check.diffPct.toFixed(2)}%`}</small></div>;
 }
 
 function Reconciliation({ config, brands, toast, isLead }) {
