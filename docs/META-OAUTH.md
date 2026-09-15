@@ -11,11 +11,28 @@
 | Migration ที่ apply แล้ว | 0005–0008 · 0009 (`ads_control`) · 0010 (`20260914163737_ads_sync_worker`) — release v0.3.0 |
 | Edge Functions ที่ deploy แล้ว | `ads-oauth-start` · `ads-oauth-status` · `ads-oauth-disconnect` · `ads-oauth-callback` (ไม่บังคับ JWT) · `ads-connections` · `ads-sync` |
 | ผู้ใช้ team_lead ที่ผูกแล้ว | login `jiraphon.e` → โปรไฟล์ `u_art` |
-| แอปฝั่งหน้าบ้าน | ยังไม่มี hosting · ทดสอบที่ `http://localhost:5173` ด้วย `VITE_AUTH_MODE=supabase` (ตั้งใน `.env.local` แล้ว) |
-| Meta App | **ยังไม่ได้สร้าง / ยังไม่ได้ส่ง App ID มา** |
-| Server secrets ของ Meta | **ยังไม่ได้ตั้ง** (ณ 14 ก.ย. · callback ตอบ 500 จนกว่าจะตั้งครบ) · ตรวจชื่อที่ตั้งแล้วด้วย `npx supabase secrets list` |
+| แอปฝั่งหน้าบ้าน | `https://mkt-test-ssb.vercel.app` (ต้องตั้ง `VITE_AUTH_MODE=supabase` ใน Vercel) · ทดสอบบนเครื่องที่ `http://localhost:5173` |
+| Meta App | สร้างแล้ว · App ID `1048047581400827` · โหมดทดลอง (คนเชื่อมต้องอยู่ใน App Roles) |
+| Server secrets ของ Meta | ตั้งครบ 7 ค่าแล้ว (15 ก.ย.) · ตรวจชื่อด้วย `npx supabase secrets list` |
 
-ที่เหลือคือข้อ 2 และ 3 ของคู่มือนี้ ซึ่งต้องทำเองเพราะมี App Secret และกุญแจเข้ารหัส จากนั้นทดสอบตามข้อ 5 และ 6
+## ใครทำอะไรได้ (ตั้งแต่ v0.4.0)
+
+| ผู้ใช้ | ทำได้ |
+|---|---|
+| สมาชิกทีม (ผู้ใช้ Auth ที่ผูกกับ `mkt_profile` ที่ active) | ล็อกอินครั้งเดียว (เบราว์เซอร์จำ session) · เชื่อม / ดู / ยกเลิก Meta ของตัวเอง · token ของแต่ละคนแยกกัน คนอื่นมองไม่เห็น |
+| `team_lead` | ทุกอย่างของสมาชิก + เห็นบัญชีที่ทุกคนในทีมเชื่อมไว้ · ผูกบัญชีกับแบรนด์ · บันทึกตั้งค่า · สั่งดึงข้อมูล · ดู Meta Pilot |
+
+**เพิ่มสมาชิกใหม่ 3 ขั้น**
+1. Supabase Dashboard → Authentication → Users → Add user (อีเมล + รหัสผ่าน) หรือ Invite
+2. ผูกกับโปรไฟล์ทีมใน SQL Editor (client ทำเองไม่ได้ มี trigger กัน):
+   ```sql
+   update mkt_profile set auth_user_id = '<uuid ของผู้ใช้จากขั้น 1>' where id = '<mkt_profile.id>' and auth_user_id is null;
+   ```
+3. Meta App → App Roles → เพิ่มบัญชี Facebook ของคนนั้นเป็น Tester แล้วให้เขากดยอมรับคำเชิญ (จนกว่าแอปจะผ่าน App Review)
+
+สมาชิกออกจากทีม: ปิด `active` ของโปรไฟล์ (SQL Editor) · token ของคนนั้นหยุดถูกใช้ผูกบัญชีและดึงข้อมูลทันที · ให้ team_lead ผูกบัญชีนั้นกับ token ของคนอื่นแทน
+
+ลิงก์เว็บเปิดได้หลาย origin พร้อมกัน: ระบบพากลับไปหน้าเดิมที่กดเชื่อม ถ้า origin นั้นอยู่ใน `ADS_ALLOWED_ORIGINS` · ไม่อยู่ = กลับไปที่ `ADS_APP_ORIGIN`
 
 ## 1. เตรียมฐานข้อมูล — ทำแล้ว
 
@@ -76,8 +93,8 @@ npx supabase secrets set --project-ref lzvftqhffqefqupwulus \
   META_APP_SECRET='<App Secret จาก Meta>' \
   META_GRAPH_VERSION='v26.0' \
   META_OAUTH_REDIRECT_URI='https://lzvftqhffqefqupwulus.supabase.co/functions/v1/ads-oauth-callback' \
-  ADS_APP_ORIGIN='http://localhost:5173' \
-  ADS_ALLOWED_ORIGINS='http://localhost:5173,http://127.0.0.1:5173' \
+  ADS_APP_ORIGIN='https://mkt-test-ssb.vercel.app' \
+  ADS_ALLOWED_ORIGINS='https://mkt-test-ssb.vercel.app,http://localhost:5173,http://127.0.0.1:5173' \
   ADS_TOKEN_ENCRYPTION_KEY='<ผลจาก openssl rand -base64 32>'
 ```
 
@@ -87,11 +104,11 @@ npx supabase secrets set --project-ref lzvftqhffqefqupwulus \
 | `META_APP_SECRET` | ต้องใส่เอง | Meta App → Settings → Basic · ห้ามเผยแพร่ |
 | `META_GRAPH_VERSION` | `v26.0` | ค่าเริ่มของโค้ด · เปลี่ยนเมื่อ Meta เลิกรองรับ |
 | `META_OAUTH_REDIRECT_URI` | callback ของโปรเจกต์นี้ | ต้องตรงกับที่กรอกใน Meta ทุกตัวอักษร |
-| `ADS_APP_ORIGIN` | `http://localhost:5173` | origin ของแอปที่กลับมาหลังเชื่อม · ต้องตรงกับ URL ที่เปิดแอปจริง (`localhost` กับ `127.0.0.1` ถือเป็นคนละ origin) |
-| `ADS_ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | origin ที่เรียก function จาก browser ได้ (CORS) |
+| `ADS_APP_ORIGIN` | `https://mkt-test-ssb.vercel.app` | origin ค่าเริ่มที่พากลับหลังเชื่อม (ใช้เมื่อหน้าที่กดเชื่อมไม่อยู่ในรายชื่อด้านล่าง) |
+| `ADS_ALLOWED_ORIGINS` | `https://mkt-test-ssb.vercel.app,http://localhost:5173,http://127.0.0.1:5173` | origin ที่เรียก function จาก browser ได้ (CORS) และพากลับได้ · `localhost` กับ `127.0.0.1` ถือเป็นคนละ origin · ไม่อยู่ในรายชื่อ = ขึ้น "เรียกระบบหลังบ้านไม่ได้" |
 | `ADS_TOKEN_ENCRYPTION_KEY` | ต้องสร้างเอง | `openssl rand -base64 32` · **ตั้งครั้งเดียว** ถ้าเปลี่ยนภายหลัง token ที่เก็บไว้จะถอดรหัสไม่ได้ ต้องเชื่อม Meta ใหม่ |
 
-เมื่อมี domain จริงของแอป ให้ตั้ง `ADS_APP_ORIGIN='https://<domain>'` และเพิ่ม domain นั้นหน้า `ADS_ALLOWED_ORIGINS` (ไม่ต้อง deploy function ใหม่ secrets มีผลรอบเรียกถัดไป)
+เพิ่ม domain ใหม่ของแอป: ต่อท้าย `ADS_ALLOWED_ORIGINS` (ไม่ต้อง deploy function ใหม่ secrets มีผลรอบเรียกถัดไป)
 
 `SUPABASE_URL` และ `SUPABASE_SERVICE_ROLE_KEY` มีใน Edge Function environment อยู่แล้ว ไม่ต้องตั้ง
 

@@ -2,6 +2,18 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
+## [Unreleased]
+
+### feat
+- ads: สมาชิกทีมทุกคน (โปรไฟล์ active ที่ผูกผู้ใช้ Auth) เชื่อม / ดู / ยกเลิก Meta ของตัวเองได้ · team_lead เห็นและผูกบัญชีที่ทุกคนในทีมเชื่อมไว้ · ผูกแบรนด์ บันทึกตั้งค่า และดึงข้อมูลยังเป็นของ team_lead
+- ads: OAuth พากลับไปหน้าเดิมที่กดเชื่อมได้หลาย origin (Vercel + localhost) ตาม `ADS_ALLOWED_ORIGINS`
+
+### fix
+- ads: ข้อความผิดพลาดของ Edge Function เป็นภาษาไทยตามสาเหตุ (เช่น เรียกระบบหลังบ้านไม่ได้เพราะ origin ไม่อยู่ในรายชื่อ) แทน "ต้องเปิด Supabase Auth และ deploy OAuth Functions ก่อน"
+
+### security
+- review 2026-09-15 (สิทธิ์สมาชิก + หลาย origin): ไม่พบช่องโหว่ระดับ high/medium · แก้ตามข้อสังเกต: token ของสมาชิกที่โปรไฟล์ไม่ active แล้วไม่ถูกใช้ผูกบัญชีหรือดึงข้อมูล · ความเสี่ยงที่ยอมรับ: OAuth state ผูกกับผู้ใช้ฝั่ง server ไม่ผูกกับเบราว์เซอร์ (มีมาก่อน M1 · ตอนนี้สมาชิกเริ่ม OAuth ได้ด้วย)
+
 ## [0.3.0] — 2026-09-14
 
 ### feat
