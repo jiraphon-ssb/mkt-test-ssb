@@ -2,11 +2,21 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
-## [Unreleased]
+## [0.8.0] — 2026-09-16
 
 ### feat
-- ads: ภาพจริงของโฆษณาแบบบูสต์โพสต์เพจ (674 จาก 782 creative) — OAuth ขอสิทธิ์อ่านเพจเพิ่ม `pages_show_list` + `pages_read_engagement` (อ่านอย่างเดียว · ไม่ให้ก็ใช้งานได้ ads_read ยังเป็นตัวหลัก) · `ads-creatives` ใช้ Page access token (อยู่ในหน่วยความจำของคำขอเท่านั้น ไม่เก็บ ไม่ log) อ่าน `full_picture`/ไฟล์แนบของโพสต์ แทนรูปโปรไฟล์เพจ · อัลบั้ม = carousel · วิดีโอ = ภาพปก
-- ads: หน้าตั้งค่าแจ้ง "เชื่อม Meta ใหม่" เมื่อการเชื่อมเดิมยังไม่มีสิทธิ์อ่านเพจ · ผลดึงข้อมูลบอกจำนวนภาพจากโพสต์
+- ads: show real post images for boosted-post creatives (39e6c7d)
+  - ภาพจริงของโฆษณาแบบบูสต์โพสต์เพจ (674 จาก 782 creative) — OAuth ขอสิทธิ์อ่านเพจเพิ่ม `pages_show_list` + `pages_read_engagement` (อ่านอย่างเดียว · ไม่ให้ก็ใช้งานได้ ads_read ยังเป็นตัวหลัก) · `ads-creatives` ใช้ Page access token (อยู่ในหน่วยความจำของคำขอเท่านั้น ไม่เก็บ ไม่ log) อ่าน `full_picture`/ไฟล์แนบของโพสต์ แทนรูปโปรไฟล์เพจ · อัลบั้ม = carousel · วิดีโอ = ภาพปก
+  - หน้าตั้งค่าแจ้ง "เชื่อม Meta ใหม่" เมื่อการเชื่อมเดิมยังไม่มีสิทธิ์อ่านเพจ · ผลดึงข้อมูลบอกจำนวนภาพจากโพสต์
+
+### security
+- review 2026-09-16: ไม่พบช่องโหว่ · Page token อยู่ใน Map ในหน่วยความจำ ส่งเฉพาะ header ไป graph.facebook.com · ไม่อยู่ใน log/ฐาน/response · โพสต์แต่ละตัวใช้ token ของเพจตัวเองจาก story id ที่ตรวจรูปแบบ · สิทธิ์ที่เพิ่มเป็นอ่านอย่างเดียว
+
+### Edge Functions
+- deploy ใหม่: `ads-oauth-start` · `ads-creatives`
+
+### ต้องทำหลัง deploy
+- ผู้ที่เชื่อม Meta ไว้แล้ว: กด "เชื่อมใหม่" ในหน้าตั้งค่า เลือกทุกเพจที่ยิงแอด แล้วดึงข้อมูลใหม่
 
 ## [0.7.1] — 2026-09-16
 
