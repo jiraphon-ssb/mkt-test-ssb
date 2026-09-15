@@ -2,6 +2,21 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
+## [0.6.2] — 2026-09-16
+
+### fix
+- ads: read creatives from ad account edge (Graph v26 dropped ?ids=) (1c945d1)
+  - log ที่เพิ่มใน 0.6.1 เผยสาเหตุจริง: `The ids query parameter is deprecated in v26.0+` → ทุกคำขอพัง แต่ละรอบวิ่งจนหมดงบเวลา 90 วินาทีโดยไม่ได้ภาพเลย
+  - อ่านโฆษณาจาก `/act_x/ads` พร้อม creative (field เบา) คัดเฉพาะ ad ที่มีค่าแอด หยุดเมื่อเจอครบ
+  - Meta ไม่รับ → ถอยทีละขั้น: ภาพย่อใหญ่ → ตัวกรอง archived → ลดจำนวนต่อหน้า · rate limit/token หยุดทันที ไม่ retry
+  - เรียกต่อด้วย cursor (ไม่คืน URL หน้าถัดไป)
+
+### security
+- review 2026-09-16: ไม่พบช่องโหว่ · cursor จาก client จำกัด `[A-Za-z0-9_-]` ฉีด parameter ไม่ได้ · token ไม่อยู่ใน cursor/log
+
+### Edge Functions
+- deploy ใหม่: `ads-creatives`
+
 ## [0.6.1] — 2026-09-16
 
 ### fix
