@@ -17,3 +17,17 @@ describe("adsErrorText", () => {
     }
   });
 });
+
+import { functionErrorCode } from "../src/modules/marketing/ads/adsSyncMessages.js";
+describe("functionErrorCode — แปลง error ของ supabase.functions.invoke เป็นรหัส", () => {
+  it("body มี { error } ใช้รหัสนั้น · ส่งไม่ถึง function (CORS/เครือข่าย) = FUNCTION_UNREACHABLE · อื่นๆ = fallback", async () => {
+    const http = { name: "FunctionsHttpError", context: { json: async () => ({ error: "MEMBER_REQUIRED" }) } };
+    expect(await functionErrorCode(http, "X")).toBe("MEMBER_REQUIRED");
+    expect(await functionErrorCode({ name: "FunctionsFetchError", message: "Failed to send a request to the Edge Function" }, "X")).toBe("FUNCTION_UNREACHABLE");
+    expect(await functionErrorCode({ name: "FunctionsHttpError", context: { json: async () => { throw new Error("not json"); } } }, "X")).toBe("X");
+  });
+  it("ข้อความไทยของรหัสใหม่", () => {
+    expect(adsErrorText("FUNCTION_UNREACHABLE")).toContain("เรียกระบบหลังบ้านไม่ได้");
+    expect(adsErrorText("MEMBER_REQUIRED")).toContain("โปรไฟล์ทีม");
+  });
+});

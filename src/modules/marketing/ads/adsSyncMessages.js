@@ -2,6 +2,11 @@
 const TEXT = {
   AUTH_REQUIRED: "ต้องเข้าสู่ระบบก่อน",
   TEAM_LEAD_REQUIRED: "เฉพาะหัวหน้าทีมเท่านั้น",
+  MEMBER_REQUIRED: "บัญชีนี้ยังไม่ได้ผูกกับโปรไฟล์ทีม ให้หัวหน้าทีมผูกให้ก่อน",
+  FUNCTION_UNREACHABLE: "เรียกระบบหลังบ้านไม่ได้ ตรวจอินเทอร์เน็ต หรือเว็บนี้ยังไม่อยู่ในรายชื่อ origin ที่อนุญาต",
+  OAUTH_START_FAILED: "เริ่มเชื่อม Meta ไม่สำเร็จ ลองใหม่อีกครั้ง",
+  OAUTH_STATUS_FAILED: "ตรวจสถานะการเชื่อม Meta ไม่สำเร็จ",
+  DISCONNECT_FAILED: "ยกเลิกการเชื่อมไม่สำเร็จ ลองใหม่อีกครั้ง",
   CONNECTION_NOT_FOUND: "ไม่พบบัญชีนี้ในระบบ ลองบันทึกหน้าตั้งค่าอีกครั้ง",
   CONNECTION_NOT_READY: "บัญชียังไม่พร้อม ต้องเชื่อม OAuth และบันทึก mapping ก่อน",
   AUTHORIZATION_NOT_READY: "การเชื่อม Meta หมดอายุหรือถูกยกเลิก ต้องเชื่อมใหม่",
@@ -21,6 +26,16 @@ const TEXT = {
   ACCOUNT_ID_INVALID: "Account ID ต้องเป็น act_ ตามด้วยตัวเลข",
   MAPPINGS_INVALID: "ข้อมูล mapping ไม่ถูกต้อง",
 };
+
+/** error ของ supabase.functions.invoke → รหัส: body { error } · ส่งไม่ถึง function = FUNCTION_UNREACHABLE */
+export async function functionErrorCode(error, fallback) {
+  if (error?.name === "FunctionsFetchError" || error?.name === "FunctionsRelayError") return "FUNCTION_UNREACHABLE";
+  try {
+    const body = await error?.context?.json?.();
+    if (typeof body?.error === "string") return body.error;
+  } catch { /* body ไม่ใช่ JSON */ }
+  return fallback;
+}
 
 export function adsErrorText(error, fallback = "ทำรายการไม่สำเร็จ") {
   const code = typeof error === "string" ? error : error?.code ?? error?.message;

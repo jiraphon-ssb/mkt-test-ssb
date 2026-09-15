@@ -14,6 +14,7 @@ import { supabase, requireSupabase } from "./supabaseClient.js";
 import { AR_MAIN_STAGES, arEligible, buildForecast, buildAging, arKpis } from "./arModel.js";
 /* เดโม marketing — วันต่อ Supabase จริง 2 บรรทัดนี้จะถูกแทนด้วย db.from/db.rpc */
 import { store as mktStore } from "../../modules/marketing/data/DataStore.js";
+import { functionErrorCode } from "../../modules/marketing/ads/adsSyncMessages.js";
 import { hoursWaitingInReview as mktHoursWaiting } from "../../modules/marketing/mktRules.js";
 
 /* AP (เงินออก) data surface — spec §17. All AP reads/writes go through here;
@@ -2402,11 +2403,8 @@ const marketing = {
 
 /** Edge Function ตอบ { error: CODE } — ดึงรหัสออกมาเป็น message (แสดงผลแปลไทยที่หน้าจอ) */
 async function adsFunctionError(error, fallback) {
-  try {
-    const body = await error?.context?.json?.();
-    if (body?.error) { const e = new Error(body.error); e.code = body.error; return e; }
-  } catch { /* body ไม่ใช่ JSON */ }
-  const e = new Error(fallback); e.code = fallback; return e;
+  const code = await functionErrorCode(error, fallback);
+  const e = new Error(code); e.code = code; return e;
 }
 
 /** Ads connectors — browser receives OAuth URLs and sync status only.
@@ -2421,20 +2419,20 @@ const adsData = {
   async startOAuth(provider, returnTo = "/mkt/ads?panel=settings") {
     const db = requireSupabase();
     const { data, error } = await db.functions.invoke("ads-oauth-start", { body: { provider, returnTo } });
-    if (error) throw error;
+    if (error) throw await adsFunctionError(error, "OAUTH_START_FAILED");
     if (!data?.authorizeUrl) throw new Error("OAuth URL was not returned");
     return data.authorizeUrl;
   },
   async oauthStatus(provider = "meta") {
     const db = requireSupabase();
     const { data, error } = await db.functions.invoke("ads-oauth-status", { body: { provider } });
-    if (error) throw error;
-    return { authorizations: data?.authorizations ?? [], accounts: data?.accounts ?? [] };
+    if (error) throw await adsFunctionError(error, "OAUTH_STATUS_FAILED");
+    return { authorizations: data?.authorizations ?? [], accounts: data?.accounts ?? [], teamAccounts: data?.teamAccounts ?? [], isLead: Boolean(data?.isLead) };
   },
   async disconnectOAuth(authorizationId, revoke = true) {
     const db = requireSupabase();
     const { data, error } = await db.functions.invoke("ads-oauth-disconnect", { body: { authorizationId, revoke } });
-    if (error) throw error;
+    if (error) throw await adsFunctionError(error, "DISCONNECT_FAILED");
     return data;
   },
   /** mode: "auto" (ครั้งแรก = backfill ไม่งั้น incremental) · "incremental" · "backfill" */
