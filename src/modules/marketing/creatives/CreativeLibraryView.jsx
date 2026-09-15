@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, Film, Image as ImageIcon, Search, Settings2, X } from "lucide-react";
+import { ExternalLink, Film, Image as ImageIcon, Play, Search, Settings2, X } from "lucide-react";
 import { useApp } from "../useMkt.jsx";
 import { useAdsData } from "../ads/useAdsData.js";
 import { AdsSourceControl, AdsSourceNotice } from "../ads/AdsSourceControl.jsx";
@@ -12,27 +12,41 @@ import { fmtMoney, fmtPct } from "../dash/charts/theme.js";
 import { PlatformIcon } from "../ads/PlatformIcon.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { filterCreativeLibrary, creativeLibrarySummary } from "./creativeLibrary.js";
+import { CreativePreview } from "./CreativePreview.jsx";
+import { postLinksOf } from "../ads/metaCreativeContract.js";
+import { Pagination } from "../ui/Pagination.jsx";
+import { scrollToList } from "../ui/pagination.js";
+import { usePagination } from "../ui/usePagination.js";
 import "../ads/adsWorkspace.css";
 import "./creativeLibrary.css";
 
 const metric = (value, format = "number") => value == null ? "—" : format === "money" ? fmtMoney(value) : format === "pct" ? fmtPct(value, 2) : format === "roas" ? `${value.toFixed(1)}x` : `${value.toFixed(1)}x`;
 const actionText = { Scale: "น่าขยาย", Fix: "ควรแก้", Stop: "ควรหยุด", "ติดตาม": "ติดตาม" };
 
-function Media({ row }) {
+const PAGE_SIZES = [12, 24, 48];   // หารลงตัวกับกริด 4 / 3 / 2 คอลัมน์ · หน้าละไม่เกิน 48 ภาพ
+
+/** ภาพบนการ์ด · มีรหัสโฆษณาจริง = กดดูตัวอย่างโฆษณาของ Meta (เล่นคลิปได้) */
+function Media({ row, onPreview }) {
   const asset = row.asset;
   const item = asset?.media?.[0];
   const src = item?.thumbnailUrl || item?.imageUrl;
-  if (src) return <div className="cl-media"><img src={src} alt={asset.copy?.headline || row.creative} loading="lazy" /><span>{asset.format === "video" ? <Film size={14} /> : <ImageIcon size={14} />}{asset.format}</span></div>;
-  return <div className="cl-media cl-media--empty"><ImageIcon size={26} /><strong>รอ Creative API</strong><small>จะแสดงภาพหรือวิดีโอหลัง Sync สำเร็จ</small></div>;
+  const canPreview = Boolean(asset?.adId && asset?.connectionId && onPreview);
+  const isVideo = asset?.format === "video" || item?.type === "video";
+  const label = `ดูตัวอย่างโฆษณา ${row.creative}`;
+  const inner = src
+    ? <div className="cl-media"><img src={src} alt={asset.copy?.headline || row.creative} loading="lazy" />{isVideo && canPreview && <span className="cl-media-play" aria-hidden="true"><i><Play size={18} /></i></span>}<span>{isVideo ? <Film size={14} /> : <ImageIcon size={14} />}{asset.format}</span></div>
+    : <div className="cl-media cl-media--empty"><ImageIcon size={26} /><strong>{canPreview ? "ยังไม่มีภาพย่อ" : "รอ Creative API"}</strong><small>{canPreview ? "กดเพื่อดูตัวอย่างโฆษณาจาก Meta" : "จะแสดงภาพหรือวิดีโอหลัง Sync สำเร็จ"}</small>{canPreview && <span className="cl-media-cta">ดูตัวอย่าง</span>}</div>;
+  return canPreview ? <button type="button" className="cl-media-button" onClick={() => onPreview(row)} aria-label={label}>{inner}</button> : inner;
 }
 
-function CreativeCard({ row, checked, onToggle }) {
+function CreativeCard({ row, checked, onToggle, onPreview }) {
+  const links = postLinksOf(row.asset);
   return <article className={`cl-card ${row.fatigue ? "is-fatigue" : ""}`}>
-    <Media row={row} />
+    <Media row={row} onPreview={onPreview} />
     <div className="cl-card-body">
       <header><div><span><PlatformIcon channel={row.platform} size={14} /> {row.platform}</span><strong title={row.creative}>{row.creative}</strong><small>{row.brand} · {row.campaigns.length} แคมเปญ</small></div><label className="cl-check"><input type="checkbox" checked={checked} onChange={onToggle} /><span>เทียบ</span></label></header>
       <div className="cl-metrics"><div><span>ค่าแอด</span><b>{metric(row.spend, "money")}</b></div><div><span>ROAS</span><b>{metric(row.roas, "roas")}</b></div><div><span>CPL</span><b>{metric(row.cpl, "money")}</b></div><div><span>CTR</span><b>{metric(row.ctr, "pct")}</b></div></div>
-      <footer><span className={`cl-action cl-action--${row.tone}`}>{row.fatigue ? "เริ่มล้า" : actionText[row.action] ?? row.action}</span><span>ความถี่ {metric(row.frequency)}</span>{row.asset?.permalinkUrl && <a href={row.asset.permalinkUrl} target="_blank" rel="noreferrer">ดูโพสต์ <ExternalLink size={12} /></a>}</footer>
+      <footer><span className={`cl-action cl-action--${row.tone}`}>{row.fatigue ? "เริ่มล้า" : actionText[row.action] ?? row.action}</span><span>ความถี่ {metric(row.frequency)}</span>{links.length > 0 && <span className="cl-links">{links.map((link) => <a key={link.key} href={link.url} target="_blank" rel="noreferrer" aria-label={`${link.label} ของ ${row.creative}`}>{link.key === "facebook" ? "FB" : "IG"} <ExternalLink size={11} /></a>)}</span>}</footer>
     </div>
   </article>;
 }
@@ -65,6 +79,10 @@ export function CreativeLibraryView() {
     return { rows, all, brands, platforms, summary: creativeLibrarySummary(rows), range };
   }, [data, ads.cards, inBrandScope, brandFilter, period, from, to, brand, platform, state, sort, query]);
   const chosen = selected.map((key) => v.all.find((row) => row.key === key)).filter(Boolean);
+  const [previewRow, setPreviewRow] = useState(null);
+  const listTop = useRef(null);
+  /* แบ่งหน้า: ตัวกรอง/การเรียง/ช่วงวัน/แหล่งข้อมูลเปลี่ยน → กลับหน้า 1 · ตัวเลขสรุปด้านบนนับทุกหน้า · ที่เลือกเทียบคงอยู่ข้ามหน้า */
+  const pager = usePagination(v.rows, { storageKey: "ssb.creatives.pageSize", sizes: PAGE_SIZES, defaultSize: 12, resetKey: `${period}|${from}|${to}|${brand}|${platform}|${state}|${sort}|${query}|${ads.source}` });
   const toggle = (key) => setSelected((current) => current.includes(key) ? current.filter((item) => item !== key) : current.length >= 4 ? (toast?.("เทียบได้สูงสุด 4 ชิ้น", "bad"), current) : [...current, key]);
   const fromShown = isoDay(new Date(v.range.start));
   const toShown = isoDay(new Date(new Date(v.range.end).getTime() - 1));
@@ -76,6 +94,10 @@ export function CreativeLibraryView() {
     </section>
     <section className="cl-summary"><div><span>ชิ้นงานในช่วงนี้</span><b>{v.summary.count}</b></div><div><span>ค่าแอดรวม</span><b>{metric(v.summary.spend, "money")}</b></div><div><span>มีภาพ/วิดีโอแล้ว</span><b>{v.summary.withMedia}</b></div><div className={v.summary.tired ? "warn" : ""}><span>เริ่มล้า</span><b>{v.summary.tired}</b></div></section>
     <CompareTray rows={chosen} onRemove={(key) => setSelected((current) => current.filter((item) => item !== key))} onClear={() => setSelected([])} />
-    {v.rows.length ? <section className="cl-grid">{v.rows.map((row) => <CreativeCard key={row.key} row={row} checked={selected.includes(row.key)} onToggle={() => toggle(row.key)} />)}</section> : <section className="cl-empty"><ImageIcon size={28} /><strong>ไม่พบชิ้นงานในช่วงนี้</strong><span>ลองเปลี่ยนช่วงเวลาหรือล้างตัวกรอง</span></section>}
+    <div ref={listTop} className="cl-list-top" />
+    {v.rows.length ? <><section className="cl-grid">{pager.pageItems.map((row) => <CreativeCard key={row.key} row={row} checked={selected.includes(row.key)} onToggle={() => toggle(row.key)} onPreview={setPreviewRow} />)}</section>
+      <Pagination pager={pager} sizes={PAGE_SIZES} unit="ชิ้นงาน" label="แบ่งหน้า Creative" onChange={() => scrollToList(listTop)} /></>
+      : <section className="cl-empty"><ImageIcon size={28} /><strong>ไม่พบชิ้นงานในช่วงนี้</strong><span>ลองเปลี่ยนช่วงเวลาหรือล้างตัวกรอง</span></section>}
+    {previewRow && <CreativePreview row={previewRow} onClose={() => setPreviewRow(null)} />}
   </main>;
 }

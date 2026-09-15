@@ -32,3 +32,25 @@ describe("Meta creative contract", () => {
     expect(normalized.media[0].videoUrl).toBe("https://video.example/ad.mp4");
   });
 });
+
+import { postLinksOf } from "../src/modules/marketing/ads/metaCreativeContract.js";
+describe("ภาพจริงของโฆษณา + ลิงก์โพสต์", () => {
+  it("ใช้ภาพของตัวโฆษณาเอง (ภาพปกวิดีโอ/ภาพลิงก์) ก่อนภาพย่อระดับ creative ที่มักเป็นรูปโปรไฟล์เพจ", () => {
+    const logo = "https://scontent.xx.fbcdn.net/page-logo.jpg";
+    const video = normalizeMetaAdCreative({ id: "ad-v", creative: { id: "cr-v", thumbnail_url: logo, object_story_spec: { video_data: { video_id: "v1", image_url: "https://scontent.xx.fbcdn.net/video-cover.jpg" } } } });
+    expect(video.media[0]).toMatchObject({ type: "video", thumbnailUrl: "https://scontent.xx.fbcdn.net/video-cover.jpg", videoId: "v1" });
+    const link = normalizeMetaAdCreative({ id: "ad-l", creative: { id: "cr-l", thumbnail_url: logo, object_story_spec: { link_data: { picture: "https://scontent.xx.fbcdn.net/link.jpg" } } } });
+    expect(link.media[0].thumbnailUrl).toBe("https://scontent.xx.fbcdn.net/link.jpg");
+    const onlyCreative = normalizeMetaAdCreative({ id: "ad-p", creative: { id: "cr-p", thumbnail_url: "https://scontent.xx.fbcdn.net/t.jpg" } });
+    expect(onlyCreative.media[0].thumbnailUrl).toBe("https://scontent.xx.fbcdn.net/t.jpg");     // ไม่มีอะไรดีกว่า ก็ใช้ภาพย่อ
+  });
+  it("postLinksOf: Instagram จาก permalink · Facebook จาก story id (เพจ_โพสต์) · รูปแบบแปลกไม่สร้างลิงก์", () => {
+    expect(postLinksOf({ permalinkUrl: "https://www.instagram.com/p/abc/", storyId: "1234_5678" })).toEqual([
+      { key: "facebook", label: "โพสต์ Facebook", url: "https://www.facebook.com/1234_5678" },
+      { key: "instagram", label: "โพสต์ Instagram", url: "https://www.instagram.com/p/abc/" },
+    ]);
+    expect(postLinksOf({ storyId: "1234_5678/../evil" })).toEqual([]);
+    expect(postLinksOf({ permalinkUrl: "javascript:alert(1)" })).toEqual([]);
+    expect(postLinksOf(null)).toEqual([]);
+  });
+});

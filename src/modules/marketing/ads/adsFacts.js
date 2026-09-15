@@ -23,6 +23,7 @@ export function creativeAssetFromRow(row) {
   if (!row) return null;
   return {
     provider: row.provider ?? "meta",
+    connectionId: row.connection_id ?? null,          // ใช้ขอตัวอย่างโฆษณา (ads-preview)
     creativeId: row.external_creative_id || null,
     adId: row.external_ad_id || null,
     name: row.name || "ไม่ระบุชื่อครีเอทีฟ",

@@ -2500,6 +2500,13 @@ const adsData = {
     if (error) throw await adsFunctionError(error, "CREATIVE_SYNC_FAILED");
     return data;
   },
+  /** ตัวอย่างโฆษณาจริงจาก Meta — คืน src ของ iframe ที่ server ตรวจแล้ว */
+  async creativePreview(connectionId, adId, format = "MOBILE_FEED_STANDARD") {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-preview", { body: { connectionId, adId, format } });
+    if (error) throw await adsFunctionError(error, "PREVIEW_UNAVAILABLE");
+    return data;
+  },
   /** creative ที่ worker เก็บไว้ (อ่านอย่างเดียว) */
   async creatives() {
     const db = requireSupabase();

@@ -17,8 +17,11 @@ export const META_AD_CREATIVE_FIELDS = [
 function mediaItem(input = {}, fallback = {}) {
   const videoId = first(input.video_id, fallback.video_id);
   const videoUrl = safeUrl(first(input.video_url, input.source, fallback.video_url));
-  const imageUrl = safeUrl(first(input.picture, input.image_url, fallback.image_url));
-  const thumbnailUrl = safeUrl(first(input.thumbnail_url, fallback.thumbnail_url, imageUrl));
+  /* ภาพของตัวโฆษณาเอง (ภาพปกวิดีโอ/ภาพลิงก์/ภาพโพสต์) มาก่อนภาพย่อระดับ creative
+     — ภาพย่อระดับ creative ของโฆษณาจากโพสต์เพจมักเป็นรูปโปรไฟล์เพจ ไม่ใช่ตัวคอนเทนต์ */
+  const ownImage = safeUrl(first(input.picture, input.image_url, input.url));
+  const imageUrl = ownImage ?? safeUrl(fallback.image_url);
+  const thumbnailUrl = safeUrl(first(input.thumbnail_url, ownImage, fallback.image_url, fallback.thumbnail_url));
   if (!videoId && !videoUrl && !imageUrl && !thumbnailUrl) return null;
   return {
     id: first(input.id, input.image_hash, videoId, imageUrl),
@@ -86,6 +89,16 @@ export function creativeAssetOf(value) {
 
 /* ── worker ─────────────────────────────────────────────────────────── */
 /* field เบาที่หน้าจอใช้จริง — ไม่ขอ object_story_spec/asset_feed_spec (ก้อนใหญ่ ทำให้ Meta ตอบ "ลดปริมาณข้อมูล" เมื่อขอหลาย ad) */
+/** ลิงก์โพสต์ของโฆษณา: Facebook จาก story id (pageid_postid) · Instagram จาก permalink ที่ Meta ส่งมา */
+export function postLinksOf(asset) {
+  if (!asset) return [];
+  const links = [];
+  if (typeof asset.storyId === "string" && /^\d+_\d+$/.test(asset.storyId)) links.push({ key: "facebook", label: "โพสต์ Facebook", url: `https://www.facebook.com/${asset.storyId}` });
+  const ig = safeUrl(asset.permalinkUrl);
+  if (ig) links.push({ key: "instagram", label: "โพสต์ Instagram", url: ig });
+  return links;
+}
+
 export const META_CREATIVE_LIGHT_FIELDS = [
   "id", "name", "object_type", "body", "title", "image_url", "thumbnail_url", "video_id", "link_url", "object_url",
   "call_to_action_type", "effective_object_story_id", "effective_instagram_media_id", "instagram_permalink_url",
@@ -105,13 +118,17 @@ export function rankAdIdsBySpend(facts = [], limit = 400) {
 const AD_STATUSES = ["ACTIVE", "PAUSED", "ARCHIVED", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "WITH_ISSUES", "PENDING_REVIEW", "DISAPPROVED", "PREAPPROVED", "PENDING_BILLING_INFO"];
 
 /** โฆษณาของบัญชีพร้อม creative — Graph v26 เลิกรองรับ ?ids= จึงอ่านจาก /act_x/ads แล้วคัดเฉพาะ ad ที่มีค่าแอด */
-export function buildAccountAdsUrl({ version, accountId, limit = 50, largeThumbnails = true, includeArchived = true, after = null }) {
+/* สเปกโฆษณา: ภาพปกวิดีโอ ภาพลิงก์ carousel dynamic — ขอก่อน ถ้า Meta ว่าหนักเกินค่อยตัดทิ้ง */
+const SPEC_FIELDS = "image_hash,object_story_spec,asset_feed_spec";
+
+export function buildAccountAdsUrl({ version, accountId, limit = 50, largeThumbnails = true, withSpecs = true, includeArchived = true, after = null }) {
   if (!/^act_\d+$/.test(String(accountId ?? ""))) throw syncError("ACCOUNT_ID_INVALID");
   if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
   if (after != null && !/^[A-Za-z0-9_\-]{1,512}$/.test(String(after))) throw syncError("CURSOR_INVALID");
   const url = new URL(`https://graph.facebook.com/${version}/${accountId}/ads`);
   const creative = largeThumbnails ? "creative.thumbnail_width(600).thumbnail_height(600)" : "creative";
-  url.searchParams.set("fields", `id,name,campaign_id,adset_id,updated_time,${creative}{${META_CREATIVE_LIGHT_FIELDS}}`);
+  const creativeFields = withSpecs ? `${META_CREATIVE_LIGHT_FIELDS},${SPEC_FIELDS}` : META_CREATIVE_LIGHT_FIELDS;
+  url.searchParams.set("fields", `id,name,campaign_id,adset_id,updated_time,${creative}{${creativeFields}}`);
   url.searchParams.set("limit", String(Math.max(1, Math.min(100, Math.floor(limit)))));
   if (includeArchived) url.searchParams.set("effective_status", JSON.stringify(AD_STATUSES));   // ad ที่มีค่าแอดแต่ถูกเก็บแล้ว
   if (after) url.searchParams.set("after", String(after));
@@ -163,16 +180,17 @@ export async function fetchAccountCreatives(accountId, wantedIds, { version, aft
   const graphOpts = { ...opts, maxRetries, baseDelayMs, maxDelayMs: baseDelayMs };
   const ads = [], found = new Set();
   let cursor = after, pages = 0, lastError = null;
-  let limit = 50, largeThumbnails = true, includeArchived = true;
+  let limit = 50, largeThumbnails = true, withSpecs = true, includeArchived = true;
   while (pages < maxPages) {
     if (now() >= deadline) return { ads, pages, after: cursor, lastError };
     let payload;
     try {
-      ({ payload } = await fetchGraphJson(buildAccountAdsUrl({ version, accountId, limit, largeThumbnails, includeArchived, after: cursor }), graphOpts));
+      ({ payload } = await fetchGraphJson(buildAccountAdsUrl({ version, accountId, limit, largeThumbnails, withSpecs, includeArchived, after: cursor }), graphOpts));
     } catch (error) {
       if (!RECOVERABLE.has(error?.code)) throw error;
       lastError = error.detail ?? error.code;
       if (largeThumbnails) largeThumbnails = false;
+      else if (withSpecs) withSpecs = false;
       else if (includeArchived) includeArchived = false;
       else if (limit > 5) limit = Math.ceil(limit / 2);
       else throw error;
@@ -190,3 +208,27 @@ export async function fetchAccountCreatives(accountId, wantedIds, { version, aft
   }
   return { ads, pages, after: cursor, lastError };
 }
+
+/* ── ตัวอย่างโฆษณา (Ad Preview API · ใช้ ads_read) — iframe ของ Meta เล่นคลิปได้ตามที่ลูกค้าเห็นจริง ── */
+export const PREVIEW_FORMATS = ["MOBILE_FEED_STANDARD", "DESKTOP_FEED_STANDARD", "INSTAGRAM_STANDARD", "INSTAGRAM_STORY"];
+
+export function buildAdPreviewUrl({ version, adId, format = "MOBILE_FEED_STANDARD" }) {
+  if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
+  if (!/^\d+$/.test(String(adId ?? ""))) throw syncError("AD_ID_INVALID");
+  if (!PREVIEW_FORMATS.includes(format)) throw syncError("PREVIEW_FORMAT_INVALID");
+  const url = new URL(`https://graph.facebook.com/${version}/${adId}/previews`);
+  url.searchParams.set("ad_format", format);
+  return url.toString();
+}
+
+export const PREVIEW_SRC = /^https:\/\/www\.facebook\.com\/ads\/api\/preview_iframe\.php\?[A-Za-z0-9_\-.~%=&]+$/;
+/** src ของ iframe ที่ Meta ส่งมาใน body · ยอมเฉพาะ preview_iframe.php ของ facebook.com · ไม่คืน HTML ให้ browser */
+export function extractPreviewSrc(body) {
+  const match = /<iframe[^>]*\ssrc="([^"]+)"/i.exec(String(body ?? ""));
+  if (!match) return null;
+  const src = match[1].replace(/&amp;/g, "&");
+  return PREVIEW_SRC.test(src) ? src : null;
+}
+
+/** ตรวจ src ซ้ำฝั่ง browser ก่อนใส่ iframe */
+export const isPreviewSrc = (src) => typeof src === "string" && PREVIEW_SRC.test(src);

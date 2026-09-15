@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SAVED_VIEWS, applyView, campaignTotals, sortCampaigns } from "../adsCampaigns.js";
 import { PlatformIcon, platformMeta } from "../ads/PlatformIcon.jsx";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
@@ -38,6 +38,12 @@ function BudgetPace({ row }) {
   </div>;
 }
 
+import { Pagination } from "../ui/Pagination.jsx";
+import { scrollToList } from "../ui/pagination.js";
+import { usePagination } from "../ui/usePagination.js";
+
+const PAGE_SIZES = [10, 20, 50];
+
 export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, revenueLabel, goalTargets = null, targetPeriod = null }) {
   const [view, setView] = useState("all");
   const [sortValue, setSortValue] = useState("spend:desc");
@@ -47,6 +53,9 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
   const [sortKey, sortDir] = sortValue.split(":");
   const shown = useMemo(() => sortCampaigns(applyView(rows, view), sortKey, sortDir), [rows, view, sortKey, sortDir]);
   const totals = useMemo(() => campaignTotals(shown), [shown]);
+  /* แบ่งหน้าเฉพาะรายการ · ยอดรวม/กราฟ/จำนวนในแท็บยังนับทุกแคมเปญที่กรองแล้ว · ตัวกรอง/กลุ่ม/การเรียงเปลี่ยน → หน้า 1 */
+  const listTop = useRef(null);
+  const pager = usePagination(shown, { storageKey: "ssb.campaigns.pageSize", sizes: PAGE_SIZES, defaultSize: 20, resetKey: shown });   // shown เปลี่ยนเมื่อตัวกรอง กลุ่ม หรือการเรียงเปลี่ยนเท่านั้น (useMemo)
   /* ผลลัพธ์ของแคมเปญ = คนทักจากโฆษณา → เทียบเป้าคนทัก · CPL/ROAS/%Ads เทียบเป้าอัตราส่วน */
   const goals = useMemo(() => goalTargets ? goalsFor({ inquiries: totals.leads, cpl: totals.cpl, roas: totals.roas, pctAds: totals.pctAds }, goalTargets, targetPeriod) : null, [totals, goalTargets, targetPeriod]);
   const counts = useMemo(() => Object.fromEntries(SAVED_VIEWS.map((s) => [s.key, applyView(rows, s.key).length])), [rows]);
@@ -122,9 +131,10 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
 
     {shown.length > 0 && <details className="cp-overview-trend"><summary>ดูแนวโน้มรวมของ {shown.length} แคมเปญ</summary><div><header><div className="cp-metric-tabs" role="tablist" aria-label="ตัวชี้วัดกราฟรวม">{TREND_METRICS.map(([key, label]) => <button type="button" role="tab" aria-selected={trendMetric === key} className={trendMetric === key ? "active" : ""} key={key} onClick={() => setTrendMetric(key)}>{label}</button>)}</div><span>รายวัน · ตามช่วงที่เลือก</span></header><ChartBox type="line" height={190} ariaLabel={`แนวโน้ม${TREND_METRICS.find(([key]) => key === trendMetric)?.[1]}รวม`} data={{ labels: trend.days.map(dayLabel), datasets: [{ label: TREND_METRICS.find(([key]) => key === trendMetric)?.[1], data: trend.values, borderColor: SERIES.blue, backgroundColor: "rgba(111,140,245,.10)", fill: true, ...lineSeries(trend.days.length) }] }} options={baseOpts({ scales: { x: { grid: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } }, y: { beginAtZero: true, grid: { color: chartColor.line(), drawTicks: false }, border: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 11 }, callback: (v) => trendMetric === "roas" ? `${Number(v).toFixed(1)}x` : fmtCompact(v) } } }, plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y == null ? "—" : trendMetric === "roas" ? `${c.parsed.y.toFixed(1)}x` : trendMetric === "leads" ? fmtInt(c.parsed.y) : fmtMoney(c.parsed.y)}` } } } })} /></div></details>}
 
+    <div ref={listTop} />
     {shown.length === 0 ? <div className="cp-empty"><b>{emptyText}</b><span>ลองเปลี่ยนช่วงเวลา แบรนด์ ช่องทาง หรือกลุ่มการตัดสินใจ</span></div> : <div className="cp-campaign-list">
       <div className="cp-list-labels" aria-hidden="true"><span>แคมเปญ</span><span>ค่าแอด</span><span>ผลลัพธ์</span><span>ประสิทธิภาพ</span><span>งบเดือน / จังหวะ</span><span>ควรทำต่อ</span><span /></div>
-      {shown.map((row) => {
+      {pager.pageItems.map((row) => {
         const open = openKey === row.key;
         const meta = platformMeta(row.platform);
         return <article key={row.key} className={`cp-campaign ${open ? "open" : ""}`} style={{ "--platform": meta.color }}>
@@ -140,6 +150,7 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
         </article>;
       })}
     </div>}
+    {shown.length > 0 && <Pagination pager={pager} sizes={PAGE_SIZES} unit="แคมเปญ" label="แบ่งหน้าแคมเปญ" onChange={() => scrollToList(listTop)} />}
     {selected && <><button type="button" className="cp-drawer-backdrop" aria-label="ปิดรายละเอียด" onClick={() => setOpenKey(null)} /><aside className="cp-drawer" aria-label={`รายละเอียด ${selected.name}`}><header><div><span>{selected.brand} · {selected.platform}</span><h2>{selected.name}</h2></div><button type="button" aria-label="ปิดรายละเอียด" onClick={() => setOpenKey(null)}><X size={18} /></button></header><div className="cp-drawer-content">{renderDetail(selected)}</div></aside></>}
   </section>;
 }
