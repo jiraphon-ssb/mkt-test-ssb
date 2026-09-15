@@ -2,6 +2,20 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
+## [0.7.1] — 2026-09-16
+
+### fix
+- ads: parse Meta ad preview iframe src with a URL allowlist (a5d2bb8) — ตัวอย่างโฆษณาขึ้น "แสดงตัวอย่างไม่ได้" ทุกชิ้น: Meta ส่งตัวอย่างมาแล้ว แต่ตัวตรวจแบบ regex ตัวอักษรตีตก · ตรวจด้วย URL parser (https · www/business.facebook.com · path หน้าตัวอย่าง) · log รูปแบบ body เมื่อไม่ผ่านโดยไม่เผย query
+
+### ข้อมูลที่พบ (ภาพบนการ์ด)
+- 674 จาก 782 creative เป็นโฆษณาจากโพสต์เพจเดิม (object_type STATUS) — Meta ส่งแค่ภาพย่อระดับ creative ซึ่งเป็นรูปโปรไฟล์เพจ ภาพจริงของโพสต์ต้องใช้สิทธิ์ `pages_read_engagement` (รอตัดสินใจ)
+
+### security
+- review 2026-09-16: ไม่พบช่องโหว่ · ทดสอบกรณีขอบของ URL parser (backslash, percent-encoded host, trailing dot, userinfo) ไม่มีทางโหลด origin อื่น
+
+### Edge Functions
+- deploy ใหม่: `ads-preview` · `ads-creatives`
+
 ## [0.7.0] — 2026-09-16
 
 ### fix
