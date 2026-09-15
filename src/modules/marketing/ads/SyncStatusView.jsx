@@ -100,7 +100,7 @@ export function SyncStatusView() {
       let creatives = 0, creativeError = null;
       for (const [index, id] of okAccounts.entries()) {
         setSyncing({ phase: "creatives", done: index, total: okAccounts.length });
-        const out = await syncCreativesFor(id, (connectionId, offset) => apiClient.ads.syncCreatives(connectionId, offset));
+        const out = await syncCreativesFor(id, (connectionId, cursor) => apiClient.ads.syncCreatives(connectionId, cursor));
         creatives += out.saved;
         creativeError ??= out.error;
       }

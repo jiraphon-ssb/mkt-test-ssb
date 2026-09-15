@@ -114,20 +114,19 @@ export function applyCoverage(config = {}, missingByConnection = new Map()) {
   return { ...config, mappings: { ...(config.mappings ?? {}), meta } };
 }
 
-/** ดึง creative ของบัญชีหนึ่งจนครบ (Edge Function คืน nextOffset) · ไม่ throw — คืนผลที่ได้ + รหัส error */
-export async function syncCreativesFor(connectionId, call, maxRounds = 20) {   // งบเวลาต่อรอบทำให้บางรอบได้น้อยกว่า 100 ชิ้น
-  let offset = 0, saved = 0, skipped = 0, rounds = 0;
+/** ดึง creative ของบัญชีหนึ่งจนครบ (Edge Function คืน nextCursor) · ไม่ throw — คืนผลที่ได้ + รหัส error */
+export async function syncCreativesFor(connectionId, call, maxRounds = 10) {
+  let cursor = null, saved = 0, rounds = 0;
   while (rounds < maxRounds) {
     rounds += 1;
     try {
-      const data = await call(connectionId, offset);
+      const data = await call(connectionId, cursor);
       saved += Number(data?.saved) || 0;
-      skipped += Number(data?.skipped) || 0;
-      if (data?.nextOffset == null) break;
-      offset = data.nextOffset;
+      if (data?.nextCursor == null) break;
+      cursor = data.nextCursor;
     } catch (error) {
-      return { saved, skipped, rounds, error: error?.code ?? error?.message ?? "CREATIVE_SYNC_FAILED" };
+      return { saved, rounds, error: error?.code ?? error?.message ?? "CREATIVE_SYNC_FAILED" };
     }
   }
-  return { saved, skipped, rounds, error: null };
+  return { saved, rounds, error: null };
 }

@@ -1,6 +1,6 @@
 /* Creative worker: ดึง creative ของโฆษณาที่มียอด → ad_creatives → Creative Library โหมด Meta Pilot */
 import { describe, it, expect, vi } from "vitest";
-import { rankAdIdsBySpend, buildAdsByIdsUrl, creativeRowFromAd, fetchAdsByIds } from "../supabase/functions/_shared/metaCreative.js";
+import { rankAdIdsBySpend, buildAccountAdsUrl, creativeRowFromAd, fetchAccountCreatives } from "../supabase/functions/_shared/metaCreative.js";
 import { creativeAssetFromRow, factsToAdCards } from "../src/modules/marketing/ads/adsFacts.js";
 import { creativeAssetOf } from "../src/modules/marketing/ads/metaCreativeContract.js";
 
@@ -18,27 +18,6 @@ describe("rankAdIdsBySpend", () => {
     const facts = [{ ad_id: "11", spend: 10 }, { ad_id: "22", spend: 50 }, { ad_id: "11", spend: "45.5" }, { ad_id: "x1,me", spend: 999 }, { ad_id: "", spend: 5 }, { ad_id: "33", spend: null }];
     expect(rankAdIdsBySpend(facts)).toEqual(["11", "22", "33"]);
     expect(rankAdIdsBySpend(facts, 2)).toEqual(["11", "22"]);
-  });
-});
-
-describe("buildAdsByIdsUrl", () => {
-  it("ขอหลาย ad ในคำขอเดียว · field creative ครบ · ขอภาพย่อขนาดใหญ่ · ไม่มี token", () => {
-    const url = new URL(buildAdsByIdsUrl({ version: "v26.0", ids: ["11", "22"] }));
-    expect(url.origin + url.pathname).toBe("https://graph.facebook.com/v26.0/");
-    expect(url.searchParams.get("ids")).toBe("11,22");
-    const fields = url.searchParams.get("fields");
-    expect(fields).toMatch(/^id,name,campaign_id,adset_id,updated_time,creative\.thumbnail_width\(600\)\.thumbnail_height\(600\)\{/);
-    expect(fields).toContain("thumbnail_url");
-    expect(fields).toContain("image_url");
-    expect(fields).not.toContain("object_story_spec");     // สเปกก้อนใหญ่ทำให้ Meta ตอบ "ลดปริมาณข้อมูล"
-    expect(fields).not.toContain("asset_feed_spec");
-    expect(url.searchParams.has("access_token")).toBe(false);
-    expect(new URL(buildAdsByIdsUrl({ version: "v26.0", ids: ["11"], largeThumbnails: false })).searchParams.get("fields")).toContain(",creative{");
-  });
-  it("id ไม่ใช่ตัวเลข / ว่าง / เกิน 50 = throw", () => {
-    expect(() => buildAdsByIdsUrl({ version: "v26.0", ids: ["me"] })).toThrow("AD_IDS_INVALID");
-    expect(() => buildAdsByIdsUrl({ version: "v26.0", ids: [] })).toThrow("AD_IDS_INVALID");
-    expect(() => buildAdsByIdsUrl({ version: "v26.0", ids: Array.from({ length: 51 }, (_, i) => String(i + 1)) })).toThrow("AD_IDS_INVALID");
   });
 });
 
@@ -78,79 +57,80 @@ describe("factsToAdCards ผูก creative", () => {
   });
 });
 
-describe("fetchAdsByIds", () => {
-  const res = (body, status = 200) => ({ ok: status < 300, status, json: async () => body });
-  const opts = (fetch) => ({ fetch, token: "T", sleep: async () => {}, version: "v26.0" });
-  it("แบ่งคำขอชุดละ 25 (ค่าเริ่ม ลดภาระต่อคำขอ) · รวมผลที่ Meta ตอบเป็น object ตาม id", async () => {
-    const ids = Array.from({ length: 60 }, (_, i) => String(i + 1));
-    const fetch = vi.fn(async (url) => {
-      const asked = new URL(url).searchParams.get("ids").split(",");
-      return res(Object.fromEntries(asked.map((id) => [id, graphAd(id)])));
-    });
-    const out = await fetchAdsByIds(ids, opts(fetch));
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(out.ads.length).toBe(60);
-    expect(out.processed).toBe(60);
-    expect(out.skipped).toEqual([]);
+describe("buildAccountAdsUrl (?ids= เลิกรองรับใน Graph v26 → อ่านจาก ad account)", () => {
+  it("/act_x/ads · field เบา · ภาพย่อใหญ่ · รวมโฆษณาที่ archived · ไม่มี token", () => {
+    const url = new URL(buildAccountAdsUrl({ version: "v26.0", accountId: "act_9" }));
+    expect(url.origin + url.pathname).toBe("https://graph.facebook.com/v26.0/act_9/ads");
+    expect(url.searchParams.has("ids")).toBe(false);
+    const fields = url.searchParams.get("fields");
+    expect(fields).toMatch(/^id,name,campaign_id,adset_id,updated_time,creative\.thumbnail_width\(600\)\.thumbnail_height\(600\)\{/);
+    expect(fields).toContain("thumbnail_url");
+    expect(fields).not.toContain("object_story_spec");
+    expect(url.searchParams.get("limit")).toBe("50");
+    expect(JSON.parse(url.searchParams.get("effective_status"))).toContain("ARCHIVED");
+    expect(url.searchParams.has("access_token")).toBe(false);
+    const lean = new URL(buildAccountAdsUrl({ version: "v26.0", accountId: "act_9", limit: 13, largeThumbnails: false, includeArchived: false, after: "QVFIUk1" }));
+    expect(lean.searchParams.get("fields")).toContain(",creative{");
+    expect(lean.searchParams.has("effective_status")).toBe(false);
+    expect(lean.searchParams.get("limit")).toBe("13");
+    expect(lean.searchParams.get("after")).toBe("QVFIUk1");
   });
-  it("Meta ไม่รับ modifier ภาพย่อ (#100) → ลองแบบไม่มี modifier แล้วจำไว้ใช้ต่อ", async () => {
-    const fetch = vi.fn(async (url) => {
-      if (new URL(url).searchParams.get("fields").includes("thumbnail_width")) return res({ error: { code: 100, message: "bad field" } }, 400);
-      return res({ "11": graphAd("11") });
-    });
-    const out = await fetchAdsByIds(["11"], opts(fetch));
-    expect(out.ads.length).toBe(1);
-    expect(out.largeThumbnails).toBe(false);
-  });
-  it("ทั้งก้อนพังเพราะบาง id เข้าไม่ได้ → ไล่ทีละ id ข้ามตัวที่พัง · token หมดอายุ = หยุดทั้งหมด", async () => {
-    const fetch = vi.fn(async (url) => {
-      const asked = new URL(url).searchParams.get("ids").split(",");
-      if (asked.includes("99")) return res({ error: { code: 100, message: "no access" } }, 400);
-      return res(Object.fromEntries(asked.map((id) => [id, graphAd(id)])));
-    });
-    const out = await fetchAdsByIds(["11", "99", "22"], { ...opts(fetch) });
-    expect(out.ads.map((a) => a.id).sort()).toEqual(["11", "22"]);
-    expect(out.skipped).toEqual(["99"]);
-    const dead = vi.fn(async () => res({ error: { code: 190 } }, 401));
-    await expect(fetchAdsByIds(["11"], opts(dead))).rejects.toMatchObject({ code: "META_TOKEN_INVALID" });
+  it("account id / cursor ผิดรูป = throw", () => {
+    expect(() => buildAccountAdsUrl({ version: "v26.0", accountId: "act_1/../me" })).toThrow("ACCOUNT_ID_INVALID");
+    expect(() => buildAccountAdsUrl({ version: "v26.0", accountId: "act_1", after: "x&access_token=1" })).toThrow("CURSOR_INVALID");
   });
 });
 
-describe("fetchAdsByIds — Meta ตอบว่าขอข้อมูลมากเกิน / ขัดข้อง", () => {
+describe("fetchAccountCreatives", () => {
   const res = (body, status = 200) => ({ ok: status < 300, status, json: async () => body });
-  const tooMuch = () => res({ error: { code: 1, message: "Please reduce the amount of data you're asking for, then retry your request" } }, 500);
-  it("แบ่งครึ่งจนขนาดที่ Meta รับได้ · ไม่ถอยเรื่องภาพย่อใหญ่เพราะไม่ใช่ต้นเหตุ · ได้ครบทุกตัว", async () => {
+  const page = (ids, after) => res({ data: ids.map((id) => graphAd(id)), paging: after ? { cursors: { after }, next: `https://graph.facebook.com/v26.0/act_9/ads?after=${after}` } : { cursors: {} } });
+  const base = (fetch, extra = {}) => ({ version: "v26.0", fetch, token: "T", sleep: async () => {}, ...extra });
+  it("ไล่หน้าจนเจอ ad ที่ต้องการครบแล้วหยุด · เก็บเฉพาะ ad ที่มีค่าแอด", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(page(["1", "2", "3"], "c1"))
+      .mockResolvedValueOnce(page(["4", "5"], "c2"))
+      .mockResolvedValueOnce(page(["6"], null));
+    const out = await fetchAccountCreatives("act_9", new Set(["2", "5"]), base(fetch));
+    expect(out.ads.map((a) => a.id)).toEqual(["2", "5"]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(out.after).toBeNull();
+    expect(new URL(fetch.mock.calls[1][0]).searchParams.get("after")).toBe("c1");
+  });
+  it("หน้าหมดก่อนเจอครบ = จบ (ad ที่เหลือไม่อยู่ในบัญชีแล้ว) · after = null", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(page(["1"], null));
+    const out = await fetchAccountCreatives("act_9", new Set(["1", "99"]), base(fetch));
+    expect(out.ads.length).toBe(1);
+    expect(out.after).toBeNull();
+  });
+  it("Meta ไม่รับคำขอ → ถอยทีละขั้น: ภาพย่อใหญ่ → archived → ลดจำนวนต่อหน้า · จำขั้นที่ใช้ได้", async () => {
     const fetch = vi.fn(async (url) => {
-      const asked = new URL(url).searchParams.get("ids").split(",");
-      if (asked.length > 5) return tooMuch();
-      return res(Object.fromEntries(asked.map((id) => [id, graphAd(id)])));
+      const u = new URL(url);
+      if (u.searchParams.get("fields").includes("thumbnail_width")) return res({ error: { code: 100, message: "bad field" } }, 400);
+      if (u.searchParams.has("effective_status")) return res({ error: { code: 100, message: "bad status" } }, 400);
+      if (Number(u.searchParams.get("limit")) > 20) return res({ error: { code: 1, message: "Please reduce the amount of data you're asking for" } }, 500);
+      return page(["1"], null);
     });
-    const ids = Array.from({ length: 20 }, (_, i) => String(i + 1));
-    const out = await fetchAdsByIds(ids, { fetch, token: "T", sleep: async () => {}, version: "v26.0", batchSize: 20 });
-    expect(out.ads.map((a) => a.id).sort((a, b) => a - b)).toEqual(ids);
-    expect(out.skipped).toEqual([]);
-    expect(out.largeThumbnails).toBe(true);
-    expect(out.processed).toBe(20);
+    const out = await fetchAccountCreatives("act_9", new Set(["1"]), base(fetch));
+    expect(out.ads.length).toBe(1);
+    const last = new URL(fetch.mock.calls.at(-1)[0]);
+    expect(last.searchParams.get("limit")).toBe("13");
     expect(out.lastError).toMatch(/reduce the amount of data/);
   });
-  it("ขัดข้องถาวร (code 2 ทุกครั้ง) = ไม่รอ retry ยาว · ไล่ลงทีละตัวแล้วข้าม · ไม่ทำให้ทั้งงานล้ม", async () => {
-    const sleep = vi.fn(async () => {});
-    const fetch = vi.fn(async () => res({ error: { code: 2, is_transient: true, message: "Service temporarily unavailable" } }, 500));
-    const out = await fetchAdsByIds(["11", "22"], { fetch, token: "T", sleep, version: "v26.0" });
-    expect(out.ads).toEqual([]);
-    expect(out.skipped.sort()).toEqual(["11", "22"]);
-    expect(sleep.mock.calls.every(([ms]) => ms <= 1000)).toBe(true);
+  it("ถอยจนสุดแล้วยังไม่ได้ = throw รหัสเดิม · rate limit/token = throw ทันที", async () => {
+    const always = vi.fn(async () => res({ error: { code: 100, message: "nope" } }, 400));
+    await expect(fetchAccountCreatives("act_9", new Set(["1"]), base(always))).rejects.toMatchObject({ code: "META_API_ERROR" });
+    const limited = vi.fn(async () => res({ error: { code: 17 } }, 400));
+    await expect(fetchAccountCreatives("act_9", new Set(["1"]), base(limited))).rejects.toMatchObject({ code: "META_RATE_LIMIT" });
+    expect(limited).toHaveBeenCalledTimes(1);
   });
-  it("rate limit = หยุดทั้งงาน (ยิงต่อยิ่งโดนจำกัดนาน)", async () => {
-    const fetch = vi.fn(async () => res({ error: { code: 17, message: "User request limit reached" } }, 400));
-    await expect(fetchAdsByIds(["11"], { fetch, token: "T", sleep: async () => {}, version: "v26.0" })).rejects.toMatchObject({ code: "META_RATE_LIMIT" });
-  });
-  it("เกินงบเวลา = หยุดก่อนเริ่มชุดถัดไป · processed บอกว่าทำไปถึงไหน (ให้ client เรียกต่อ)", async () => {
+  it("เกินงบเวลา = หยุดแล้วคืน cursor ให้เรียกต่อ · เริ่มต่อจาก cursor ที่ส่งมาได้", async () => {
     let t = 0;
-    const fetch = vi.fn(async (url) => { t += 40_000; const asked = new URL(url).searchParams.get("ids").split(","); return res(Object.fromEntries(asked.map((id) => [id, graphAd(id)]))); });
-    const ids = Array.from({ length: 10 }, (_, i) => String(i + 1));
-    const out = await fetchAdsByIds(ids, { fetch, token: "T", sleep: async () => {}, version: "v26.0", batchSize: 2, deadline: 90_000, now: () => t });
-    expect(out.processed).toBe(6);
-    expect(out.ads.length).toBe(6);
+    const fetch = vi.fn(async (url) => { t += 50_000; const after = new URL(url).searchParams.get("after"); return after === "c1" ? page(["2"], null) : page(["1"], "c1"); });
+    const first = await fetchAccountCreatives("act_9", new Set(["1", "2"]), base(fetch, { deadline: 40_000, now: () => t }));
+    expect(first.ads.map((a) => a.id)).toEqual(["1"]);
+    expect(first.after).toBe("c1");
+    const second = await fetchAccountCreatives("act_9", new Set(["1", "2"]), base(fetch, { after: first.after }));
+    expect(second.ads.map((a) => a.id)).toEqual(["2"]);
+    expect(second.after).toBeNull();
   });
 });

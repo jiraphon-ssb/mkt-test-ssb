@@ -85,7 +85,6 @@ export function creativeAssetOf(value) {
 }
 
 /* ── worker ─────────────────────────────────────────────────────────── */
-export const MAX_IDS_PER_REQUEST = 50;
 /* field เบาที่หน้าจอใช้จริง — ไม่ขอ object_story_spec/asset_feed_spec (ก้อนใหญ่ ทำให้ Meta ตอบ "ลดปริมาณข้อมูล" เมื่อขอหลาย ad) */
 export const META_CREATIVE_LIGHT_FIELDS = [
   "id", "name", "object_type", "body", "title", "image_url", "thumbnail_url", "video_id", "link_url", "object_url",
@@ -103,13 +102,19 @@ export function rankAdIdsBySpend(facts = [], limit = 400) {
   return [...totals.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([id]) => id);
 }
 
-export function buildAdsByIdsUrl({ version, ids, largeThumbnails = true }) {
+const AD_STATUSES = ["ACTIVE", "PAUSED", "ARCHIVED", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "WITH_ISSUES", "PENDING_REVIEW", "DISAPPROVED", "PREAPPROVED", "PENDING_BILLING_INFO"];
+
+/** โฆษณาของบัญชีพร้อม creative — Graph v26 เลิกรองรับ ?ids= จึงอ่านจาก /act_x/ads แล้วคัดเฉพาะ ad ที่มีค่าแอด */
+export function buildAccountAdsUrl({ version, accountId, limit = 50, largeThumbnails = true, includeArchived = true, after = null }) {
+  if (!/^act_\d+$/.test(String(accountId ?? ""))) throw syncError("ACCOUNT_ID_INVALID");
   if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
-  if (!Array.isArray(ids) || !ids.length || ids.length > MAX_IDS_PER_REQUEST || !ids.every((id) => /^\d+$/.test(String(id)))) throw syncError("AD_IDS_INVALID");
-  const url = new URL(`https://graph.facebook.com/${version}/`);
-  url.searchParams.set("ids", ids.join(","));
+  if (after != null && !/^[A-Za-z0-9_\-]{1,512}$/.test(String(after))) throw syncError("CURSOR_INVALID");
+  const url = new URL(`https://graph.facebook.com/${version}/${accountId}/ads`);
   const creative = largeThumbnails ? "creative.thumbnail_width(600).thumbnail_height(600)" : "creative";
   url.searchParams.set("fields", `id,name,campaign_id,adset_id,updated_time,${creative}{${META_CREATIVE_LIGHT_FIELDS}}`);
+  url.searchParams.set("limit", String(Math.max(1, Math.min(100, Math.floor(limit)))));
+  if (includeArchived) url.searchParams.set("effective_status", JSON.stringify(AD_STATUSES));   // ad ที่มีค่าแอดแต่ถูกเก็บแล้ว
+  if (after) url.searchParams.set("after", String(after));
   return url.toString();
 }
 
@@ -148,38 +153,40 @@ export function creativeRowFromAd(ad, connectionId, now = new Date().toISOString
   };
 }
 
-/* error ที่แก้ได้ด้วยการลดขนาดคำขอ / ข้าม ad ตัวที่มีปัญหา · rate limit/token/สิทธิ์ = หยุดทั้งงาน */
-const SPLITTABLE = new Set(["META_API_ERROR", "META_TEMPORARY", "META_TOO_MUCH_DATA", "META_RESPONSE_INVALID"]);
+/* error ที่แก้ได้ด้วยการผ่อนคำขอ · rate limit/token/สิทธิ์ = หยุดทั้งงาน */
+const RECOVERABLE = new Set(["META_API_ERROR", "META_TEMPORARY", "META_TOO_MUCH_DATA", "META_RESPONSE_INVALID"]);
 
-/** ดึง ad หลายตัวเป็นชุด (ค่าเริ่ม 25) · ชุดพัง → ลองแบบไม่ขอภาพย่อใหญ่ → แบ่งครึ่งจนเหลือทีละตัว → ตัวที่ยังพังข้าม
-    retry ชั่วคราวแค่ 1 ครั้ง (ไม่เสียเวลา 30 วินาทีกับ error ถาวร) · เกินงบเวลา = หยุดก่อนชุดถัดไป คืน processed ให้ client เรียกต่อ */
-export async function fetchAdsByIds(ids, { version, batchSize = 25, deadline = Infinity, now = Date.now, maxRetries = 1, baseDelayMs = 1000, ...opts }) {
-  const ads = [], skipped = [];
-  let largeThumbnails = true, lastError = null, processed = 0;
+/** ไล่หน้าโฆษณาของบัญชี เก็บ ad ที่อยู่ใน wantedIds · หยุดเมื่อเจอครบ / หน้าหมด / เกินงบเวลา (คืน after ให้เรียกต่อ)
+    Meta ไม่รับคำขอ → ถอยทีละขั้น: ภาพย่อใหญ่ → ตัวกรอง archived → ลดจำนวนต่อหน้า (ถึง ≤5 แล้วยังพัง = throw)
+    คืนแค่ cursor (paging.cursors.after) ไม่คืน URL หน้าถัดไป */
+export async function fetchAccountCreatives(accountId, wantedIds, { version, after = null, deadline = Infinity, now = Date.now, maxPages = 40, maxRetries = 0, baseDelayMs = 1000, ...opts }) {   // ไม่ retry: rate limit หยุดทันที · error อื่นถอยเป็นคำขอที่เบาลงแทน
   const graphOpts = { ...opts, maxRetries, baseDelayMs, maxDelayMs: baseDelayMs };
-  const get = async (group, large) => {
-    const { payload } = await fetchGraphJson(buildAdsByIdsUrl({ version, ids: group, largeThumbnails: large }), graphOpts);
-    if (!payload || typeof payload !== "object") throw syncError("META_RESPONSE_INVALID");
-    return Object.values(payload).filter((item) => item && typeof item === "object" && item.id);
-  };
-  const note = (error) => { if (!SPLITTABLE.has(error?.code)) throw error; lastError = error.detail ?? error.code; };
-  const fetchGroup = async (group) => {
-    if (now() >= deadline) { skipped.push(...group); return; }
-    try { ads.push(...await get(group, largeThumbnails)); return; } catch (error) { note(error); }
-    if (largeThumbnails) {
-      try { ads.push(...await get(group, false)); largeThumbnails = false; return; } catch (error) { note(error); }
+  const ads = [], found = new Set();
+  let cursor = after, pages = 0, lastError = null;
+  let limit = 50, largeThumbnails = true, includeArchived = true;
+  while (pages < maxPages) {
+    if (now() >= deadline) return { ads, pages, after: cursor, lastError };
+    let payload;
+    try {
+      ({ payload } = await fetchGraphJson(buildAccountAdsUrl({ version, accountId, limit, largeThumbnails, includeArchived, after: cursor }), graphOpts));
+    } catch (error) {
+      if (!RECOVERABLE.has(error?.code)) throw error;
+      lastError = error.detail ?? error.code;
+      if (largeThumbnails) largeThumbnails = false;
+      else if (includeArchived) includeArchived = false;
+      else if (limit > 5) limit = Math.ceil(limit / 2);
+      else throw error;
+      continue;
     }
-    if (group.length === 1) { skipped.push(group[0]); return; }
-    const mid = Math.ceil(group.length / 2);
-    await fetchGroup(group.slice(0, mid));
-    await fetchGroup(group.slice(mid));
-  };
-  const size = Math.max(1, Math.min(MAX_IDS_PER_REQUEST, batchSize));
-  for (let i = 0; i < ids.length; i += size) {
-    if (now() >= deadline) break;
-    const chunk = ids.slice(i, i + size);
-    await fetchGroup(chunk);
-    processed += chunk.length;
+    if (!Array.isArray(payload?.data)) throw syncError("META_RESPONSE_INVALID");
+    pages++;
+    for (const ad of payload.data) {
+      const id = String(ad?.id ?? "");
+      if (wantedIds.has(id) && !found.has(id)) { found.add(id); ads.push(ad); }
+    }
+    const nextCursor = payload.paging?.next ? payload.paging?.cursors?.after ?? null : null;
+    if (!nextCursor || found.size >= wantedIds.size) return { ads, pages, after: null, lastError };
+    cursor = nextCursor;
   }
-  return { ads, skipped, largeThumbnails, processed, lastError };
+  return { ads, pages, after: cursor, lastError };
 }

@@ -2493,10 +2493,10 @@ const adsData = {
     }
     return rows;
   },
-  /** ดึง creative ของบัญชี — รอบละ ≤100 ad คืน nextOffset */
-  async syncCreatives(connectionId, offset = 0) {
+  /** ดึง creative ของบัญชี — ยังไม่จบคืน nextCursor ให้เรียกต่อ */
+  async syncCreatives(connectionId, after = null) {
     const db = requireSupabase();
-    const { data, error } = await db.functions.invoke("ads-creatives", { body: { connectionId, offset } });
+    const { data, error } = await db.functions.invoke("ads-creatives", { body: after ? { connectionId, after } : { connectionId } });
     if (error) throw await adsFunctionError(error, "CREATIVE_SYNC_FAILED");
     return data;
   },

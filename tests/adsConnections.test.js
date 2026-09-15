@@ -234,15 +234,16 @@ describe("applyCoverage — ช่อง 'ช่องว่าง' ในหน
   });
 });
 
-describe("syncCreativesFor — ดึง creative ต่อเนื่องจน nextOffset = null", () => {
-  it("วนตาม offset · รวมจำนวนที่บันทึก · มีเพดานรอบกันวนไม่รู้จบ", async () => {
-    const call = vi.fn(async (id, offset) => offset === 0 ? { saved: 90, skipped: 1, nextOffset: 100 } : { saved: 40, skipped: 0, nextOffset: null });
-    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 130, skipped: 1, rounds: 2, error: null });
-    const loop = vi.fn(async () => ({ saved: 1, skipped: 0, nextOffset: 100 }));
+describe("syncCreativesFor — ดึง creative ต่อเนื่องจน nextCursor = null", () => {
+  it("วนตาม cursor · รวมจำนวนที่บันทึก · มีเพดานรอบกันวนไม่รู้จบ", async () => {
+    const call = vi.fn(async (id, cursor) => cursor == null ? { saved: 90, nextCursor: "c1" } : { saved: 40, nextCursor: null });
+    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 130, rounds: 2, error: null });
+    expect(call.mock.calls.map((c) => c[1])).toEqual([null, "c1"]);
+    const loop = vi.fn(async () => ({ saved: 1, nextCursor: "again" }));
     expect((await syncCreativesFor("c1", loop, 3)).rounds).toBe(3);
   });
   it("พังกลางทาง = คืนสิ่งที่ได้แล้ว + รหัส error (ไม่ throw ให้คิวหลักล้ม)", async () => {
-    const call = vi.fn().mockResolvedValueOnce({ saved: 50, skipped: 0, nextOffset: 100 }).mockRejectedValueOnce(Object.assign(new Error("x"), { code: "META_RATE_LIMIT" }));
-    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 50, skipped: 0, rounds: 2, error: "META_RATE_LIMIT" });
+    const call = vi.fn().mockResolvedValueOnce({ saved: 50, nextCursor: "c1" }).mockRejectedValueOnce(Object.assign(new Error("x"), { code: "META_RATE_LIMIT" }));
+    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 50, rounds: 2, error: "META_RATE_LIMIT" });
   });
 });
