@@ -4,7 +4,7 @@
 import { activeMemberUserIds, corsHeaders, decryptToken, graphVersion, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { fetchGraphJson, syncError } from "../_shared/metaInsights.js";
-import { buildAdPreviewUrl, extractPreviewSrc, PREVIEW_FORMATS } from "../_shared/metaCreative.js";
+import { buildAdPreviewUrl, extractPreviewSrc, previewDiagnostics, PREVIEW_FORMATS } from "../_shared/metaCreative.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -38,8 +38,13 @@ Deno.serve(async (request) => {
 
     const token = await decryptToken(authorization.token_ciphertext, authorization.token_iv);
     const { payload } = await fetchGraphJson(buildAdPreviewUrl({ version: graphVersion(), adId, format }), { fetch, token, sleep, maxRetries: 1, baseDelayMs: 1000, maxDelayMs: 1000 });
-    const src = extractPreviewSrc(payload?.data?.[0]?.body);
-    if (!src) throw syncError("PREVIEW_UNAVAILABLE");
+    const previewBody = payload?.data?.[0]?.body;
+    const src = extractPreviewSrc(previewBody);
+    if (!src) {
+      // รูปแบบที่ตรวจไม่ผ่าน (ไม่มี query/token) ไว้วินิจฉัยใน log ฝั่ง server
+      console.error("[ads-preview] shape", format, JSON.stringify({ items: Array.isArray(payload?.data) ? payload.data.length : null, ...previewDiagnostics(previewBody) }));
+      throw syncError("PREVIEW_UNAVAILABLE");
+    }
     return json(request, { src, format });
   } catch (error) {
     const code = publicSyncCode(error, "PREVIEW_UNAVAILABLE");

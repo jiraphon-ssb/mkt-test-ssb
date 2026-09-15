@@ -124,7 +124,7 @@ const SPEC_FIELDS = "image_hash,object_story_spec,asset_feed_spec";
 export function buildAccountAdsUrl({ version, accountId, limit = 50, largeThumbnails = true, withSpecs = true, includeArchived = true, after = null }) {
   if (!/^act_\d+$/.test(String(accountId ?? ""))) throw syncError("ACCOUNT_ID_INVALID");
   if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
-  if (after != null && !/^[A-Za-z0-9_\-]{1,512}$/.test(String(after))) throw syncError("CURSOR_INVALID");
+  if (after != null && !/^[A-Za-z0-9_-]{1,512}$/.test(String(after))) throw syncError("CURSOR_INVALID");
   const url = new URL(`https://graph.facebook.com/${version}/${accountId}/ads`);
   const creative = largeThumbnails ? "creative.thumbnail_width(600).thumbnail_height(600)" : "creative";
   const creativeFields = withSpecs ? `${META_CREATIVE_LIGHT_FIELDS},${SPEC_FIELDS}` : META_CREATIVE_LIGHT_FIELDS;
@@ -221,14 +221,35 @@ export function buildAdPreviewUrl({ version, adId, format = "MOBILE_FEED_STANDAR
   return url.toString();
 }
 
-export const PREVIEW_SRC = /^https:\/\/www\.facebook\.com\/ads\/api\/preview_iframe\.php\?[A-Za-z0-9_\-.~%=&]+$/;
-/** src ของ iframe ที่ Meta ส่งมาใน body · ยอมเฉพาะ preview_iframe.php ของ facebook.com · ไม่คืน HTML ให้ browser */
-export function extractPreviewSrc(body) {
-  const match = /<iframe[^>]*\ssrc="([^"]+)"/i.exec(String(body ?? ""));
-  if (!match) return null;
-  const src = match[1].replace(/&amp;/g, "&");
-  return PREVIEW_SRC.test(src) ? src : null;
+const PREVIEW_HOSTS = new Set(["www.facebook.com", "business.facebook.com"]);
+const PREVIEW_PATH = "/ads/api/preview_iframe.php";
+
+/** ตรวจด้วย URL parser (ไม่ใช่ regex ของตัวอักษร): https · host ของ Facebook · path ของหน้าตัวอย่าง · ไม่มี user/pass */
+function previewUrl(value) {
+  if (typeof value !== "string" || /[\s"'<>]/.test(value)) return null;
+  let url;
+  try { url = new URL(value); } catch { return null; }
+  if (url.protocol !== "https:" || !PREVIEW_HOSTS.has(url.hostname) || url.pathname !== PREVIEW_PATH || url.username || url.password || url.port) return null;
+  url.hash = "";
+  return url.href;
 }
 
-/** ตรวจ src ซ้ำฝั่ง browser ก่อนใส่ iframe */
-export const isPreviewSrc = (src) => typeof src === "string" && PREVIEW_SRC.test(src);
+const IFRAME_SRC = /<iframe\b[^>]*?\ssrc\s*=\s*(["'])(.*?)\1/i;
+
+/** src ของ iframe ที่ Meta ส่งมาใน body · ยอมเฉพาะหน้าตัวอย่างของ facebook.com · ไม่คืน HTML ให้ browser */
+export function extractPreviewSrc(body) {
+  const match = IFRAME_SRC.exec(String(body ?? ""));
+  return match ? previewUrl(match[2].replace(/&amp;/g, "&")) : null;
+}
+
+/** รูปแบบของ body ที่ตรวจไม่ผ่าน สำหรับ log — ไม่เผย query (d/t ของ Meta) */
+export function previewDiagnostics(body) {
+  const text = String(body ?? "");
+  const match = IFRAME_SRC.exec(text);
+  let url = null;
+  try { url = match ? new URL(match[2].replace(/&amp;/g, "&")) : null; } catch { url = null; }
+  return { iframe: Boolean(match), protocol: url?.protocol ?? null, host: url?.hostname ?? null, path: url?.pathname ?? null, length: text.length };
+}
+
+/** ตรวจซ้ำฝั่ง browser ก่อนใส่ iframe */
+export const isPreviewSrc = (src) => previewUrl(src) === src && src != null;

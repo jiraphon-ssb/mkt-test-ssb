@@ -1,6 +1,6 @@
 /* Creative worker: ดึง creative ของโฆษณาที่มียอด → ad_creatives → Creative Library โหมด Meta Pilot */
 import { describe, it, expect, vi } from "vitest";
-import { rankAdIdsBySpend, buildAccountAdsUrl, creativeRowFromAd, fetchAccountCreatives, buildAdPreviewUrl, extractPreviewSrc, PREVIEW_FORMATS } from "../supabase/functions/_shared/metaCreative.js";
+import { rankAdIdsBySpend, buildAccountAdsUrl, creativeRowFromAd, fetchAccountCreatives, buildAdPreviewUrl, extractPreviewSrc, previewDiagnostics, PREVIEW_FORMATS } from "../supabase/functions/_shared/metaCreative.js";
 import { creativeAssetFromRow, factsToAdCards } from "../src/modules/marketing/ads/adsFacts.js";
 import { creativeAssetOf } from "../src/modules/marketing/ads/metaCreativeContract.js";
 
@@ -147,13 +147,22 @@ describe("ตัวอย่างโฆษณาของ Meta (เล่นค
     expect(() => buildAdPreviewUrl({ version: "v26.0", adId: "me" })).toThrow("AD_ID_INVALID");
     expect(PREVIEW_FORMATS).toEqual(["MOBILE_FEED_STANDARD", "DESKTOP_FEED_STANDARD", "INSTAGRAM_STANDARD", "INSTAGRAM_STORY"]);
   });
-  it("extractPreviewSrc: ดึง src ของ iframe จาก Meta · ถอด &amp; · ยอมเฉพาะ https://www.facebook.com/ads/api/preview_iframe.php", () => {
+  it("extractPreviewSrc: ดึง src ของ iframe จาก Meta ด้วยการ parse URL · รองรับเครื่องหมายคำพูดทั้งสองแบบ/ลำดับ attribute/อักขระ base64 · ยอมเฉพาะ preview_iframe.php ของ facebook.com", () => {
     const body = '<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=AQabc&amp;t=AQxyz" width="540" height="690" scrolling="yes" style="border: none;"></iframe>';
     expect(extractPreviewSrc(body)).toBe("https://www.facebook.com/ads/api/preview_iframe.php?d=AQabc&t=AQxyz");
+    expect(extractPreviewSrc("<iframe width='540' src='https://www.facebook.com/ads/api/preview_iframe.php?d=AQ%2Bx/y+z*&amp;t=AQ-_.' ></iframe>")).toBe("https://www.facebook.com/ads/api/preview_iframe.php?d=AQ%2Bx/y+z*&t=AQ-_.");
+    expect(extractPreviewSrc('<iframe src="https://business.facebook.com/ads/api/preview_iframe.php?d=1"></iframe>')).toBe("https://business.facebook.com/ads/api/preview_iframe.php?d=1");
     expect(extractPreviewSrc('<iframe src="https://evil.example/ads/api/preview_iframe.php?d=1"></iframe>')).toBeNull();
+    expect(extractPreviewSrc('<iframe src="https://www.facebook.com.evil.example/ads/api/preview_iframe.php?d=1"></iframe>')).toBeNull();
+    expect(extractPreviewSrc('<iframe src="https://user@www.facebook.com/ads/api/preview_iframe.php?d=1"></iframe>')).toBeNull();
+    expect(extractPreviewSrc('<iframe src="https://www.facebook.com/other.php?d=1"></iframe>')).toBeNull();
+    expect(extractPreviewSrc('<iframe src="http://www.facebook.com/ads/api/preview_iframe.php?d=1"></iframe>')).toBeNull();
     expect(extractPreviewSrc('<iframe src="javascript:alert(1)"></iframe>')).toBeNull();
-    expect(extractPreviewSrc('<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=1&quot;onload=alert(1)"></iframe>')).toBeNull();
     expect(extractPreviewSrc("")).toBeNull();
+  });
+  it("previewDiagnostics: บอกรูปแบบ body ที่ตรวจไม่ผ่านโดยไม่เผย query (ใช้เขียน log)", () => {
+    expect(previewDiagnostics('<iframe src="https://www.facebook.com/x.php?d=SECRET"></iframe>')).toEqual({ iframe: true, protocol: "https:", host: "www.facebook.com", path: "/x.php", length: 63 });
+    expect(previewDiagnostics("<div>no preview</div>")).toEqual({ iframe: false, protocol: null, host: null, path: null, length: 21 });
   });
 });
 
@@ -163,6 +172,7 @@ describe("isPreviewSrc (ตรวจซ้ำฝั่ง browser)", () => {
     expect(isPreviewSrc("https://www.facebook.com/ads/api/preview_iframe.php?d=AQ1&t=AQ2")).toBe(true);
     expect(isPreviewSrc("http://www.facebook.com/ads/api/preview_iframe.php?d=1")).toBe(false);
     expect(isPreviewSrc("https://www.facebook.com.evil.com/ads/api/preview_iframe.php?d=1")).toBe(false);
+    expect(isPreviewSrc("https://business.facebook.com/ads/api/preview_iframe.php?d=AQ%2B/x")).toBe(true);
     expect(isPreviewSrc(null)).toBe(false);
   });
 });
