@@ -7,8 +7,6 @@
 .cl-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:16px 0; }.cl-summary>div { display:grid; gap:5px; padding:13px 15px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }.cl-summary span { color:var(--ink-soft); font-size:10px; }.cl-summary b { font-size:20px; font-variant-numeric:tabular-nums; }.cl-summary .warn b { color:var(--warn-text); }
 .cl-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:13px; }
 .cl-card { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:12px; background:var(--surface); transition:border-color .15s,transform .15s; }.cl-card:hover { border-color:var(--line-strong); transform:translateY(-1px); }.cl-card.is-fatigue { box-shadow:inset 0 3px var(--warn); }
-.cl-media { position:relative; aspect-ratio:16/9; overflow:hidden; background:var(--surface-2); }.cl-media img { width:100%; height:100%; object-fit:cover; }.cl-media>span { position:absolute; right:8px; bottom:8px; display:flex; align-items:center; gap:5px; padding:4px 7px; border-radius:99px; background:#000c; color:white; font-size:9px; text-transform:capitalize; }
-.cl-media--empty { display:grid; place-content:center; justify-items:center; gap:6px; color:var(--ink-faint); background:repeating-linear-gradient(135deg,var(--surface-2),var(--surface-2) 10px,color-mix(in srgb,var(--surface-2) 80%,var(--surface)) 10px,color-mix(in srgb,var(--surface-2) 80%,var(--surface)) 20px); }.cl-media--empty strong { color:var(--ink-soft); font-size:11px; }.cl-media--empty small { font-size:9px; }
 .cl-card-body { padding:14px; }.cl-card-body>header { display:flex; justify-content:space-between; gap:10px; min-height:64px; }.cl-card-body>header>div { display:grid; gap:4px; min-width:0; }.cl-card-body>header span { display:flex; align-items:center; gap:5px; color:var(--ink-soft); font-size:9px; }.cl-card-body>header strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }.cl-card-body>header small { color:var(--ink-soft); font-size:9px; }
 .cl-check { display:flex; align-items:center; gap:5px; align-self:flex-start; color:var(--ink-soft); font-size:9px; cursor:pointer; }.cl-check input { accent-color:var(--accent); }
 .cl-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; margin-top:11px; padding:11px 0; border-block:1px solid var(--line); }.cl-metrics>div { display:grid; gap:4px; padding:0 8px; border-left:1px solid var(--line); }.cl-metrics>div:first-child { padding-left:0; border:0; }.cl-metrics span { color:var(--ink-soft); font-size:8px; }.cl-metrics b { overflow:hidden; text-overflow:ellipsis; font-size:11px; font-variant-numeric:tabular-nums; }
@@ -19,13 +17,6 @@
 @media(max-width:1250px){.cl-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1050px){.cl-summary,.cl-compare-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.cl-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cl-search{margin-left:0}.cl-command{position:static}}
 @media(max-width:650px){.cl-command>header{display:grid}.cl-head-actions{flex-wrap:wrap}.cl-summary,.cl-compare-grid{grid-template-columns:1fr}.cl-grid{grid-template-columns:1fr}.cl-filters>label,.cl-filters select,.cl-filters input,.cl-search input{width:100%}.cl-filters>label{flex:1 1 140px}.cl-search{flex-basis:100%!important}}
-/* ── สื่อบนการ์ด: กดดูตัวอย่างโฆษณาจริง ── */
-.mkt-root .cl-media-button { display:block; width:100%; padding:0; border:0; background:none; cursor:pointer; text-align:inherit; }
-.mkt-root .cl-media-button:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:-2px; }
-.mkt-root .cl-media-play { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
-.mkt-root .cl-media-play i { display:grid; place-items:center; width:46px; height:46px; border-radius:50%; background:#000b; color:#fff; }
-.mkt-root .cl-media-button:hover .cl-media-play i { background:#000; }
-.mkt-root .cl-media--empty .cl-media-cta { margin-top:4px; color:var(--accent-text); font-size:10px; font-weight:650; }
 .mkt-root .cl-links { display:flex; gap:10px; margin-left:auto; }
 .mkt-root .cl-links a { display:inline-flex; align-items:center; gap:3px; color:var(--accent-text); font-size:10px; text-decoration:none; }
 .mkt-root .cl-links a:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; border-radius:4px; }
@@ -58,3 +49,41 @@
 @keyframes cl-preview-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .mkt-root .cl-preview .spin { animation:none; } }
 @media(max-width:860px){ .mkt-root .cl-preview-body { grid-template-columns:1fr; } .mkt-root .cl-preview-layer { padding:0; } .mkt-root .cl-preview { max-height:100dvh; border-radius:0; } }
+
+/* ── สื่อบนการ์ด: กรอบ 1:1 · ทั้งชิ้น (contain) บนพื้นเบลอ · specificity (0,2,0) ชนะ reset ของ .mkt-root ── */
+.mkt-root .cl-media { position:relative; display:block; aspect-ratio:1/1; overflow:hidden; background:#0b0c0e; isolation:isolate; }
+.mkt-root .cl-media-backdrop { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scale(1.2); filter:blur(22px) saturate(1.15); opacity:.6; z-index:0; }
+.mkt-root .cl-media-img { position:relative; z-index:1; display:block; width:100%; height:100%; object-fit:contain; opacity:0; transition:opacity .2s ease-out; }
+.mkt-root .cl-media[data-state="loaded"] .cl-media-img { opacity:1; }
+.mkt-root .cl-media-skeleton { position:absolute; inset:0; z-index:3; background:linear-gradient(100deg,var(--surface-2) 30%,color-mix(in srgb,var(--surface-2) 70%,var(--surface)) 50%,var(--surface-2) 70%); background-size:220% 100%; animation:cl-media-shimmer 1.2s linear infinite; }
+@keyframes cl-media-shimmer { from { background-position:120% 0; } to { background-position:-120% 0; } }
+.mkt-root .cl-media--none, .mkt-root .cl-media[data-state="error"] { background:repeating-linear-gradient(135deg,var(--surface-2),var(--surface-2) 10px,color-mix(in srgb,var(--surface-2) 80%,var(--surface)) 10px,color-mix(in srgb,var(--surface-2) 80%,var(--surface)) 20px); }
+.mkt-root .cl-media-fallback { position:absolute; inset:0; z-index:3; display:grid; place-content:center; justify-items:center; gap:6px; padding:16px; color:var(--ink-soft); text-align:center; }
+.mkt-root .cl-media-fallback strong { color:var(--ink); font-size:13px; }
+.mkt-root .cl-media-fallback small { max-width:22ch; font-size:11px; line-height:1.45; }
+.mkt-root .cl-media-play { position:absolute; left:50%; top:50%; z-index:4; display:grid; place-items:center; width:52px; height:52px; border-radius:50%; background:#000b; color:#fff; box-shadow:0 0 0 1px #fff3; transform:translate(-50%,-50%); transition:transform .15s ease-out,background-color .15s; }
+.mkt-root .cl-media-play svg { margin-left:3px; }
+.mkt-root .cl-media-badge { position:absolute; left:10px; top:10px; z-index:4; display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px; border-radius:99px; background:#000c; color:#fff; font-size:11px; font-weight:600; line-height:1; }
+.mkt-root .cl-media-note { position:absolute; right:10px; top:10px; z-index:4; height:24px; padding:0 9px; border-radius:99px; background:#000c; color:#fffd; font-size:11px; line-height:24px; }
+.mkt-root .cl-media-hint { position:absolute; inset:auto 0 0; z-index:4; display:flex; align-items:center; justify-content:center; height:36px; background:#000c; color:#fff; font-size:12px; font-weight:600; opacity:0; transform:translateY(100%); transition:opacity .15s ease-out,transform .15s ease-out; }
+.mkt-root .cl-media-button { display:block; width:100%; padding:0; border:0; background:none; cursor:pointer; text-align:inherit; }
+.mkt-root .cl-media-button:hover .cl-media-hint, .mkt-root .cl-media-button:focus-visible .cl-media-hint { opacity:1; transform:none; }
+.mkt-root .cl-media-button:hover .cl-media-play { background:#000; transform:translate(-50%,-50%) scale(1.06); }
+.mkt-root .cl-media-button:focus-visible { outline:3px solid var(--aw-accent,var(--accent)); outline-offset:-3px; }
+@media (prefers-reduced-motion: reduce) {
+  .mkt-root .cl-media-skeleton { animation:none; }
+  .mkt-root .cl-media-img, .mkt-root .cl-media-hint, .mkt-root .cl-media-play { transition:none; }
+  .mkt-root .cl-media-button:hover .cl-media-play { transform:translate(-50%,-50%); }
+}
+/* ── เนื้อหาการ์ด: ตัวอักษรอ่านง่ายขึ้น (เดิม 8–9px) · ชื่อ 2 บรรทัด ── */
+.mkt-root .cl-card-body { padding:14px 14px 12px; }
+.mkt-root .cl-card-body>header { min-height:74px; }
+.mkt-root .cl-card-body>header span { font-size:11px; }
+.mkt-root .cl-card-body>header strong { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; white-space:normal; overflow:hidden; font-size:14px; line-height:1.35; }
+.mkt-root .cl-card-body>header small { font-size:11px; }
+.mkt-root .cl-check { font-size:11px; }
+.mkt-root .cl-metrics span { font-size:10px; }
+.mkt-root .cl-metrics b { font-size:13px; }
+.mkt-root .cl-card footer { font-size:11px; }
+.mkt-root .cl-action { font-size:11px; }
+.mkt-root .cl-links a { font-size:11px; }

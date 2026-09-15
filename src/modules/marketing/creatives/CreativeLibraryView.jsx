@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, Film, Image as ImageIcon, Play, Search, Settings2, X } from "lucide-react";
+import { ExternalLink, Image as ImageIcon, Search, Settings2, X } from "lucide-react";
 import { useApp } from "../useMkt.jsx";
 import { useAdsData } from "../ads/useAdsData.js";
 import { AdsSourceControl, AdsSourceNotice } from "../ads/AdsSourceControl.jsx";
@@ -13,6 +13,7 @@ import { PlatformIcon } from "../ads/PlatformIcon.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { filterCreativeLibrary, creativeLibrarySummary } from "./creativeLibrary.js";
 import { CreativePreview } from "./CreativePreview.jsx";
+import { CreativeMedia } from "./CreativeMedia.jsx";
 import { postLinksOf } from "../ads/metaCreativeContract.js";
 import { Pagination } from "../ui/Pagination.jsx";
 import { scrollToList } from "../ui/pagination.js";
@@ -25,24 +26,10 @@ const actionText = { Scale: "น่าขยาย", Fix: "ควรแก้", 
 
 const PAGE_SIZES = [12, 24, 48];   // หารลงตัวกับกริด 4 / 3 / 2 คอลัมน์ · หน้าละไม่เกิน 48 ภาพ
 
-/** ภาพบนการ์ด · มีรหัสโฆษณาจริง = กดดูตัวอย่างโฆษณาของ Meta (เล่นคลิปได้) */
-function Media({ row, onPreview }) {
-  const asset = row.asset;
-  const item = asset?.media?.[0];
-  const src = item?.thumbnailUrl || item?.imageUrl;
-  const canPreview = Boolean(asset?.adId && asset?.connectionId && onPreview);
-  const isVideo = asset?.format === "video" || item?.type === "video";
-  const label = `ดูตัวอย่างโฆษณา ${row.creative}`;
-  const inner = src
-    ? <div className="cl-media"><img src={src} alt={asset.copy?.headline || row.creative} loading="lazy" />{isVideo && canPreview && <span className="cl-media-play" aria-hidden="true"><i><Play size={18} /></i></span>}<span>{isVideo ? <Film size={14} /> : <ImageIcon size={14} />}{asset.format}</span></div>
-    : <div className="cl-media cl-media--empty"><ImageIcon size={26} /><strong>{canPreview ? "ยังไม่มีภาพย่อ" : "รอ Creative API"}</strong><small>{canPreview ? "กดเพื่อดูตัวอย่างโฆษณาจาก Meta" : "จะแสดงภาพหรือวิดีโอหลัง Sync สำเร็จ"}</small>{canPreview && <span className="cl-media-cta">ดูตัวอย่าง</span>}</div>;
-  return canPreview ? <button type="button" className="cl-media-button" onClick={() => onPreview(row)} aria-label={label}>{inner}</button> : inner;
-}
-
 function CreativeCard({ row, checked, onToggle, onPreview }) {
   const links = postLinksOf(row.asset);
   return <article className={`cl-card ${row.fatigue ? "is-fatigue" : ""}`}>
-    <Media row={row} onPreview={onPreview} />
+    <CreativeMedia row={row} onPreview={onPreview} />
     <div className="cl-card-body">
       <header><div><span><PlatformIcon channel={row.platform} size={14} /> {row.platform}</span><strong title={row.creative}>{row.creative}</strong><small>{row.brand} · {row.campaigns.length} แคมเปญ</small></div><label className="cl-check"><input type="checkbox" checked={checked} onChange={onToggle} /><span>เทียบ</span></label></header>
       <div className="cl-metrics"><div><span>ค่าแอด</span><b>{metric(row.spend, "money")}</b></div><div><span>ROAS</span><b>{metric(row.roas, "roas")}</b></div><div><span>CPL</span><b>{metric(row.cpl, "money")}</b></div><div><span>CTR</span><b>{metric(row.ctr, "pct")}</b></div></div>
