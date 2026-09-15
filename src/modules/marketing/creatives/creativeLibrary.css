@@ -20,61 +20,6 @@
 .mkt-root .cl-links { display:flex; gap:10px; margin-left:auto; }
 .mkt-root .cl-links a { display:inline-flex; align-items:center; gap:3px; color:var(--accent-text); font-size:10px; text-decoration:none; }
 .mkt-root .cl-links a:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; border-radius:4px; }
-/* ── หน้าต่างตัวอย่าง ── */
-.mkt-root .cl-preview-layer { position:fixed; inset:0; z-index:80; display:grid; place-items:center; padding:20px; }
-.mkt-root .cl-preview-backdrop { position:absolute; inset:0; border:0; background:#0009; cursor:default; }
-.mkt-root .cl-preview { position:relative; display:flex; flex-direction:column; width:min(980px,100%); max-height:calc(100dvh - 40px); overflow:hidden; border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:0 24px 64px #0006; }
-.mkt-root .cl-preview>header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:14px 16px 10px; border-bottom:1px solid var(--line); }
-.mkt-root .cl-preview>header span { color:var(--ink-soft); font-size:10px; }
-.mkt-root .cl-preview>header h2 { margin:2px 0 0; font-size:15px; line-height:1.35; }
-.mkt-root .cl-preview-close { display:grid; place-items:center; width:32px; height:32px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); color:var(--ink); cursor:pointer; }
-.mkt-root .cl-preview-close:focus-visible,.mkt-root .cl-preview-formats button:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
-.mkt-root .cl-preview-formats { display:flex; flex-wrap:wrap; gap:6px; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--surface-2); }
-.mkt-root .cl-preview-formats button { height:30px; padding:0 11px; border:1px solid var(--line); border-radius:99px; background:var(--surface); color:var(--ink-soft); font:inherit; font-size:11px; cursor:pointer; }
-.mkt-root .cl-preview-formats button.active { border-color:var(--accent-line,var(--accent)); background:var(--accent-tint,var(--surface)); color:var(--ink); font-weight:650; }
-.mkt-root .cl-preview-body { display:grid; grid-template-columns:minmax(0,560px) minmax(0,1fr); gap:16px; padding:16px; overflow:auto; }
-.mkt-root .cl-preview-frame { display:grid; place-items:center; overflow:hidden; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); }
-.mkt-root .cl-preview-frame iframe { display:block; width:100%; max-width:540px; border:0; background:#fff; }
-.mkt-root .cl-preview-state { display:grid; justify-items:center; gap:8px; padding:24px; color:var(--ink-soft); font-size:11px; text-align:center; }
-.mkt-root .cl-preview-state.bad strong { color:var(--bad-text); }
-.mkt-root .cl-preview-side { display:flex; flex-direction:column; gap:12px; min-width:0; }
-.mkt-root .cl-preview-side p { display:grid; gap:3px; margin:0; font-size:12px; line-height:1.5; }
-.mkt-root .cl-preview-side small { color:var(--ink-faint); font-size:10px; }
-.mkt-root .cl-preview-text span { white-space:pre-line; overflow-wrap:anywhere; }
-.mkt-root .cl-preview-links { display:flex; flex-wrap:wrap; gap:8px; }
-.mkt-root .cl-preview-links a { display:inline-flex; align-items:center; gap:5px; height:30px; padding:0 10px; border:1px solid var(--line); border-radius:8px; color:var(--ink); font-size:11px; text-decoration:none; }
-.mkt-root .cl-preview-links a:hover { background:var(--surface-2); }
-.mkt-root .cl-preview-note { margin-top:auto; color:var(--ink-faint); font-size:10px; }
-.mkt-root .cl-preview .spin { animation:cl-preview-spin .8s linear infinite; }
-@keyframes cl-preview-spin { to { transform:rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .mkt-root .cl-preview .spin { animation:none; } }
-@media(max-width:860px){ .mkt-root .cl-preview-body { grid-template-columns:1fr; } .mkt-root .cl-preview-layer { padding:0; } .mkt-root .cl-preview { max-height:100dvh; border-radius:0; } }
-
-/* ── สื่อบนการ์ด: กรอบ 1:1 · ทั้งชิ้น (contain) บนพื้นเบลอ · specificity (0,2,0) ชนะ reset ของ .mkt-root ── */
-.mkt-root .cl-media { position:relative; display:block; aspect-ratio:1/1; overflow:hidden; background:#0b0c0e; isolation:isolate; }
-.mkt-root .cl-media-backdrop { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scale(1.2); filter:blur(22px) saturate(1.15); opacity:.6; z-index:0; }
-.mkt-root .cl-media-img { position:relative; z-index:1; display:block; width:100%; height:100%; object-fit:contain; opacity:0; transition:opacity .2s ease-out; }
-.mkt-root .cl-media[data-state="loaded"] .cl-media-img { opacity:1; }
-.mkt-root .cl-media-skeleton { position:absolute; inset:0; z-index:3; background:linear-gradient(100deg,var(--surface-2) 30%,color-mix(in srgb,var(--surface-2) 70%,var(--surface)) 50%,var(--surface-2) 70%); background-size:220% 100%; animation:cl-media-shimmer 1.2s linear infinite; }
-@keyframes cl-media-shimmer { from { background-position:120% 0; } to { background-position:-120% 0; } }
-.mkt-root .cl-media--none, .mkt-root .cl-media[data-state="error"] { background:repeating-linear-gradient(135deg,var(--surface-2),var(--surface-2) 10px,color-mix(in srgb,var(--surface-2) 80%,var(--surface)) 10px,color-mix(in srgb,var(--surface-2) 80%,var(--surface)) 20px); }
-.mkt-root .cl-media-fallback { position:absolute; inset:0; z-index:3; display:grid; place-content:center; justify-items:center; gap:6px; padding:16px; color:var(--ink-soft); text-align:center; }
-.mkt-root .cl-media-fallback strong { color:var(--ink); font-size:13px; }
-.mkt-root .cl-media-fallback small { max-width:22ch; font-size:11px; line-height:1.45; }
-.mkt-root .cl-media-play { position:absolute; left:50%; top:50%; z-index:4; display:grid; place-items:center; width:52px; height:52px; border-radius:50%; background:#000b; color:#fff; box-shadow:0 0 0 1px #fff3; transform:translate(-50%,-50%); transition:transform .15s ease-out,background-color .15s; }
-.mkt-root .cl-media-play svg { margin-left:3px; }
-.mkt-root .cl-media-badge { position:absolute; left:10px; top:10px; z-index:4; display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px; border-radius:99px; background:#000c; color:#fff; font-size:11px; font-weight:600; line-height:1; }
-.mkt-root .cl-media-note { position:absolute; right:10px; top:10px; z-index:4; height:24px; padding:0 9px; border-radius:99px; background:#000c; color:#fffd; font-size:11px; line-height:24px; }
-.mkt-root .cl-media-hint { position:absolute; inset:auto 0 0; z-index:4; display:flex; align-items:center; justify-content:center; height:36px; background:#000c; color:#fff; font-size:12px; font-weight:600; opacity:0; transform:translateY(100%); transition:opacity .15s ease-out,transform .15s ease-out; }
-.mkt-root .cl-media-button { display:block; width:100%; padding:0; border:0; background:none; cursor:pointer; text-align:inherit; }
-.mkt-root .cl-media-button:hover .cl-media-hint, .mkt-root .cl-media-button:focus-visible .cl-media-hint { opacity:1; transform:none; }
-.mkt-root .cl-media-button:hover .cl-media-play { background:#000; transform:translate(-50%,-50%) scale(1.06); }
-.mkt-root .cl-media-button:focus-visible { outline:3px solid var(--aw-accent,var(--accent)); outline-offset:-3px; }
-@media (prefers-reduced-motion: reduce) {
-  .mkt-root .cl-media-skeleton { animation:none; }
-  .mkt-root .cl-media-img, .mkt-root .cl-media-hint, .mkt-root .cl-media-play { transition:none; }
-  .mkt-root .cl-media-button:hover .cl-media-play { transform:translate(-50%,-50%); }
-}
 /* ── เนื้อหาการ์ด: ตัวอักษรอ่านง่ายขึ้น (เดิม 8–9px) · ชื่อ 2 บรรทัด ── */
 .mkt-root .cl-card-body { padding:14px 14px 12px; }
 .mkt-root .cl-card-body>header { min-height:74px; }

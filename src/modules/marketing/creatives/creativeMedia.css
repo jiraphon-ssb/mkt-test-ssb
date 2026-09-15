@@ -1,0 +1,51 @@
+/* สื่อบนการ์ด Creative — ใช้ร่วมกันระหว่างคลังครีเอทีฟและ drawer แคมเปญ
+   กรอบ 1:1 · แสดงทั้งชิ้น (contain) บนพื้นเบลอ · specificity (0,2,0) ชนะ reset ของ .mkt-root */
+.mkt-root .cl-media { position:relative; display:block; aspect-ratio:1/1; overflow:hidden; background:#0b0c0e; isolation:isolate; }
+.mkt-root .cl-media[data-multi] { touch-action:pan-y; }   /* ปัดแนวนอน = เปลี่ยนภาพ · แนวตั้งยังเลื่อนหน้าได้ */
+.mkt-root .cl-media:focus-visible { outline:3px solid var(--aw-accent,var(--accent)); outline-offset:-3px; }
+.mkt-root .cl-media-backdrop { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scale(1.2); filter:blur(22px) saturate(1.15); opacity:.6; z-index:0; }
+.mkt-root .cl-media-img { position:relative; z-index:1; display:block; width:100%; height:100%; object-fit:contain; opacity:0; transition:opacity .2s ease-out; }
+.mkt-root .cl-media[data-state="loaded"] .cl-media-img { opacity:1; }
+.mkt-root .cl-media-skeleton { position:absolute; inset:0; z-index:3; background:linear-gradient(100deg,var(--surface-2) 30%,color-mix(in srgb,var(--surface-2) 70%,var(--surface)) 50%,var(--surface-2) 70%); background-size:220% 100%; animation:cl-media-shimmer 1.2s linear infinite; }
+@keyframes cl-media-shimmer { from { background-position:120% 0; } to { background-position:-120% 0; } }
+.mkt-root .cl-media--none, .mkt-root .cl-media[data-state="error"] { background:repeating-linear-gradient(135deg,var(--surface-2),var(--surface-2) 10px,color-mix(in srgb,var(--surface-2) 80%,var(--surface)) 10px,color-mix(in srgb,var(--surface-2) 80%,var(--surface)) 20px); }
+.mkt-root .cl-media-fallback { position:absolute; inset:0; z-index:3; display:grid; place-content:center; justify-items:center; gap:6px; padding:16px 52px; color:var(--ink-soft); text-align:center; }
+.mkt-root .cl-media-fallback strong { color:var(--ink); font-size:13px; }
+.mkt-root .cl-media-fallback small { max-width:22ch; font-size:11px; line-height:1.45; }
+.mkt-root .cl-media-play { position:absolute; left:50%; top:50%; z-index:4; display:grid; place-items:center; width:52px; height:52px; border-radius:50%; background:#000b; color:#fff; box-shadow:0 0 0 1px #fff3; transform:translate(-50%,-50%); transition:transform .15s ease-out,background-color .15s; pointer-events:none; }
+.mkt-root .cl-media-play svg { margin-left:3px; }
+.mkt-root .cl-media-badge, .mkt-root .cl-media-count { position:absolute; top:10px; z-index:4; display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px; border-radius:99px; background:#000c; color:#fff; font-size:11px; font-weight:600; line-height:1; pointer-events:none; }
+.mkt-root .cl-media-badge { left:10px; }
+.mkt-root .cl-media-count { right:10px; font-variant-numeric:tabular-nums; }
+.mkt-root .cl-media-sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+
+/* กดทั้งกรอบเพื่อดูตัวอย่าง — ปุ่มซ้อนทับ (ไม่ห่อปุ่มเลื่อนภาพไว้ข้างใน) */
+.mkt-root .cl-media-open { position:absolute; inset:0; z-index:5; display:block; width:100%; height:100%; padding:0; border:0; background:none; cursor:pointer; }
+.mkt-root .cl-media-open:focus-visible { outline:3px solid var(--aw-accent,var(--accent)); outline-offset:-3px; }
+.mkt-root .cl-media-hint { position:absolute; inset:auto 0 0; display:flex; align-items:center; justify-content:center; height:36px; background:#000c; color:#fff; font-size:12px; font-weight:600; opacity:0; transform:translateY(100%); transition:opacity .15s ease-out,transform .15s ease-out; }
+.mkt-root .cl-media-open:hover .cl-media-hint, .mkt-root .cl-media-open:focus-visible .cl-media-hint { opacity:1; transform:none; }
+.mkt-root .cl-media:has(.cl-media-open:hover) .cl-media-play { background:#000; transform:translate(-50%,-50%) scale(1.06); }
+
+/* เลื่อนภาพ: ปุ่มซ้าย/ขวา 36px (พื้นที่กด 44px) · จุดบอกตำแหน่ง */
+.mkt-root .cl-media-nav { position:absolute; top:50%; z-index:6; display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; background:none; color:#fff; cursor:pointer; transform:translateY(-50%); transition:opacity .15s ease-out; }
+.mkt-root .cl-media-nav::before { content:""; position:absolute; inset:4px; border-radius:50%; background:#000b; box-shadow:0 0 0 1px #fff3; transition:background-color .15s; }
+.mkt-root .cl-media-nav svg { position:relative; }
+.mkt-root .cl-media-nav--prev { left:4px; }
+.mkt-root .cl-media-nav--next { right:4px; }
+.mkt-root .cl-media-nav:hover::before { background:#000; }
+.mkt-root .cl-media-nav:focus-visible { outline:none; }
+.mkt-root .cl-media-nav:focus-visible::before { box-shadow:0 0 0 3px var(--aw-accent,var(--accent)); }
+.mkt-root .cl-media-nav:disabled { opacity:0; pointer-events:none; }
+.mkt-root .cl-media-dots { position:absolute; left:50%; bottom:12px; z-index:4; display:flex; gap:5px; padding:4px 6px; border-radius:99px; background:#0008; transform:translateX(-50%); pointer-events:none; transition:opacity .15s ease-out; }
+.mkt-root .cl-media-dots i { width:6px; height:6px; border-radius:50%; background:#fff7; transition:background-color .15s,transform .15s; }
+.mkt-root .cl-media-dots i.on { background:#fff; transform:scale(1.2); }
+.mkt-root .cl-media:has(.cl-media-open:hover) .cl-media-dots, .mkt-root .cl-media:has(.cl-media-open:focus-visible) .cl-media-dots { opacity:0; }
+@media (hover:hover) {
+  .mkt-root .cl-media-nav:not(:disabled) { opacity:.72; }
+  .mkt-root .cl-media:hover .cl-media-nav:not(:disabled), .mkt-root .cl-media:focus-within .cl-media-nav:not(:disabled) { opacity:1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mkt-root .cl-media-skeleton { animation:none; }
+  .mkt-root .cl-media-img, .mkt-root .cl-media-hint, .mkt-root .cl-media-play, .mkt-root .cl-media-nav, .mkt-root .cl-media-dots, .mkt-root .cl-media-dots i { transition:none; }
+  .mkt-root .cl-media:has(.cl-media-open:hover) .cl-media-play { transform:translate(-50%,-50%); }
+}

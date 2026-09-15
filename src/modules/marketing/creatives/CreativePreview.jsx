@@ -5,6 +5,7 @@ import { ExternalLink, LoaderCircle, X } from "lucide-react";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { adsErrorText } from "../ads/adsSyncMessages.js";
 import { isPreviewSrc, postLinksOf } from "../ads/metaCreativeContract.js";
+import "./creativePreview.css";
 
 const FORMATS = [
   ["MOBILE_FEED_STANDARD", "Facebook มือถือ", 690],

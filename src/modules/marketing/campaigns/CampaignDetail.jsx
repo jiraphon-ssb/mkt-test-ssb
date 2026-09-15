@@ -1,32 +1,29 @@
 import { useState } from "react";
-import { ExternalLink, Film, Images } from "lucide-react";
+import { ExternalLink } from "lucide-react";
+import { CreativeMedia } from "../creatives/CreativeMedia.jsx";
+import { CreativePreview } from "../creatives/CreativePreview.jsx";
+import { postLinksOf } from "../ads/metaCreativeContract.js";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
 import { baseOpts, chartColor, dayLabel, fmtCompact, fmtMoney, fmtPct, lineSeries, SERIES } from "../dash/charts/theme.js";
 
 const METRICS = [["spend", "ค่าแอด", "money"], ["leads", "ผลลัพธ์", "int"], ["cpl", "CPL", "money"], ["roas", "ROAS", "roas"]];
 const fmt = (kind, v) => (v == null ? "—" : kind === "money" ? fmtMoney(v) : kind === "roas" ? `${v.toFixed(1)}x` : String(Math.round(v)));
-const FORMAT = { image: "รูปภาพ", video: "วิดีโอ", carousel: "Carousel", dynamic: "Dynamic", unknown: "ครีเอทีฟ" };
 
-function CreativeCard({ creative }) {
+function CreativeCard({ creative, onPreview }) {
   const asset = creative.asset;
-  const cover = asset?.media?.[0];
-  const image = cover?.thumbnailUrl ?? cover?.imageUrl;
+  const links = postLinksOf(asset);
+  const destination = asset?.destinationUrl;
   return <article className={`cp-creative-card ${asset ? "has-asset" : ""}`}>
-    {asset && <div className="cp-creative-media">
-      {cover?.videoUrl ? <video src={cover.videoUrl} poster={image ?? undefined} controls preload="metadata" /> : image ? <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{cover?.type === "video" ? <Film size={22} /> : <Images size={22} />}</span>}
-      <b>{FORMAT[asset.format] ?? FORMAT.unknown}</b>
-      {asset.media.length > 1 && <em>+{asset.media.length - 1}</em>}
-    </div>}
+    {asset && <CreativeMedia row={creative} onPreview={onPreview} />}
     <div className="cp-creative-copy">
-      <div className="cp-creative-title"><b>{creative.creative}</b><span className={`ads-badge ads-badge--${creative.tone}`}>{creative.action}</span></div>
+      <div className="cp-creative-title"><b title={creative.creative}>{creative.creative}</b><span className={`ads-badge ads-badge--${creative.tone}`}>{creative.action}</span></div>
       <dl><div><dt>ค่าแอด</dt><dd>{fmtMoney(creative.spend)}</dd></div><div><dt>CTR</dt><dd>{creative.ctr != null ? fmtPct(creative.ctr, 2) : "—"}</dd></div><div><dt>ความถี่</dt><dd>{creative.frequency != null ? `${creative.frequency.toFixed(1)}x` : "—"}</dd></div></dl>
       {asset?.copy?.headline && <strong className="cp-creative-headline">{asset.copy.headline}</strong>}
       {asset?.copy?.primaryText && <p className="cp-creative-text">{asset.copy.primaryText}</p>}
       <p>{creative.why}</p>
-      {asset && <div className="cp-creative-links">{asset.copy?.callToAction && <span>{String(asset.copy.callToAction).replaceAll("_", " ")}</span>}
-        {asset.previewUrl && <a href={asset.previewUrl} target="_blank" rel="noreferrer">ดูตัวอย่าง <ExternalLink size={12} /></a>}
-        {asset.permalinkUrl && <a href={asset.permalinkUrl} target="_blank" rel="noreferrer">ดูโพสต์ <ExternalLink size={12} /></a>}
-        {asset.destinationUrl && <a href={asset.destinationUrl} target="_blank" rel="noreferrer">เปิดลิงก์ปลายทาง <ExternalLink size={12} /></a>}
+      {asset && (asset.copy?.callToAction || links.length > 0 || destination) && <div className="cp-creative-links">{asset.copy?.callToAction && <span>{String(asset.copy.callToAction).replaceAll("_", " ")}</span>}
+        {links.map((link) => <a key={link.key} href={link.url} target="_blank" rel="noreferrer" aria-label={`${link.label} ของ ${creative.creative}`}>{link.key === "facebook" ? "FB" : "IG"} <ExternalLink size={12} aria-hidden="true" /></a>)}
+        {destination && <a href={destination} target="_blank" rel="noreferrer">ลิงก์ปลายทาง <ExternalLink size={12} aria-hidden="true" /></a>}
       </div>}
     </div>
   </article>;
@@ -34,6 +31,7 @@ function CreativeCard({ creative }) {
 
 export function CampaignDetail({ row, compareLabel }) {
   const [metric, setMetric] = useState("spend");
+  const [previewRow, setPreviewRow] = useState(null);
   const [, label, kind] = METRICS.find((m) => m[0] === metric);
   const data = row.series[metric];
   const fatigued = row.creatives.filter((c) => c.fatigue);
@@ -60,7 +58,7 @@ export function CampaignDetail({ row, compareLabel }) {
 
     <section className="cp-creative-section" aria-label="ครีเอทีฟ">
       <header><div><h4>ครีเอทีฟ</h4><p>{row.creatives.length} ชิ้นในแคมเปญ</p></div><div className="cp-creative-status">{creativeAssets ? <span className="ads-badge ads-badge--emerald">มีสื่อ {creativeAssets}</span> : <span className="ads-badge ads-badge--zinc">รอ Creative API</span>}{fatigued.length > 0 && <span className="ads-badge ads-badge--amber">เสี่ยงล้า {fatigued.length}</span>}</div></header>
-      {row.creatives.length ? <div className="cp-creatives">{row.creatives.map((c) => <CreativeCard key={c.key} creative={c} />)}</div> : <p className="cp-no-value">ไม่มีข้อมูลครีเอทีฟ</p>}
+      {row.creatives.length ? <div className="cp-creatives">{row.creatives.map((c) => <CreativeCard key={c.key} creative={c} onPreview={setPreviewRow} />)}</div> : <p className="cp-no-value">ไม่มีข้อมูลครีเอทีฟ</p>}
     </section>
 
     <details className="cp-lineage"><summary>ที่มาและวิธีคำนวณ</summary><ul>
@@ -71,5 +69,6 @@ export function CampaignDetail({ row, compareLabel }) {
       <li>ข้อเสนอแนะใช้กฎกลาง เป้าแบรนด์ และข้อมูลขั้นต่ำ 3 วัน / 5 ผลลัพธ์</li>
       <li>ยังไม่มีประวัติการแก้ไขจากแพลตฟอร์ม จึงไม่สรุปว่าการเปลี่ยนงบหรือสถานะเป็นสาเหตุของผลงาน</li>
     </ul></details>
+    {previewRow && <CreativePreview row={previewRow} onClose={() => setPreviewRow(null)} />}
   </div>;
 }
