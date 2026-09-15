@@ -1,7 +1,7 @@
 /* Creative ของ Meta: แปลงเป็นสัญญากลาง + ตัวดึงสำหรับ Edge Function ads-creatives
    ไฟล์เดียวใช้ทั้ง Deno และหน้าเว็บ (src/modules/marketing/ads/metaCreativeContract.js re-export) · เทสใน tests/adsCreativeWorker.test.js
    ไม่เก็บไฟล์สื่อ — URL รูปของ Meta หมดอายุได้ worker ดึงใหม่ทับทุกรอบ */
-import { fetchGraphJson, syncError } from "./metaInsights.js";
+import { fetchAllPages, fetchGraphJson, syncError } from "./metaInsights.js";
 
 const WEB_URL = /^https?:\/\//i;
 const FORMATS = new Set(["image", "video", "carousel", "dynamic", "catalog", "unknown"]);
@@ -30,6 +30,8 @@ function mediaItem(input = {}, fallback = {}) {
     thumbnailUrl,
     videoId: videoId ? String(videoId) : null,
     videoUrl,
+    // "creative" = มีแค่ภาพย่อระดับ creative (โฆษณาจากโพสต์เพจมักเป็นรูปโปรไฟล์เพจ) → worker ไปดึงภาพจากโพสต์จริงแทน
+    source: imageUrl || videoId || videoUrl || safeUrl(input.thumbnail_url) ? "ad" : "creative",
   };
 }
 
@@ -253,3 +255,96 @@ export function previewDiagnostics(body) {
 
 /** ตรวจซ้ำฝั่ง browser ก่อนใส่ iframe */
 export const isPreviewSrc = (src) => previewUrl(src) === src && src != null;
+
+/* ── ภาพจริงของโพสต์เพจ (โฆษณาแบบบูสต์โพสต์เดิม) · ต้องมี pages_show_list + pages_read_engagement ──
+   ใช้ Page access token จาก /me/accounts เฉพาะในหน่วยความจำของคำขอนั้น ไม่เก็บ ไม่ log ไม่ส่งออก */
+export const OAUTH_SCOPES = ["ads_read", "pages_show_list", "pages_read_engagement"];
+const STORY_ID = /^\d+_\d+$/;
+
+export function needsPostMedia(row) {
+  if (!row || typeof row.effective_story_id !== "string" || !STORY_ID.test(row.effective_story_id)) return false;
+  const media = Array.isArray(row.media_assets) ? row.media_assets : [];
+  return media.length === 0 || media.every((item) => item?.source === "creative");
+}
+
+export function buildPageTokensUrl({ version }) {
+  if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
+  const url = new URL(`https://graph.facebook.com/${version}/me/accounts`);
+  url.searchParams.set("fields", "id,access_token");
+  url.searchParams.set("limit", "100");
+  return url.toString();
+}
+
+export function buildPostMediaUrl({ version, storyId }) {
+  if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
+  if (!STORY_ID.test(String(storyId ?? ""))) throw syncError("STORY_ID_INVALID");
+  const url = new URL(`https://graph.facebook.com/${version}/${storyId}`);
+  url.searchParams.set("fields", "full_picture,permalink_url,attachments{media_type,type,media,subattachments.limit(10){media_type,media}}");
+  return url.toString();
+}
+
+/** โพสต์ → media ที่หน้าจอใช้ (วิดีโอ = ภาพปก · อัลบั้ม = carousel · ภาพเดี่ยว) */
+export function postMediaFrom(post = {}) {
+  const attachment = post?.attachments?.data?.[0] ?? null;
+  const item = (src, type) => { const u = safeUrl(src); return u ? { type, imageUrl: u, thumbnailUrl: u, videoId: null, videoUrl: null, source: "post" } : null; };
+  const kind = (value) => String(value ?? "").toLowerCase().includes("video") ? "video" : "image";
+  const subs = attachment?.subattachments?.data ?? [];
+  let media, format;
+  if (subs.length > 1) {
+    media = subs.map((sub) => item(sub?.media?.image?.src, kind(sub?.media_type))).filter(Boolean);
+    format = "carousel";
+  } else {
+    format = kind(attachment?.media_type ?? attachment?.type);
+    const one = item(attachment?.media?.image?.src ?? post?.full_picture, format);
+    media = one ? [one] : [];
+  }
+  return { format, permalink: safeUrl(post?.permalink_url), media: media.map((m, i) => ({ id: `post-${i}`, ...m })) };
+}
+
+/** เติมภาพจากโพสต์จริงให้แถวที่มีแค่ภาพย่อระดับ creative · ไม่มีสิทธิ์/rate limit/หมดเวลา = คืนแถวเดิม + เหตุผล (ไม่ throw) */
+export async function enrichRowsWithPosts(rows, { version, token, deadline = Infinity, now = Date.now, concurrency = 4, ...opts }) {
+  const graphOpts = { ...opts, maxRetries: 0, baseDelayMs: 1000, maxDelayMs: 1000 };
+  if (!rows.some(needsPostMedia)) return { rows, enriched: 0, missingPages: [], reason: null };
+  let pageTokens;
+  try {
+    const { rows: pages } = await fetchAllPages(buildPageTokensUrl({ version }), { ...graphOpts, token, maxPages: 10 });
+    pageTokens = new Map(pages
+      .filter((page) => /^\d+$/.test(String(page?.id ?? "")) && typeof page.access_token === "string" && page.access_token)
+      .map((page) => [String(page.id), page.access_token]));
+  } catch (error) {
+    return { rows, enriched: 0, missingPages: [], reason: error?.code ?? "META_API_ERROR" };
+  }
+  const stories = [...new Set(rows.filter(needsPostMedia).map((row) => row.effective_story_id))];
+  const missingPages = new Set();
+  const queue = stories.filter((story) => {
+    const page = story.split("_")[0];
+    if (pageTokens.has(page)) return true;
+    missingPages.add(page);
+    return false;
+  });
+  const results = new Map();
+  let reason = null;
+  const worker = async () => {
+    while (queue.length && !reason) {
+      if (now() >= deadline) { reason = "DEADLINE"; return; }
+      const story = queue.shift();
+      try {
+        const { payload } = await fetchGraphJson(buildPostMediaUrl({ version, storyId: story }), { ...graphOpts, token: pageTokens.get(story.split("_")[0]) });
+        const post = postMediaFrom(payload);
+        if (post.media.length) results.set(story, post);
+      } catch (error) {
+        if (error?.code === "META_RATE_LIMIT" || error?.code === "META_TOKEN_INVALID") { reason = error.code; return; }
+        // โพสต์ถูกลบ / ไม่มีสิทธิ์โพสต์นี้ → ข้าม
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
+  let enriched = 0;
+  const out = rows.map((row) => {
+    const post = needsPostMedia(row) ? results.get(row.effective_story_id) : null;
+    if (!post) return row;
+    enriched += 1;
+    return { ...row, media_assets: post.media.slice(0, 20), format: FORMATS.has(post.format) ? post.format : row.format, source_spec: { ...row.source_spec, ...(post.permalink ? { post_permalink: post.permalink } : {}) } };
+  });
+  return { rows: out, enriched, missingPages: [...missingPages], reason };
+}

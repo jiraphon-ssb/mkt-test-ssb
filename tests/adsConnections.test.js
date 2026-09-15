@@ -236,14 +236,24 @@ describe("applyCoverage — ช่อง 'ช่องว่าง' ในหน
 
 describe("syncCreativesFor — ดึง creative ต่อเนื่องจน nextCursor = null", () => {
   it("วนตาม cursor · รวมจำนวนที่บันทึก · มีเพดานรอบกันวนไม่รู้จบ", async () => {
-    const call = vi.fn(async (id, cursor) => cursor == null ? { saved: 90, nextCursor: "c1" } : { saved: 40, nextCursor: null });
-    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 130, rounds: 2, error: null });
+    const call = vi.fn(async (id, cursor) => cursor == null ? { saved: 90, nextCursor: "c1", postMedia: { enriched: 30, reason: null } } : { saved: 40, nextCursor: null, postMedia: { enriched: 5, reason: "NEEDS_RECONNECT" } });
+    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 130, rounds: 2, postEnriched: 35, needsReconnect: true, error: null });
     expect(call.mock.calls.map((c) => c[1])).toEqual([null, "c1"]);
     const loop = vi.fn(async () => ({ saved: 1, nextCursor: "again" }));
     expect((await syncCreativesFor("c1", loop, 3)).rounds).toBe(3);
   });
   it("พังกลางทาง = คืนสิ่งที่ได้แล้ว + รหัส error (ไม่ throw ให้คิวหลักล้ม)", async () => {
     const call = vi.fn().mockResolvedValueOnce({ saved: 50, nextCursor: "c1" }).mockRejectedValueOnce(Object.assign(new Error("x"), { code: "META_RATE_LIMIT" }));
-    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 50, rounds: 2, error: "META_RATE_LIMIT" });
+    expect(await syncCreativesFor("c1", call)).toEqual({ saved: 50, rounds: 2, postEnriched: 0, needsReconnect: false, error: "META_RATE_LIMIT" });
+  });
+});
+
+import { needsPostScopeReconnect } from "../src/modules/marketing/ads/adsConnectionSync.js";
+describe("needsPostScopeReconnect — ต้องเชื่อม Meta ใหม่เพื่อให้แสดงภาพโพสต์ไหม", () => {
+  it("มี authorization ที่เชื่อมอยู่แต่ยังไม่มีสิทธิ์อ่านเพจ = ต้องเชื่อมใหม่", () => {
+    expect(needsPostScopeReconnect([{ status: "connected", scopes: ["ads_read"] }])).toBe(true);
+    expect(needsPostScopeReconnect([{ status: "connected", scopes: ["ads_read", "pages_show_list", "pages_read_engagement"] }])).toBe(false);
+    expect(needsPostScopeReconnect([{ status: "expired", scopes: ["ads_read"] }])).toBe(false);
+    expect(needsPostScopeReconnect([])).toBe(false);
   });
 });

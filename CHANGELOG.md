@@ -2,6 +2,12 @@
 
 รูปแบบตาม [Keep a Changelog](https://keepachangelog.com/) · เวอร์ชันตาม SemVer · รายการสร้างจาก conventional commits
 
+## [Unreleased]
+
+### feat
+- ads: ภาพจริงของโฆษณาแบบบูสต์โพสต์เพจ (674 จาก 782 creative) — OAuth ขอสิทธิ์อ่านเพจเพิ่ม `pages_show_list` + `pages_read_engagement` (อ่านอย่างเดียว · ไม่ให้ก็ใช้งานได้ ads_read ยังเป็นตัวหลัก) · `ads-creatives` ใช้ Page access token (อยู่ในหน่วยความจำของคำขอเท่านั้น ไม่เก็บ ไม่ log) อ่าน `full_picture`/ไฟล์แนบของโพสต์ แทนรูปโปรไฟล์เพจ · อัลบั้ม = carousel · วิดีโอ = ภาพปก
+- ads: หน้าตั้งค่าแจ้ง "เชื่อม Meta ใหม่" เมื่อการเชื่อมเดิมยังไม่มีสิทธิ์อ่านเพจ · ผลดึงข้อมูลบอกจำนวนภาพจากโพสต์
+
 ## [0.7.1] — 2026-09-16
 
 ### fix

@@ -1,3 +1,4 @@
+import { OAUTH_SCOPES } from "../_shared/metaCreative.js";
 import { corsHeaders, env, graphVersion, json, oauthReturnTarget, publicErrorCode, randomState, requireMember, sha256 } from "../_shared/adsOAuth.ts";
 
 Deno.serve(async (request) => {
@@ -18,9 +19,10 @@ Deno.serve(async (request) => {
     authorize.searchParams.set("client_id", env("META_APP_ID"));
     authorize.searchParams.set("redirect_uri", env("META_OAUTH_REDIRECT_URI"));
     authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("scope", "ads_read");
+    // ads_read = หลัก (callback บังคับ) · pages_show_list + pages_read_engagement = ภาพของโฆษณาที่บูสต์โพสต์เพจ (อ่านอย่างเดียว · ไม่ให้ก็ใช้งานได้)
+    authorize.searchParams.set("scope", OAUTH_SCOPES.join(","));
     authorize.searchParams.set("state", state);
-    return json(request, { authorizeUrl: authorize.toString(), expiresIn: 600, scopes: ["ads_read"] });
+    return json(request, { authorizeUrl: authorize.toString(), expiresIn: 600, scopes: OAUTH_SCOPES });
   } catch (error) {
     console.error("[ads-oauth-start]", error instanceof Error ? error.message : error);
     const code = publicErrorCode(error, "OAUTH_START_FAILED");

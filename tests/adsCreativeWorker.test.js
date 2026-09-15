@@ -176,3 +176,79 @@ describe("isPreviewSrc (ตรวจซ้ำฝั่ง browser)", () => {
     expect(isPreviewSrc(null)).toBe(false);
   });
 });
+
+import { needsPostMedia, buildPageTokensUrl, buildPostMediaUrl, postMediaFrom, enrichRowsWithPosts, OAUTH_SCOPES } from "../supabase/functions/_shared/metaCreative.js";
+describe("ภาพจริงของโฆษณาที่บูสต์โพสต์เพจ (pages_read_engagement)", () => {
+  const LOGO = "https://scontent.xx.fbcdn.net/v/t39.30808-1/logo.jpg";
+  const statusAd = (id, story) => ({ id, name: `Ad ${id}`, campaign_id: "c", adset_id: "s", creative: { id: `cr${id}`, object_type: "STATUS", thumbnail_url: LOGO, effective_object_story_id: story } });
+  const res = (body, status = 200) => ({ ok: status < 300, status, json: async () => body });
+
+  it("OAuth ขอ ads_read เป็นหลัก + สิทธิ์อ่านเพจแบบอ่านอย่างเดียว", () => {
+    expect(OAUTH_SCOPES).toEqual(["ads_read", "pages_show_list", "pages_read_engagement"]);
+  });
+  it("needsPostMedia: มีโพสต์ id และมีแค่ภาพย่อระดับ creative (รูปโปรไฟล์เพจ) · โฆษณาที่มีภาพของตัวเองไม่ต้อง", () => {
+    expect(needsPostMedia(creativeRowFromAd(statusAd("1", "111_222"), "conn"))).toBe(true);
+    expect(needsPostMedia(creativeRowFromAd(graphAd("2"), "conn"))).toBe(false);          // มี image_url ของตัวเอง
+    expect(needsPostMedia(creativeRowFromAd(statusAd("3", null), "conn"))).toBe(false);    // ไม่มีโพสต์
+    expect(needsPostMedia({ effective_story_id: "111_222", media_assets: [] })).toBe(true);
+    expect(needsPostMedia({ effective_story_id: "111_222/../x", media_assets: [] })).toBe(false);
+  });
+  it("URL: /me/accounts ขอแค่ id + token เพจ · /{story} ขอภาพ/ไฟล์แนบ/ลิงก์ · id ผิดรูป throw", () => {
+    const pages = new URL(buildPageTokensUrl({ version: "v26.0" }));
+    expect(pages.pathname).toBe("/v26.0/me/accounts");
+    expect(pages.searchParams.get("fields")).toBe("id,access_token");
+    const post = new URL(buildPostMediaUrl({ version: "v26.0", storyId: "111_222" }));
+    expect(post.pathname).toBe("/v26.0/111_222");
+    expect(post.searchParams.get("fields")).toContain("full_picture");
+    expect(post.searchParams.get("fields")).toContain("attachments");
+    expect(() => buildPostMediaUrl({ version: "v26.0", storyId: "me" })).toThrow("STORY_ID_INVALID");
+  });
+  it("postMediaFrom: วิดีโอ/อัลบั้ม/ภาพเดี่ยว → media ของโพสต์ · ลิงก์ที่ไม่ใช่ http(s) ถูกทิ้ง", () => {
+    const video = postMediaFrom({ full_picture: "https://scontent.xx.fbcdn.net/cover.jpg", permalink_url: "https://www.facebook.com/111/posts/222", attachments: { data: [{ media_type: "video", media: { image: { src: "https://scontent.xx.fbcdn.net/cover-big.jpg" } } }] } });
+    expect(video).toEqual({ format: "video", permalink: "https://www.facebook.com/111/posts/222", media: [{ id: "post-0", type: "video", imageUrl: "https://scontent.xx.fbcdn.net/cover-big.jpg", thumbnailUrl: "https://scontent.xx.fbcdn.net/cover-big.jpg", videoId: null, videoUrl: null, source: "post" }] });
+    const album = postMediaFrom({ attachments: { data: [{ media_type: "album", subattachments: { data: [{ media: { image: { src: "https://s/a.jpg" } } }, { media: { image: { src: "javascript:x" } } }, { media: { image: { src: "https://s/b.jpg" } } }] } }] } });
+    expect(album.format).toBe("carousel");
+    expect(album.media.map((m) => m.imageUrl)).toEqual(["https://s/a.jpg", "https://s/b.jpg"]);
+    expect(postMediaFrom({ full_picture: "https://s/p.jpg" }).media[0]).toMatchObject({ type: "image", imageUrl: "https://s/p.jpg" });
+    expect(postMediaFrom({}).media).toEqual([]);
+  });
+  it("enrichRowsWithPosts: ใช้ token ของเพจนั้นเรียกโพสต์ · ใส่ภาพจริงแทนโลโก้ · token เพจไม่ออกมานอกฟังก์ชัน", async () => {
+    const rows = [creativeRowFromAd(statusAd("1", "111_222"), "conn"), creativeRowFromAd(statusAd("2", "111_222"), "conn"), creativeRowFromAd(statusAd("3", "999_333"), "conn"), creativeRowFromAd(graphAd("4"), "conn")];
+    const fetch = vi.fn(async (url, init) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith("/me/accounts")) return res({ data: [{ id: "111", access_token: "PAGE_TOKEN_111" }] });
+      if (u.pathname.endsWith("/111_222")) {
+        expect(init.headers.Authorization).toBe("Bearer PAGE_TOKEN_111");
+        return res({ full_picture: "https://scontent.xx.fbcdn.net/real.jpg", permalink_url: "https://www.facebook.com/111/posts/222" });
+      }
+      throw new Error("unexpected " + url);
+    });
+    const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {} });
+    expect(fetch).toHaveBeenCalledTimes(2);                                   // เพจ 1 ครั้ง + โพสต์ซ้ำกันเรียกครั้งเดียว
+    expect(out.enriched).toBe(2);
+    expect(out.missingPages).toEqual(["999"]);
+    expect(out.rows[0].media_assets[0]).toMatchObject({ imageUrl: "https://scontent.xx.fbcdn.net/real.jpg", source: "post" });
+    expect(out.rows[0].source_spec.post_permalink).toBe("https://www.facebook.com/111/posts/222");
+    expect(out.rows[2].media_assets[0].thumbnailUrl).toBe(LOGO);             // เพจที่ไม่มีสิทธิ์ คงของเดิม
+    expect(out.rows[3]).toBe(rows[3]);                                        // โฆษณาที่มีภาพแล้วไม่แตะ
+    expect(JSON.stringify(out)).not.toContain("PAGE_TOKEN");
+  });
+  it("ไม่มีสิทธิ์อ่านเพจ / rate limit = ไม่ทำให้การดึง creative ล้ม · คืนเหตุผลให้แจ้งผู้ใช้", async () => {
+    const rows = [creativeRowFromAd(statusAd("1", "111_222"), "conn")];
+    const denied = vi.fn(async () => res({ error: { code: 200, message: "Requires pages_show_list" } }, 403));
+    const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch: denied, token: "USER", sleep: async () => {} });
+    expect(out).toMatchObject({ enriched: 0, reason: "META_PERMISSION" });
+    expect(out.rows).toEqual(rows);
+    const limited = vi.fn(async (url) => new URL(url).pathname.endsWith("/me/accounts") ? res({ data: [{ id: "111", access_token: "T" }] }) : res({ error: { code: 4 } }, 400));
+    const out2 = await enrichRowsWithPosts(rows, { version: "v26.0", fetch: limited, token: "USER", sleep: async () => {} });
+    expect(out2).toMatchObject({ enriched: 0, reason: "META_RATE_LIMIT" });
+  });
+  it("เกินงบเวลา = หยุดเติมภาพ คืนแถวที่ได้แล้ว", async () => {
+    let t = 0;
+    const rows = ["1", "2", "3"].map((id) => creativeRowFromAd(statusAd(id, `111_${id}00`), "conn"));
+    const fetch = vi.fn(async (url) => { t += 30_000; return new URL(url).pathname.endsWith("/me/accounts") ? res({ data: [{ id: "111", access_token: "T" }] }) : res({ full_picture: "https://s/x.jpg" }); });
+    const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {}, deadline: 50_000, now: () => t, concurrency: 1 });
+    expect(out.enriched).toBe(1);
+    expect(out.reason).toBe("DEADLINE");
+  });
+});

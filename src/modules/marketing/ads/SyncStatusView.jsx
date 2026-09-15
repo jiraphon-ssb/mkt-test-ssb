@@ -97,18 +97,20 @@ export function SyncStatusView() {
       const jobs = planSyncJobs({ connections: targets, runs: coverage, todayOf: (tz) => todayInTimeZone(new Date(), tz) });
       const result = await runSyncJobs(jobs, (id, mode, range) => apiClient.ads.sync(id, mode, range), (done, total) => setSyncing({ phase: "facts", done, total }));
       const okAccounts = Object.entries(result.byConnection).filter(([, s]) => s.ok > 0).map(([id]) => id);
-      let creatives = 0, creativeError = null;
+      let creatives = 0, creativeError = null, postEnriched = 0, needsReconnect = false;
       for (const [index, id] of okAccounts.entries()) {
         setSyncing({ phase: "creatives", done: index, total: okAccounts.length });
         const out = await syncCreativesFor(id, (connectionId, cursor) => apiClient.ads.syncCreatives(connectionId, cursor));
         creatives += out.saved;
+        postEnriched += out.postEnriched;
+        needsReconnect ||= out.needsReconnect;
         creativeError ??= out.error;
       }
       const rows = Object.values(result.byConnection).reduce((n, s) => n + s.rowsWritten, 0);
       const firstError = Object.values(result.byConnection).find((s) => s.firstError)?.firstError;
       toast?.(result.failed
         ? `ดึงสำเร็จ ${result.total - result.failed}/${result.total} ช่วง · ${adsErrorText(firstError, "บางช่วงดึงไม่สำเร็จ")} · กดดึงอีกครั้งจะเติมเฉพาะช่วงที่ขาด`
-        : `ดึงข้อมูลแล้ว ${result.total} ช่วง · ${rows.toLocaleString("th-TH")} แถว · Creative ${creatives.toLocaleString("th-TH")} ชิ้น${creativeError ? ` (${adsErrorText(creativeError, "ดึง Creative ไม่ครบ")})` : ""}`,
+        : `ดึงข้อมูลแล้ว ${result.total} ช่วง · ${rows.toLocaleString("th-TH")} แถว · Creative ${creatives.toLocaleString("th-TH")} ชิ้น (ภาพจากโพสต์ ${postEnriched.toLocaleString("th-TH")})${creativeError ? ` · ${adsErrorText(creativeError, "ดึง Creative ไม่ครบ")}` : ""}${needsReconnect ? " · เชื่อม Meta ใหม่ในหน้าตั้งค่าเพื่อให้โฆษณาแบบบูสต์โพสต์แสดงภาพจริง" : ""}`,
       result.failed ? "bad" : "ok");
     } catch (error) {
       toast?.(adsErrorText(error, "ดึงข้อมูลไม่สำเร็จ"), "bad");

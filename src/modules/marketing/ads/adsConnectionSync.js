@@ -114,19 +114,27 @@ export function applyCoverage(config = {}, missingByConnection = new Map()) {
   return { ...config, mappings: { ...(config.mappings ?? {}), meta } };
 }
 
-/** ดึง creative ของบัญชีหนึ่งจนครบ (Edge Function คืน nextCursor) · ไม่ throw — คืนผลที่ได้ + รหัส error */
+/** ดึง creative ของบัญชีหนึ่งจนครบ (Edge Function คืน nextCursor) · ไม่ throw — คืนผลที่ได้ + รหัส error
+    postEnriched = ภาพจากโพสต์จริง · needsReconnect = สิทธิ์อ่านเพจยังไม่มี (ต้องเชื่อม Meta ใหม่) */
 export async function syncCreativesFor(connectionId, call, maxRounds = 10) {
-  let cursor = null, saved = 0, rounds = 0;
+  let cursor = null, saved = 0, rounds = 0, postEnriched = 0, needsReconnect = false;
   while (rounds < maxRounds) {
     rounds += 1;
     try {
       const data = await call(connectionId, cursor);
       saved += Number(data?.saved) || 0;
+      postEnriched += Number(data?.postMedia?.enriched) || 0;
+      needsReconnect ||= data?.postMedia?.reason === "NEEDS_RECONNECT";
       if (data?.nextCursor == null) break;
       cursor = data.nextCursor;
     } catch (error) {
-      return { saved, rounds, error: error?.code ?? error?.message ?? "CREATIVE_SYNC_FAILED" };
+      return { saved, rounds, postEnriched, needsReconnect, error: error?.code ?? error?.message ?? "CREATIVE_SYNC_FAILED" };
     }
   }
-  return { saved, rounds, error: null };
+  return { saved, rounds, postEnriched, needsReconnect, error: null };
+}
+
+/** มีการเชื่อม Meta ที่ยังไม่มีสิทธิ์อ่านเพจ → ภาพโฆษณาแบบบูสต์โพสต์ยังเป็นรูปโปรไฟล์เพจ ต้องเชื่อมใหม่ */
+export function needsPostScopeReconnect(authorizations = []) {
+  return authorizations.some((item) => item?.status === "connected" && !(item.scopes ?? []).includes("pages_read_engagement"));
 }

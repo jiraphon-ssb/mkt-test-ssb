@@ -5,7 +5,7 @@
 import { activeMemberUserIds, corsHeaders, decryptToken, graphVersion, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { syncError, todayInTimeZone } from "../_shared/metaInsights.js";
-import { creativeRowFromAd, fetchAccountCreatives, rankAdIdsBySpend } from "../_shared/metaCreative.js";
+import { creativeRowFromAd, enrichRowsWithPosts, fetchAccountCreatives, rankAdIdsBySpend } from "../_shared/metaCreative.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ADS = 400;
@@ -30,7 +30,7 @@ Deno.serve(async (request) => {
     if (connection.provider !== "meta") throw syncError("PROVIDER_NOT_SUPPORTED");
     if (connection.status === "disabled" || !connection.authorization_id) throw syncError("CONNECTION_NOT_READY");
     const { data: authorization } = await db.from("ad_provider_authorizations")
-      .select("id,user_id,token_ciphertext,token_iv,status,expires_at").eq("id", connection.authorization_id).maybeSingle();
+      .select("id,user_id,token_ciphertext,token_iv,status,expires_at,scopes").eq("id", connection.authorization_id).maybeSingle();
     if (!authorization || authorization.status !== "connected" || !(await activeMemberUserIds(db)).has(authorization.user_id)) throw syncError("AUTHORIZATION_NOT_READY");
     if (authorization.expires_at && new Date(authorization.expires_at).getTime() <= Date.now()) throw syncError("META_TOKEN_INVALID");
 
@@ -55,12 +55,23 @@ Deno.serve(async (request) => {
     // ข้อความ error ของ Meta (ไม่มี token) ไว้วินิจฉัยใน log ฝั่ง server เท่านั้น
     if (lastError) console.error("[ads-creatives] meta", connection.id, String(lastError).slice(0, 300));
     const now = new Date().toISOString();
-    const rows = ads.map((ad) => creativeRowFromAd(ad, connection.id, now)).filter(Boolean);
+    let rows = ads.map((ad) => creativeRowFromAd(ad, connection.id, now)).filter(Boolean);
+    // โฆษณาแบบบูสต์โพสต์เพจ: Meta ให้แค่รูปโปรไฟล์เพจ → ดึงภาพจากโพสต์จริงด้วย Page token (ในหน่วยความจำเท่านั้น)
+    const scopes: string[] = authorization.scopes ?? [];
+    let postMedia: { enriched: number; missingPages: number; reason: string | null } = { enriched: 0, missingPages: 0, reason: null };
+    if (scopes.includes("pages_read_engagement") && scopes.includes("pages_show_list")) {
+      const enriched = await enrichRowsWithPosts(rows, { version: graphVersion(), fetch, token, sleep, deadline: startedAt + TIME_BUDGET_MS + 20_000 });
+      rows = enriched.rows;
+      postMedia = { enriched: enriched.enriched, missingPages: enriched.missingPages.length, reason: enriched.reason };
+      if (enriched.reason || enriched.missingPages.length) console.error("[ads-creatives] post media", connection.id, enriched.reason ?? "", `missingPages=${enriched.missingPages.join(",")}`);
+    } else if (rows.some((row) => row.source_spec?.object_type === "STATUS")) {
+      postMedia = { enriched: 0, missingPages: 0, reason: "NEEDS_RECONNECT" };
+    }
     for (let i = 0; i < rows.length; i += 200) {
       const { error } = await db.from("ad_creatives").upsert(rows.slice(i, i + 200), { onConflict: "connection_id,external_creative_id,external_ad_id" });
       if (error) { console.error("[ads-creatives] write", error.message); throw syncError("SYNC_WRITE_FAILED"); }
     }
-    return json(request, { total: wanted.size, saved: rows.length, pages, nextCursor });
+    return json(request, { total: wanted.size, saved: rows.length, pages, nextCursor, postMedia });
   } catch (error) {
     const code = publicSyncCode(error, "CREATIVE_SYNC_FAILED");
     console.error("[ads-creatives]", code, error instanceof Error ? error.message : error, (error as { detail?: string })?.detail ?? "");

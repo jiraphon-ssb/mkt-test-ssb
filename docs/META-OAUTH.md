@@ -75,6 +75,17 @@ https://lzvftqhffqefqupwulus.supabase.co/functions/v1/ads-oauth-callback
 
 โหมดทดลองต้องเพิ่มผู้ทดสอบเป็น App Role และผู้กดเชื่อมต้องมีสิทธิ์ใน Ad Account ที่ต้องการอ่าน เมื่อเปิดให้คนนอกทีมใช้จึงทำ App Review/Advanced Access ตามข้อกำหนดของ Meta
 
+### สิทธิ์อ่านเพจ (ภาพของโฆษณาแบบบูสต์โพสต์ · ตั้งแต่ v0.8.0)
+
+โฆษณาส่วนใหญ่เป็นการบูสต์โพสต์เพจเดิม Meta ให้แค่รูปโปรไฟล์เพจผ่าน `ads_read` จึงขอสิทธิ์อ่านเพจเพิ่ม (อ่านอย่างเดียว)
+
+1. Meta App → Use cases → Customize ของ use case ที่มี `pages_read_engagement` → ตรวจว่า `pages_show_list` และ `pages_read_engagement` เป็น Ready for testing (ถ้ามีปุ่ม Add ให้กด)
+2. บัญชี Facebook ที่เชื่อมต้องมีบทบาทในเพจของทุกแบรนด์ (เช่น Admin/Editor/Moderator)
+3. ในแอป: หน้าตั้งค่า → บัญชี → กด "เชื่อมใหม่" → ในหน้า Facebook เลือกเพจทุกเพจที่ยิงแอด
+4. สถานะ Sync → ดึงข้อมูลตอนนี้ → การ์ด Creative ได้ภาพจากโพสต์จริง
+
+Page access token ใช้เฉพาะในคำขอดึง Creative ไม่ถูกเก็บลงฐานหรือ log · ไม่ให้สิทธิ์เพจ = ระบบยังทำงานปกติ แค่การ์ดของโฆษณาแบบบูสต์โพสต์เป็นรูปโปรไฟล์เพจ
+
 ## 3. ตั้ง Server secrets
 
 สร้างกุญแจเข้ารหัสหนึ่งครั้ง:
