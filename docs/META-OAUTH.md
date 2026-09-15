@@ -165,4 +165,5 @@ supabase functions deploy ads-sync
 ## ขอบเขตของขั้นนี้
 
 OAuth · account discovery · สร้าง `ad_connections` · ดึง Insights รายวัน · สลับหน้า ads เป็นยอดจริง (Pilot) พร้อมแล้ว
-ขั้นถัดไป: เทียบยอด 7 และ 30 วันกับ Ads Manager และสุขภาพข้อมูลจากฐานจริง · Creative worker → `ad_creatives` · cron · เปิดให้ทุกคนเห็นยอดจริงหลังตรวจยอดผ่าน
+ตรวจยอด (ข้อ 4): ปุ่ม "ตรวจยอด" ในหน้าสถานะ Sync หรือแท็บ 4 ของหน้าตั้งค่า — เทียบค่าแอด 7/30 วัน (ไม่รวมวันนี้) กับ Meta ระดับบัญชี ผ่านทุกบัญชีแล้วป้ายจะเป็น "ข้อมูลปกติ" · Edge Function `ads-reconcile`
+ขั้นถัดไป: Creative worker → `ad_creatives` · cron · แบ่ง backfill บัญชีใหญ่เป็นหลายรอบ · เปิดให้ทุกคนเห็นยอดจริงหลังตรวจยอดผ่าน

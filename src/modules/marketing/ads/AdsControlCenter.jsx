@@ -8,7 +8,7 @@ import { Dropdown } from "../ui/Dropdown.jsx";
 import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, validateAdsConnection } from "./adsConnectorContract.js";
 import { adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
 import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
-import { applyConnectionResult, enabledMetaMappings } from "./adsConnectionSync.js";
+import { applyConnectionResult, applyReconciliation, enabledMetaMappings, latestReconcileByConnection } from "./adsConnectionSync.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 
 const SOURCE_DETAILS = {
@@ -202,9 +202,38 @@ function CheckCell({ check }) {
   return <div className={`acc-check ${check.status}`}><strong>{check.status === "passed" ? "ตรงกัน" : "ยอดไม่ตรง"}</strong><small>{money(check.local)} / {money(check.remote)} · ต่าง {check.diffPct.toFixed(2)}%</small></div>;
 }
 
-function Reconciliation({ config, brands }) {
-  const rows = reconciliationRows(config, brands);
-  return <div className="acc-reconcile-stack"><HealthSummary config={config} /><section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">BEFORE GO-LIVE</span><h2>ตรวจยอดกับต้นทาง</h2><p>ค่าแอดในระบบต้องตรงกับแพลตฟอร์มทั้งช่วง 7 และ 30 วัน</p></div><span className="acc-tolerance">ยอมรับผลต่าง ≤ {config.rules?.reconciliationTolerance ?? 1}%</span></header>
+function Reconciliation({ config, brands, toast, isLead }) {
+  /* ผลจริงจากฐาน (run โหมด reconcile + สถานะ connection) ทับ config ใน state — โหมดเดโมใช้ config เดิม */
+  const { demo } = useAuth();
+  const [live, setLive] = useState({ connections: null, runs: [] });
+  const [checking, setChecking] = useState(false);
+  const loadLive = async () => {
+    try {
+      const [connections, runs] = await Promise.all([apiClient.ads.connections(), apiClient.ads.reconciliations()]);
+      setLive({ connections: connections.filter((c) => c.provider === "meta"), runs: runs ?? [] });
+    } catch { /* เดโม/ยังไม่ deploy — ใช้ค่าใน settings ตามเดิม */ }
+  };
+  useEffect(() => { if (!demo) loadLive(); }, [demo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const merged = useMemo(() => applyReconciliation(
+    live.connections ? applyConnectionResult(config, { connections: live.connections }) : config,
+    latestReconcileByConnection(live.runs),
+  ), [config, live]);
+  const checkNow = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const { results } = await apiClient.ads.reconcile();
+      const passed = results.filter((item) => item.ok && item.summary?.passed).length;
+      toast?.(passed === results.length ? `ตรวจยอดผ่านทั้ง ${passed} บัญชี` : `ตรวจยอดแล้ว · ผ่าน ${passed}/${results.length} บัญชี`, passed === results.length ? "ok" : "bad");
+      await loadLive();
+    } catch (error) {
+      toast?.(adsErrorText(error, "ตรวจยอดไม่สำเร็จ"), "bad");
+    } finally {
+      setChecking(false);
+    }
+  };
+  const rows = reconciliationRows(merged, brands);
+  return <div className="acc-reconcile-stack"><HealthSummary config={merged} /><section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">BEFORE GO-LIVE</span><h2>ตรวจยอดกับต้นทาง</h2><p>ค่าแอดในระบบต้องตรงกับแพลตฟอร์มทั้งช่วง 7 และ 30 วัน (ไม่รวมวันนี้)</p></div><div className="acc-reconcile-actions"><span className="acc-tolerance">ยอมรับผลต่าง ≤ {config.rules?.reconciliationTolerance ?? 1}%</span>{isLead && !demo && <button type="button" className="acc-reconcile-run" onClick={checkNow} disabled={checking} aria-busy={checking}>{checking ? <LoaderCircle size={14} className="spin" /> : <Scale size={14} />} {checking ? "กำลังตรวจ…" : "ตรวจยอดตอนนี้"}</button>}</div></header>
     {rows.length ? <div className="acc-reconcile"><div className="acc-reconcile-row head"><span>บัญชี</span><span>7 วัน</span><span>30 วัน</span><span>ผล</span></div>{rows.map((row) => <div className="acc-reconcile-row" key={row.key}><div><strong>{row.brand}</strong><small>{row.provider} · {row.accountId}</small></div><CheckCell check={row.checks[0]} /><CheckCell check={row.checks[1]} /><span className={`acc-ready-state ${row.ready ? "passed" : "pending"}`}>{row.ready ? "เปิดใช้ได้" : !row.mappingValid ? "Mapping ไม่ครบ" : row.connected ? "รอตรวจยอด" : "รอเชื่อม OAuth"}</span></div>)}</div> : <div className="acc-empty-check"><Scale size={24} /><strong>ยังไม่มีบัญชีสำหรับตรวจยอด</strong><span>กลับไปเปิด “เตรียมดึง” และกรอก Account ID ก่อน</span></div>}
   </section></div>;
 }
@@ -260,6 +289,6 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
     {tab === "sources" && <Connections brands={brands} config={config} setConfig={setConfig} toast={toast} isLead={isLead} />}
     {tab === "targets" && <Targets brands={brands} targets={targets} setTargets={setTargets} />}
     {tab === "rules" && <Rules rules={rules} setRules={setRules} />}
-    {tab === "reconcile" && <Reconciliation config={currentConfig} brands={brands} />}
+    {tab === "reconcile" && <Reconciliation config={currentConfig} brands={brands} toast={toast} isLead={isLead} />}
   </main>;
 }

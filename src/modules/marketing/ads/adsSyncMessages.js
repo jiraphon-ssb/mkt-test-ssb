@@ -20,6 +20,7 @@ const TEXT = {
   META_TOO_MANY_PAGES: "ข้อมูลช่วงนี้ใหญ่เกิน ลดจำนวนวันย้อนหลังแล้วลองใหม่",
   INSIGHT_ROW_INVALID: "ข้อมูลจาก Meta ผิดรูป ยังไม่ได้บันทึกยอด",
   SYNC_WRITE_FAILED: "บันทึกยอดลงฐานไม่สำเร็จ ยอดเดิมยังอยู่ครบ",
+  RECONCILE_FAILED: "ตรวจยอดไม่สำเร็จ ลองใหม่อีกครั้ง",
   ACCOUNT_NOT_AUTHORIZED: "บัญชีนี้ไม่อยู่ในบัญชีที่คุณเชื่อม OAuth",
   ACCOUNT_MAPPED_TWICE: "บัญชีเดียวกันผูกหลายแบรนด์ ยอดจะนับซ้ำ",
   ACCOUNT_NOT_ACTIVE: "บัญชีโฆษณานี้ถูกปิดใช้งานใน Meta",

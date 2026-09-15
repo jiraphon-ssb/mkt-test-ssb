@@ -150,3 +150,43 @@ describe("liveTeamAccounts — สมาชิกที่ถูกปิดโ�
     expect(out.map((a) => [a.external_account_id, a.authorization_id])).toEqual([["act_1", "a1"]]);
   });
 });
+
+import { latestReconcileByConnection, applyReconciliation } from "../src/modules/marketing/ads/adsConnectionSync.js";
+describe("ผลตรวจยอดจาก run โหมด reconcile → mapping (ให้ adsDataHealth/reconciliationRows ใช้)", () => {
+  const run = (connectionId, startedAt, passed, patch = {}) => ({
+    connection_id: connectionId, mode: "reconcile", status: passed ? "success" : "partial", started_at: startedAt,
+    summary: { kind: "reconcile", tolerance: 1, checkedAt: startedAt, passed,
+      windows: { "7d": { from: "2026-09-08", to: "2026-09-14", localSpend: 100, remoteSpend: 100, diffPct: 0, status: "passed" },
+        "30d": { from: "2026-08-16", to: "2026-09-14", localSpend: 500, remoteSpend: passed ? 500 : 700, diffPct: passed ? 0 : 40, status: passed ? "passed" : "failed" } } },
+    ...patch,
+  });
+  it("เอาเฉพาะ run ล่าสุดต่อ connection · ข้ามโหมดอื่นและ run ที่ไม่มี summary", () => {
+    const latest = latestReconcileByConnection([
+      run("c1", "2026-09-15T09:00:00Z", false), run("c1", "2026-09-15T10:00:00Z", true),
+      run("c2", "2026-09-15T08:00:00Z", true, { summary: null }), { connection_id: "c1", mode: "incremental", started_at: "2026-09-15T11:00:00Z" },
+    ]);
+    expect([...latest.keys()]).toEqual(["c1"]);
+    expect(latest.get("c1").passed).toBe(true);
+  });
+  it("ใส่ผลเข้า mapping ตาม connectionId · แถวที่ไม่มี run ไม่แตะ · โครงตรงกับที่ reconciliationRows อ่าน", () => {
+    const config = { mappings: { meta: { td: { accountId: "act_1", enabled: true, connectionId: "c1" }, jk: { accountId: "act_2", enabled: true, connectionId: "c2" } } } };
+    const out = applyReconciliation(config, latestReconcileByConnection([run("c1", "2026-09-15T10:00:00Z", true)]));
+    expect(out.mappings.meta.td.reconciliation).toMatchObject({ status: "passed", checkedAt: "2026-09-15T10:00:00Z" });
+    expect(out.mappings.meta.td.reconciliation.windows["7d"]).toMatchObject({ localSpend: 100, remoteSpend: 100 });
+    expect(out.mappings.meta.jk.reconciliation).toBeUndefined();
+    expect(config.mappings.meta.td.reconciliation).toBeUndefined();
+  });
+  it("ต่อเข้า reconciliationRows/adsDataHealth แล้วปลดป้ายรอตรวจยอดจริง", async () => {
+    const { reconciliationRows, adsDataHealth } = await import("../src/modules/marketing/ads/adsDataHealth.js");
+    const base = { mappings: { meta: { td: { accountId: "act_1", enabled: true, connectionId: "c1", oauthStatus: "connected", timezone: "Asia/Bangkok", currency: "THB", lastSuccessAt: new Date().toISOString() } } }, rules: { reconciliationTolerance: 1 } };
+    const before = adsDataHealth(base);
+    expect(before.state).toBe("unverified");
+    const merged = applyReconciliation(base, latestReconcileByConnection([run("c1", "2026-09-15T10:00:00Z", true)]));
+    const row = reconciliationRows(merged, [{ id: "td", name: "TEAMDEE" }])[0];
+    expect(row.ready).toBe(true);
+    expect(row.checks.map((c) => c.status)).toEqual(["passed", "passed"]);
+    const after = adsDataHealth(merged);
+    expect(after.state).toBe("healthy");
+    expect(after.goLive).toBe(true);
+  });
+});

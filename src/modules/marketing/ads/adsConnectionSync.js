@@ -42,3 +42,34 @@ export async function runSyncQueue(connectionIds, sync, onProgress = () => {}) {
   }
   return results;
 }
+
+/** run โหมด reconcile ล่าสุดของแต่ละ connection → Map(connectionId → summary) */
+export function latestReconcileByConnection(runs = []) {
+  const latest = new Map();
+  for (const run of runs) {
+    if (run?.mode !== "reconcile" || run.summary?.kind !== "reconcile") continue;
+    const id = run.connection_id ?? run.connectionId;
+    const current = latest.get(id);
+    if (!current || String(run.started_at ?? "") > String(current._startedAt ?? "")) {
+      latest.set(id, { ...run.summary, _startedAt: run.started_at ?? null });
+    }
+  }
+  return latest;
+}
+
+/** ใส่ผลตรวจยอดเข้า mapping (โครงเดียวกับที่ reconciliationRows/adsDataHealth อ่าน: reconciliation.windows[w].localSpend/remoteSpend) */
+export function applyReconciliation(config = {}, latest = new Map()) {
+  if (!latest.size) return config;
+  const meta = { ...(config.mappings?.meta ?? {}) };
+  for (const [brandId, row] of Object.entries(meta)) {
+    const summary = row?.connectionId ? latest.get(row.connectionId) : null;
+    if (!summary) continue;
+    meta[brandId] = { ...row, reconciliation: {
+      status: summary.passed ? "passed" : "failed",
+      checkedAt: summary.checkedAt ?? summary._startedAt ?? null,
+      tolerance: summary.tolerance ?? null,
+      windows: summary.windows ?? {},
+    } };
+  }
+  return { ...config, mappings: { ...(config.mappings ?? {}), meta } };
+}

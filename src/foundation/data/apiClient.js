@@ -2464,6 +2464,21 @@ const adsData = {
     }
     return rows;
   },
+  /** สั่งตรวจยอด 7/30 วันกับ Meta (team_lead) — ไม่ส่ง connectionId = ทุกบัญชี */
+  async reconcile(connectionId = null) {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-reconcile", { body: connectionId ? { connectionId } : {} });
+    if (error) throw await adsFunctionError(error, "RECONCILE_FAILED");
+    return { tolerance: data?.tolerance ?? null, results: data?.results ?? [] };
+  },
+  /** run โหมด reconcile ล่าสุด (เอาไปหา summary ต่อ connection ฝั่ง client) */
+  async reconciliations(limit = 40) {
+    const db = requireSupabase();
+    const { data, error } = await db.from("ad_sync_runs").select("connection_id,mode,status,started_at,summary")
+      .eq("mode", "reconcile").order("started_at", { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data;
+  },
   async recentSyncs(limit = 20) {
     const db = requireSupabase();
     const { data, error } = await db.from("ad_sync_runs").select("*").order("started_at", { ascending: false }).limit(limit);
