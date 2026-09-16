@@ -13,6 +13,9 @@ import { isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope
 import { useAdsData } from "./useAdsData.js";
 import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues, plansFromTargets } from "../adsTargets.js";
 import { GoalLine } from "../ui/GoalLine.jsx";
+import { applySalesToBrands, applySalesToSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals, salesFactsByBrand, salesPipeline } from "./salesOverview.js";
+import { metricCoverage } from "./salesFacts.js";
+import { SALES_BRAND_IDS } from "./syncSources.js";
 
 const fmtRoas = (value) => value == null ? "—" : `${value.toFixed(1)}x`;
 const GAUGE_TONE = { emerald: "var(--ok)", amber: "var(--warn)", rose: "var(--bad)", zinc: "var(--ink-soft)" };
@@ -262,31 +265,88 @@ export function AdsView() {
     const monthView = period === "mtd";
     const sumRange = monthView ? monthRange : range;
     const prevRange = monthView ? sameDatesLastMonth(monthRange) : before;
-    /* งบ/เป้ายอดขายเดือนนี้มาจากหน้าตั้งค่า (ads_control.targets ในฐาน) — แบ่งเฉพาะแพลตฟอร์มที่มีค่าแอดจริง */
-    const plans = plansFromTargets({
-      targets: data.settings?.ads_control?.targets ?? {}, adBudgets: data.ad_budgets ?? [], salesTargets: data.sales_targets ?? [],
-      month: today.slice(0, 7), channelsByBrand: adChannelsByBrand(scopedAll, monthRange),
-    });
-    const brandTotals = adsByBrandChannel(scopedAll, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
+    const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));
+    const targetPeriod = periodForTargets({ monthView, from: shownFrom, to: shownTo, today });
+    /* ข้อมูลจริง = ยึดระบบขายของพี่ทัช: ยอดขาย · funnel · เป้า · งบ Meta มาจากระบบขายทั้งหมด (แผน 2026-09-17 ข้อ 3–4)
+       ค่าแอดยังเป็นของ Meta · ระดับแพลตฟอร์ม/แคมเปญยังเป็น Meta attribute (ยอดจริงมาถึงแค่แบรนด์×วัน)
+       ข้อมูลจำลอง (สาธิต) ใช้เป้าจากหน้าตั้งค่าเดิมต่อ ไม่ผสมกับยอดจริง */
+    const real = ads.source === "meta_pilot";
+    const goalMonth = `${(monthView ? today : shownTo).slice(0, 7)}-01`;
+    const plans = real
+      ? plansFromSalesGoals({ goals: ads.salesGoals, month: today.slice(0, 7), basis: revenueBasis })
+      : plansFromTargets({
+        targets: data.settings?.ads_control?.targets ?? {}, adBudgets: data.ad_budgets ?? [], salesTargets: data.sales_targets ?? [],
+        month: today.slice(0, 7), channelsByBrand: adChannelsByBrand(scopedAll, monthRange),
+      });
+    const metaTotals = adsByBrandChannel(scopedAll, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
+    const dayRange = (r) => ({ from: isoDay(new Date(r.start)), to: isoDay(new Date(new Date(r.end).getTime() - 1)) });
+    const sales = real ? salesFactsByBrand(ads.sales, dayRange(sumRange)) : null;
+    const prevSales = real ? salesFactsByBrand(ads.sales, dayRange(prevRange)) : null;
+    const brandTotals = real ? applySalesToBrands(metaTotals, { sales, prevSales, basis: revenueBasis, sourceBrandIds: SALES_BRAND_IDS }) : metaTotals;
     const filteredBrands = channel === "all" ? brandTotals : adsByBrandChannel(scoped, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
     const filteredById = new Map(filteredBrands.map((brand) => [brand.id, brand]));
-    const summary = adsCompanySummary(brandTotals, today);
-    const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));
-    const pipelines = Object.fromEntries(brands.map((brand) => [brand.id, adsSalePipeline(scoped.filter((card) => card.brand_id === brand.id), range, before)]));
-    const overallPipeline = adsSalePipeline(scoped, range, before);
-    /* เป้าจากหน้าตั้งค่า → "ทำได้เท่าไรจากเป้า" ทั้งภาพรวมและรายแบรนด์ · %Ads ใช้ค่าเดียวกับที่การ์ดแสดง */
-    const savedTargets = data.settings?.ads_control?.targets ?? {};
-    const targetPeriod = periodForTargets({ monthView, from: shownFrom, to: shownTo, today });
-    const goals = {
-      overall: goalsFor({ ...pipelineValues(overallPipeline), pctAds: share(summary.spend, summary.revenue) }, combineTargets(brands.map((brand) => savedTargets[brand.id])), targetPeriod),
-      byBrand: Object.fromEntries(brandTotals.map((brand) => [brand.id, goalsFor({ ...pipelineValues(pipelines[brand.id]), pctAds: brand.pctAds }, normalizeTargets(savedTargets[brand.id]), targetPeriod)])),
-    };
+    const summary = real ? applySalesToSummary(adsCompanySummary(brandTotals, today), brandTotals, today) : adsCompanySummary(brandTotals, today);
+    const metaPipelines = Object.fromEntries(brands.map((brand) => [brand.id, adsSalePipeline(scoped.filter((card) => card.brand_id === brand.id), range, before)]));
+    const metaOverall = adsSalePipeline(scoped, range, before);
+    let pipelines = metaPipelines;
+    let overallPipeline = metaOverall;
+    let goals;
+    if (real) {
+      const coverage = metricCoverage(ads.sales);
+      const pipeSales = salesFactsByBrand(ads.sales, { from: shownFrom, to: shownTo });
+      const pipePrev = salesFactsByBrand(ads.sales, dayRange(before));
+      const metaInquiriesOf = (pipeline) => pipeline?.items?.find((item) => item.key === "inquiries")?.value ?? null;
+      const byId = new Map(brandTotals.map((brand) => [brand.id, brand]));
+      /* ค่าแอดใช้ยอดระดับแบรนด์ที่คิดไว้แล้ว (ทุกแพลตฟอร์ม) — ยอดขายจริงไม่มีมิติแพลตฟอร์มโฆษณาให้แยก */
+      pipelines = Object.fromEntries(brands.map((brand) => {
+        const row = byId.get(brand.id);
+        return [brand.id, salesPipeline({
+          sales: pipeSales.get(brand.id) ?? null, prevSales: pipePrev.get(brand.id) ?? null,
+          metaInquiries: metaInquiriesOf(metaPipelines[brand.id]),
+          spend: row?.spend ?? null, prevSpend: row?.prevSpend ?? null,
+          basis: revenueBasis, depositsSince: coverage.get(brand.id)?.deposits ?? null, from: shownFrom, to: shownTo,
+          waiting: !SALES_BRAND_IDS.includes(brand.id),
+        })];
+      }));
+      /* ภาพรวม: รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย — ค่าแอดของแบรนด์ที่รอเชื่อมไม่นับ ไม่งั้น ROAS ภาพรวมต่ำเกินจริง */
+      const merge = (map) => {
+        const rows = SALES_BRAND_IDS.map((id) => map.get(id)).filter(Boolean);
+        if (!rows.length) return null;
+        return rows.reduce((acc, row) => Object.fromEntries(Object.keys(row).map((key) => [key, (acc[key] ?? 0) + row[key]])), {});
+      };
+      const sourceCards = scoped.filter((card) => SALES_BRAND_IDS.includes(card.brand_id));
+      const starts = SALES_BRAND_IDS.map((id) => coverage.get(id)?.deposits).filter(Boolean).sort();
+      const sourceRows = SALES_BRAND_IDS.map((id) => byId.get(id)).filter(Boolean);
+      const sumOf = (pick) => sourceRows.some((row) => pick(row) != null) ? sourceRows.reduce((n, row) => n + (pick(row) ?? 0), 0) : null;
+      overallPipeline = salesPipeline({
+        sales: merge(pipeSales), prevSales: merge(pipePrev),
+        metaInquiries: metaInquiriesOf(adsSalePipeline(sourceCards, range, before)),
+        spend: sumOf((row) => row.spend), prevSpend: sumOf((row) => row.prevSpend),
+        basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: shownTo,
+      });
+      const targets = goalTargetsByBrand(ads.salesGoals, goalMonth);
+      const goalRows = new Map((ads.salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
+      goals = {
+        overall: goalsFor(pipelineValues(overallPipeline), combineGoalTargets(SALES_BRAND_IDS.filter((id) => byId.has(id)).map((id) => ({
+          targets: targets.get(id) ?? {}, weights: { budget: goalRows.get(id)?.ad_budget, revenue: goalRows.get(id)?.sales_target, inquiries: goalRows.get(id)?.inquiry_target },
+        }))), targetPeriod),
+        byBrand: Object.fromEntries(brandTotals.map((brand) => [brand.id, goalsFor(pipelineValues(pipelines[brand.id]), targets.get(brand.id) ?? {}, targetPeriod)])),
+      };
+    } else {
+      /* ข้อมูลจำลอง: เป้าจากหน้าตั้งค่าเดิม */
+      const savedTargets = data.settings?.ads_control?.targets ?? {};
+      goals = {
+        overall: goalsFor({ ...pipelineValues(overallPipeline), pctAds: share(summary.spend, summary.revenue) }, combineTargets(brands.map((brand) => savedTargets[brand.id])), targetPeriod),
+        byBrand: Object.fromEntries(brandTotals.map((brand) => [brand.id, goalsFor({ ...pipelineValues(pipelines[brand.id]), pctAds: brand.pctAds }, normalizeTargets(savedTargets[brand.id]), targetPeriod)])),
+      };
+    }
     return {
       scoped,
       range,
       before,
       monthView,
       rangeLabel: rangeLabel(shownFrom, shownTo),
+      salesRange: { from: shownFrom, to: shownTo }, // ตาราง sales ใช้วัน ISO — v.range เป็น {start,end} ส่งตรงไม่ได้ (เคยทำให้รวมทุกวันที่โหลดมา)
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
       revenueBasis,
       channelList: adsChannelList(scopedAll),
@@ -296,7 +356,7 @@ export function AdsView() {
       overallPipeline,
       goals,
     };
-  }, [data, ads.cards, ads.mockFallback, inBrandScope, period, customFrom, customTo, compare, brandFilter, channel, revenueBasis]);
+  }, [data, ads.cards, ads.mockFallback, ads.source, ads.sales, ads.salesGoals, inBrandScope, period, customFrom, customTo, compare, brandFilter, channel, revenueBasis]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));

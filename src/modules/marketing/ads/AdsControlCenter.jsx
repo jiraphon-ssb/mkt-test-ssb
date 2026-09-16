@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, LoaderCircle, LogOut, Save, Scale, ShieldAlert, Target } from "lucide-react";
+import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, LoaderCircle, LogOut, Save, Scale, ShieldAlert } from "lucide-react";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { BrandMark } from "./BrandMark.jsx";
@@ -26,22 +26,7 @@ const DEFAULT_RULES = {
   missingDataHours: 12,
 };
 
-const moneyValue = (value) => Math.max(0, Number(value) || 0);
 const numberValue = (value) => Math.max(0, Number(value) || 0);
-
-function buildTargets(brands, saved) {
-  return Object.fromEntries(brands.map((brand) => [brand.id, {
-    revenue: saved?.[brand.id]?.revenue ?? brand.revTarget ?? 0,
-    budget: saved?.[brand.id]?.budget ?? brand.budget ?? 0,
-    roas: saved?.[brand.id]?.roas ?? 4,
-    pctAds: saved?.[brand.id]?.pctAds ?? 20,
-    cpl: saved?.[brand.id]?.cpl ?? 500,
-    inquiries: saved?.[brand.id]?.inquiries ?? 0,
-    qualified: saved?.[brand.id]?.qualified ?? 0,
-    deposits: saved?.[brand.id]?.deposits ?? 0,
-    closed: saved?.[brand.id]?.closed ?? 0,
-  }]));
-}
 
 function SourceCard({ source, active, onSelect }) {
   return <button type="button" className={`acc-source ${active ? "active" : ""}`} onClick={onSelect}>
@@ -138,47 +123,6 @@ function HealthSummary({ config }) {
   </section>;
 }
 
-/* ช่องเป้าแบ่ง 3 กลุ่ม — 0 = ยังไม่ตั้ง (หน้า Overview/แคมเปญจะแสดง "ยังไม่ตั้งเป้า" แทนการเดา) */
-const TARGET_GROUPS = [
-  ["เงินต่อเดือน", "ใช้คำนวณจังหวะยอดขาย/งบ และถ่วงน้ำหนักเป้าภาพรวม", [
-    ["revenue", "เป้ายอดขาย", "฿", "before", 1000],
-    ["budget", "งบโฆษณา", "฿", "before", 1000],
-  ]],
-  ["ประสิทธิภาพ", "ไม่ขึ้นกับความยาวช่วงเวลาที่เลือก", [
-    ["roas", "ROAS ขั้นต่ำ", "×", "after", 0.1],
-    ["pctAds", "%Ads สูงสุด", "%", "after", 0.1],
-    ["cpl", "CPL สูงสุด", "฿", "before", 10],
-  ]],
-  ["กรวยยอดขายต่อเดือน", "ช่วงสั้นกว่าเดือนจะเฉลี่ยเป้าตามจำนวนวัน", [
-    ["inquiries", "คนทัก", "คน", "after", 1],
-    ["qualified", "Lead", "คน", "after", 1],
-    ["deposits", "มัดจำ", "รายการ", "after", 1],
-    ["closed", "ออเดอร์ปิดแล้ว", "ออเดอร์", "after", 1],
-  ]],
-];
-
-function Targets({ brands, targets, setTargets }) {
-  const update = (brandId, key, value) => setTargets((current) => ({ ...current, [brandId]: { ...current[brandId], [key]: value } }));
-  return <section className="acc-sheet">
-    <header className="acc-sheet-head"><div><span className="acc-kicker">MONTHLY TARGETS</span><h2>เป้าและเพดานรายแบรนด์</h2><p>ใช้บอกว่าตัวเลขบนหน้า Overview และแคมเปญ "ทำได้เท่าไรจากเป้า" · ภาพรวมทุกแบรนด์รวมจากเป้ารายแบรนด์ · ใส่ 0 = ยังไม่ตั้ง</p></div></header>
-    <div className="acc-target-grid">
-      {brands.map((brand) => <article className="acc-target-card" key={brand.id}>
-        <header><BrandMark brand={brand} size={36} /><div><h3>{brand.name}</h3><span>สกุลเงิน THB · เดือนปัจจุบัน</span></div></header>
-        {TARGET_GROUPS.map(([title, hint, fields]) => <fieldset className="acc-target-group" key={title}>
-          <legend>{title}<small>{hint}</small></legend>
-          <div className="acc-field-grid">
-            {fields.map(([key, label, unit, side, step]) => <label key={key}><span>{label}</span><div className="acc-input-unit">
-              {side === "before" && <b>{unit}</b>}
-              <input type="number" min="0" step={step} value={targets[brand.id]?.[key] ?? 0} onChange={(e) => update(brand.id, key, (step < 1 ? numberValue : moneyValue)(e.target.value))} />
-              {side === "after" && <b>{unit}</b>}
-            </div></label>)}
-          </div>
-        </fieldset>)}
-      </article>)}
-    </div>
-  </section>;
-}
-
 const RULE_FIELDS = [
   ["paceTolerance", "ช่วงยอมรับของ pace", "%", "เตือนเมื่อยอดใช้เงินจริงต่างจากจังหวะที่ควรถึงเกินค่านี้"],
   ["overspendLimit", "เพดานเกินงบ", "%", "ขึ้นสถานะวิกฤตเมื่อคาดการณ์สิ้นเดือนเกินงบมากกว่าค่านี้"],
@@ -242,7 +186,7 @@ function Reconciliation({ config, brands, toast, isLead }) {
 export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const initial = useMemo(() => saved ?? {}, [saved]);
   const requestedTab = new URLSearchParams(window.location.search).get("tab");
-  const [tab, setTab] = useState(["sources", "targets", "rules", "reconcile"].includes(requestedTab) ? requestedTab : "sources");
+  const [tab, setTab] = useState(["sources", "rules", "reconcile"].includes(requestedTab) ? requestedTab : "sources");
   /* กลับจาก Meta OAuth: callback แนบ ?oauth=success|error มา → แจ้งผลครั้งเดียวแล้วล้าง param ออกจาก URL */
   useEffect(() => {
     const result = oauthResultMessage(window.location.search);
@@ -252,7 +196,6 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
     window.history.replaceState(null, "", stripOAuthParams(window.location.href));
   }, [toast]);
   const [config, setConfig] = useState(() => ({ mappings: initial.mappings ?? {}, sources: initial.sources ?? {} }));
-  const [targets, setTargets] = useState(() => buildTargets(brands, initial.targets));
   const [rules, setRules] = useState(() => ({ ...DEFAULT_RULES, reconciliationTolerance: 1, ...(initial.rules ?? {}) }));
   const { demo, user } = useAuth();
   const isLead = user?.role === "team_lead";
@@ -260,7 +203,8 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   /* บันทึก settings ก่อนเสมอ แล้วค่อยให้ backend สร้าง ad_connections จาก mapping Meta (ตรวจบัญชีกับ OAuth ของผู้บันทึก)
      ผูกไม่สำเร็จ = ค่าที่กรอกยังอยู่ครบ แจ้งเหตุผลรายแบรนด์ในแถว mapping */
   const save = async () => {
-    const next = { mappings: config.mappings, sources: config.sources, targets, rules, updatedAt: new Date().toISOString() };
+    /* targets: แท็บเป้าถอดแล้ว (ข้อมูลจริงใช้เป้าระบบขาย) — เก็บค่าเดิมไว้ให้โหมดข้อมูลจำลองอ่านต่อ ไม่ลบทิ้ง */
+    const next = { mappings: config.mappings, sources: config.sources, targets: initial.targets ?? {}, rules, updatedAt: new Date().toISOString() };
     onSave(next);
     const meta = next.mappings?.meta ?? {};
     const touchesMeta = Object.keys(enabledMetaMappings(next)).length > 0 || Object.values(meta).some((row) => row?.connectionId);
@@ -281,14 +225,14 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   };
   const currentConfig = { ...config, rules };
   const health = adsDataHealth(currentConfig);
-  const primaryTabs = [["sources",Link2,"1 · บัญชี"],["targets",Target,"2 · เป้า"],["rules",ShieldAlert,"3 · กฎ"],["reconcile",Scale,"4 · ตรวจยอด"]];
+  const primaryTabs = [["sources",Link2,"1 · บัญชี"],["rules",ShieldAlert,"2 · กฎ"],["reconcile",Scale,"3 · ตรวจยอด"]];
   return <main className="aw acc">
     <header className="acc-header"><div><Link to="/mkt/ads"><ArrowLeft size={15} /> Overview ads</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div><button type="button" className="acc-save" onClick={save} disabled={linking || !isLead} aria-busy={linking} title={isLead ? undefined : "เฉพาะหัวหน้าทีมบันทึกการตั้งค่าได้"}>{linking ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} {linking ? "กำลังผูกบัญชี…" : "บันทึก"}</button></header>
     <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
       {primaryTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}
     </nav>
+    <p className="acc-goal-note" role="note">เป้ายอดขาย งบแอด และเพดาน CPL / ROAS / %Ads ใช้ของระบบขาย (หน้าเป้าหมาย) ทั้งหมด · ดูว่าเดือนนี้ตั้งช่องไหนแล้วที่ <Link to="/mkt/ads/sync">สถานะ Sync</Link></p>
     {tab === "sources" && <Connections brands={brands} config={config} setConfig={setConfig} toast={toast} isLead={isLead} />}
-    {tab === "targets" && <Targets brands={brands} targets={targets} setTargets={setTargets} />}
     {tab === "rules" && <Rules rules={rules} setRules={setRules} />}
     {tab === "reconcile" && <Reconciliation config={currentConfig} brands={brands} toast={toast} isLead={isLead} />}
   </main>;

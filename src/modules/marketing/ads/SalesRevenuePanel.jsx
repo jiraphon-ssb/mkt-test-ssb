@@ -24,7 +24,9 @@ export function SalesRevenuePanel({ brands = [], sales = [], salesGoals = [], ra
     revenue: row.revenue == null ? sum.revenue : (sum.revenue ?? 0) + row.revenue,
     orders: row.orders == null ? sum.orders : (sum.orders ?? 0) + row.orders,
   }), { spend: 0, revenue: null, orders: null });
-  const totalRoas = total.spend > 0 && total.revenue != null ? total.revenue / total.spend : null;
+  // ROAS รวมหารด้วยค่าแอดของแบรนด์ที่มียอดขายเท่านั้น — แบรนด์รอเชื่อมแหล่งไม่ดึง ROAS ลง (ตรงกับแผงประสิทธิภาพ)
+  const salesSpend = rows.reduce((sum, row) => sum + (row.revenue == null ? 0 : row.spend ?? 0), 0);
+  const totalRoas = salesSpend > 0 && total.revenue != null ? total.revenue / salesSpend : null;
 
   const goalLine = brands.map((brand) => ({ brand, goal: goalSource(brand.id, goals, null) })).filter((entry) => entry.goal.source === "sales");
 
@@ -52,8 +54,8 @@ export function SalesRevenuePanel({ brands = [], sales = [], salesGoals = [], ra
     </table></div>
     {goalLine.length > 0 && <dl className="aw-facts aw-sales-goals">{goalLine.map(({ brand, goal }) => <div key={brand.id}>
       <dt>เป้า {brand.name} <small>จากระบบขาย v{goal.version}</small></dt>
-      <dd>{money(goal.revenue)}<small> · งบแอด {money(goal.budget)}{goal.roas != null ? ` · ROAS ${goal.roas.toFixed(1)}×` : ""}</small></dd>
+      <dd>{goal.revenue == null ? "ยังไม่ตั้งเป้า" : money(goal.revenue)}<small> · งบแอด {goal.budget == null ? "ยังไม่ตั้งเป้า" : money(goal.budget)}{goal.roas != null ? ` · ROAS ${goal.roas.toFixed(1)}×` : ""}</small></dd>
     </div>)}</dl>}
-    <p className="aw-key">รายได้นับตามวันจ่ายงวดแรกเหมือนงบ P&amp;L (รวมการแก้ยอด/ยกเลิกย้อนหลัง) · แบรนด์ที่ยังไม่มีข้อมูลขึ้น “—” ไม่ใช่ ฿0 · ตัวเลขนี้คนละนิยามกับยอดขายที่ Meta มองเห็น</p>
+    <p className="aw-key">ยอดขาย = ยืนยันออเดอร์ ณ วันจ่ายงวดแรก นิยามเดียวกับแดชบอร์ดขาย (ยกเลิกแยกไว้ ไม่หักจากยอด) · ค่าแอดเป็นของ Meta · แบรนด์ที่ยังไม่มีข้อมูลขึ้น “—” ไม่ใช่ ฿0</p>
   </section>;
 }

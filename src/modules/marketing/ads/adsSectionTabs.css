@@ -49,12 +49,6 @@
 .mkt-root .ads-suite .aw-trend-controls .aw-tabs .dd { align-self:flex-start; margin:0; }
 .mkt-root .ads-suite .aw-trend-controls .aw-tabs .dd .dd-trigger>span { font-size:12px; margin-left:0; }
 /* หน้าตั้งค่า: กลุ่มช่องเป้าในการ์ดแบรนด์ */
-.mkt-root .acc-target-group { margin:0 0 14px; padding:0; border:0; }
-.mkt-root .acc-target-group:last-child { margin-bottom:0; }
-.mkt-root .acc-target-group legend { display:flex; align-items:baseline; gap:8px; width:100%; margin:0 0 8px; padding:10px 0 0; border-top:1px solid var(--line); color:var(--ink); font-size:11px; font-weight:700; }
-.mkt-root .acc-target-group:first-of-type legend { padding-top:0; border-top:0; }
-.mkt-root .acc-target-group legend small { color:var(--ink-soft); font-size:10px; font-weight:400; }
-.mkt-root .acc-target-group .acc-input-unit b { white-space:nowrap; }
 
 /* เป้าบนหน้า Overview/แคมเปญ: "เป้า X · ทำได้ Y% · สถานะ" + แถบความคืบหน้า */
 .mkt-root .ads-goal { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-top:6px; font-size:11px; line-height:1.45; color:var(--ink-soft); }

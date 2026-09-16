@@ -78,6 +78,8 @@
 .mkt-root .acc-save { display:inline-flex; align-items:center; gap:8px; padding:10px 15px; border-radius:8px; background:var(--accent-solid,var(--accent)); color:var(--on-accent); font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
 .acc-tabs { position:relative; display:flex; gap:6px; margin:14px 0 18px; padding:5px; width:max-content; max-width:100%; background:var(--surface-2); border-radius:9px; }
 .mkt-root .acc-tabs button { display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:6px; color:var(--ink-soft); font:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
+.acc-goal-note { margin:-8px 0 16px; color:var(--ink-soft); font-size:12px; line-height:1.6; }
+.acc-goal-note a { color:var(--ink); text-decoration:underline; text-underline-offset:2px; }
 .mkt-root .acc-tabs button[aria-current="page"] { color:var(--ink); background:var(--surface); box-shadow:0 1px 3px #00000012; font-weight:700; }
 .acc-more { position:relative; }
 .acc-more summary { display:flex; align-items:center; height:100%; padding:0 12px; border-radius:6px; color:var(--ink-soft); font-size:12px; cursor:pointer; list-style:none; }
@@ -120,8 +122,6 @@
 .acc-enable { display:flex; align-items:center; gap:8px; min-height:24px; color:var(--ink-soft); font-size:12px; cursor:pointer; }
 .acc-enable input { width:18px; height:18px; margin:3px; accent-color:var(--accent); cursor:pointer; }
 .acc-mapping-row .acc-enable>span { display:inline; }
-.acc-target-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:18px; }
-.acc-target-card { padding:18px; border:1px solid var(--line); border-radius:10px; }.acc-target-card header { display:flex; gap:10px; align-items:center; margin-bottom:16px; }.acc-target-card h3 { margin:0; font-size:15px; }.acc-target-card header span { color:var(--ink-soft); font-size:11px; }
 .acc-field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }.acc-field-grid label>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }
 .acc-input-unit { display:flex; align-items:center; gap:7px; padding:0 9px; border:1px solid var(--line); border-radius:7px; background:var(--surface); }.acc-input-unit input { padding-inline:0; border:0; outline:0; }.acc-input-unit b { color:var(--ink-soft); font-size:12px; white-space:nowrap; }
 .acc-rules-layout { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(280px,.7fr); gap:20px; align-items:start; }
@@ -151,10 +151,10 @@
 /* ยอดขายจริงจากระบบขาย */
 .aw-sales-head { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:12px 0; }
 .aw-sales-head>div { padding:11px 12px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
-.aw-sales-head span { display:block; color:var(--ink-soft); font-size:10px; }
+.aw-sales-head span { display:block; color:var(--ink-soft); font-size:11px; }
 .aw-sales-head b { display:block; margin-top:4px; color:var(--ink); font-size:16px; font-variant-numeric:tabular-nums; }
 .aw-sales td { font-variant-numeric:tabular-nums; }
 @media(max-width:760px){ .aw-sales-head { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .aw-sales-goals { margin-top:12px; }
-.aw-sales-goals dt small { color:var(--ink-faint); font-weight:500; }
+.aw-sales-goals dt small { color:var(--ink-soft); font-size:11px; font-weight:500; }
 .aw-sales-goals dd small { color:var(--ink-soft); font-weight:500; }

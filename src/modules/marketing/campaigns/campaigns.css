@@ -52,6 +52,7 @@
 .cp-summary article:first-child { border-left: 0; }
 .cp-summary article>span { color: var(--ink-soft); font-size: 11px; }
 .cp-summary strong { margin-top: 5px; color: var(--ink); font-size: 24px; line-height: 1.2; }
+.cp-summary strong.cp-summary-missing { color: var(--ink-soft); font-size: 15px; font-weight: 500; }
 .cp-summary small { margin-top: auto; color: var(--ink-soft); font-size: 11px; }
 .cp-summary em { position: absolute; right: 14px; top: 13px; padding: 3px 7px; border-radius: 99px; background: var(--surface-2); color: var(--ink-soft); font-size: 11px; font-style: normal; }
 .cp-summary-main { background: color-mix(in srgb,var(--aw-accent) 5%,var(--surface)); }

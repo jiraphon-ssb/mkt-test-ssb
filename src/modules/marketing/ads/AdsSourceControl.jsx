@@ -35,7 +35,7 @@ export function AdsSourceNotice({ ads }) {
     <Database size={14} />
     <span><b>Meta Pilot</b> · {summary.accounts} บัญชี · ข้อมูล {day(summary.from)}–{day(summary.to)} · อัปเดตล่าสุด {when(summary.lastSuccessAt)}</span>
     {summary.provisionalToday && <span className="ads-source-flag"><Clock3 size={13} /> วันนี้ยังไม่สิ้นสุด ยอดยังเปลี่ยนได้</span>}
-    <span className="ads-source-fine">ยอดขาย = มูลค่า purchase ที่ Meta attribute · ยอดใหม่ยังไม่มีจนกว่าจะเชื่อม CRM</span>
+    <span className="ads-source-fine">ยอดขาย · เป้า · funnel = ระบบขาย · ค่าแอด · คนทักจากแอด = Meta</span>
     <button type="button" onClick={ads.reload}><RefreshCw size={13} /> โหลดใหม่</button>
   </div>;
 }

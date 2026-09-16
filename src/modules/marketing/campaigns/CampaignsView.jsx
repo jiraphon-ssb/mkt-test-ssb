@@ -16,8 +16,20 @@ import { CampaignDetail } from "./CampaignDetail.jsx";
 import { adsDataHealth } from "../ads/adsDataHealth.js";
 import { useAdsData } from "../ads/useAdsData.js";
 import { AdsSourceControl, AdsSourceNotice } from "../ads/AdsSourceControl.jsx";
+import { campaignSalesSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals } from "../ads/salesOverview.js";
+import { SALES_BRAND_IDS } from "../ads/syncSources.js";
 import "../ads/adsWorkspace.css";
 import "./campaigns.css";
+
+/* เป้ารวมจากระบบขาย: แบรนด์ที่เลือก หรือถ่วงรวมแบรนด์ที่มีแหล่งยอดขาย (แบรนด์รอเชื่อมไม่ดึงเป้ารวมเป็น null) */
+function realGoalTargets(brands, selectedBrand, salesTargets, salesGoals, goalMonth) {
+  if (selectedBrand !== "all") return salesTargets.get(selectedBrand) ?? {};
+  const rows = new Map((salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
+  return combineGoalTargets(brands.filter((b) => SALES_BRAND_IDS.includes(b.id)).map((b) => ({
+    targets: salesTargets.get(b.id) ?? {},
+    weights: { budget: rows.get(b.id)?.ad_budget, revenue: rows.get(b.id)?.sales_target, inquiries: rows.get(b.id)?.inquiry_target },
+  })));
+}
 
 export function CampaignsView() {
   const { data, inBrandScope, brandFilter } = useApp();
@@ -42,9 +54,16 @@ export function CampaignsView() {
     const before = compare === "lastMonth" ? sameDatesLastMonth(range) : previousRange(range);
     const brands = (data.brands ?? []).filter((b) => b.active !== false && (brandFilter === "all" || b.id === brandFilter));
     const selectedBrand = brandSel === "all" || brands.some((b) => b.id === brandSel) ? brandSel : "all";
-    const targets = data.settings?.ads_control?.targets ?? {};
     const month = isoDay(new Date()).slice(0, 7);
-    const { adBudgets } = plansFromTargets({ targets, adBudgets: data.ad_budgets ?? [], month, channelsByBrand: adChannelsByBrand(scopedAll, periodRange("mtd", null, null)) });
+    const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));
+    /* ข้อมูลจริง = เป้าและงบ Meta จากระบบขายของพี่ทัช (แท็บเป้าของเราถอดแล้ว) · ข้อมูลจำลอง = ค่าที่เคยบันทึกไว้ในตั้งค่า (สาธิตอย่างเดียว) */
+    const real = ads.source === "meta_pilot";
+    const goalMonth = `${(period === "mtd" ? todayLocal : shownTo).slice(0, 7)}-01`;
+    const salesTargets = real ? goalTargetsByBrand(ads.salesGoals, goalMonth) : null;
+    const targets = real ? Object.fromEntries(salesTargets) : data.settings?.ads_control?.targets ?? {};
+    const { adBudgets } = real
+      ? plansFromSalesGoals({ goals: ads.salesGoals, month })
+      : plansFromTargets({ targets, adBudgets: data.ad_budgets ?? [], month, channelsByBrand: adChannelsByBrand(scopedAll, periodRange("mtd", null, null)) });
     const all = campaignRows(scoped, range, {
       brands, adBudgets, campaignBudgets: data.campaign_budgets ?? [],
       today: isoDay(new Date()), prevRange: before,
@@ -57,20 +76,30 @@ export function CampaignsView() {
       && (budgetState === "all" || (budgetState === "set" ? r.budget != null : r.budget == null))
       && (!q || r.name.toLowerCase().includes(q))
     );
-    const rows = withSpendShare(filtered).map((r) => ({ ...r, decision: campaignDecision(r, targets[r.brandId] ?? null) }));
+    /* ข้อมูลจริง: ตัดสินรายแคมเปญด้วยเพดาน CPL จากระบบขายเท่านั้น — ROAS เป้าเป็นยอดจริงระดับแบรนด์ ส่วน ROAS แคมเปญเป็นยอดที่ Meta เห็น
+       เทียบกันตรงๆ จะติด "ตรวจแก้" ทุกแคมเปญ · ไม่มีเพดาน = กฎกลาง */
+    const decisionTargets = (brandId) => real ? (targets[brandId]?.cpl != null ? { cpl: targets[brandId].cpl } : null) : targets[brandId] ?? null;
+    const rows = withSpendShare(filtered).map((r) => ({ ...r, decision: campaignDecision(r, decisionTargets(r.brandId)) }));
     const brandSums = campaignsByBrand(all);
     const dataHealth = adsDataHealth(data.settings?.ads_control ?? {});
     return {
       rows, brands, selectedBrand, byBrand: brandSums.byBrand,
       /* เป้า: แบรนด์ที่เลือก หรือรวมทุกแบรนด์ในขอบเขต — ตัวเลขจริงเทียบใน CampaignsTable (ตามมุมมองที่กรองอยู่) */
-      goalTargets: selectedBrand === "all" ? combineTargets(brands.map((b) => targets[b.id])) : normalizeTargets(targets[selectedBrand]),
-      targetPeriod: periodForTargets({ monthView: period === "mtd", from: isoDay(new Date(range.start)), to: isoDay(new Date(new Date(range.end).getTime() - 1)), today: todayLocal }),
+      goalTargets: real ? realGoalTargets(brands, selectedBrand, salesTargets, ads.salesGoals, goalMonth)
+        : selectedBrand === "all" ? combineTargets(brands.map((b) => targets[b.id])) : normalizeTargets(targets[selectedBrand]),
+      targetPeriod: periodForTargets({ monthView: period === "mtd", from: shownFrom, to: shownTo, today: todayLocal }),
+      salesSummary: real ? campaignSalesSummary({
+        sales: ads.sales, from: shownFrom, to: shownTo, sourceBrandIds: SALES_BRAND_IDS,
+        brandIds: (selectedBrand === "all" ? brands : brands.filter((b) => b.id === selectedBrand)).map((b) => b.id),
+        names: Object.fromEntries(brands.map((b) => [b.id, b.name])),
+        spendByBrand: Object.fromEntries(brands.map((b) => [b.id, filtered.filter((r) => r.brandId === b.id).reduce((n, r) => n + (r.spend ?? 0), 0)])),
+      }) : null,
       channelList: adsChannelList(scopedAll), scopeEmpty: all.length === 0, range,
       statuses: [...new Set(all.map((r) => r.status))], objectives: [...new Set(all.map((r) => r.objective ?? "unknown"))],
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
       dataHealth,
     };
-  }, [data, ads.cards, ads.mockFallback, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis, todayLocal]);
+  }, [data, ads.cards, ads.mockFallback, ads.source, ads.sales, ads.salesGoals, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis, todayLocal]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
@@ -104,6 +133,6 @@ export function CampaignsView() {
     {/* โหมด Meta Pilot: สถานะข้อมูลอยู่ในแถบแหล่งข้อมูลแล้ว · กล่องนี้อ่านจาก settings (ข้อมูลจำลอง) จะขัดกัน — สุขภาพจากฐานจริงทำในรอบถัดไป */}
     {ads.source === "mock" && <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><Link to="/mkt/ads/sync">ดูสถานะ Sync</Link></section>}
 
-    <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} goalTargets={v.goalTargets} targetPeriod={v.targetPeriod} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} canPreview={ads.canPreview} />} />
+    <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} goalTargets={v.goalTargets} targetPeriod={v.targetPeriod} salesSummary={v.salesSummary} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} canPreview={ads.canPreview} />} />
   </main>;
 }

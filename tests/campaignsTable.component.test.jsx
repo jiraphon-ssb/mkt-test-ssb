@@ -50,6 +50,25 @@ const show = (props = {}) => render(
   />,
 );
 
+describe("CampaignsTable — ข้อมูลจริง: การ์ดยอดขายยึดระบบขาย", () => {
+  it("ยอดขายจริง + ROAS จริง · ยอดที่ Meta เห็นเป็นบรรทัดรอง · บอกแบรนด์ที่ไม่รวม", () => {
+    const { container } = show({ salesSummary: { revenue: 80000, revenueNew: 60000, orders: 4, spend: 4000, roas: 20, pctAds: 4000 / 60000, excludedWaiting: ["JUNTAKARN"], excludedNoData: [] } });
+    const summary = container.querySelector(".cp-summary");
+    expect(within(summary).getByText("ยอดขายจริง · ระบบขาย")).toBeTruthy();
+    expect(within(summary).getByText("฿80,000")).toBeTruthy();
+    expect(within(summary).getByText(/ROAS จริง 20\.0x · %Ads ยอดใหม่ 6\.7%/)).toBeTruthy();
+    expect(within(summary).getByText(/Meta เห็น ฿9,000 · ROAS Meta 2\.3x/)).toBeTruthy();
+    expect(within(summary).getByText("ไม่รวม JUNTAKARN (รอเชื่อมแหล่งข้อมูล)")).toBeTruthy();
+  });
+
+  it("แบรนด์ที่เลือกยังไม่มีแหล่ง = บอกเหตุผล ไม่ขึ้น ฿0", () => {
+    const { container } = show({ salesSummary: { revenue: null, roas: null, pctAds: null, excludedWaiting: ["JUNTAKARN"], excludedNoData: [] } });
+    const summary = container.querySelector(".cp-summary");
+    expect(within(summary).getByText("รอเชื่อมแหล่งข้อมูล")).toBeTruthy();
+    expect(within(summary).queryByText("฿0")).toBeNull();
+  });
+});
+
 describe("CampaignsTable — สิ่งที่เห็นบนหน้าจอ", () => {
   it("ขึ้นครบทุกแคมเปญพร้อมจำนวนรายการ", () => {
     show();

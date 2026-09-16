@@ -44,7 +44,7 @@ import { usePagination } from "../ui/usePagination.js";
 
 const PAGE_SIZES = [10, 20, 50];
 
-export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, revenueLabel, goalTargets = null, targetPeriod = null }) {
+export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, revenueLabel, goalTargets = null, targetPeriod = null, salesSummary = null }) {
   const [view, setView] = useState("all");
   const [sortValue, setSortValue] = useState("spend:desc");
   const [columnView, setColumnView] = useState("decision");
@@ -57,7 +57,17 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
   const listTop = useRef(null);
   const pager = usePagination(shown, { storageKey: "ssb.campaigns.pageSize", sizes: PAGE_SIZES, defaultSize: 20, resetKey: shown });   // shown เปลี่ยนเมื่อตัวกรอง กลุ่ม หรือการเรียงเปลี่ยนเท่านั้น (useMemo)
   /* ผลลัพธ์ของแคมเปญ = คนทักจากโฆษณา → เทียบเป้าคนทัก · CPL/ROAS/%Ads เทียบเป้าอัตราส่วน */
-  const goals = useMemo(() => goalTargets ? goalsFor({ inquiries: totals.leads, cpl: totals.cpl, roas: totals.roas, pctAds: totals.pctAds }, goalTargets, targetPeriod) : null, [totals, goalTargets, targetPeriod]);
+  /* ข้อมูลจริง (salesSummary): ROAS/%Ads เทียบเป้าด้วยยอดจริงของระบบขาย ไม่ใช่ยอดที่ Meta เห็น · คนทักของแคมเปญ (Meta) ไม่เทียบเป้าคนทักของระบบขาย (คนละนิยาม) */
+  const goals = useMemo(() => {
+    if (!goalTargets) return null;
+    if (salesSummary) return goalsFor({ cpl: totals.cpl, roas: salesSummary.roas, pctAds: salesSummary.pctAds }, { ...goalTargets, inquiries: null }, targetPeriod);
+    return goalsFor({ inquiries: totals.leads, cpl: totals.cpl, roas: totals.roas, pctAds: totals.pctAds }, goalTargets, targetPeriod);
+  }, [totals, goalTargets, targetPeriod, salesSummary]);
+  const salesMissing = salesSummary && salesSummary.revenue == null
+    ? (salesSummary.excludedWaiting?.length ? "รอเชื่อมแหล่งข้อมูล" : "ช่วงนี้ยังไม่มีข้อมูลยอดขาย") : null;
+  const salesExcluded = salesSummary && salesSummary.revenue != null
+    ? [salesSummary.excludedWaiting?.length ? `ไม่รวม ${salesSummary.excludedWaiting.join(" · ")} (รอเชื่อมแหล่งข้อมูล)` : null,
+       salesSummary.excludedNoData?.length ? `ไม่รวม ${salesSummary.excludedNoData.join(" · ")} (ช่วงนี้ยังไม่มีข้อมูล)` : null].filter(Boolean) : [];
   const counts = useMemo(() => Object.fromEntries(SAVED_VIEWS.map((s) => [s.key, applyView(rows, s.key).length])), [rows]);
   const trend = useMemo(() => {
     const days = [...new Set(shown.flatMap((r) => r.series?.days ?? []))].sort();
@@ -118,7 +128,9 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
     <div className="cp-summary" aria-label="สรุปแคมเปญตามตัวกรอง">
       <article className="cp-summary-main"><span>ค่าแอด</span><strong className="mono">{fmtMoney(totals.spend)}</strong><small>{totals.count} แคมเปญ · งบที่ตั้ง {totals.budget != null ? fmtMoney(totals.budget) : "—"}</small>{totals.budget != null && totals.budgetRows < totals.count && <em>{totals.budgetRows}/{totals.count} แคมเปญมีงบ</em>}</article>
       <article><span>ผลลัพธ์</span><strong className="mono">{fmtInt(totals.leads)}</strong><small>CPL {totals.cpl != null ? fmtMoney(totals.cpl) : "—"}</small>{goals && <><GoalLine metric="inquiries" goal={goals.inquiries} /><GoalLine metric="cpl" goal={goals.cpl} compact /></>}</article>
-      <article><span>{revenueLabel}</span><strong className="mono">{fmtMoney(totals.revenue)}</strong><small>ROAS แพลตฟอร์ม {fmtRoas(totals.roas)} · %Ads {totals.pctAds != null ? fmtPct(totals.pctAds, 1) : "—"}</small>{goals && <><GoalLine metric="roas" goal={goals.roas} compact /><GoalLine metric="pctAds" goal={goals.pctAds} compact /></>}</article>
+      {salesSummary
+        ? <article><span>ยอดขายจริง · ระบบขาย</span>{salesMissing ? <strong className="cp-summary-missing">{salesMissing}</strong> : <strong className="mono">{fmtMoney(salesSummary.revenue)}</strong>}{!salesMissing && <small>ROAS จริง {fmtRoas(salesSummary.roas)} · %Ads ยอดใหม่ {salesSummary.pctAds != null ? fmtPct(salesSummary.pctAds, 1) : "—"}</small>}<small>Meta เห็น {fmtMoney(totals.revenue)} · ROAS Meta {fmtRoas(totals.roas)}</small>{salesExcluded.map((text) => <small key={text}>{text}</small>)}{goals && !salesMissing && <><GoalLine metric="roas" goal={goals.roas} compact /><GoalLine metric="pctAds" goal={goals.pctAds} compact /></>}</article>
+        : <article><span>{revenueLabel}</span><strong className="mono">{fmtMoney(totals.revenue)}</strong><small>ROAS แพลตฟอร์ม {fmtRoas(totals.roas)} · %Ads {totals.pctAds != null ? fmtPct(totals.pctAds, 1) : "—"}</small>{goals && <><GoalLine metric="roas" goal={goals.roas} compact /><GoalLine metric="pctAds" goal={goals.pctAds} compact /></>}</article>}
     </div>
 
     <div className="cp-list-head">
