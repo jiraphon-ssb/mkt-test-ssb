@@ -1,0 +1,44 @@
+# ประตูก่อนเข้า main — เทส/lint/build ต้องผ่าน (ไม่มีคนรีวิว จึงให้ CI ทำหน้าที่แทน ตามกติกาในโปรเจกต์)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: ติดตั้ง dependency ตาม lockfile
+        run: npm ci
+
+      - name: lint (ห้ามมี error)
+        run: npm run lint
+
+      - name: เทส
+        run: npm test
+
+      - name: build
+        run: npm run build
+
+      # กันความผิดพลาดที่เคยเกิดจริง: แพตช์ชั่วคราวตอนตรวจหน้าจอหลุดขึ้น main
+      - name: ห้ามมีแพตช์ชั่วคราวค้างในโค้ด
+        run: |
+          if grep -rn "TEMP-PREVIEW" src supabase tests; then
+            echo "::error::พบ TEMP-PREVIEW ค้างอยู่ — ถอดแพตช์ทดสอบออกก่อน merge"
+            exit 1
+          fi

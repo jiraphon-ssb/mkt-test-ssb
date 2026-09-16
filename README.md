@@ -1,17 +1,27 @@
-# Content Pipeline — โมดูล marketing (digital twin ของ SOP v1.1)
+# SSB Marketing Ads Workspace
 
-> **สตักเดียวกับ `ssbgroup-platform`**: React 19 · Vite · **JavaScript ล้วน** · Tailwind v4 (dark/light) ·
-> **Chart.js 4** (ไม่ใช้ Recharts) · lucide-react · react-router-dom 7
-> ทุกไฟล์อยู่ในโปรเจกต์นี้ — repo `ssbgroup-platform` ไม่ถูกแตะ (ดู [INTEGRATION.md](INTEGRATION.md) เผื่อวันย้าย)
+> ห้องทำงานโฆษณาของ SSB Group — ดูยอดจริงจาก Meta Ads ของ 4 แบรนด์ (TEAMDEE · JK Design · t around · JUNTAKARN) ในที่เดียว
+> React 19 · Vite · JavaScript ล้วน · Chart.js 4 · lucide-react · react-router-dom 7 · Supabase (Postgres + Edge Functions) · deploy ที่ Vercel
+
+**หน้าในระบบ** — Overview (`/mkt/ads`) · แคมเปญ (`/mkt/campaigns`) · Creative (`/mkt/creatives`) · สถานะ Sync (`/mkt/ads/sync`) · ตั้งค่า (`/mkt/ads?panel=settings`)
+
+**เอกสารที่ควรอ่านก่อน**
+
+| ไฟล์ | เมื่อไหร่ที่ต้องใช้ |
+|---|---|
+| [PLAN.md](PLAN.md) | โปรเจกต์นี้คืออะไร เหลืออะไร และของเก่าที่เก็บไว้เฉยๆ อยู่ตรงไหน |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md) | ข้อมูลไม่เข้า ตัวเลขไม่ตรง ตัวตั้งเวลาเงียบ — แก้ยังไง |
+| [docs/META-OAUTH.md](docs/META-OAUTH.md) | เชื่อม Meta · ตัวดึงอัตโนมัติ (pg_cron) · ค่าที่ต้องตั้ง |
+| [docs/handoff/](docs/handoff/) | SQL ที่ต้องรันในโปรเจกต์ระบบขาย (รอพี่ทัชรีวิว) |
 
 **เริ่มใช้งาน**
 
 ```bash
 npm install
-npm run dev        # เปิด http://localhost:5173 — ใช้ได้เลย ไม่ต้องต่อฐานข้อมูล (localStorage)
+npm run dev        # http://localhost:5173 — ไม่ใส่คีย์ = โหมดเดโม (ข้อมูลจำลองในหน่วยความจำ)
 ```
 
-ต่อฐานข้อมูลจริงแบบไม่ต้องล็อกอิน → [SUPABASE.md](SUPABASE.md) (รัน SQL 1 ไฟล์ + ใส่คีย์ 2 ค่า)
+ต่อฐานข้อมูลจริง → ใส่ `VITE_SUPABASE_URL` · `VITE_SUPABASE_ANON_KEY` · `VITE_AUTH_MODE=supabase` ใน `.env.local` (ดู `.env.example`)
 
 ```
 src/
@@ -37,7 +47,7 @@ tests/                   184 เคส (vitest) — อยู่ที่นี�
 4. **ทุกการขยับมี audit log** (status_history) — แก้ย้อนหลังไม่ได้
 5. **เงื่อนไขจบเป็น validation** — ขยับการ์ดไม่ได้ถ้าเงื่อนไขขั้นปัจจุบันไม่ครบ ระบบบอกว่าขาดอะไร
 
-ตรรกะทั้งหมดอยู่ใน [`src/domain/rules.ts`](src/domain/rules.ts) (pure functions + มี test)
+ตรรกะทั้งหมดอยู่ใน [`src/modules/marketing/mktRules.js`](src/modules/marketing/mktRules.js) (pure functions + มี test)
 
 ---
 

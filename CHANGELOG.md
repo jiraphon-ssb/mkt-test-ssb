@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### docs
+- เพิ่ม [docs/RUNBOOK.md](docs/RUNBOOK.md) — ข้อมูลไม่เข้า/ตัวเลขไม่ตรง/ตัวตั้งเวลาเงียบ ต้องทำอะไร พร้อมตารางแปล error และค่าที่ต้องตั้งทั้งหมด
+- README เขียนใหม่ให้ตรงกับของจริง (เดิมยังบอกว่าเป็น SOP board ใช้ localStorage) และแก้ path ที่อ้างผิด
+
+### ci
+- เพิ่ม GitHub Actions: lint + เทส + build ทุก push/PR เข้า main และกันไม่ให้แพตช์ชั่วคราว `TEMP-PREVIEW` หลุดขึ้น main
+
 ### security
 - ads: ปิดสิทธิ์เขียนของ anon บนตารางเนื้อหาเก่า `mkt_*` 11 ตาราง (repo เป็น public และ anon key อยู่ในไฟล์ที่เสิร์ฟให้ทุกคน ใครก็ลบ `mkt_brand` ได้ ซึ่งจะทำให้หน้า ads พังทั้งระบบ) · bucket `mkt-files` เหลือเฉพาะผู้ล็อกอิน — migration `20260916180000` เขียนแล้ว **ยังไม่ push**
 
