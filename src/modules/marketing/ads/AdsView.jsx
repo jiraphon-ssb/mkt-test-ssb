@@ -146,7 +146,10 @@ function ChannelCard({ c, monthView = true }) {
         <div className="ads-chan-top">
           <span className="ads-chan-spend mono">
             ค่าแอด <b>{fmtMoney(c.spend)}</b>
-            <span className="ads-muted"> จากงบ {c.budget != null ? fmtMoney(c.budget) : "ยังไม่ตั้งงบ"}</span>
+            {/* งบระดับช่องทางไม่ได้มีใครกรอก — ระบบแบ่งจากงบของแบรนด์ตามสัดส่วนแผนก่อนหน้า จึงต้องบอกให้ชัด */}
+            <span className="ads-muted" title="ระบบแบ่งงบของแบรนด์ให้แต่ละแพลตฟอร์มตามสัดส่วนแผนก่อนหน้า ไม่ใช่งบที่ตั้งรายแพลตฟอร์ม">
+              {" "}จากงบ {c.budget != null ? `${fmtMoney(c.budget)} (แบ่งจากงบแบรนด์)` : "ยังไม่ตั้งงบ"}
+            </span>
           </span>
           <span className="ads-chan-pct mono">
             <span className="ads-chan-pctads">%Ads <b>{c.pctAds != null ? fmtPct(c.pctAds, 1) : "—"}</b></span>

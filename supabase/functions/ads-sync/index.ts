@@ -66,6 +66,16 @@ Deno.serve(async (request) => {
       version: graphVersion(), token, fetch, sleep,
     });
     await db.from("ad_sync_runs").update({ rows_read: summary.rowsRead }).eq("id", runId);
+    /* Meta ตอบ 200 พร้อม data: [] ได้ทั้งกรณี "ไม่มีโฆษณาวิ่งจริง" และกรณีขัดข้องฝั่งเขา
+       RPC ลบช่วงวันก่อนเขียนเสมอ → ถ้าปล่อยผ่าน ข้อมูลที่เคยมีจะหายและถูกบันทึกว่า "สำเร็จ"
+       จึงเช็คก่อน: ช่วงนี้เคยมีข้อมูลไหม ถ้าเคยมีแต่รอบนี้ว่าง = ถือว่าล้มเหลว ไม่แตะของเดิม */
+    if (facts.length === 0) {
+      const { count, error: countError } = await db.from("ad_daily_facts")
+        .select("id", { count: "exact", head: true })
+        .eq("connection_id", connection.id).gte("fact_date", range.from).lte("fact_date", range.to);
+      if (countError) { console.error("[ads-sync] guard", countError.message); throw syncError("SYNC_WRITE_FAILED"); }
+      if ((count ?? 0) > 0) throw syncError("SYNC_EMPTY_RESULT", `${range.from}..${range.to} มี ${count} แถวเดิม`);
+    }
     const { data: written, error: writeError } = await db.rpc("ads_replace_daily_facts", {
       p_run_id: runId, p_connection_id: connection.id, p_level: "ad", p_from: range.from, p_to: range.to, p_rows: facts, p_summary: summary,
     });

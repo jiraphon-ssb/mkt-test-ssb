@@ -240,7 +240,7 @@ describe("งบ + จังหวะใช้เงิน", () => {
     expect(td.revenue).toBeNull();
     expect(td.roas).toBeNull();
     expect(td.pctAds).toBeNull();
-    expect(rows.find((r) => r.id === "b_jk").revenue).toBe(0);          // แบรนด์ที่ไม่มีงานยิงแอดเลย = 0 ตามเดิม
+    expect(rows.find((r) => r.id === "b_jk").revenue).toBeNull();       // ไม่มีงานยิงแอดเลย = ไม่รู้ ไม่ใช่ 0 (แก้ 16 ก.ย. 2569)
     expect(adsCompanySummary(rows, "2026-07-24").revenue).toBeNull();
     const mixed = [cards[0], card({ id: "c", brief: brief({ channels: ["Meta Ads"], publish_at: null }), metrics: metrics({ spend: 100, leads: 1, revenue: 900 }) })];
     expect(adsByBrandChannel(mixed, RANGE, [{ id: "b_td", name: "TEAMDEE" }], [], "2026-07-24")[0].revenue).toBeNull();   // มีบางใบไม่รู้ = รวมไม่ได้
@@ -297,8 +297,20 @@ describe("แบรนด์ × ช่องทาง (การ์ดเกจ�
     ], budgets, "2026-07-15");
     const ta = rows.find((r) => r.id === "b_ta");
     expect(ta).toBeTruthy();
-    expect(ta.spend).toBe(0);
+    expect(ta.spend).toBeNull();      // อยู่ในผลลัพธ์ แต่ค่าเป็น "ไม่รู้" จนกว่าจะมีข้อมูลจริง
+    expect(ta.revenue).toBeNull();
     expect(ta.channels).toEqual([]);
+  });
+});
+
+describe("แบรนด์ที่ยังไม่มีข้อมูลเลย", () => {
+  it("ไม่มีการ์ดในช่วงนั้น = ยอด/ค่าแอด/ลีดเป็น null ไม่ใช่ 0 (แยกให้ออกจาก 'ขายไม่ได้เลย')", () => {
+    const rows = adsByBrandChannel([], RANGE, [{ id: "b_td", name: "TEAMDEE" }], {});
+    const td = rows.find((r) => r.id === "b_td");
+    expect(td.channels).toEqual([]);
+    expect(td.revenue).toBeNull();
+    expect(td.spend).toBeNull();
+    expect(td.leads).toBeNull();
   });
 });
 
@@ -311,10 +323,15 @@ describe("กรวยผลจากค่าแอด", () => {
     expect(f.stages[2].cost).toBe(500);
     expect(f.estimated).toBe(false);
   });
-  it("ข้อมูลเก่าใช้ค่าจำลองต่อจากคนทักและติดธง estimated", () => {
+  it("ไม่มีข้อมูลขั้นถัดไปจริง = null ทุกขั้น ไม่เดาจากอัตราส่วนคงที่ (ตัดสินใจ 16 ก.ย. 2569)", () => {
     const f = adsFunnel([card({ metrics: metrics({ leads: 100, spend: 5000 }) })], RANGE);
-    expect(f.stages.map((s) => s.value)).toEqual([100, 65, 10, 8]);
-    expect(f.estimated).toBe(true);
+    expect(f.stages.map((s) => s.value)).toEqual([100, null, null, null]);
+    expect(f.estimated).toBe(true);          // ยังติดธงไว้ให้หน้าจอบอกว่ารอเชื่อมระบบขาย
+    expect(f.worstKey).toBeNull();           // ไม่มีอัตราส่วนจริง = ไม่ชี้ว่า "หล่นแรงสุด" ตรงไหน
+  });
+  it("มีข้อมูลจริงบางขั้น = คิดเฉพาะขั้นที่มี", () => {
+    const f = adsFunnel([card({ metrics: metrics({ leads: 100, spend: 5000, qualified_leads: 40 }) })], RANGE);
+    expect(f.stages.map((s) => s.value)).toEqual([100, 40, null, null]);
   });
   it("ไม่มีงานยิงแอดเลย ทุกขั้นเป็น null", () => {
     expect(adsFunnel([], RANGE).stages.every((s) => s.value === null)).toBe(true);
@@ -322,9 +339,8 @@ describe("กรวยผลจากค่าแอด", () => {
 });
 
 describe("กรวย — ขั้นหล่นแรงสุด", () => {
-  it("worstKey = ขั้นที่อัตราแปลงต่ำสุด (ไม่นับขั้นแรก)", () => {
-    /* leads 20 → 13 (65%) → 2 (15%) → 2 (100%) */
-    const cards = [card({ metrics: metrics({ spend: 2000, leads: 20, revenue: 8000 }) })];
+  it("worstKey = ขั้นที่อัตราแปลงต่ำสุด (ไม่นับขั้นแรก) — คิดจากข้อมูลจริงเท่านั้น", () => {
+    const cards = [card({ metrics: metrics({ spend: 2000, leads: 20, qualified_leads: 13, deposits: 2, closed_orders: 2, revenue: 8000 }) })];
     expect(adsFunnel(cards, RANGE).worstKey).toBe("deposits");
   });
   it("ไม่มีข้อมูล → worstKey เป็น null", () => {
@@ -636,8 +652,8 @@ describe("Sale pipeline แนวนอน", () => {
     expect(p.items.every((i) => i.before == null)).toBe(true);
   });
   it("ขั้นขายพกอัตราแปลงจากขั้นก่อน และชี้ขั้นที่หล่นแรงสุด", () => {
-    /* leads 20 → Lead 13 (65%) → มัดจำ 2 (15%) → ปิด 2 (100%) — มัดจำหล่นแรงสุด */
-    const p = adsSalePipeline([shot("a1")], RANGE);
+    /* ใช้ตัวเลขจริงทุกขั้น: ทัก 20 → Lead 13 → มัดจำ 2 → ปิด 2 — มัดจำหล่นแรงสุด */
+    const p = adsSalePipeline([shot("a1", { qualified_leads: 13, deposits: 2, closed_orders: 2 })], RANGE);
     const [inq, lead, dep, closed] = p.items;
     expect(inq.conv).toBeNull();
     expect(lead.conv).toBeCloseTo(13 / 20);

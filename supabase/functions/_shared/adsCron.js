@@ -35,7 +35,9 @@ export function planCronJobs({
 
   const ready = [];
   for (const connection of connections) {
-    if (!connection?.id || connection.status === "disabled" || !connection.authorization_id) continue;
+    // expired = token หมดอายุ/ถูกถอน — วางแผนต่อไปก็ล้มทุกครั้ง และเพราะเรียงจาก "ค้างนานสุดก่อน"
+    // มันจะอยู่หัวคิวถาวรจนบัญชีอื่นไม่ได้คิว (ต้องแก้ที่ต้นทางในหน้าตั้งค่า)
+    if (!connection?.id || ["disabled", "expired"].includes(connection.status) || !connection.authorization_id) continue;
     const own = runs.filter((r) => (r.connection_id ?? r.connectionId) === connection.id);
     // run ที่ยังวิ่งอยู่จริง (ยังไม่ค้างเกินเพดาน) → รอบนี้ข้ามไปก่อน ไม่งั้นชน unique index
     if (own.some((r) => ["queued", "running"].includes(r.status) && time(r.started_at) >= staleBefore)) continue;
@@ -71,7 +73,7 @@ export function planReconcileTargets({
   if (!Number.isFinite(time(now))) return [];
   const targets = [];
   for (const connection of connections) {
-    if (!connection?.id || connection.status === "disabled" || !connection.authorization_id) continue;
+    if (!connection?.id || ["disabled", "expired"].includes(connection.status) || !connection.authorization_id) continue;
     const own = entryRuns(runs.filter((r) => (r.connection_id ?? r.connectionId) === connection.id));
     const today = todayOf(connection.timezone);
     if (hourOf(connection.timezone) < afterHour) continue;
@@ -105,4 +107,17 @@ export function salesDue({ lastAt = null, now, hour = 0, today, afterHour = RECO
   const last = time(lastAt);
   if (!Number.isFinite(last)) return true;
   return new Date(last).toISOString().slice(0, 10) < String(today ?? "");
+}
+
+export const TOKEN_WARN_DAYS = 7;
+
+/** token ใกล้หมดอายุหรือหมดแล้ว — คืน code ที่เอาไปเขียนลง ad_connections.last_error_code ให้หน้าจอเห็นก่อนพัง
+    ไม่มีวันหมดอายุหรือค่าเสีย = ไม่เตือน (เดาไม่ได้ว่าจะพังเมื่อไร) */
+export function tokenWarning(expiresAt, now = Date.now()) {
+  const exp = time(expiresAt);
+  if (!Number.isFinite(exp)) return null;
+  const msLeft = exp - now;
+  if (msLeft <= 0) return { code: "META_TOKEN_INVALID", daysLeft: 0 };
+  const daysLeft = Math.floor(msLeft / 86_400_000);
+  return daysLeft <= TOKEN_WARN_DAYS ? { code: "META_TOKEN_EXPIRING", daysLeft } : null;
 }

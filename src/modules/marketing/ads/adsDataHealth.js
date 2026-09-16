@@ -125,7 +125,8 @@ export function normalizeSyncRuns(runs = []) {
 }
 
 /* ── ประวัติตัวดึงอัตโนมัติ (ad_cron_ticks) ── */
-const CRON_STALE_MS = 2 * 3_600_000;   // cron ตั้งไว้ทุกชั่วโมง เงียบเกิน 2 ชั่วโมง = มีอะไรผิด
+const CRON_STALE_MS = 2 * 3_600_000;
+const STUCK_TICK_MS = 10 * 60_000;   // Edge Function ถูกตัดก่อน 10 นาทีเสมอ — ค้างเกินนี้คือ crash   // cron ตั้งไว้ทุกชั่วโมง เงียบเกิน 2 ชั่วโมง = มีอะไรผิด
 
 export function normalizeCronTicks(ticks = []) {
   return [...(ticks ?? [])].filter(Boolean).map((tick) => {
@@ -157,6 +158,8 @@ export function cronHealth(ticks = [], now = Date.now()) {
   const at = latest.startedAt ?? null;
   const age = now - Date.parse(at ?? "");
   if (latest.status === "failed") return { state: "error", label: "รอบล่าสุดไม่สำเร็จ", at };
+  // ค้างสถานะ "กำลังทำงาน" นานเกินกว่าที่ Edge Function จะรันได้ = ตายกลางทาง ไม่ใช่กำลังทำงานอยู่จริง
+  if (latest.status === "running" && Number.isFinite(age) && age > STUCK_TICK_MS) return { state: "error", label: "รอบล่าสุดค้างกลางทาง", at };
   if (!Number.isFinite(age) || age > CRON_STALE_MS) return { state: "stale", label: "เงียบเกินกำหนด", at };
   return { state: "healthy", label: "ทำงานปกติ", at };
 }

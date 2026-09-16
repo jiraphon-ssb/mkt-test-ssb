@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cronDue, planCronJobs, planReconcileTargets, salesDue, summarizeTick } from "../supabase/functions/_shared/adsCron.js";
+import { cronDue, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../supabase/functions/_shared/adsCron.js";
 
 const NOW = "2026-09-16T10:00:00.000Z";
 const conn = (id, patch = {}) => ({ id, status: "connected", authorization_id: "auth-" + id, timezone: "Asia/Bangkok", config: { backfillDays: 31 }, ...patch });
@@ -75,6 +75,21 @@ describe("planCronJobs — งานที่รอบนี้จะดึง",
   });
 });
 
+describe("บัญชีเสียต้องไม่ลากบัญชีอื่นหยุดตาม", () => {
+  it("บัญชีที่ token หมดอายุ (status expired) ไม่ถูกวางแผนอีก — ไม่งั้นจะอยู่หัวคิวถาวร", () => {
+    const jobs = plan({
+      connections: [conn("c1", { status: "expired" }), conn("c2")],
+      runs: [run("c2", { finished_at: "2026-09-16T01:00:00.000Z" })],
+      syncEveryHours: 6,
+    });
+    expect(jobs.map((job) => job.connectionId)).toEqual(["c2"]);
+  });
+  it("บัญชีที่ยังไม่ผูก token ก็ข้าม ไม่ปนเข้าคิว", () => {
+    const jobs = plan({ connections: [conn("c1", { authorization_id: null }), conn("c2")], runs: [], syncEveryHours: 6 });
+    expect(jobs.every((job) => job.connectionId === "c2")).toBe(true);
+  });
+});
+
 describe("planReconcileTargets — ตรวจยอดอัตโนมัติวันละครั้ง", () => {
   const recon = (connection_id, patch = {}) => ({ connection_id, mode: "reconcile", status: "success", started_at: "2026-09-16T02:00:00.000Z", finished_at: "2026-09-16T02:00:10.000Z", ...patch });
   const target = (args) => planReconcileTargets({ now: NOW, todayOf: () => "2026-09-16", hourOf: () => 17, ...args });
@@ -120,5 +135,18 @@ describe("summarizeTick — สรุปลงประวัติ", () => {
     expect(summarizeTick({ planned: 2, sync: [{ ok: true, rows: 5 }, { ok: false }] }).status).toBe("partial");
     expect(summarizeTick({ planned: 1, sync: [{ ok: false }] }).status).toBe("failed");
     expect(summarizeTick({ planned: 0, sync: [] })).toEqual({ planned: 0, synced: 0, failed: 0, rowsWritten: 0, reconciled: 0, status: "success" });
+  });
+});
+
+describe("tokenWarning — เตือนก่อน token หมดอายุ", () => {
+  const at = (iso) => Date.parse(iso);
+  it("เหลือ ≤7 วัน = เตือน · เหลือมากกว่านั้น = เงียบ", () => {
+    expect(tokenWarning("2026-09-20T00:00:00.000Z", at("2026-09-16T10:00:00Z"))).toEqual({ code: "META_TOKEN_EXPIRING", daysLeft: 3 });
+    expect(tokenWarning("2026-11-14T08:46:00.000Z", at("2026-09-16T10:00:00Z"))).toBeNull();
+  });
+  it("หมดอายุไปแล้ว = เตือนแบบหมดอายุ · ไม่มีวันหมดอายุ/ค่าเสีย = ไม่เตือน (ไม่เดา)", () => {
+    expect(tokenWarning("2026-09-15T00:00:00.000Z", at("2026-09-16T10:00:00Z"))).toEqual({ code: "META_TOKEN_INVALID", daysLeft: 0 });
+    expect(tokenWarning(null, at("2026-09-16T10:00:00Z"))).toBeNull();
+    expect(tokenWarning("ไม่ใช่เวลา", at("2026-09-16T10:00:00Z"))).toBeNull();
   });
 });

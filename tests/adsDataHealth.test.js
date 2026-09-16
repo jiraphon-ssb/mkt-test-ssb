@@ -113,4 +113,8 @@ describe("cronHealth — สรุปว่าตัวดึงอัตโน�
   it("รอบล่าสุดพัง = ต้องแก้ แม้เวลาจะสด", () => {
     expect(cronHealth([{ startedAt: "2026-09-16T04:07:00Z", status: "failed" }], now).state).toBe("error");
   });
+  it("รอบที่ค้างสถานะ 'กำลังทำงาน' เกิน 10 นาที = ตายกลางทาง ต้องขึ้นว่าต้องแก้ ไม่ใช่เขียว", () => {
+    expect(cronHealth([{ startedAt: "2026-09-16T04:25:00Z", status: "running" }], now).state).toBe("healthy");   // เพิ่งเริ่ม ยังปกติ
+    expect(cronHealth([{ startedAt: "2026-09-16T04:05:00Z", status: "running" }], now).state).toBe("error");
+  });
 });

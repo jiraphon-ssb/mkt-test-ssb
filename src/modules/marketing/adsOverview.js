@@ -369,10 +369,13 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
           };
         })
         .sort((x, y) => y.spend - x.spend);
-      const spend = channels.reduce((n, c) => n + c.spend, 0);
+      /* ไม่มีช่องทางเลยในช่วงนี้ = "ยังไม่มีข้อมูล" ไม่ใช่ "ได้ศูนย์" — ต้องเป็น null
+         ไม่งั้นแบรนด์ที่ยังไม่ซิงก์จะขึ้น ฿0 พร้อมป้ายแดง "ช้ากว่าแผน" เหมือนแบรนด์ที่ขายไม่ได้จริง */
+      const empty = channels.length === 0;
+      const spend = empty ? null : channels.reduce((n, c) => n + c.spend, 0);
       const sumRevenue = (rows) => rows.some((c) => c.revenue == null) ? null : rows.reduce((n, c) => n + c.revenue, 0);
-      const revenue = sumRevenue(channels);
-      const leads = channels.reduce((n, c) => n + c.leads, 0);
+      const revenue = empty ? null : sumRevenue(channels);
+      const leads = empty ? null : channels.reduce((n, c) => n + c.leads, 0);
       // ยอดงบรวมใช้ได้ต่อเมื่อทุกช่องทางมีงบ ห้ามรวมเฉพาะช่องที่กรอกแล้วเพราะจะทำให้ pace แบรนด์เพี้ยน
       const budget = channels.length > 0 && channels.every((c) => c.budget != null)
         ? channels.reduce((n, c) => n + c.budget, 0)
@@ -410,16 +413,20 @@ export function adsFunnel(cards, range, prev = null) {
   const build = (r) => {
     const rows = adFactRows(cards, r);
     if (!rows.length) return { spend: 0, values: [null, null, null, null], estimated: false };
+    /* ขั้น Lead/มัดจำ/ออเดอร์ เคยคิดจากอัตราส่วนคงที่ (0.65 · 0.15 · 0.8) ซึ่งทำให้ "หล่นแรงสุด"
+       ชี้ที่มัดจำเสมอไม่ว่าข้อมูลจริงเป็นอย่างไร — ตัดออกแล้ว ขั้นไหนไม่มีข้อมูลจริง = null
+       จนกว่าจะเชื่อมระบบขาย (ดู docs/superpowers/specs/2026-09-16-sales-revenue-bridge.md) */
     let estimated = false;
-    const totals = [0, 0, 0, 0];
+    const totals = [null, null, null, null];
+    const add = (i, value) => { if (value != null) totals[i] = (totals[i] ?? 0) + value; };
     for (const c of rows) {
       const m = c.metrics ?? {};
       const inquiry = m.inquiries ?? m.chats ?? m.leads;
-      const lead = m.qualified_leads ?? (inquiry == null ? null : Math.round(inquiry * 0.65));
-      const deposit = m.deposits ?? (lead == null ? null : Math.round(lead * 0.15));
-      const closed = m.closed_orders ?? (deposit == null ? null : Math.round(deposit * 0.8));
       if (m.qualified_leads == null || m.deposits == null || m.closed_orders == null) estimated = true;
-      [inquiry, lead, deposit, closed].forEach((value, i) => { if (value != null) totals[i] += value; });
+      add(0, inquiry);
+      add(1, m.qualified_leads);
+      add(2, m.deposits);
+      add(3, m.closed_orders);
     }
     const spend = completeSum(rows, (c) => c.metrics?.spend);
     return { spend, values: totals, estimated };

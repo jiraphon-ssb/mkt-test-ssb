@@ -79,14 +79,18 @@ export function baseOpts(extra = {}) {
   };
 }
 
-/* ---------- format ---------- */
-export const fmtInt = (n) => Math.round(n).toLocaleString("th-TH");
+/* ---------- format ----------
+   null ≠ 0 — ค่าที่ "ไม่รู้" ต้องขึ้น "—" ทุกตัว (เดิม fmtInt/fmtMoney ปัด null เป็น 0
+   ทำให้ยอดที่ยังไม่รู้ขึ้น ฿0 ข้างๆ ROAS ที่ขึ้น "—" บนบรรทัดเดียวกัน) */
+const unknown = (n) => n == null || (typeof n === "number" && !Number.isFinite(n));
+export const fmtInt = (n) => (unknown(n) ? "—" : Math.round(n).toLocaleString("th-TH"));
 export const fmtCompact = (n) =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M`
+  unknown(n) ? "—"
+  : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M`
   : n >= 1_000 ? `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`
   : String(Math.round(n));
-export const fmtPct = (x, digits = 1) => (x == null ? "—" : `${(x * 100).toFixed(digits)}%`);
-export const fmtMoney = (n) => `฿${Math.round(n).toLocaleString("th-TH")}`;
+export const fmtPct = (x, digits = 1) => (unknown(x) ? "—" : `${(x * 100).toFixed(digits)}%`);
+export const fmtMoney = (n) => (unknown(n) ? "—" : `฿${Math.round(n).toLocaleString("th-TH")}`);
 export const fmtDays = (x) => (x == null ? "—" : `${x.toFixed(1)} วัน`);
 
 /* ---------- กราฟเส้นรายวัน: ค่าตั้งต้นเดียวกันทุกกราฟ ----------
