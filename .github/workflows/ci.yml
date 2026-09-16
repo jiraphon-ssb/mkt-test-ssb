@@ -11,6 +11,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # ธุรกิจนี้ทำงานบนเวลาไทยทั้งหมด (Meta ตั้ง timezone รายบัญชีเป็น Asia/Bangkok ด้วย)
+  # ตัวสร้างข้อมูลเดโมของหน้าเก่าสร้างเวลาจาก local time ของเครื่อง จึงต้องตรึง TZ ให้ CI ตรงกับเครื่องทีม
+  TZ: Asia/Bangkok
+
 jobs:
   check:
     runs-on: ubuntu-latest

@@ -292,14 +292,22 @@ export function ideaToPublishedCycle(cards, history, r) {
 /** slot 2 ชั่วโมง 08:00–22:00 = 7 ช่อง (local time — ตรงกับปฏิทินในแอพ) */
 export const HEAT_SLOTS = 7;
 export const HEAT_START_HOUR = 8;
+const HEAT_TZ = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", weekday: "short", hour: "2-digit", hour12: false });
+
 export function publishHeatmap(cards, r) {
   const acc = new Map();
   for (const c of measuredInRange(cards, r)) {
     if (!c.brief.publish_at)
       continue;
     const d = new Date(c.brief.publish_at);
-    const dow = (d.getDay() + 6) % 7; // Date.getDay(): 0=อาทิตย์ → แปลงเป็น 0=จันทร์
-    const slot = Math.floor((d.getHours() - HEAT_START_HOUR) / 2);
+    /* อ่านเป็นเวลาไทยเสมอ — เดิมใช้ getDay()/getHours() ซึ่งเป็นเวลาของเครื่องที่รัน
+       ทำให้ผลเพี้ยน 7 ชั่วโมงเมื่อรันบนเซิร์ฟเวอร์ UTC (เช่น CI) */
+    const parts = HEAT_TZ.formatToParts(d);
+    const weekday = parts.find((part) => part.type === "weekday")?.value ?? "Mon";
+    const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekday);
+    const hour = Number(parts.find((part) => part.type === "hour")?.value ?? NaN);
+    if (dow < 0 || !Number.isFinite(hour)) continue;
+    const slot = Math.floor((hour - HEAT_START_HOUR) / 2);
     if (slot < 0 || slot >= HEAT_SLOTS)
       continue;
     const key = `${dow}:${slot}`;
