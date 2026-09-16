@@ -65,12 +65,17 @@ export function planCronJobs({
 }
 
 export const RECONCILE_AFTER_HOUR = 9;   // Meta ปิดยอดของเมื่อวานตอนเช้า — ตรวจก่อนนั้นได้ผลไม่นิ่ง
+export const RECONCILE_RETRY_HOURS = 4;  // ตรวจแล้วไม่ผ่าน → พักก่อนลองใหม่ (ยอดไม่ตรงมักไม่หายในชั่วโมงเดียว)
+export const RECONCILE_MAX_TRIES = 3;    // ต่อบัญชีต่อวัน — ไม่ให้บัญชีที่ยอดไม่ตรงเรื้อรังกิน quota Meta ทั้งวัน
 
-/** บัญชีที่ควรตรวจยอดในรอบนี้: ข้อมูลครบ · สายพอตามเวลาบัญชี · วันนี้ยังไม่มีผลตรวจที่สำเร็จ */
+/** บัญชีที่ควรตรวจยอดในรอบนี้: ข้อมูลครบ · สายพอตามเวลาบัญชี · วันนี้ยังไม่ผ่าน และยังอยู่ในโควตา/พ้นช่วงพักแล้ว
+    ผลตรวจที่ไม่ผ่านถูกบันทึกเป็น status partial — ถ้านับแค่ success ว่า "ตรวจแล้ว" บัญชีที่ยอดไม่ตรงจะถูกตรวจซ้ำทุกชั่วโมง */
 export function planReconcileTargets({
   connections = [], runs = [], now, todayOf, hourOf, afterHour = RECONCILE_AFTER_HOUR, max = 4,
+  retryHours = RECONCILE_RETRY_HOURS, maxTries = RECONCILE_MAX_TRIES,
 } = {}) {
-  if (!Number.isFinite(time(now))) return [];
+  const current = time(now);
+  if (!Number.isFinite(current)) return [];
   const targets = [];
   for (const connection of connections) {
     if (!connection?.id || ["disabled", "expired"].includes(connection.status) || !connection.authorization_id) continue;
@@ -78,31 +83,57 @@ export function planReconcileTargets({
     const today = todayOf(connection.timezone);
     if (hourOf(connection.timezone) < afterHour) continue;
     if (missingDaysOf(own, today, connection.config?.backfillDays)) continue;
-    const checkedToday = own.some((r) => r.mode === "reconcile" && r.status === "success" && String(r.started_at ?? "").slice(0, 10) === today);
-    if (checkedToday) continue;
+    const triesToday = own.filter((r) => r.mode === "reconcile" && String(r.started_at ?? "").slice(0, 10) === today);
+    if (triesToday.some((r) => r.status === "success")) continue;          // ผ่านแล้ววันนี้ จบ
+    if (triesToday.length >= maxTries) continue;                          // ลองครบโควตาของวันแล้ว
+    const lastTry = triesToday.reduce((latest, r) => Math.max(latest, time(r.started_at) || 0), 0);
+    if (lastTry && current - lastTry < retryHours * HOUR) continue;       // ยังอยู่ในช่วงพัก
     targets.push(connection.id);
     if (targets.length >= max) break;
   }
   return targets;
 }
 
+export const CREATIVE_EVERY_HOURS = 24;  // รูป/ข้อความเปลี่ยนไม่บ่อย และ URL สื่อจาก Meta หมดอายุได้ → วันละครั้งพอ
+
+/** บัญชีที่ควรรีเฟรช creative ในรอบนี้ — refreshedAt = เวลาที่รีเฟรชล่าสุดของแต่ละบัญชี (media_refreshed_at ล่าสุด)
+    ค้างนานสุดได้ก่อน · ทำทีละบัญชีต่อรอบ เพราะ ads-creatives ใช้เวลาได้ถึง 90 วินาที */
+export function planCreativeTargets({
+  connections = [], refreshedAt = {}, now, everyHours = CREATIVE_EVERY_HOURS, max = 1,
+} = {}) {
+  if (!Number.isFinite(time(now))) return [];
+  const due = [];
+  for (const connection of connections) {
+    if (!connection?.id || ["disabled", "expired"].includes(connection.status) || !connection.authorization_id) continue;
+    const last = time(refreshedAt?.[connection.id]);
+    if (!cronDue(Number.isFinite(last) ? new Date(last).toISOString() : null, now, everyHours)) continue;
+    due.push({ id: connection.id, last: Number.isFinite(last) ? last : 0 });
+  }
+  return due.sort((a, b) => a.last - b.last).slice(0, Math.max(1, max)).map((entry) => entry.id);
+}
+
 /** สรุปผลรอบหนึ่งลงตาราง ad_cron_ticks — ไม่มีงานให้ทำ ไม่ใช่ความผิดพลาด */
-export function summarizeTick({ planned = 0, sync = [], reconcile = [] } = {}) {
+export function summarizeTick({ planned = 0, sync = [], reconcile = [], extra = [] } = {}) {
   const ok = sync.filter((r) => r?.ok);
-  const failed = [...sync, ...reconcile].filter((r) => r && !r.ok).length;
+  // extra = งานอื่นของรอบนั้น (ดึงยอดขาย · รีเฟรช creative) — ไม่ใช่การดึง insight แต่พังแล้วต้องเห็นในสถานะรอบ
+  const failed = [...sync, ...reconcile, ...extra].filter((r) => r && !r.ok).length;
   const reconciled = reconcile.filter((r) => r?.ok).length;
   const rowsWritten = ok.reduce((sum, r) => sum + (Number(r.rows) || 0), 0);
-  const done = ok.length + reconciled;
+  const done = ok.length + reconciled + extra.filter((r) => r?.ok).length;
   return {
     planned, synced: ok.length, failed, rowsWritten, reconciled,
     status: !failed ? "success" : done ? "partial" : "failed",
   };
 }
 
+export const SALES_MAX_TRIES = 4;   // ลองใหม่ได้ถ้าระบบขายล่ม แต่ไม่ยิงทุกชั่วโมงจนหมดวัน
+
 /** ถึงเวลาดึงยอดขายจริงหรือยัง — วันละครั้ง หลังเวลาที่ระบบขายปิดยอดของเมื่อวานแล้ว
-    lastAt = เวลาที่ดึงสำเร็จครั้งล่าสุด (เก็บใน ad_cron_ticks.detail) · เทียบเป็นวันตามโซนเวลาบัญชี */
-export function salesDue({ lastAt = null, now, hour = 0, today, afterHour = RECONCILE_AFTER_HOUR } = {}) {
+    lastAt = เวลาที่ดึง "สำเร็จ" ครั้งล่าสุด (เก็บใน ad_cron_ticks.detail) · tries = จำนวนครั้งที่ลองไปแล้ววันนี้
+    ที่ต้องแยกสำเร็จ/ล้มเหลว: ถ้านับการลองที่ล้มเหลวว่าทำแล้ว วันที่ระบบขายล่มจะไม่มีใครดึงยอดวันนั้นอีกเลย */
+export function salesDue({ lastAt = null, now, hour = 0, today, afterHour = RECONCILE_AFTER_HOUR, tries = 0, maxTries = SALES_MAX_TRIES } = {}) {
   if (!Number.isFinite(time(now)) || hour < afterHour) return false;
+  if (Number(tries) >= maxTries) return false;
   if (!lastAt) return true;
   const last = time(lastAt);
   if (!Number.isFinite(last)) return true;

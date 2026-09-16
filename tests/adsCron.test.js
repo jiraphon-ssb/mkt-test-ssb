@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cronDue, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../supabase/functions/_shared/adsCron.js";
+import { cronDue, planCreativeTargets, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../supabase/functions/_shared/adsCron.js";
 
 const NOW = "2026-09-16T10:00:00.000Z";
 const conn = (id, patch = {}) => ({ id, status: "connected", authorization_id: "auth-" + id, timezone: "Asia/Bangkok", config: { backfillDays: 31 }, ...patch });
@@ -111,6 +111,48 @@ describe("planReconcileTargets — ตรวจยอดอัตโนมัต
     expect(target({ connections: [conn("c1", { status: "disabled" })], runs: [run("c1")] })).toEqual([]);
     expect(target({ connections: [conn("c1")], runs: [run("c1"), recon("c1", { status: "failed" })] })).toEqual(["c1"]);
   });
+  it("ยอดไม่ตรง (partial) เมื่อชั่วโมงที่แล้ว = พักก่อน ไม่ตรวจซ้ำทุก tick", () => {
+    const justNow = recon("c1", { status: "partial", started_at: "2026-09-16T09:30:00.000Z" });
+    expect(target({ connections: [conn("c1")], runs: [run("c1"), justNow] })).toEqual([]);
+  });
+  it("พ้นช่วงพักแล้ว = ลองใหม่ได้", () => {
+    const earlier = recon("c1", { status: "partial", started_at: "2026-09-16T05:00:00.000Z" });
+    expect(target({ connections: [conn("c1")], runs: [run("c1"), earlier] })).toEqual(["c1"]);
+  });
+  it("ลองครบโควตาของวันแล้ว = หยุด ไม่กิน quota Meta ทั้งวัน", () => {
+    const tries = ["2026-09-16T01:00:00.000Z", "2026-09-16T03:00:00.000Z", "2026-09-16T05:00:00.000Z"]
+      .map((started_at) => recon("c1", { status: "partial", started_at }));
+    expect(target({ connections: [conn("c1")], runs: [run("c1"), ...tries] })).toEqual([]);
+  });
+  it("ผ่านแล้ววันนี้ ต่อให้เคยพลาดมาก่อน = ไม่ตรวจซ้ำ", () => {
+    const failed = recon("c1", { status: "partial", started_at: "2026-09-16T01:00:00.000Z" });
+    const passed = recon("c1", { status: "success", started_at: "2026-09-16T03:00:00.000Z" });
+    expect(target({ connections: [conn("c1")], runs: [run("c1"), failed, passed] })).toEqual([]);
+  });
+});
+
+describe("planCreativeTargets — รีเฟรชรูป/ข้อความโฆษณาเอง", () => {
+  const targets = (args) => planCreativeTargets({ now: NOW, ...args });
+
+  it("ไม่เคยรีเฟรช = ถึงคิว", () => {
+    expect(targets({ connections: [conn("c1")], refreshedAt: {} })).toEqual(["c1"]);
+  });
+  it("เพิ่งรีเฟรช = ยังไม่ถึงคิว · เกินรอบแล้ว = ถึงคิว", () => {
+    expect(targets({ connections: [conn("c1")], refreshedAt: { c1: "2026-09-16T08:00:00.000Z" } })).toEqual([]);
+    expect(targets({ connections: [conn("c1")], refreshedAt: { c1: "2026-09-15T08:00:00.000Z" } })).toEqual(["c1"]);
+  });
+  it("บัญชีปิด / token หมด / ยังไม่ผูก = ข้าม", () => {
+    expect(targets({ connections: [conn("c1", { status: "disabled" }), conn("c2", { status: "expired" }), conn("c3", { authorization_id: null })] })).toEqual([]);
+  });
+  it("ค้างนานสุดได้คิวก่อน และทำทีละบัญชีต่อรอบ (ads-creatives กินเวลาถึง 90 วิ)", () => {
+    const connections = [conn("c1"), conn("c2"), conn("c3")];
+    const refreshedAt = { c1: "2026-09-14T10:00:00.000Z", c2: "2026-09-10T10:00:00.000Z", c3: null };
+    expect(targets({ connections, refreshedAt })).toEqual(["c3"]);
+    expect(targets({ connections, refreshedAt: { ...refreshedAt, c3: "2026-09-13T10:00:00.000Z" }, max: 2 })).toEqual(["c2", "c3"]);
+  });
+  it("เวลาที่บันทึกไว้เสีย = ถือว่ายังไม่เคยรีเฟรช", () => {
+    expect(targets({ connections: [conn("c1")], refreshedAt: { c1: "ไม่ใช่เวลา" } })).toEqual(["c1"]);
+  });
 });
 
 describe("salesDue — ดึงยอดขายจริงวันละครั้ง", () => {
@@ -122,6 +164,10 @@ describe("salesDue — ดึงยอดขายจริงวันละค
     expect(salesDue({ lastAt: null, now: NOW, hour: 6, today: "2026-09-16" })).toBe(false);
     expect(salesDue({ lastAt: "2026-09-16T03:00:00.000Z", now: NOW, hour: 17, today: "2026-09-16" })).toBe(false);
   });
+  it("ดึงไม่สำเร็จ = ลองใหม่รอบหน้า แต่ไม่เกินโควตาของวัน", () => {
+    expect(salesDue({ lastAt: null, now: NOW, hour: 17, today: "2026-09-16", tries: 3 })).toBe(true);
+    expect(salesDue({ lastAt: null, now: NOW, hour: 17, today: "2026-09-16", tries: 4 })).toBe(false);
+  });
 });
 
 describe("summarizeTick — สรุปลงประวัติ", () => {
@@ -130,6 +176,11 @@ describe("summarizeTick — สรุปลงประวัติ", () => {
     expect(summarizeTick({ planned: 2, sync, reconcile: [{ ok: true }] })).toEqual({
       planned: 2, synced: 2, failed: 0, rowsWritten: 186, reconciled: 1, status: "success",
     });
+  });
+  it("งานอื่นในรอบ (ยอดขาย/creative) พัง = รอบนั้นไม่เขียวสนิท", () => {
+    expect(summarizeTick({ planned: 1, sync: [{ ok: true, rows: 5 }], extra: [{ ok: false }] }).status).toBe("partial");
+    expect(summarizeTick({ planned: 1, sync: [{ ok: true, rows: 5 }], extra: [{ ok: true }] }).status).toBe("success");
+    expect(summarizeTick({ planned: 0, extra: [{ ok: false }] })).toMatchObject({ status: "failed", failed: 1, synced: 0 });
   });
   it("มีบางงานพัง = partial · พังหมด = failed · ไม่มีงานเลย = success (ไม่ถึงรอบ ไม่ใช่ความผิดพลาด)", () => {
     expect(summarizeTick({ planned: 2, sync: [{ ok: true, rows: 5 }, { ok: false }] }).status).toBe("partial");

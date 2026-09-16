@@ -2,7 +2,7 @@
    อ่านจาก /act_x/ads (Graph v26 เลิกรองรับ ?ids=) แล้วคัดเฉพาะ ad ที่มีค่าแอด สูงสุด 400 ตัวเรียงตามค่าแอด
    งบเวลา 90 วินาทีต่อคำขอ · ยังไม่จบคืน nextCursor ให้ client เรียกต่อ (คืนแค่ cursor ไม่คืน URL)
    สิทธิ์ team_lead · token ถอดรหัสฝั่ง server · ไม่เก็บไฟล์สื่อ เก็บ URL ที่ Meta ส่งมา (หมดอายุได้ ดึงใหม่ทับ) */
-import { activeMemberUserIds, corsHeaders, decryptToken, graphVersion, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { syncError, todayInTimeZone } from "../_shared/metaInsights.js";
 import { creativeRowFromAd, enrichRowsWithPosts, fetchAccountCreatives, rankAdIdsBySpend } from "../_shared/metaCreative.js";
@@ -18,7 +18,8 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
   const startedAt = Date.now();
   try {
-    const { db } = await requireTeamLead(request);
+    // service role = ads-cron รีเฟรชอัตโนมัติวันละครั้ง · นอกนั้นต้องเป็น team_lead ตามเดิม
+    const { db } = isServiceRole(request) ? { db: adminClient() } : await requireTeamLead(request);
     const body = await request.json().catch(() => ({}));
     const connectionId = typeof body.connectionId === "string" && UUID.test(body.connectionId) ? body.connectionId : null;
     if (!connectionId) throw syncError("CONNECTION_ID_REQUIRED");

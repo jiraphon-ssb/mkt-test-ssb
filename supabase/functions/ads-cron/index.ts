@@ -3,11 +3,12 @@
    ทำทีละน้อยต่อรอบ (ดึง ≤4 ก้อน · ตรวจยอด ≤4 บัญชี) เพราะ Edge Function มีเพดานเวลา — ที่เหลือรอบหน้าค่อยทำ
    ทุกรอบบันทึกลง ad_cron_ticks แม้ไม่มีอะไรต้องทำ เพื่อให้ตอบได้ว่าระบบยังวิ่งอยู่จริง */
 import { adminClient, corsHeaders, env, isServiceRole, json } from "../_shared/adsOAuth.ts";
-import { DEFAULT_SYNC_EVERY_HOURS, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../_shared/adsCron.js";
+import { DEFAULT_SYNC_EVERY_HOURS, planCreativeTargets, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../_shared/adsCron.js";
 import { hourInTimeZone, todayInTimeZone } from "../_shared/metaInsights.js";
 
 const MAX_SYNC_JOBS = 4;
 const MAX_RECONCILE = 4;
+const MAX_CREATIVE = 1;      // ads-creatives ใช้เวลาได้ถึง 90 วิ/บัญชี — เกินหนึ่งต่อรอบเสี่ยงชนเพดานเวลา
 const JOB_TIMEOUT_MS = 110_000;
 const KEEP_TICK_DAYS = 90;
 
@@ -95,7 +96,7 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
         signal: AbortSignal.timeout(JOB_TIMEOUT_MS),
       });
       const data = await response.json().catch(() => ({}));
-      return { ok: response.ok, code: response.ok ? null : data?.error ?? String(response.status), rows: data?.rowsWritten ?? null, ms: Date.now() - started };
+      return { ok: response.ok, code: response.ok ? null : data?.error ?? String(response.status), rows: data?.rowsWritten ?? data?.saved ?? null, ms: Date.now() - started };
     } catch (error) {
       return { ok: false, code: error instanceof Error ? error.name : "FETCH_FAILED", ms: Date.now() - started };
     }
@@ -135,20 +136,51 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
   const reconcile: JobResult[] = [];
   for (const connectionId of targets) reconcile.push({ connectionId, ...(await call("ads-reconcile", { connectionId })) });
 
-  // ยอดขายจริงจากระบบขาย — วันละครั้ง หลัง 9 โมงตามเวลาไทย (ใช้รอบก่อนหน้าจาก ad_cron_ticks เป็นตัวจำ)
-  const { data: lastSales } = await db.from("ad_cron_ticks").select("started_at")
-    .not("detail->sales", "is", null).order("started_at", { ascending: false }).limit(1).maybeSingle();
+  /* ยอดขายจริงจากระบบขาย — วันละครั้ง หลัง 9 โมงตามเวลาไทย (ใช้รอบก่อนหน้าจาก ad_cron_ticks เป็นตัวจำ)
+     นับเฉพาะรอบที่ "สำเร็จ" ว่าทำแล้ว — ไม่งั้นวันที่ระบบขายล่ม ยอดของวันนั้นจะไม่มีใครดึงอีกเลย
+     จำนวนครั้งที่ลองวันนี้ใช้จำกัดการยิงซ้ำ ไม่ให้ระบบขายที่ล่มยาวโดนยิงทุกชั่วโมง
+     อ่านประวัติ 3 วันแล้วคัดในโค้ด ไม่พึ่ง json filter ของ PostgREST — ถ้า syntax เพี้ยนมันจะคืนว่างเงียบๆ
+     แล้วกลายเป็นยิงทุกชั่วโมงโดยไม่มีใครรู้ */
+  const { data: salesTicks } = await db.from("ad_cron_ticks")
+    .select("started_at,detail").order("started_at", { ascending: false }).limit(72);
+  const salesOf = (row: { detail?: unknown }) => (row?.detail as { sales?: { ok?: boolean } } | null)?.sales ?? null;
+  const salesToday = todayOf("Asia/Bangkok");
+  const lastSalesOk = (salesTicks ?? []).find((row) => salesOf(row)?.ok === true)?.started_at ?? null;
+  const salesTries = (salesTicks ?? [])
+    .filter((row) => salesOf(row) && String(row.started_at ?? "").slice(0, 10) === now.slice(0, 10)).length;
   let sales: Record<string, unknown> | null = null;
-  if (salesDue({ lastAt: lastSales?.started_at ?? null, now, hour: hourOf("Asia/Bangkok"), today: todayOf("Asia/Bangkok") })) {
+  if (salesDue({ lastAt: lastSalesOk, now, hour: hourOf("Asia/Bangkok"), today: salesToday, tries: salesTries })) {
     sales = await call("sales-sync", {});
   }
 
-  const summary = summarizeTick({ planned: jobs.length + targets.length, sync, reconcile });
+  /* รูป/ข้อความโฆษณา — Meta เปลี่ยนได้ตลอดและ URL สื่อหมดอายุ ถ้าไม่รีเฟรชเองหน้า Creative จะค้างที่ครั้งที่กดมือล่าสุด
+     media_refreshed_at ล่าสุดของแต่ละบัญชี = เวลาที่รีเฟรชครั้งก่อน (บัญชีน้อย จึงถามทีละบัญชี แถวเดียว)
+     ขอบเขต: ยิงครั้งเดียวต่อรอบ ไม่ไล่ nextCursor ต่อ — ads-creatives เรียงตามค่าแอดอยู่แล้ว ครั้งเดียวจึงได้ตัวที่คนดูจริง
+     บัญชีใหญ่ที่ไม่จบใน 90 วิ ส่วนที่เหลือยังต้องกดปุ่มรีเฟรชในหน้า Creative เอง */
+  const refreshedAt: Record<string, string | null> = {};
+  for (const connection of connections) {
+    const { data } = await db.from("ad_creatives").select("media_refreshed_at")
+      .eq("connection_id", connection.id).not("media_refreshed_at", "is", null)
+      .order("media_refreshed_at", { ascending: false }).limit(1).maybeSingle();
+    refreshedAt[connection.id] = data?.media_refreshed_at ?? null;
+  }
+  const creativeTargets = planCreativeTargets({ connections, refreshedAt, now, max: MAX_CREATIVE })
+    .filter((connectionId) => !stopped.has(connectionId));
+  const creatives: JobResult[] = [];
+  for (const connectionId of creativeTargets) creatives.push({ connectionId, ...(await call("ads-creatives", { connectionId })) });
+
+  const summary = summarizeTick({
+    planned: jobs.length + targets.length + creativeTargets.length, sync, reconcile,
+    extra: [...(sales ? [sales as JobResult] : []), ...creatives],
+  });
   await finish({
     status: summary.status, planned: summary.planned, synced: summary.synced, reconciled: summary.reconciled,
     failed: summary.failed, rows_written: summary.rowsWritten, sync_every_hours: syncEveryHours,
-    detail: { sync, reconcile, ...(sales ? { sales } : {}), ...(Object.keys(tokenWarnings).length ? { tokenWarnings } : {}) },
+    detail: {
+      sync, reconcile, ...(sales ? { sales } : {}), ...(creatives.length ? { creatives } : {}),
+      ...(Object.keys(tokenWarnings).length ? { tokenWarnings } : {}),
+    },
   });
   console.log(`[ads-cron] planned=${summary.planned} synced=${summary.synced} reconciled=${summary.reconciled} failed=${summary.failed}`);
-  return json(request, { at: now, tickId, syncEveryHours, ...summary, sync, reconcile, sales });
+  return json(request, { at: now, tickId, syncEveryHours, ...summary, sync, reconcile, sales, creatives });
 }
