@@ -17,6 +17,16 @@ export function adminClient() {
   });
 }
 
+/** ผู้เรียกเป็น service role หรือไม่ (pg_cron → ads-cron → ads-sync) — เทียบแบบเวลาคงที่ ไม่ให้เดาทีละตัวอักษร */
+export function isServiceRole(request: Request) {
+  const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const key = env("SUPABASE_SERVICE_ROLE_KEY");
+  if (token.length !== key.length) return false;
+  let diff = 0;
+  for (let i = 0; i < key.length; i += 1) diff |= token.charCodeAt(i) ^ key.charCodeAt(i);
+  return diff === 0;
+}
+
 export function allowedOrigins() {
   return parseOrigins(Deno.env.get("ADS_ALLOWED_ORIGINS") ?? "http://localhost:5173,http://127.0.0.1:5173");
 }

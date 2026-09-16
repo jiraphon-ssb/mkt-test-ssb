@@ -1,6 +1,6 @@
 /* ads-sync — ดึง Meta Insights รายวันของ connection เดียว แล้วแทนที่ยอดช่วงนั้นใน ad_daily_facts
    สิทธิ์: team_lead (verify_jwt) · token ถอดรหัสฝั่ง server เท่านั้น · ข้อมูลไม่ครบ = run failed และไม่เขียนยอด */
-import { activeMemberUserIds, corsHeaders, decryptToken, graphVersion, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { collectMetaFacts, pickSyncMode, publicSyncCode, syncFailureStatus } from "../_shared/adsSyncJob.js";
 import { syncError, syncRange, todayInTimeZone } from "../_shared/metaInsights.js";
 import { validateExplicitRange } from "../_shared/adsBackfill.js";
@@ -22,7 +22,8 @@ Deno.serve(async (request) => {
   let runId: string | null = null;
   let connectionId: string | null = null;
   try {
-    const auth = await requireTeamLead(request);
+    // คนกดเอง = team_lead · pg_cron เรียกผ่าน ads-cron = service role (ไม่มี user ผูกกับ run)
+    const auth = isServiceRole(request) ? { db: adminClient(), user: null } : await requireTeamLead(request);
     db = auth.db;
     const body = await request.json().catch(() => ({}));
     connectionId = typeof body.connectionId === "string" && UUID.test(body.connectionId) ? body.connectionId : null;
@@ -54,7 +55,7 @@ Deno.serve(async (request) => {
       .eq("connection_id", connection.id).in("status", ["queued", "running"])
       .lt("started_at", new Date(Date.now() - STALE_RUN_MINUTES * 60_000).toISOString());
     const { data: run, error: runError } = await db.from("ad_sync_runs").insert({
-      connection_id: connection.id, mode, range_from: range.from, range_to: range.to, status: "running", triggered_by: auth.user.id,
+      connection_id: connection.id, mode, range_from: range.from, range_to: range.to, status: "running", triggered_by: auth.user?.id ?? null,
     }).select("id").single();
     if (runError) throw runError.code === "23505" ? syncError("SYNC_ALREADY_RUNNING") : runError;
     runId = run.id;
