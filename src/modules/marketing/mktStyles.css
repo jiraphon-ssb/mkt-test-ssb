@@ -20,6 +20,9 @@
   --accent-tint: var(--color-emerald-950);      /* พื้นแผง accent แบบจาง */
   --accent-line: var(--color-emerald-700);      /* ขอบแผง accent */
   --accent-text: var(--color-emerald-300);      /* ตัวหนังสือบนแผง tint */
+  /* พื้นทึบของปุ่ม/ชิปที่มีตัวหนังสือขาวทับ — ขาวบน --accent ได้แค่ 3.65 (มืด) / 3.74 (สว่าง) ตก AA
+     ธีมมืดใช้ shade 700 = 5.36 · ธีมสว่างใช้ shade 200 = 6.30 (ตั้งไว้ในบล็อก .light) */
+  --accent-solid: var(--color-emerald-700);
   /* พื้นอ่อนของไอคอนใน stat tile — ต้องพลิกตามธีม ไม่งั้นเป็นแผ่นสว่างจ้าบนพื้นมืด */
   --tint-blue: color-mix(in srgb, var(--link) 18%, var(--surface));
   /* ---- remap: token ของโมดูล → ตัวแปรธีมของแพลตฟอร์ม (จุดเดียวที่คุมสีทั้งโมดูล) ---- */
@@ -123,7 +126,7 @@
     font-size: var(--fs-sm); font-weight: 600; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; transition: .15s;
   }
   .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
-  .chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .chip.on { background: var(--accent-solid, var(--accent)); border-color: var(--accent-solid, var(--accent)); color: var(--on-accent); }
   .chip.on .dot { outline: 2px solid color-mix(in srgb, var(--bg) 35%, transparent); }
   /* ---------- Nav ---------- */
   .nav {
@@ -565,12 +568,12 @@
   .rq-readonly { flex: 1; font-size: var(--fs-sm); color: var(--ink-faint); text-align: center; padding: 8px; background: var(--surface-2); border-radius: var(--r-sm); }
   .rq-meta { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--ink-faint); }
   .btn { border-radius: var(--r-sm); padding: 8px 18px; font-weight: 600; font-size: var(--fs-md); transition: .12s; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
-  .btn.approve { flex: 1; background: var(--accent); color: var(--on-accent); }
+  .btn.approve { flex: 1; background: var(--accent-solid, var(--accent)); color: var(--on-accent); }
   .btn.approve:hover { background: var(--accent-deep); }
   .btn.reject { flex: 1; background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
   .btn.reject:hover { border-color: var(--bad); color: var(--bad); }
   .btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
-  .btn.primary { background: var(--accent); color: var(--on-accent); width: 100%; }
+  .btn.primary { background: var(--accent-solid, var(--accent)); color: var(--on-accent); width: 100%; }
   .btn.primary:hover:not(:disabled) { background: var(--accent-deep); }
   .btn.ghost { background: var(--surface); border: 1px solid var(--line); }
   .btn.small { padding: 6px 14px; font-size: var(--fs-md); }
@@ -2610,6 +2613,7 @@
   --rt-chip: color-mix(in srgb, var(--color-amber-400) 30%, var(--surface));
   --violet: var(--color-violet-300);
   --accent-deep: var(--color-emerald-200);
+  --accent-solid: var(--color-emerald-200);   /* ขาวบน #a63f08 = 6.30 ผ่าน AA */
   /* ตัวหนังสือสีแบรนด์บนพื้น tint ของธีมสว่าง — shade 300 (#c64c0c) ได้ contrast แค่ 4.14 ตก AA
      ขยับเป็น shade 200 (#a63f08) = 5.52 บนพื้น tint และ 6.30 บนพื้นขาว ยังเป็นส้ม TEAMDEE เหมือนเดิม */
   --accent-text: var(--color-emerald-200);
