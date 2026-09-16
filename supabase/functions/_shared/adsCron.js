@@ -61,3 +61,38 @@ export function planCronJobs({
   }
   return jobs;
 }
+
+export const RECONCILE_AFTER_HOUR = 9;   // Meta ปิดยอดของเมื่อวานตอนเช้า — ตรวจก่อนนั้นได้ผลไม่นิ่ง
+
+/** บัญชีที่ควรตรวจยอดในรอบนี้: ข้อมูลครบ · สายพอตามเวลาบัญชี · วันนี้ยังไม่มีผลตรวจที่สำเร็จ */
+export function planReconcileTargets({
+  connections = [], runs = [], now, todayOf, hourOf, afterHour = RECONCILE_AFTER_HOUR, max = 4,
+} = {}) {
+  if (!Number.isFinite(time(now))) return [];
+  const targets = [];
+  for (const connection of connections) {
+    if (!connection?.id || connection.status === "disabled" || !connection.authorization_id) continue;
+    const own = entryRuns(runs.filter((r) => (r.connection_id ?? r.connectionId) === connection.id));
+    const today = todayOf(connection.timezone);
+    if (hourOf(connection.timezone) < afterHour) continue;
+    if (missingDaysOf(own, today, connection.config?.backfillDays)) continue;
+    const checkedToday = own.some((r) => r.mode === "reconcile" && r.status === "success" && String(r.started_at ?? "").slice(0, 10) === today);
+    if (checkedToday) continue;
+    targets.push(connection.id);
+    if (targets.length >= max) break;
+  }
+  return targets;
+}
+
+/** สรุปผลรอบหนึ่งลงตาราง ad_cron_ticks — ไม่มีงานให้ทำ ไม่ใช่ความผิดพลาด */
+export function summarizeTick({ planned = 0, sync = [], reconcile = [] } = {}) {
+  const ok = sync.filter((r) => r?.ok);
+  const failed = [...sync, ...reconcile].filter((r) => r && !r.ok).length;
+  const reconciled = reconcile.filter((r) => r?.ok).length;
+  const rowsWritten = ok.reduce((sum, r) => sum + (Number(r.rows) || 0), 0);
+  const done = ok.length + reconciled;
+  return {
+    planned, synced: ok.length, failed, rowsWritten, reconciled,
+    status: !failed ? "success" : done ? "partial" : "failed",
+  };
+}

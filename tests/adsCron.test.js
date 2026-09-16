@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planCronJobs, cronDue } from "../supabase/functions/_shared/adsCron.js";
+import { cronDue, planCronJobs, planReconcileTargets, summarizeTick } from "../supabase/functions/_shared/adsCron.js";
 
 const NOW = "2026-09-16T10:00:00.000Z";
 const conn = (id, patch = {}) => ({ id, status: "connected", authorization_id: "auth-" + id, timezone: "Asia/Bangkok", config: { backfillDays: 31 }, ...patch });
@@ -72,5 +72,42 @@ describe("planCronJobs — งานที่รอบนี้จะดึง",
     ];
     const jobs = plan({ connections: conns, runs, syncEveryHours: 6, maxJobs: 2 });
     expect(jobs.map((job) => job.connectionId)).toEqual(["c2", "c3"]);
+  });
+});
+
+describe("planReconcileTargets — ตรวจยอดอัตโนมัติวันละครั้ง", () => {
+  const recon = (connection_id, patch = {}) => ({ connection_id, mode: "reconcile", status: "success", started_at: "2026-09-16T02:00:00.000Z", finished_at: "2026-09-16T02:00:10.000Z", ...patch });
+  const target = (args) => planReconcileTargets({ now: NOW, todayOf: () => "2026-09-16", hourOf: () => 17, ...args });
+
+  it("ข้อมูลครบ + สายพอ + วันนี้ยังไม่ได้ตรวจ = ตรวจ", () => {
+    expect(target({ connections: [conn("c1")], runs: [run("c1")] })).toEqual(["c1"]);
+  });
+  it("ยังเช้าอยู่ (Meta ยังปิดยอดเมื่อวานไม่เสร็จ) = ยังไม่ตรวจ", () => {
+    expect(target({ connections: [conn("c1")], runs: [run("c1")], hourOf: () => 6 })).toEqual([]);
+  });
+  it("ตรวจไปแล้ววันนี้ = ไม่ตรวจซ้ำ · ของเมื่อวาน = ตรวจใหม่", () => {
+    expect(target({ connections: [conn("c1")], runs: [run("c1"), recon("c1")] })).toEqual([]);
+    expect(target({ connections: [conn("c1")], runs: [run("c1"), recon("c1", { started_at: "2026-09-15T02:00:00.000Z" })] })).toEqual(["c1"]);
+  });
+  it("ยังมีวันที่ขาด = ไม่ตรวจ (ตรวจไปก็ไม่ผ่านเพราะข้อมูลไม่ครบ)", () => {
+    expect(target({ connections: [conn("c1")], runs: [] })).toEqual([]);
+  });
+  it("บัญชีปิด/ไม่มี token = ไม่ตรวจ · ตรวจที่ล้มเหลววันนี้ไม่นับว่าตรวจแล้ว", () => {
+    expect(target({ connections: [conn("c1", { status: "disabled" })], runs: [run("c1")] })).toEqual([]);
+    expect(target({ connections: [conn("c1")], runs: [run("c1"), recon("c1", { status: "failed" })] })).toEqual(["c1"]);
+  });
+});
+
+describe("summarizeTick — สรุปลงประวัติ", () => {
+  it("นับงานที่สำเร็จ/ล้มเหลว แถวที่เขียน และสถานะรวม", () => {
+    const sync = [{ ok: true, rows: 120 }, { ok: true, rows: 66 }];
+    expect(summarizeTick({ planned: 2, sync, reconcile: [{ ok: true }] })).toEqual({
+      planned: 2, synced: 2, failed: 0, rowsWritten: 186, reconciled: 1, status: "success",
+    });
+  });
+  it("มีบางงานพัง = partial · พังหมด = failed · ไม่มีงานเลย = success (ไม่ถึงรอบ ไม่ใช่ความผิดพลาด)", () => {
+    expect(summarizeTick({ planned: 2, sync: [{ ok: true, rows: 5 }, { ok: false }] }).status).toBe("partial");
+    expect(summarizeTick({ planned: 1, sync: [{ ok: false }] }).status).toBe("failed");
+    expect(summarizeTick({ planned: 0, sync: [] })).toEqual({ planned: 0, synced: 0, failed: 0, rowsWritten: 0, reconciled: 0, status: "success" });
   });
 });

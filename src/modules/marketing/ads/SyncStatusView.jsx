@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database, Download, RefreshCw, Scale, Settings2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database, Download, RefreshCw, Scale, Settings2, Timer } from "lucide-react";
 import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { useApp } from "../useMkt.jsx";
-import { adsDataHealth, normalizeSyncRuns, syncAccountRows } from "./adsDataHealth.js";
+import { adsDataHealth, cronHealth, normalizeCronTicks, normalizeSyncRuns, syncAccountRows } from "./adsDataHealth.js";
 import { ADS_PROVIDERS } from "./adsConnectorContract.js";
 import { applyConnectionResult, applyCoverage, applyReconciliation, latestReconcileByConnection, runSyncJobs, syncCreativesFor } from "./adsConnectionSync.js";
 import { missingDaysOf, planSyncJobs } from "../../../../supabase/functions/_shared/adsBackfill.js";
@@ -28,7 +28,39 @@ function AccountRow({ row }) {
 
 function RunTable({ runs, accounts }) {
   const names = new Map(accounts.map((row) => [row.connectionId, `${row.brand} · ${row.provider}`]));
-  return <section className="sy-panel"><header><div><h2>ประวัติการ Sync</h2><p>หลักฐานการดึงข้อมูลล่าสุดจาก backend</p></div></header>{runs.length ? <div className="sy-run-table"><div className="sy-run-row head"><span>บัญชี</span><span>เริ่ม</span><span>โหมด</span><span>เขียนข้อมูล</span><span>ผล</span></div>{runs.slice(0, 20).map((run) => <div className="sy-run-row" key={run.id}><span>{names.get(run.connectionId) ?? run.connectionId ?? "ไม่ทราบบัญชี"}</span><span>{when(run.startedAt)}</span><span>{run.mode === "backfill" ? "ย้อนหลัง" : run.mode === "reconcile" ? "ตรวจยอด" : "ล่าสุด"}</span><span>{run.mode === "reconcile" ? "—" : `${run.rowsWritten.toLocaleString("th-TH")} แถว`}</span><span className={`sy-run-${run.status}`}>{run.errorCode ? `${run.status} · ${run.errorCode}` : run.status}</span></div>)}</div> : <div className="sy-empty"><Database size={25} /><strong>ยังไม่มีประวัติจาก backend</strong><span>ประวัติจะเริ่มแสดงหลังเชื่อม OAuth และ Sync ครั้งแรก</span></div>}</section>;
+  return <section className="sy-panel"><header><div><h2>ประวัติการ Sync</h2><p>หลักฐานการดึงข้อมูลล่าสุดจาก backend</p></div></header>{runs.length ? <div className="sy-run-table"><div className="sy-run-row head"><span>บัญชี</span><span>เริ่ม</span><span>โหมด</span><span>ผู้สั่ง</span><span>เขียนข้อมูล</span><span>ผล</span></div>{runs.slice(0, 20).map((run) => <div className="sy-run-row" key={run.id}><span>{names.get(run.connectionId) ?? run.connectionId ?? "ไม่ทราบบัญชี"}</span><span>{when(run.startedAt)}</span><span>{run.mode === "backfill" ? "ย้อนหลัง" : run.mode === "reconcile" ? "ตรวจยอด" : "ล่าสุด"}</span><span>{run.auto ? "อัตโนมัติ" : "กดเอง"}</span><span>{run.mode === "reconcile" ? "—" : `${run.rowsWritten.toLocaleString("th-TH")} แถว`}</span><span className={`sy-run-${run.status}`}>{run.errorCode ? `${run.status} · ${run.errorCode}` : run.status}</span></div>)}</div> : <div className="sy-empty"><Database size={25} /><strong>ยังไม่มีประวัติจาก backend</strong><span>ประวัติจะเริ่มแสดงหลังเชื่อม OAuth และ Sync ครั้งแรก</span></div>}</section>;
+}
+
+const TICK_STATUS = { success: "สำเร็จ", partial: "สำเร็จบางส่วน", failed: "ไม่สำเร็จ", running: "กำลังทำงาน" };
+const seconds = (ms) => (ms == null ? "—" : ms < 1000 ? "<1 วิ" : `${Math.round(ms / 1000)} วิ`);
+
+function CronPanel({ ticks, everyHours }) {
+  const health = cronHealth(ticks);
+  const last = ticks[0] ?? null;
+  return <section className="sy-panel sy-cron" aria-label="การดึงข้อมูลอัตโนมัติ">
+    <header>
+      <div><h2>ดึงอัตโนมัติ</h2><p>ตัวตั้งเวลาในฐานข้อมูลเรียกทุกชั่วโมง แล้วดึง/ตรวจยอดเท่าที่ถึงคิว</p></div>
+      <span className={`sy-cron-pill ${health.state}`}><Timer size={13} aria-hidden="true" />{health.label}{last ? ` · ${when(last.startedAt)}` : ""}</span>
+    </header>
+    <dl className="sy-cron-facts">
+      <div><dt>รอบถัดไป</dt><dd>ทุกชั่วโมง นาทีที่ 7</dd></div>
+      <div><dt>ดึงซ้ำทุก</dt><dd>{everyHours ? `${everyHours} ชั่วโมง` : "—"}</dd></div>
+      <div><dt>ตรวจยอด</dt><dd>วันละครั้ง หลัง 9 โมงเช้า</dd></div>
+      <div><dt>รอบที่เก็บไว้</dt><dd>90 วันล่าสุด</dd></div>
+    </dl>
+    {ticks.length ? <div className="sy-run-table sy-tick-table">
+      <div className="sy-run-row sy-tick-row head"><span>เวลา</span><span>ที่มา</span><span>ดึง</span><span>ตรวจยอด</span><span>เขียนข้อมูล</span><span>ใช้เวลา</span><span>ผล</span></div>
+      {ticks.slice(0, 12).map((tick) => <div className="sy-run-row sy-tick-row" key={tick.id}>
+        <span>{when(tick.startedAt)}</span>
+        <span>{tick.auto ? "อัตโนมัติ" : "สั่งเอง"}</span>
+        <span>{tick.synced ? `${tick.synced} ก้อน` : "—"}</span>
+        <span>{tick.reconciled ? `${tick.reconciled} บัญชี` : "—"}</span>
+        <span>{tick.rowsWritten ? `${tick.rowsWritten.toLocaleString("th-TH")} แถว` : "—"}</span>
+        <span>{seconds(tick.durationMs)}</span>
+        <span className={`sy-run-${tick.status}`}>{tick.errorCode ? `${TICK_STATUS[tick.status] ?? tick.status} · ${tick.errorCode}` : tick.planned === 0 && tick.status === "success" ? "ไม่มีอะไรต้องทำ" : TICK_STATUS[tick.status] ?? tick.status}</span>
+      </div>)}
+    </div> : <div className="sy-empty"><Timer size={25} /><strong>ยังไม่มีรอบอัตโนมัติ</strong><span>ประวัติจะขึ้นหลังตัวตั้งเวลาทำงานรอบแรก</span></div>}
+  </section>;
 }
 
 export function SyncStatusView() {
@@ -39,6 +71,7 @@ export function SyncStatusView() {
   const [dbConnections, setDbConnections] = useState(null);
   const [reconRuns, setReconRuns] = useState([]);
   const [coverageRuns, setCoverageRuns] = useState([]);
+  const [ticks, setTicks] = useState([]);
   const saved = data.settings?.ads_control;
   const config = useMemo(() => {
     const merged = dbConnections ? applyConnectionResult(saved ?? {}, { connections: dbConnections }) : (saved ?? {});
@@ -58,10 +91,12 @@ export function SyncStatusView() {
   const refresh = async () => {
     setLoading(true);
     try {
-      const [runsFromDb, connections, recons, coverage] = await Promise.all([
+      const [runsFromDb, connections, recons, coverage, cronTicks] = await Promise.all([
         apiClient.ads.recentSyncs(20), canSync ? apiClient.ads.connections() : Promise.resolve(null),
         apiClient.ads.reconciliations().catch(() => []), canSync ? apiClient.ads.syncCoverage().catch(() => []) : Promise.resolve([]),
+        apiClient.ads.cronTicks().catch(() => []),
       ]);
+      setTicks(normalizeCronTicks(cronTicks));
       setRemoteRuns(normalizeSyncRuns(runsFromDb));
       setReconRuns(recons ?? []);
       setCoverageRuns(coverage ?? []);
@@ -128,6 +163,7 @@ export function SyncStatusView() {
     <section className="sy-kpis"><div><span>Mapping เปิดใช้</span><b>{accounts.length}</b><small>{accounts.filter((row) => row.connected).length} เชื่อม OAuth แล้ว</small></div><div><span>พร้อมเปิดใช้</span><b>{ready}</b><small>ผ่านตรวจยอด 7 และ 30 วัน</small></div><div className={problems ? "bad" : ""}><span>ต้องแก้</span><b>{problems}</b><small>ข้อมูลขาด ล่าช้า หรือ Sync ผิดพลาด</small></div><div><span>ตรวจสถานะล่าสุด</span><b className="sy-time">{checkedAt ? when(checkedAt) : "ยังไม่ได้ตรวจ backend"}</b><small>หน้านี้ไม่สร้างสถานะสำเร็จจำลอง</small></div></section>
     <section className="sy-sources">{ADS_PROVIDERS.map((provider) => { const source = health.sources.find((item) => item.provider === provider.id); return <SourceSummary key={provider.id} source={{ ...source, color: provider.color }} rowCount={accounts.filter((row) => row.providerId === provider.id).length} />; })}</section>
     <section className="sy-panel"><header><div><h2>บัญชีที่ต้องดู</h2><p>เรียงจากสถานะที่ต้องแก้ก่อน</p></div><Link to="/mkt/ads?panel=settings&tab=sources">จัดการบัญชี <ArrowRight size={13} /></Link></header>{accounts.length ? <div className="sy-accounts"><div className="sy-account-row head"><span>บัญชี</span><span>สถานะ</span><span>Sync ล่าสุด</span><span>ช่องว่าง</span><span>ตรวจยอด / Creative</span><span /></div>{[...accounts].sort((a, b) => ({ error: 5, missing: 4, stale: 3, waiting: 2, syncing: 1, healthy: 0 }[b.state] - ({ error: 5, missing: 4, stale: 3, waiting: 2, syncing: 1, healthy: 0 }[a.state]))).map((row) => <AccountRow key={row.key} row={row} />)}</div> : <div className="sy-empty"><Database size={25} /><strong>ยังไม่มีบัญชีที่เปิดใช้</strong><span>เพิ่ม Account ID และเปิด “เตรียมดึง” ในหน้าตั้งค่าก่อน</span><Link to="/mkt/ads?panel=settings&tab=sources">ไปตั้งค่าบัญชี</Link></div>}</section>
+    <CronPanel ticks={ticks} everyHours={config.sources?.meta?.syncEveryHours ?? null} />
     <RunTable runs={runs} accounts={accounts} />
   </main>;
 }

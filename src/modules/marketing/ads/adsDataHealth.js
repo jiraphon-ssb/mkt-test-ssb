@@ -119,5 +119,44 @@ export function normalizeSyncRuns(runs = []) {
     rowsRead: Number(run.rows_read ?? run.rowsRead) || 0,
     rowsWritten: Number(run.rows_written ?? run.rowsWritten) || 0,
     errorCode: run.error_code ?? run.errorCode ?? null,
+    // ไม่มีคนสั่ง = ตัวดึงอัตโนมัติ (ads-cron ไม่ผูก user กับ run)
+    auto: (run.triggered_by ?? run.triggeredBy ?? null) === null,
   })).sort((a, b) => new Date(b.startedAt ?? 0) - new Date(a.startedAt ?? 0));
+}
+
+/* ── ประวัติตัวดึงอัตโนมัติ (ad_cron_ticks) ── */
+const CRON_STALE_MS = 2 * 3_600_000;   // cron ตั้งไว้ทุกชั่วโมง เงียบเกิน 2 ชั่วโมง = มีอะไรผิด
+
+export function normalizeCronTicks(ticks = []) {
+  return [...(ticks ?? [])].filter(Boolean).map((tick) => {
+    const startedAt = tick.started_at ?? tick.startedAt ?? null;
+    const finishedAt = tick.finished_at ?? tick.finishedAt ?? null;
+    const span = Date.parse(finishedAt ?? "") - Date.parse(startedAt ?? "");
+    return {
+      id: tick.id ?? `${startedAt ?? "unknown"}`,
+      startedAt, finishedAt,
+      durationMs: Number.isFinite(span) ? span : null,
+      source: tick.source ?? "pg_cron",
+      auto: (tick.source ?? "pg_cron") === "pg_cron",
+      status: tick.status ?? "unknown",
+      planned: Number(tick.planned) || 0,
+      synced: Number(tick.synced) || 0,
+      reconciled: Number(tick.reconciled) || 0,
+      failed: Number(tick.failed) || 0,
+      rowsWritten: Number(tick.rows_written ?? tick.rowsWritten) || 0,
+      syncEveryHours: Number(tick.sync_every_hours ?? tick.syncEveryHours) || null,
+      errorCode: tick.error_code ?? tick.errorCode ?? null,
+    };
+  }).sort((a, b) => new Date(b.startedAt ?? 0) - new Date(a.startedAt ?? 0));
+}
+
+/** ตัวดึงอัตโนมัติยังวิ่งอยู่ไหม — ดูจากรอบล่าสุด ไม่ใช่จากค่าที่ตั้งไว้ */
+export function cronHealth(ticks = [], now = Date.now()) {
+  const latest = [...(ticks ?? [])].filter(Boolean).sort((a, b) => new Date(b.startedAt ?? 0) - new Date(a.startedAt ?? 0))[0];
+  if (!latest) return { state: "idle", label: "ยังไม่เริ่มทำงาน", at: null };
+  const at = latest.startedAt ?? null;
+  const age = now - Date.parse(at ?? "");
+  if (latest.status === "failed") return { state: "error", label: "รอบล่าสุดไม่สำเร็จ", at };
+  if (!Number.isFinite(age) || age > CRON_STALE_MS) return { state: "stale", label: "เงียบเกินกำหนด", at };
+  return { state: "healthy", label: "ทำงานปกติ", at };
 }

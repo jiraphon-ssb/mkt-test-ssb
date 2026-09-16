@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adsDataHealth, normalizeSyncRuns, reconciliationRows, syncAccountRows } from "../src/modules/marketing/ads/adsDataHealth.js";
+import { normalizeCronTicks, cronHealth, adsDataHealth, normalizeSyncRuns, reconciliationRows, syncAccountRows } from "../src/modules/marketing/ads/adsDataHealth.js";
 
 const mapping = (over = {}) => ({ enabled: true, accountId: "act_123", timezone: "Asia/Bangkok", currency: "THB", ...over });
 
@@ -70,5 +70,47 @@ describe("sync status", () => {
     const runs = normalizeSyncRuns([{ id: "a", started_at: "2026-09-13", rows_written: 4 }, { id: "b", started_at: "2026-09-14", rows_written: 8 }]);
     expect(runs.map((run) => run.id)).toEqual(["b", "a"]);
     expect(runs[0].rowsWritten).toBe(8);
+  });
+});
+
+describe("normalizeSyncRuns — ผู้สั่ง", () => {
+  it("run ที่ไม่มี triggered_by = อัตโนมัติ · มี = คนกดเอง", () => {
+    const rows = normalizeSyncRuns([
+      { id: "r1", connection_id: "c1", status: "success", mode: "incremental", started_at: "2026-09-16T04:00:00Z", triggered_by: null },
+      { id: "r2", connection_id: "c1", status: "success", mode: "backfill", started_at: "2026-09-16T03:00:00Z", triggered_by: "user-1" },
+    ]);
+    expect(rows.map((r) => r.auto)).toEqual([true, false]);
+  });
+});
+
+describe("normalizeCronTicks — ประวัติตัวดึงอัตโนมัติ", () => {
+  it("แปลงชื่อคอลัมน์ · เรียงใหม่ไปเก่า · รอบที่ยังไม่จบไม่มีเวลาจบ", () => {
+    const rows = [
+      { id: "t1", started_at: "2026-09-16T03:07:00Z", finished_at: "2026-09-16T03:07:42Z", source: "pg_cron", status: "success", planned: 4, synced: 4, reconciled: 0, failed: 0, rows_written: 1200, sync_every_hours: 6, detail: {} },
+      { id: "t2", started_at: "2026-09-16T04:07:00Z", finished_at: null, source: "manual", status: "running", planned: 0, synced: 0, reconciled: 0, failed: 0, rows_written: 0 },
+    ];
+    const ticks = normalizeCronTicks(rows);
+    expect(ticks.map((t) => t.id)).toEqual(["t2", "t1"]);
+    expect(ticks[1]).toMatchObject({ source: "pg_cron", status: "success", planned: 4, synced: 4, rowsWritten: 1200, syncEveryHours: 6, auto: true });
+    expect(ticks[0]).toMatchObject({ source: "manual", auto: false, finishedAt: null, durationMs: null });
+    expect(ticks[1].durationMs).toBe(42000);
+  });
+  it("แถวพัง/ว่าง ไม่ทำให้ล้ม", () => {
+    expect(normalizeCronTicks([null, undefined])).toEqual([]);
+    expect(normalizeCronTicks()).toEqual([]);
+  });
+});
+
+describe("cronHealth — สรุปว่าตัวดึงอัตโนมัติยังวิ่งอยู่ไหม", () => {
+  const now = Date.parse("2026-09-16T04:30:00Z");
+  it("มีรอบภายใน 2 ชั่วโมง = ปกติ", () => {
+    expect(cronHealth([{ startedAt: "2026-09-16T04:07:00Z", status: "success" }], now)).toMatchObject({ state: "healthy", label: "ทำงานปกติ" });
+  });
+  it("เงียบเกิน 2 ชั่วโมง = ผิดปกติ · ยังไม่เคยวิ่งเลย = ยังไม่เริ่ม", () => {
+    expect(cronHealth([{ startedAt: "2026-09-16T01:00:00Z", status: "success" }], now).state).toBe("stale");
+    expect(cronHealth([], now).state).toBe("idle");
+  });
+  it("รอบล่าสุดพัง = ต้องแก้ แม้เวลาจะสด", () => {
+    expect(cronHealth([{ startedAt: "2026-09-16T04:07:00Z", status: "failed" }], now).state).toBe("error");
   });
 });

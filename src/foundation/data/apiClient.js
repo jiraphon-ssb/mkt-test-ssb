@@ -2521,6 +2521,15 @@ const adsData = {
     }
     return rows;
   },
+  /** ประวัติรอบทำงานของตัวดึงอัตโนมัติ (pg_cron → ads-cron) — อ่านอย่างเดียว เขียนได้เฉพาะ service role */
+  async cronTicks(limit = 24) {
+    const db = requireSupabase();
+    const { data, error } = await db.from("ad_cron_ticks")
+      .select("id,started_at,finished_at,source,status,planned,synced,reconciled,failed,rows_written,sync_every_hours,error_code")
+      .order("started_at", { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data ?? [];
+  },
   async recentSyncs(limit = 20) {
     const db = requireSupabase();
     const { data, error } = await db.from("ad_sync_runs").select("*").order("started_at", { ascending: false }).limit(limit);

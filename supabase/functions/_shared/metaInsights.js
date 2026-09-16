@@ -36,6 +36,13 @@ export function todayInTimeZone(now = new Date(), timeZone = "Asia/Bangkok") {
   try { return format(timeZone || "Asia/Bangkok"); } catch { return format("Asia/Bangkok"); }
 }
 
+/** ชั่วโมง 0–23 ตามโซนเวลาของบัญชี — ใช้ตัดสินว่า "เช้าพอจะตรวจยอดของเมื่อวานหรือยัง" */
+export function hourInTimeZone(now = new Date(), timeZone = "Asia/Bangkok") {
+  const read = (tz) => Number(new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", hour12: false }).format(now));
+  const hour = (() => { try { return read(timeZone || "Asia/Bangkok"); } catch { return read("Asia/Bangkok"); } })();
+  return Number.isFinite(hour) ? hour % 24 : 0;
+}
+
 /** incremental = 3 วันล่าสุด (Meta แก้ยอดย้อนหลังได้) · backfill = N วัน (1–180) · นับรวมวันนี้ */
 export function syncRange(mode, today, backfillDays = 30) {
   const end = toTime(today);

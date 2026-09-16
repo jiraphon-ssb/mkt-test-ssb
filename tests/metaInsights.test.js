@@ -1,7 +1,7 @@
 /* ตัวดึง/แปลง Meta Insights ที่ Edge Function ads-sync ใช้ — pure JS เทสได้ใน vitest */
 import { describe, it, expect, vi } from "vitest";
 import {
-  todayInTimeZone, syncRange, chunkRange, buildInsightsUrl, normalizeInsightRow,
+  todayInTimeZone, hourInTimeZone, syncRange, chunkRange, buildInsightsUrl, normalizeInsightRow,
   metaErrorCode, isRetryableMetaError, fetchAllPages, dedupeFacts, summarizeFacts,
 } from "../supabase/functions/_shared/metaInsights.js";
 
@@ -65,6 +65,18 @@ describe("buildInsightsUrl", () => {
   it("account id ต้องขึ้นต้น act_ ตามด้วยตัวเลข (กัน path injection)", () => {
     expect(() => buildInsightsUrl({ version: "v26.0", accountId: "act_1/../me", from: "2026-09-14", to: "2026-09-14" })).toThrow("ACCOUNT_ID_INVALID");
     expect(() => buildInsightsUrl({ version: "v26.0", accountId: "123", from: "2026-09-14", to: "2026-09-14" })).toThrow("ACCOUNT_ID_INVALID");
+  });
+});
+
+describe("hourInTimeZone", () => {
+  const at = (iso) => new Date(iso);
+  it("อ่านชั่วโมงตามโซนของบัญชี (ไทย +7)", () => {
+    expect(hourInTimeZone(at("2026-09-16T02:30:00Z"), "Asia/Bangkok")).toBe(9);
+    expect(hourInTimeZone(at("2026-09-16T17:10:00Z"), "Asia/Bangkok")).toBe(0);
+  });
+  it("โซนอื่นและโซนเพี้ยน — เพี้ยนให้ตกไปที่เวลาไทย ไม่ throw", () => {
+    expect(hourInTimeZone(at("2026-09-16T02:30:00Z"), "America/Los_Angeles")).toBe(19);
+    expect(hourInTimeZone(at("2026-09-16T02:30:00Z"), "ไม่ใช่โซน")).toBe(9);
   });
 });
 

@@ -1,7 +1,7 @@
 /* ads-reconcile — ตรวจยอด: เทียบค่าแอด 7/30 วัน (จบเมื่อวาน) ระหว่าง ad_daily_facts กับ Meta ระดับบัญชี
    สิทธิ์ team_lead · token ถอดรหัสฝั่ง server · ผลเก็บเป็น ad_sync_runs โหมด reconcile (summary.kind = "reconcile")
    ไม่แตะยอดใน ad_daily_facts — อ่านอย่างเดียวทั้งสองฝั่ง */
-import { activeMemberUserIds, corsHeaders, decryptToken, graphVersion, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { syncError, todayInTimeZone } from "../_shared/metaInsights.js";
 import { buildAccountSpendUrl, buildReconcileSummary, compareSpend, fetchRemoteSpend, reconcileWindows, sumLocalSpend, RECONCILE_WINDOW_KEYS } from "../_shared/adsReconcile.js";
@@ -13,7 +13,8 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
   try {
-    const { db, user } = await requireTeamLead(request);
+    // คนกดปุ่ม "ตรวจยอด" = team_lead · ตัวตรวจอัตโนมัติจาก ads-cron = service role (ไม่มี user ผูกกับผลตรวจ)
+    const { db, user } = isServiceRole(request) ? { db: adminClient(), user: null } : await requireTeamLead(request);
     const body = await request.json().catch(() => ({}));
     const onlyId = typeof body.connectionId === "string" && UUID.test(body.connectionId) ? body.connectionId : null;
 
@@ -67,7 +68,7 @@ Deno.serve(async (request) => {
         const { error: runError } = await db.from("ad_sync_runs").insert({
           connection_id: connection.id, mode: "reconcile", range_from: windows["30d"].from, range_to: windows["30d"].to,
           status: summary.passed ? "success" : "partial", rows_read: RECONCILE_WINDOW_KEYS.length, rows_written: 0,
-          triggered_by: user.id, summary, finished_at: new Date().toISOString(),
+          triggered_by: user?.id ?? null, summary, finished_at: new Date().toISOString(),
         });
         if (runError) throw runError;
         results.push({ connectionId: connection.id, brandId: connection.brand_id, ok: true, summary });
