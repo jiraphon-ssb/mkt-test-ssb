@@ -19,21 +19,27 @@ Deno.serve(async (request) => {
   if (!isServiceRole(request)) return json(request, { error: "SERVICE_ROLE_REQUIRED" }, 401);
 
   const db = adminClient();
-  return await runTick(request, db).catch(async (error) => {
+  const crashed = { tickId: null as string | null };
+  return await runTick(request, db, crashed).catch(async (error) => {
     console.error("[ads-cron] crash", error instanceof Error ? error.message : error);
-    await db.from("ad_cron_ticks").update({ status: "failed", error_code: "CRON_CRASHED", finished_at: new Date().toISOString() })
-      .eq("status", "running");
+    // ปิดเฉพาะ tick ของรอบนี้ — ห้ามเหมารวม tick อื่นที่อาจกำลังวิ่งอยู่จริง
+    if (crashed.tickId) {
+      await db.from("ad_cron_ticks")
+        .update({ status: "failed", error_code: "CRON_CRASHED", finished_at: new Date().toISOString() })
+        .eq("id", crashed.tickId);
+    }
     return json(request, { error: "CRON_CRASHED" }, 500);
   });
 });
 
 /** เนื้องานของหนึ่งรอบ — แยกออกมาเพื่อให้ตัวเรียกดักพังได้ทุกกรณี ไม่ทิ้ง tick ค้างสถานะ running */
-async function runTick(request: Request, db: ReturnType<typeof adminClient>) {
+async function runTick(request: Request, db: ReturnType<typeof adminClient>, crashed: { tickId: string | null }) {
   const body = await request.json().catch(() => ({}));
   const source = body?.source === "manual" ? "manual" : "pg_cron";
   const now = new Date().toISOString();
   const { data: tick } = await db.from("ad_cron_ticks").insert({ source, started_at: now }).select("id").single();
   const tickId = tick?.id ?? null;
+  crashed.tickId = tickId;
 
   const finish = async (patch: Record<string, unknown>) => {
     if (tickId) await db.from("ad_cron_ticks").update({ finished_at: new Date().toISOString(), ...patch }).eq("id", tickId);
