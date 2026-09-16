@@ -252,7 +252,9 @@ import { needsPostScopeReconnect } from "../src/modules/marketing/ads/adsConnect
 describe("needsPostScopeReconnect — ต้องเชื่อม Meta ใหม่เพื่อให้แสดงภาพโพสต์ไหม", () => {
   it("มี authorization ที่เชื่อมอยู่แต่ยังไม่มีสิทธิ์อ่านเพจ = ต้องเชื่อมใหม่", () => {
     expect(needsPostScopeReconnect([{ status: "connected", scopes: ["ads_read"] }])).toBe(true);
-    expect(needsPostScopeReconnect([{ status: "connected", scopes: ["ads_read", "pages_show_list", "pages_read_engagement"] }])).toBe(false);
+    // เพจใต้ Business Manager ต้องใช้ business_management ด้วย — ขาดตัวไหนก็ยังได้ภาพจริงไม่ครบ
+    expect(needsPostScopeReconnect([{ status: "connected", scopes: ["ads_read", "pages_show_list", "pages_read_engagement"] }])).toBe(true);
+    expect(needsPostScopeReconnect([{ status: "connected", scopes: ["ads_read", "pages_show_list", "pages_read_engagement", "business_management"] }])).toBe(false);
     expect(needsPostScopeReconnect([{ status: "expired", scopes: ["ads_read"] }])).toBe(false);
     expect(needsPostScopeReconnect([])).toBe(false);
   });

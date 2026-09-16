@@ -1,4 +1,5 @@
 /* หน้าตั้งค่า ↔ Edge Function ads-connections: เลือก mapping ที่ต้องส่ง และใส่ผลกลับเข้า settings.ads_control */
+import { OAUTH_SCOPES } from "./metaCreativeContract.js";
 
 export function enabledMetaMappings(config = {}) {
   return Object.fromEntries(Object.entries(config.mappings?.meta ?? {})
@@ -136,5 +137,6 @@ export async function syncCreativesFor(connectionId, call, maxRounds = 10) {
 
 /** มีการเชื่อม Meta ที่ยังไม่มีสิทธิ์อ่านเพจ → ภาพโฆษณาแบบบูสต์โพสต์ยังเป็นรูปโปรไฟล์เพจ ต้องเชื่อมใหม่ */
 export function needsPostScopeReconnect(authorizations = []) {
-  return authorizations.some((item) => item?.status === "connected" && !(item.scopes ?? []).includes("pages_read_engagement"));
+  // เทียบกับสิทธิ์ที่ระบบขอจริงทั้งชุด — เพิ่ม scope ใหม่ทีหลังแล้ว token เก่าจะไม่มี ต้องเตือนให้เชื่อมใหม่เอง
+  return authorizations.some((item) => item?.status === "connected" && OAUTH_SCOPES.some((scope) => !(item.scopes ?? []).includes(scope)));
 }
