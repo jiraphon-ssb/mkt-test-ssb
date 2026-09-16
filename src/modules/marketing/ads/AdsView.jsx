@@ -346,7 +346,6 @@ export function AdsView() {
       before,
       monthView,
       rangeLabel: rangeLabel(shownFrom, shownTo),
-      salesRange: { from: shownFrom, to: shownTo }, // ตาราง sales ใช้วัน ISO — v.range เป็น {start,end} ส่งตรงไม่ได้ (เคยทำให้รวมทุกวันที่โหลดมา)
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
       revenueBasis,
       channelList: adsChannelList(scopedAll),

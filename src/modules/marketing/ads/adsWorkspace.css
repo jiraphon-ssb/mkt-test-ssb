@@ -149,12 +149,3 @@
 @media(max-width:680px){.aw-header-actions { align-items:flex-start; flex-direction:column; }.acc-header>div { align-items:flex-start; flex-direction:column; gap:6px; }.acc-header a { padding:0; border:0; }.acc-source-list,.acc-target-grid,.acc-field-grid,.acc-mapping-row,.acc-ready-grid,.acc-health-grid,.acc-source-config { grid-template-columns:1fr; }.acc-sheet { padding:16px; }.acc-lineage,.acc-reconcile { overflow:auto; }.acc-lineage-row { min-width:680px; }.acc-reconcile-row { min-width:690px; }}
 
 /* ยอดขายจริงจากระบบขาย */
-.aw-sales-head { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:12px 0; }
-.aw-sales-head>div { padding:11px 12px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
-.aw-sales-head span { display:block; color:var(--ink-soft); font-size:11px; }
-.aw-sales-head b { display:block; margin-top:4px; color:var(--ink); font-size:16px; font-variant-numeric:tabular-nums; }
-.aw-sales td { font-variant-numeric:tabular-nums; }
-@media(max-width:760px){ .aw-sales-head { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-.aw-sales-goals { margin-top:12px; }
-.aw-sales-goals dt small { color:var(--ink-soft); font-size:11px; font-weight:500; }
-.aw-sales-goals dd small { color:var(--ink-soft); font-weight:500; }
