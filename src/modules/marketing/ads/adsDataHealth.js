@@ -128,6 +128,24 @@ export function normalizeSyncRuns(runs = []) {
 const CRON_STALE_MS = 2 * 3_600_000;
 const STUCK_TICK_MS = 10 * 60_000;   // Edge Function ถูกตัดก่อน 10 นาทีเสมอ — ค้างเกินนี้คือ crash   // cron ตั้งไว้ทุกชั่วโมง เงียบเกิน 2 ชั่วโมง = มีอะไรผิด
 
+const TICK_CODE = /^[A-Z0-9_]{1,64}$/;
+/* งานอื่นในรอบ cron (ยอดขาย · สำรวจแหล่ง · creative) — ไม่ได้ทำในรอบนั้น = null ไม่ใช่ 0 · หมายเหตุเก็บเฉพาะรหัส */
+function tickDetail(detail) {
+  const d = detail && typeof detail === "object" ? detail : {};
+  const job = (value) => value && typeof value === "object" ? { ok: value.ok === true, rows: Number.isFinite(Number(value.rows)) && value.rows !== null ? Number(value.rows) : null } : null;
+  const creatives = Array.isArray(d.creatives) ? d.creatives : [];
+  const notes = new Set();
+  for (const item of [d.sales, d.inventory, ...creatives, ...(Array.isArray(d.sync) ? d.sync : []), ...(Array.isArray(d.reconcile) ? d.reconcile : [])]) {
+    for (const code of [item?.code, item?.note]) if (TICK_CODE.test(String(code ?? ""))) notes.add(code);
+  }
+  return {
+    sales: job(d.sales),
+    inventory: job(d.inventory),
+    creatives: creatives.length ? { total: creatives.length, ok: creatives.filter((item) => item?.ok).length } : null,
+    notes: [...notes].sort(),
+  };
+}
+
 export function normalizeCronTicks(ticks = []) {
   return [...(ticks ?? [])].filter(Boolean).map((tick) => {
     const startedAt = tick.started_at ?? tick.startedAt ?? null;
@@ -147,6 +165,7 @@ export function normalizeCronTicks(ticks = []) {
       rowsWritten: Number(tick.rows_written ?? tick.rowsWritten) || 0,
       syncEveryHours: Number(tick.sync_every_hours ?? tick.syncEveryHours) || null,
       errorCode: tick.error_code ?? tick.errorCode ?? null,
+      ...tickDetail(tick.detail),
     };
   }).sort((a, b) => new Date(b.startedAt ?? 0) - new Date(a.startedAt ?? 0));
 }

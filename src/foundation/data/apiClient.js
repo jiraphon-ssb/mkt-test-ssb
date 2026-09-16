@@ -2525,7 +2525,7 @@ const adsData = {
   async cronTicks(limit = 24) {
     const db = requireSupabase();
     const { data, error } = await db.from("ad_cron_ticks")
-      .select("id,started_at,finished_at,source,status,planned,synced,reconciled,failed,rows_written,sync_every_hours,error_code")
+      .select("id,started_at,finished_at,source,status,planned,synced,reconciled,failed,rows_written,sync_every_hours,error_code,detail")
       .order("started_at", { ascending: false }).limit(limit);
     if (error) throw error;
     return data ?? [];

@@ -36,6 +36,25 @@ const TEXT = {
   ACCOUNT_NOT_ACTIVE: "บัญชีโฆษณานี้ถูกปิดใช้งานใน Meta",
   ACCOUNT_ID_INVALID: "Account ID ต้องเป็น act_ ตามด้วยตัวเลข",
   MAPPINGS_INVALID: "ข้อมูล mapping ไม่ถูกต้อง",
+  // ── ระบบขาย (sales-sync) ──
+  SALES_API_NOT_CONFIGURED: "ยังไม่ได้ตั้ง SALES_API_URL / SALES_API_KEY ใน Edge Function Secrets",
+  SALES_READ_FAILED: "อ่านข้อมูลจากระบบขายไม่สำเร็จ — กด “ตรวจการเชื่อมต่อ” เพื่อดูว่าคีย์หรือ URL มีปัญหาไหม",
+  SALES_RESPONSE_INVALID: "ระบบขายตอบกลับผิดรูป ยังไม่ได้บันทึกอะไร",
+  SALES_PAGE_LIMIT: "ข้อมูลวันเดียวของระบบขายเกินเพดานที่ดึงได้ต่อครั้ง ยังไม่ได้บันทึกอะไร",
+  SALES_COLUMN_LEAK: "ระบบขายส่งข้อมูลเกินที่ขอ (อาจมีข้อมูลลูกค้าติดมา) — หยุดไว้ก่อน ไม่ได้บันทึกอะไร",
+  SALES_EMPTY_RESULT: "ระบบขายตอบว่าไม่มีข้อมูลทั้งช่วง — ระบบไม่เขียนทับของเดิม น่าจะเป็นเรื่องสิทธิ์ของคีย์",
+  SALES_WRITE_FAILED: "บันทึกยอดขายลงฐานไม่สำเร็จ ยอดเดิมยังอยู่ครบ",
+  SALES_GOALS_FAILED: "ยอดขายเข้าแล้ว แต่อ่านเป้าจากระบบขายไม่สำเร็จ",
+  SALES_GOALS_WRITE_FAILED: "ยอดขายเข้าแล้ว แต่บันทึกเป้าไม่สำเร็จ",
+  SALES_RANGE_INVALID: "ช่วงวันที่ไม่ถูกต้อง",
+  SALES_RANGE_TOO_LONG: "ดึงย้อนหลังได้ครั้งละไม่เกิน 93 วัน",
+  SALES_SYNC_CRASHED: "ดึงยอดขายหยุดกลางทาง ยังไม่ได้บันทึกอะไรเพิ่ม ลองใหม่อีกครั้ง",
+  SALES_SYNC_FAILED: "ดึงยอดขายไม่สำเร็จ",
+  SALES_CHECK_FAILED: "ตรวจการเชื่อมต่อระบบขายไม่สำเร็จ",
+  SALES_INVENTORY_FAILED: "สำรวจแหล่งข้อมูลของระบบขายไม่สำเร็จ",
+  NEEDS_RECONNECT: "ต้องเชื่อม Meta ใหม่เพื่อให้สิทธิ์อ่านเพจ",
+  DEADLINE: "หมดเวลาก่อนทำครบ รอบหน้าจะทำต่อ",
+  PIPELINE_FAILED: "รอบนี้ไม่สำเร็จ",
 };
 
 /** error ของ supabase.functions.invoke → รหัส: body { error } · ส่งไม่ถึง function = FUNCTION_UNREACHABLE */

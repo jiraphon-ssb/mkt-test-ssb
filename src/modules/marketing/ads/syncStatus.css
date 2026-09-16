@@ -12,7 +12,8 @@
 .spin { animation:sy-spin .8s linear infinite; }@keyframes sy-spin{to{transform:rotate(360deg)}}
 @media(max-width:1000px){.sy-kpis,.sy-sources{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.sy-header{display:grid}.sy-header>div:last-child{flex-wrap:wrap}.sy-kpis,.sy-sources{grid-template-columns:1fr}.sy-panel{padding:12px}}
-.mkt-root .sy-header button.sy-sync-now { border-color:transparent; background:var(--aw-accent,var(--accent)); color:var(--on-accent); }
+/* พื้นทึบ + ตัวหนังสือขาว ใช้ --accent-solid (สีส้มปกติได้ contrast แค่ 3.74:1) */
+.mkt-root .sy-header button.sy-sync-now { border-color:transparent; background:var(--accent-solid,var(--aw-accent,var(--accent))); color:var(--on-accent); }
 .mkt-root .sy-header button:disabled { opacity:.5; cursor:not-allowed; }
 .mkt-root .sy-header button:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
 
@@ -30,3 +31,62 @@
 .sy-tick-row.head { font-size:11px; }
 .sy-tick-row span { font-variant-numeric:tabular-nums; }
 @media (max-width:700px) { .sy-cron-facts { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* ── แหล่งข้อมูลธุรกิจ · ระบบขาย · creative · สิทธิ์ (แผนยึดข้อมูลระบบขาย ข้อ 2) ── */
+.sy-tick-row { grid-template-columns:minmax(140px,1.1fr) .6fr .6fr .7fr .8fr .8fr .7fr .5fr 1.1fr; min-width:1000px; }
+.sy-biz { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-bottom:12px; }
+.sy-biz-card { display:grid; gap:5px; align-content:start; padding:13px 14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.sy-biz-card header { display:flex; align-items:center; gap:7px; color:var(--ink-soft); font-size:11px; font-weight:650; }
+.sy-biz-card strong { font-size:15px; }
+.sy-biz-card p, .sy-biz-card small { margin:0; color:var(--ink-soft); font-size:11px; }
+.sy-biz-card.ok { border-color:color-mix(in srgb,var(--ok) 32%,var(--line)); }
+.sy-biz-card.warn { border-color:color-mix(in srgb,var(--warn) 32%,var(--line)); }
+.sy-biz-card.bad { border-color:color-mix(in srgb,var(--bad) 32%,var(--line)); }
+.sy-biz-card .sy-biz-error { color:var(--bad-text); }
+.sy-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
+.mkt-root .sy-actions button { display:flex; align-items:center; gap:6px; min-height:34px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font:inherit; font-size:11px; font-weight:650; cursor:pointer; }
+.mkt-root .sy-actions button.sy-primary { border-color:transparent; background:var(--accent-solid,var(--aw-accent,var(--accent))); color:var(--on-accent); }
+.mkt-root .sy-actions button:disabled { opacity:.5; cursor:not-allowed; }
+.mkt-root .sy-actions button:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
+.sy-sub { margin:16px 0 8px; color:var(--ink); font-size:12px; font-weight:700; }
+.sy-sub:first-of-type { margin-top:4px; }
+.sy-check { display:grid; gap:3px; margin-bottom:10px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); font-size:11px; }
+.sy-check strong { font-size:12px; }
+.sy-check.ok { border-color:var(--ok-line,var(--line)); background:var(--ok-soft); color:var(--ok-text); }
+.sy-check.warn { border-color:var(--warn-line,var(--line)); background:var(--warn-soft); color:var(--warn-text); }
+.sy-check.bad { border-color:var(--bad-line,var(--line)); background:var(--bad-soft); color:var(--bad-text); }
+.sy-chip { display:inline-flex; align-items:center; width:max-content; min-height:22px; padding:0 8px; border-radius:99px; background:var(--surface-2); color:var(--ink-soft); font-size:11px; font-weight:700; white-space:nowrap; }
+.sy-chip.ok { background:var(--ok-soft); color:var(--ok-text); }
+.sy-chip.warn { background:var(--warn-soft); color:var(--warn-text); }
+.sy-chip.bad { background:var(--bad-soft); color:var(--bad-text); }
+.sy-goals { display:grid; gap:6px; }
+.sy-goal { display:grid; grid-template-columns:minmax(110px,.6fr) auto 1fr; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:11px; }
+.sy-goal b { font-size:12px; }
+.sy-goal-missing { color:var(--ink-soft); }
+.sy-coverage { overflow:auto; border:1px solid var(--line); border-radius:8px; }
+.sy-coverage:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
+.sy-coverage table { width:100%; min-width:720px; border-collapse:collapse; font-size:11px; }
+.sy-coverage th, .sy-coverage td { padding:7px 10px; border-top:1px solid var(--line); text-align:left; vertical-align:middle; }
+.sy-coverage thead th { border-top:0; background:var(--surface-2); color:var(--ink-soft); font-weight:700; white-space:nowrap; }
+.sy-coverage tbody th { color:var(--ink); font-size:12px; font-weight:700; white-space:nowrap; }
+.sy-coverage-metric { color:var(--ink-soft); white-space:nowrap; }
+.sy-cell { display:inline-flex; min-height:20px; align-items:center; padding:0 7px; border-radius:6px; white-space:nowrap; font-weight:650; }
+.sy-cell.full { background:var(--ok-soft); color:var(--ok-text); }
+.sy-cell.partial { background:var(--warn-soft); color:var(--warn-text); }
+.sy-cell.not_filled, .sy-cell.no_data { background:var(--bad-soft); color:var(--bad-text); }
+.sy-cell.waiting_source { background:var(--surface-2); color:var(--ink-soft); }
+.sy-inventory ul { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
+.sy-inventory li { display:grid; grid-template-columns:auto minmax(180px,.9fr) 1fr; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:11px; }
+.sy-inventory li b { font-size:12px; }
+.sy-inventory li small { color:var(--ink-soft); font-size:11px; }
+.sy-inventory-meta { margin:0 0 8px; color:var(--ink-soft); font-size:11px; }
+.sy-pipe-row { grid-template-columns:minmax(140px,1.1fr) .6fr .5fr .9fr .7fr .5fr 1.4fr; min-width:900px; }
+.sy-creative-row { grid-template-columns:minmax(180px,1.3fr) 1fr .5fr .7fr .6fr 1.3fr; min-width:860px; }
+.sy-access { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
+.sy-access li { display:grid; grid-template-columns:auto minmax(180px,.8fr) 1fr; gap:10px; align-items:center; padding:9px 10px; border:1px solid var(--line); border-radius:8px; font-size:11px; }
+.sy-access li b { font-size:12px; }
+.sy-access li small { color:var(--ink-soft); font-size:11px; }
+@media (max-width:700px) {
+  .sy-goal, .sy-inventory li, .sy-access li { grid-template-columns:1fr; gap:4px; }
+  .sy-actions { justify-content:flex-start; }
+}

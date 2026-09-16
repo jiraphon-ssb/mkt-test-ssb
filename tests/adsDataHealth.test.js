@@ -95,6 +95,21 @@ describe("normalizeCronTicks — ประวัติตัวดึงอั�
     expect(ticks[0]).toMatchObject({ source: "manual", auto: false, finishedAt: null, durationMs: null });
     expect(ticks[1].durationMs).toBe(42000);
   });
+  it("สรุปงานอื่นของรอบจาก detail: ยอดขาย · สำรวจแหล่ง · creative · หมายเหตุ (รหัสเท่านั้น)", () => {
+    const [tick] = normalizeCronTicks([{ id: "t3", started_at: "2026-09-17T02:07:00Z", status: "partial", detail: {
+      sales: { ok: true, rows: 42 }, inventory: { ok: false, code: "SALES_INVENTORY_FAILED" },
+      creatives: [{ ok: true, note: "DEADLINE" }, { ok: false, code: "CREATIVE_SYNC_FAILED" }],
+      sync: [{ ok: true, note: "ข้อความยาวๆ ที่ไม่ใช่รหัส" }],
+    } }]);
+    expect(tick.sales).toEqual({ ok: true, rows: 42 });
+    expect(tick.inventory).toEqual({ ok: false, rows: null });
+    expect(tick.creatives).toEqual({ total: 2, ok: 1 });
+    expect(tick.notes).toEqual(["CREATIVE_SYNC_FAILED", "DEADLINE", "SALES_INVENTORY_FAILED"]);
+  });
+  it("รอบที่ไม่ได้ดึงยอดขาย/creative = null ไม่ใช่ 0", () => {
+    const [tick] = normalizeCronTicks([{ id: "t4", started_at: "2026-09-17T03:07:00Z", status: "success", detail: { sync: [], reconcile: [] } }]);
+    expect(tick).toMatchObject({ sales: null, inventory: null, creatives: null, notes: [] });
+  });
   it("แถวพัง/ว่าง ไม่ทำให้ล้ม", () => {
     expect(normalizeCronTicks([null, undefined])).toEqual([]);
     expect(normalizeCronTicks()).toEqual([]);
