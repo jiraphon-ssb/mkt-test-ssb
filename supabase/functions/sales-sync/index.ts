@@ -11,6 +11,10 @@ import {
   goalsUrl, monthsToSync, probeVerdict, summarizeFacts, summarizeGoals, targetsUrl,
 } from "../_shared/salesBridge.js";
 import { todayInTimeZone } from "../_shared/metaInsights.js";
+import {
+  inventoryUrls, monthsBackStart, pagedUrl, rpcShape, summarizeApMarketing, summarizeBudgetInventory,
+  summarizeGoalInventory, summarizePctTargets, summarizeSpendInventory, summarizeTargetInventory,
+} from "../_shared/salesInventory.js";
 
 const LOOKBACK_DAYS = 14;
 const MAX_DAYS = 400;
@@ -61,6 +65,73 @@ Deno.serve(async (request) => {
     return json(request, {
       check: true, verdict: probeVerdict({ key: keyInfo, facts, goals }),
       url: urlInfo, key: keyInfo, range: { from: weekAgo, to: today }, facts, goals, truncated,
+    });
+  }
+
+  /* โหมดสำรวจ { inventory: true } — ระบบขายมีข้อมูลอะไรจริง เดือนไหน แบรนด์ไหน ครบแค่ไหน (ย้อน 3 เดือน)
+     อ่านอย่างเดียว · ไม่เขียนอะไรลงฐานข้อมูล · URL และคอลัมน์ล็อกไว้ใน salesInventory.js (ไม่ขอคอลัมน์ระบุตัวคน/ผู้ขาย)
+     คืนแค่จำนวน ชื่อช่อง และช่วงวันที่ — ไม่คืนยอดเงิน ข้อความ หรือแถวดิบ */
+  if (body?.inventory === true) {
+    if (!url || !key) return json(request, { inventory: true, verdict: "not_configured" });
+    const headers = { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" };
+    const today = todayInTimeZone(new Date(), "Asia/Bangkok");
+    const since = monthsBackStart(today, 3) as string;
+    const weekAgo = day(new Date(Date.parse(`${today}T00:00:00Z`) - 6 * 86_400_000));
+    const urls = inventoryUrls(url, { since, today });
+    type Door = { status: number | null; state: string; code?: string | null; rows?: unknown[]; truncated?: boolean };
+
+    const read = async (target: string, init: RequestInit = {}): Promise<Door & { payload?: unknown }> => {
+      try {
+        const response = await fetch(target, { ...init, headers, signal: AbortSignal.timeout(30_000) });
+        const payload = await response.json().catch(() => null);
+        const code = (payload as { code?: string } | null)?.code ?? null;
+        const state = doorState(response.status, code);
+        return state === "open" ? { status: response.status, state, payload } : { status: response.status, state, code };
+      } catch {
+        return { status: null, state: "unreachable" };
+      }
+    };
+    /** ทั้งตารางแบบแบ่งหน้า (สูงสุด 20 หน้า = 20,000 แถว) */
+    const readAll = async (target: string): Promise<Door> => {
+      const rows: unknown[] = [];
+      for (let page = 0; page < 20; page += 1) {
+        const result = await read(pagedUrl(target, page * 1000));
+        if (result.state !== "open") return { status: result.status, state: result.state, code: result.code };
+        const list = Array.isArray(result.payload) ? result.payload : [];
+        rows.push(...list);
+        if (list.length < 1000) return { status: result.status, state: "open", rows };
+      }
+      return { status: 200, state: "open", rows, truncated: true };
+    };
+    const summarize = (door: Door & { payload?: unknown }, fn: (rows: unknown) => unknown) => {
+      const { payload: _payload, rows, ...meta } = door;
+      return door.state === "open" ? { ...meta, rowCount: Array.isArray(rows ?? _payload) ? (rows ?? _payload as unknown[]).length : null, summary: fn(rows ?? _payload) } : meta;
+    };
+    const rpcBody = { method: "POST", body: JSON.stringify({ p_from: weekAgo, p_to: today, p_brands: null, p_scope: "all" }) };
+
+    const [goals, targets, spend, pct, ap, pl, versions, lines, pipeline, insight] = await Promise.all([
+      read(urls.goals), read(urls.targets), readAll(urls.spend), read(urls.pctTargets), readAll(urls.apMarketing),
+      read(urls.plRevenue), read(urls.budgetVersions), readAll(urls.budgetLines),
+      read(urls.pipeline, rpcBody), read(urls.insight, rpcBody),
+    ]);
+    const budget = lines.state === "open" && versions.state === "open"
+      ? { status: lines.status, state: "open", rowCount: (lines.rows ?? []).length, truncated: lines.truncated ?? false, summary: summarizeBudgetInventory(lines.rows, versions.payload) }
+      : { lines: { status: lines.status, state: lines.state, code: lines.code }, versions: { status: versions.status, state: versions.state, code: versions.code } };
+
+    return json(request, {
+      inventory: true, since, today,
+      goals: summarize(goals, summarizeGoalInventory),
+      legacyTargets: summarize(targets, summarizeTargetInventory),
+      adSpendCsv: summarize(spend, summarizeSpendInventory),
+      budget,
+      marketingPctTarget: summarize(pct, summarizePctTargets),
+      marketingExpenseAp: summarize(ap, summarizeApMarketing),
+      plRevenue: summarize(pl, (rows) => {
+        const list = Array.isArray(rows) ? rows as { entity?: string; ym?: string }[] : [];
+        return { months: [...new Set(list.map((row) => row.ym))].filter(Boolean).sort(), entities: [...new Set(list.map((row) => row.entity))].filter(Boolean).sort() };
+      }),
+      pipeline: summarize(pipeline, rpcShape),
+      insight: summarize(insight, rpcShape),
     });
   }
 
