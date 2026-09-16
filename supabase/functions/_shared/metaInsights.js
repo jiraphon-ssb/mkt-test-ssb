@@ -11,8 +11,9 @@ export const META_INSIGHT_FIELDS = [
   "date_start", "date_stop", "campaign_id", "campaign_name", "adset_id", "adset_name", "ad_id", "ad_name",
   "spend", "impressions", "reach", "clicks", "inline_link_clicks", "actions", "action_values",
 ];
-/* ประเภท purchase ซ้อนกัน (omni รวม pixel/onsite) → เลือกตัวแรกที่เจอตามลำดับนี้ ห้ามบวกกัน */
-const PURCHASE_TYPES = ["omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase", "onsite_web_purchase"];
+/* ประเภท purchase ซ้อนกัน (omni รวม pixel/onsite/แชท) → เลือกตัวแรกที่เจอตามลำดับนี้ ห้ามบวกกัน
+   จำนวนกับมูลค่าเลือกแยกกัน เพราะ Meta ส่ง purchase ที่ไม่มีมูลค่ามาด้วย (ซื้อผ่านแชท/ในแอป) */
+const PURCHASE_TYPES = ["omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase", "onsite_web_purchase", "onsite_conversion.purchase"];
 const ATTRIBUTION_WINDOWS = { "7d_click_1d_view": ["7d_click", "1d_view"], "1d_click": ["1d_click"], "7d_click": ["7d_click"] };
 
 export function syncError(code, detail) {
@@ -98,7 +99,8 @@ export function normalizeInsightRow(row, { leadEvent = DEFAULT_LEAD_EVENT, attri
   if (!row || typeof row !== "object") throw syncError("INSIGHT_ROW_INVALID", "row");
   if (!Number.isFinite(toTime(row.date_start)) || row.date_start !== row.date_stop) throw syncError("INSIGHT_ROW_INVALID", "date");
   if (!row.ad_id) throw syncError("INSIGHT_ROW_INVALID", "ad_id");
-  const purchaseType = Array.isArray(row.action_values) ? PURCHASE_TYPES.find((type) => row.action_values.some((item) => item?.action_type === type)) : undefined;
+  const countType = Array.isArray(row.actions) ? PURCHASE_TYPES.find((type) => row.actions.some((item) => item?.action_type === type)) : undefined;
+  const valueType = Array.isArray(row.action_values) ? PURCHASE_TYPES.find((type) => row.action_values.some((item) => item?.action_type === type)) : undefined;
   return {
     fact_date: row.date_start,
     level: "ad",
@@ -115,8 +117,9 @@ export function normalizeInsightRow(row, { leadEvent = DEFAULT_LEAD_EVENT, attri
     link_clicks: metric(row.inline_link_clicks),
     // Meta ไม่ส่ง action ที่เป็นศูนย์ → ไม่มีใน actions = 0 lead ของวันนั้น
     leads: pick(row.actions, actionTypesFor(leadEvent)) ?? 0,
-    attributed_conversions: purchaseType ? pick(row.actions, [purchaseType]) ?? null : null,
-    attributed_value: purchaseType ? pick(row.action_values, [purchaseType]) : null,
+    // ไม่มี purchase เลย = null (ไม่ใช่ 0) เพราะแยกไม่ออกจากบัญชีที่ไม่ได้วัดการซื้อ
+    attributed_conversions: countType ? pick(row.actions, [countType]) ?? null : null,
+    attributed_value: valueType ? pick(row.action_values, [valueType]) ?? null : null,
     attribution_window: attribution,
   };
 }

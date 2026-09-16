@@ -98,6 +98,23 @@ describe("normalizeInsightRow", () => {
     expect(fact.attributed_conversions).toBe(3);
     expect(normalizeInsightRow(row({ action_values: [{ action_type: "add_to_cart", value: "10" }] }), {}).attributed_value).toBeNull();
   });
+  it("นับจำนวน purchase จาก actions โดยไม่ผูกกับมูลค่า — ซื้อผ่านแชท/ในแอปที่ Meta ไม่ส่งมูลค่ามา ต้องไม่หาย", () => {
+    // เคสจริง บัญชี เพจหลัก-JK1 4 ก.ย. 2026: Meta รายงาน 18 ครั้ง มูลค่าว่าง (เดิมระบบบันทึกเป็น null → 0)
+    const noValue = normalizeInsightRow(row({ actions: [{ action_type: "omni_purchase", value: "18" }], action_values: undefined }), { leadEvent: "lead" });
+    expect(noValue.attributed_conversions).toBe(18);
+    expect(noValue.attributed_value).toBeNull();
+    // มีมูลค่าเฉพาะบางประเภท: จำนวนต้องมาจาก omni (ครบทุกช่องทาง) ไม่ใช่เฉพาะประเภทที่มีมูลค่า
+    const mixed = normalizeInsightRow(row({
+      actions: [{ action_type: "omni_purchase", value: "12" }, { action_type: "offsite_conversion.fb_pixel_purchase", value: "1" }],
+      action_values: [{ action_type: "offsite_conversion.fb_pixel_purchase", value: "558" }],
+    }), { leadEvent: "lead" });
+    expect(mixed.attributed_conversions).toBe(12);
+    expect(mixed.attributed_value).toBe(558);
+    // ซื้อในแชท (onsite) อย่างเดียวก็ต้องนับ
+    expect(normalizeInsightRow(row({ actions: [{ action_type: "onsite_conversion.purchase", value: "4" }] }), {}).attributed_conversions).toBe(4);
+    // ไม่มี purchase เลย = null (ไม่ใช่ 0) เพราะแยกไม่ออกจาก "บัญชีนี้ไม่วัดการซื้อ"
+    expect(normalizeInsightRow(row({ actions: [{ action_type: "lead", value: "5" }] }), {}).attributed_conversions).toBeNull();
+  });
   it("แถวผิดรูป (ไม่มี ad_id · ไม่ใช่รายวัน · วันที่เพี้ยน · ตัวเลขติดลบ/ไม่ใช่ตัวเลข) = throw ไม่เขียนข้อมูลเสีย", () => {
     expect(() => normalizeInsightRow(row({ ad_id: "" }), {})).toThrow("INSIGHT_ROW_INVALID");
     expect(() => normalizeInsightRow(row({ date_stop: "2026-09-11" }), {})).toThrow("INSIGHT_ROW_INVALID");
