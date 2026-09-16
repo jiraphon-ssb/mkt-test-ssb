@@ -146,8 +146,9 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
   const salesOf = (row: { detail?: unknown }) => (row?.detail as { sales?: { ok?: boolean } } | null)?.sales ?? null;
   const salesToday = todayOf("Asia/Bangkok");
   const lastSalesOk = (salesTicks ?? []).find((row) => salesOf(row)?.ok === true)?.started_at ?? null;
+  // นับเป็นวันตามเวลาไทยให้ตรงกับตัวตัดสิน — ถ้านับเป็นวัน UTC โควตาจะรีเซ็ตเหลื่อมไป 7 ชั่วโมง
   const salesTries = (salesTicks ?? [])
-    .filter((row) => salesOf(row) && String(row.started_at ?? "").slice(0, 10) === now.slice(0, 10)).length;
+    .filter((row) => salesOf(row) && todayInTimeZone(new Date(String(row.started_at)), "Asia/Bangkok") === salesToday).length;
   let sales: Record<string, unknown> | null = null;
   if (salesDue({ lastAt: lastSalesOk, now, hour: hourOf("Asia/Bangkok"), today: salesToday, tries: salesTries })) {
     sales = await call("sales-sync", {});
