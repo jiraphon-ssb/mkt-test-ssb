@@ -44,13 +44,16 @@ export function planCronJobs({
     // ยังไม่ครบรอบก็ยอมทำ ถ้าบัญชีนั้นมีวันที่ขาดอยู่ — ช่องว่างค้างไว้เสียหายกว่าดึงถี่ไปหน่อย
     const today = todayOf(connection.timezone);
     const missing = missingDaysOf(entryRuns(own), today, connection.config?.backfillDays);
-    if (!missing && !cronDue(lastSuccess ? new Date(lastSuccess).toISOString() : null, now, syncEveryHours)) continue;
-    ready.push({ connection, lastSuccess: lastSuccess ?? 0, own });
+    const due = cronDue(lastSuccess ? new Date(lastSuccess).toISOString() : null, now, syncEveryHours);
+    if (!missing && !due) continue;
+    ready.push({ connection, lastSuccess: lastSuccess ?? 0, own, due });
   }
 
   const jobs = [];
   for (const entry of ready.sort((a, b) => a.lastSuccess - b.lastSuccess)) {   // ค้างนานสุดก่อน
-    const planned = planSyncJobs({ connections: [entry.connection], runs: entry.own, todayOf });
+    const planned = planSyncJobs({ connections: [entry.connection], runs: entry.own, todayOf })
+      // ยังไม่ครบรอบ (มาเพราะช่องว่าง) → ข้ามก้อน 3 วันล่าสุด ไม่งั้นทุก tick จะดึงซ้ำจนช่องว่างไม่ถูกเติมสักที
+      .filter((job) => entry.due || job.mode === "backfill");
     for (const job of planned.slice(0, Math.max(1, maxPerConnection))) {
       if (jobs.length >= maxJobs) return jobs;
       jobs.push({ connectionId: job.connectionId, mode: job.mode, from: job.from, to: job.to });

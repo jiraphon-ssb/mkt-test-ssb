@@ -40,6 +40,17 @@ describe("planCronJobs — งานที่รอบนี้จะดึง",
     expect(jobs).toHaveLength(1);
     expect(jobs[0].from < "2026-09-14").toBe(true);   // ก้อนนี้กินวันที่ขาดด้วย ไม่ใช่ดึงแค่ 3 วันล่าสุดซ้ำ
   });
+  it("ยังไม่ครบรอบ: หยิบเฉพาะก้อนย้อนหลัง ไม่ดึง 3 วันล่าสุดซ้ำทุก tick จนช่องว่างไม่ถูกเติม", () => {
+    // เหมือนของจริง: ก.ย. ดึงครบแล้ว แต่ มิ.ย.–ส.ค. ยังขาด และเพิ่งดึงไปเมื่อ 10 นาทีก่อน
+    const runs = [
+      run("c1", { finished_at: "2026-09-16T09:50:00.000Z", range_from: "2026-09-01", range_to: "2026-09-16", mode: "backfill" }),
+      run("c1", { finished_at: "2026-09-16T09:00:00.000Z", range_from: "2026-08-20", range_to: "2026-08-25", mode: "backfill" }),
+    ];
+    const jobs = plan({ connections: [conn("c1", { config: { backfillDays: 90 } })], runs, syncEveryHours: 6 });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ mode: "backfill" });
+    expect(jobs[0].to < "2026-09-01").toBe(true);
+  });
   it("ไม่มีวันที่ขาด + ยังไม่ครบรอบ = ไม่ทำอะไร", () => {
     expect(plan({ connections: [conn("c1")], runs: [run("c1")], syncEveryHours: 6 })).toEqual([]);
   });
