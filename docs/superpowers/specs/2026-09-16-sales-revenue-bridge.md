@@ -23,9 +23,19 @@
 | แบรนด์ | TD→b_td · JD→b_jk (JK Design) · TA→b_ta · JK→b_jt (JUNTAKARN) · SF ยังไม่มีในระบบ ads = ข้าม |
 | การแสดงผล | ยอดขายจริงและ ROAS จริงเป็นตัวหลัก · ค่าที่ Meta attribute ยังแสดงคู่กันแต่ติดป้ายว่าคนละนิยาม · แบรนด์/วันที่ยังไม่มีข้อมูล = "—" ไม่ใช่ ฿0 |
 
+## เฟสถัดไป (เตรียม SQL ไว้แล้ว รอพี่ทัชรีวิว)
+
+| เฟส | ประตูฝั่งขาย | ได้อะไร | ฝั่ง marketing |
+|---|---|---|---|
+| 2 · funnel | `docs/handoff/sales-funnel-bridge.sql` → `mkt_funnel_daily(from,to)` | เทียบ "คนทักจาก Meta" กับ "คนทักที่เข้าระบบขาย" → เห็นจุดรั่วจริง + CPL/CAC จริง | เพิ่มคอลัมน์ใน `business_daily_facts` ที่มีอยู่แล้ว (inquiries/qualified_leads/deposits) แล้วต่อ `sales-sync` |
+| 3 · เป้า | `docs/handoff/sales-goal-bridge.sql` → `mkt_goal_current(month)` | เป้าเดียวกันทั้งบริษัท เลิกตั้งเป้าซ้ำสองระบบ | หน้า ads อ่านเป้าจากระบบขายแทน `settings.ads_control.targets` |
+| 4 · ระดับแคมเปญ | ต้องแก้ฝั่งขาย: เก็บ `ref` จากลิงก์ Click-to-Message ของ Meta ตอนลีดเข้า | ROAS ราย campaign/creative | ผูก ref กับ ad_id ตอนคำนวณ |
+
+เฟส 2 มีจุดต้องตัดสินใจ: นิยาม funnel อยู่ใน `sale_dashboard_facts` ที่ล็อกด้วย `sale_is_member()` — เสนอให้ wrapper เป็น security definer ที่เรียกฟังก์ชันเดิม เพื่อให้ตัวเลขตรงกับแดชบอร์ดขาย 100% แทนการคัดลอกนิยามมาเขียนใหม่
+
 ## ไม่ทำรอบนี้
 
-funnel เทียบ (คนทัก/ลีด/มัดจำ) · เป้าจาก `sale_goal` · ROAS ระดับแคมเปญ (ต้องให้ระบบขายเก็บ ref จาก ctwa ก่อน) · ส่งค่าแอดกลับไปที่ `mkt_spend`
+ส่งค่าแอดกลับไปที่ `mkt_spend` (ทีมขายยังนำเข้า CSV เอง ตามที่ตกลง)
 
 ## เกณฑ์ผ่าน
 
