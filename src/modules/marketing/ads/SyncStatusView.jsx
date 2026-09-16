@@ -26,7 +26,9 @@ function AccountRow({ row }) {
   return <div className="sy-account-row"><div className="sy-account"><i style={{ background: row.color }} /><span><strong>{row.brand}</strong><small>{row.provider} · {row.accountId}</small></span></div><span className={`sy-state sy-${row.state}`}><StateIcon size={13} />{row.label}</span><div><strong>{when(row.lastSuccessAt)}</strong><small>{row.ageHours == null ? "—" : `${row.ageHours.toFixed(1)} ชม.ก่อน`}</small></div><div><strong>{row.missingDays ? `${row.missingDays} วัน` : row.connected ? "ไม่พบช่องว่าง" : "—"}</strong><small>วันที่ขาด</small></div><div><strong>{row.reconciliation?.ready ? "ผ่าน 7 และ 30 วัน" : "ยังไม่ผ่าน"}</strong><small>{row.errorCode ? `Error: ${row.errorCode}` : row.creativeEnabled ? "รวม Creative" : "สถิติเท่านั้น"}</small></div><Link to="/mkt/ads?panel=settings&tab=reconcile">ตรวจสอบ <ArrowRight size={13} /></Link></div>;
 }
 
-function RunTable({ runs, accounts }) {
+/* export เพื่อให้เทสระดับหน้าจอเรียกตรงได้ (tests/syncStatusPanels.component.test.jsx)
+   — ทั้งสองแผงเป็นตัวแสดงผลล้วน รับข้อมูลที่ normalize แล้ว ไม่แตะ network เอง */
+export function RunTable({ runs, accounts }) {
   const names = new Map(accounts.map((row) => [row.connectionId, `${row.brand} · ${row.provider}`]));
   return <section className="sy-panel"><header><div><h2>ประวัติการ Sync</h2><p>หลักฐานการดึงข้อมูลล่าสุดจาก backend</p></div></header>{runs.length ? <div className="sy-run-table"><div className="sy-run-row head"><span>บัญชี</span><span>เริ่ม</span><span>โหมด</span><span>ผู้สั่ง</span><span>เขียนข้อมูล</span><span>ผล</span></div>{runs.slice(0, 20).map((run) => <div className="sy-run-row" key={run.id}><span>{names.get(run.connectionId) ?? run.connectionId ?? "ไม่ทราบบัญชี"}</span><span>{when(run.startedAt)}</span><span>{run.mode === "backfill" ? "ย้อนหลัง" : run.mode === "reconcile" ? "ตรวจยอด" : "ล่าสุด"}</span><span>{run.auto ? "อัตโนมัติ" : "กดเอง"}</span><span>{run.mode === "reconcile" ? "—" : `${run.rowsWritten.toLocaleString("th-TH")} แถว`}</span><span className={`sy-run-${run.status}`}>{run.errorCode ? `${run.status} · ${run.errorCode}` : run.status}</span></div>)}</div> : <div className="sy-empty"><Database size={25} /><strong>ยังไม่มีประวัติจาก backend</strong><span>ประวัติจะเริ่มแสดงหลังเชื่อม OAuth และ Sync ครั้งแรก</span></div>}</section>;
 }
@@ -34,7 +36,7 @@ function RunTable({ runs, accounts }) {
 const TICK_STATUS = { success: "สำเร็จ", partial: "สำเร็จบางส่วน", failed: "ไม่สำเร็จ", running: "กำลังทำงาน" };
 const seconds = (ms) => (ms == null ? "—" : ms < 1000 ? "<1 วิ" : `${Math.round(ms / 1000)} วิ`);
 
-function CronPanel({ ticks, everyHours }) {
+export function CronPanel({ ticks, everyHours }) {
   const health = cronHealth(ticks);
   const last = ticks[0] ?? null;
   return <section className="sy-panel sy-cron" aria-label="การดึงข้อมูลอัตโนมัติ">

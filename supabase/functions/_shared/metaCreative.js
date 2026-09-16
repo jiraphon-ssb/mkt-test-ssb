@@ -23,15 +23,21 @@ function mediaItem(input = {}, fallback = {}) {
   const imageUrl = ownImage ?? safeUrl(fallback.image_url);
   const thumbnailUrl = safeUrl(first(input.thumbnail_url, ownImage, fallback.image_url, fallback.thumbnail_url));
   if (!videoId && !videoUrl && !imageUrl && !thumbnailUrl) return null;
+  /* hash ของภาพที่ Meta ยังไม่ส่ง URL มาให้ (พบในอัลบั้ม/carousel) — worker เอาไปขอ URL ที่ /act_x/adimages
+     ถ้าไม่ทำ ทุกชิ้นในอัลบั้มจะใช้ภาพระดับ creative ตัวเดียวกันหมด */
+  const imageHash = first(input.image_hash, input.hash);
   return {
-    id: first(input.id, input.image_hash, videoId, imageUrl),
+    id: first(input.id, imageHash, videoId, imageUrl),
     type: videoId || videoUrl ? "video" : "image",
     imageUrl,
     thumbnailUrl,
     videoId: videoId ? String(videoId) : null,
     videoUrl,
-    // "creative" = มีแค่ภาพย่อระดับ creative (โฆษณาจากโพสต์เพจมักเป็นรูปโปรไฟล์เพจ) → worker ไปดึงภาพจากโพสต์จริงแทน
-    source: imageUrl || videoId || videoUrl || safeUrl(input.thumbnail_url) ? "ad" : "creative",
+    imageHash: typeof imageHash === "string" ? imageHash : null,
+    /* "creative" = ชิ้นนี้ไม่มีภาพของตัวเอง ได้แต่ภาพระดับ creative มาใช้แทน (โฆษณาจากโพสต์เพจมักเป็นรูปโปรไฟล์เพจ)
+       → worker ไปหาภาพจริงให้ (ขอ URL จาก image_hash ก่อน ไม่ได้ค่อยดึงจากโพสต์)
+       ต้องดูจาก ownImage ไม่ใช่ imageUrl — imageUrl รวมภาพที่ fallback มาแล้ว ถ้าเช็คจากตัวนั้นจะนึกว่ามีภาพของตัวเองทุกชิ้น */
+    source: ownImage || videoId || videoUrl || safeUrl(input.thumbnail_url) ? "ad" : "creative",
   };
 }
 
@@ -256,6 +262,78 @@ export function previewDiagnostics(body) {
 /** ตรวจซ้ำฝั่ง browser ก่อนใส่ iframe */
 export const isPreviewSrc = (src) => previewUrl(src) === src && src != null;
 
+/* ── ภาพของอัลบั้ม/carousel ที่ Meta ส่งมาเป็น image_hash ไม่ใช่ URL ──
+   child_attachments มักมีแค่ image_hash → ทุกชิ้นตกไปใช้ภาพระดับ creative ตัวเดียวกัน
+   หน้าจอเลยนับ "ภาพที่ 1/8" แต่ภาพไม่เปลี่ยน · แก้โดยขอ URL ตาม hash จาก /act_x/adimages
+   อยู่ในบัญชีโฆษณาเดียวกัน ใช้ ads_read ที่มีอยู่แล้ว ไม่ต้องขอสิทธิ์เพิ่ม */
+const IMAGE_HASH = /^[A-Za-z0-9_-]{1,120}$/;   // charset คือสิ่งที่กันการฉีดเข้า URL ความยาวไม่ใช่ตัวตัดสิน
+const HASHES_PER_CALL = 50;
+
+export function buildAdImagesUrl({ version, accountId, hashes = [] }) {
+  if (!/^act_\d+$/.test(String(accountId ?? ""))) throw syncError("ACCOUNT_ID_INVALID");
+  if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
+  const clean = hashes.filter((hash) => IMAGE_HASH.test(String(hash ?? "")));
+  if (!clean.length) throw syncError("IMAGE_HASHES_REQUIRED");
+  const url = new URL(`https://graph.facebook.com/${version}/${accountId}/adimages`);
+  url.searchParams.set("fields", "hash,url,url_128");
+  url.searchParams.set("hashes", JSON.stringify(clean.slice(0, HASHES_PER_CALL)));
+  return url.toString();
+}
+
+/** ผลจาก /adimages → Map(hash → URL) · เอาภาพใหญ่ก่อน ภาพย่อเป็นตัวสำรอง */
+export function imageUrlsByHash(payload = {}) {
+  const out = new Map();
+  for (const item of payload?.data ?? []) {
+    const hash = String(item?.hash ?? "");
+    const url = safeUrl(first(item?.url, item?.url_128));
+    if (IMAGE_HASH.test(hash) && url) out.set(hash, url);
+  }
+  return out;
+}
+
+/** hash ที่ยังต้องไปขอ URL — เฉพาะชิ้นที่ไม่มีภาพของตัวเอง (source = creative) */
+export function hashesNeedingUrl(rows = []) {
+  const out = new Set();
+  for (const row of rows) {
+    for (const item of Array.isArray(row?.media_assets) ? row.media_assets : []) {
+      if (item?.source === "creative" && IMAGE_HASH.test(String(item?.imageHash ?? ""))) out.add(item.imageHash);
+    }
+  }
+  return [...out];
+}
+
+/** เติม URL ที่ขอมาได้กลับเข้าแถว · hash ที่ยังไม่ได้ URL ปล่อยไว้ให้ขั้นดึงจากโพสต์ทำต่อ */
+export function applyImageHashUrls(rows = [], urlByHash = new Map()) {
+  if (!urlByHash.size) return rows;
+  return rows.map((row) => {
+    const media = Array.isArray(row?.media_assets) ? row.media_assets : null;
+    if (!media?.some((item) => item?.source === "creative" && urlByHash.has(item?.imageHash))) return row;
+    return {
+      ...row,
+      media_assets: media.map((item) => {
+        const url = item?.source === "creative" ? urlByHash.get(item?.imageHash) : null;
+        return url ? { ...item, imageUrl: url, thumbnailUrl: url, source: "ad" } : item;
+      }),
+    };
+  });
+}
+
+/** ขอ URL ของทุก hash เป็นก้อน · ขอไม่ได้ = คืนเหตุผล ไม่ล้มทั้งงาน (ยังมีภาพระดับ creative ให้แสดงอยู่) */
+export async function fetchImageUrls({ version, accountId, hashes = [], deadline = Infinity, now = Date.now, ...opts }) {
+  const graphOpts = { ...opts, maxRetries: 0, baseDelayMs: 1000, maxDelayMs: 1000 };
+  const urls = new Map();
+  for (let i = 0; i < hashes.length; i += HASHES_PER_CALL) {
+    if (now() >= deadline) return { urls, reason: "DEADLINE" };
+    try {
+      const { payload } = await fetchGraphJson(buildAdImagesUrl({ version, accountId, hashes: hashes.slice(i, i + HASHES_PER_CALL) }), graphOpts);
+      for (const [hash, url] of imageUrlsByHash(payload)) urls.set(hash, url);
+    } catch (error) {
+      return { urls, reason: error?.code ?? "META_API_ERROR" };
+    }
+  }
+  return { urls, reason: null };
+}
+
 /* ── ภาพจริงของโพสต์เพจ (โฆษณาแบบบูสต์โพสต์เดิม) · ต้องมี pages_show_list + pages_read_engagement ──
    ใช้ Page access token จาก /me/accounts เฉพาะในหน่วยความจำของคำขอนั้น ไม่เก็บ ไม่ log ไม่ส่งออก */
 export const OAUTH_SCOPES = ["ads_read", "pages_show_list", "pages_read_engagement"];
@@ -304,7 +382,9 @@ export function postMediaFrom(post = {}) {
 /** เติมภาพจากโพสต์จริงให้แถวที่มีแค่ภาพย่อระดับ creative · ไม่มีสิทธิ์/rate limit/หมดเวลา = คืนแถวเดิม + เหตุผล (ไม่ throw) */
 export async function enrichRowsWithPosts(rows, { version, token, deadline = Infinity, now = Date.now, concurrency = 4, ...opts }) {
   const graphOpts = { ...opts, maxRetries: 0, baseDelayMs: 1000, maxDelayMs: 1000 };
-  if (!rows.some(needsPostMedia)) return { rows, enriched: 0, missingPages: [], reason: null };
+  // needed = แถวที่ยังไม่มีภาพของตัวเอง — ต้องรายงานคู่กับ enriched ไม่งั้น "enriched: 0" แปลไม่ออกว่าไม่มีงาน หรือทำไม่สำเร็จ
+  const needed = rows.filter(needsPostMedia).length;
+  if (!needed) return { rows, enriched: 0, needed: 0, missingPages: [], reason: null };
   let pageTokens;
   try {
     const { rows: pages } = await fetchAllPages(buildPageTokensUrl({ version }), { ...graphOpts, token, maxPages: 10 });
@@ -312,7 +392,7 @@ export async function enrichRowsWithPosts(rows, { version, token, deadline = Inf
       .filter((page) => /^\d+$/.test(String(page?.id ?? "")) && typeof page.access_token === "string" && page.access_token)
       .map((page) => [String(page.id), page.access_token]));
   } catch (error) {
-    return { rows, enriched: 0, missingPages: [], reason: error?.code ?? "META_API_ERROR" };
+    return { rows, enriched: 0, needed, missingPages: [], reason: error?.code ?? "META_API_ERROR" };
   }
   const stories = [...new Set(rows.filter(needsPostMedia).map((row) => row.effective_story_id))];
   const missingPages = new Set();
@@ -346,5 +426,5 @@ export async function enrichRowsWithPosts(rows, { version, token, deadline = Inf
     enriched += 1;
     return { ...row, media_assets: post.media.slice(0, 20), format: FORMATS.has(post.format) ? post.format : row.format, source_spec: { ...row.source_spec, ...(post.permalink ? { post_permalink: post.permalink } : {}) } };
   });
-  return { rows: out, enriched, missingPages: [...missingPages], reason };
+  return { rows: out, enriched, needed, missingPages: [...missingPages], reason };
 }

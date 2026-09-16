@@ -5,7 +5,7 @@
 import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { syncError, todayInTimeZone } from "../_shared/metaInsights.js";
-import { creativeRowFromAd, enrichRowsWithPosts, fetchAccountCreatives, rankAdIdsBySpend } from "../_shared/metaCreative.js";
+import { applyImageHashUrls, creativeRowFromAd, enrichRowsWithPosts, fetchAccountCreatives, fetchImageUrls, hashesNeedingUrl, rankAdIdsBySpend } from "../_shared/metaCreative.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ADS = 400;
@@ -57,22 +57,37 @@ Deno.serve(async (request) => {
     if (lastError) console.error("[ads-creatives] meta", connection.id, String(lastError).slice(0, 300));
     const now = new Date().toISOString();
     let rows = ads.map((ad) => creativeRowFromAd(ad, connection.id, now)).filter(Boolean);
+
+    /* อัลบั้ม/carousel: Meta ส่ง image_hash มาโดยไม่มี URL → ทุกชิ้นตกไปใช้ภาพระดับ creative ตัวเดียวกัน
+       ขอ URL ตาม hash ก่อน (บัญชีเดียวกัน ใช้ ads_read ที่มีอยู่) แล้วค่อยให้ขั้นดึงจากโพสต์ทำที่เหลือ */
+    const hashes = hashesNeedingUrl(rows);
+    let hashImages: { resolved: number; asked: number; reason: string | null } = { resolved: 0, asked: hashes.length, reason: null };
+    if (hashes.length) {
+      const found = await fetchImageUrls({ version: graphVersion(), accountId: connection.external_account_id, hashes, fetch, token, sleep, deadline: Date.now() + 20_000 });
+      rows = applyImageHashUrls(rows, found.urls);
+      hashImages = { resolved: found.urls.size, asked: hashes.length, reason: found.reason };
+      if (found.reason) console.error("[ads-creatives] image hashes", connection.id, found.reason);
+    }
+
     // โฆษณาแบบบูสต์โพสต์เพจ: Meta ให้แค่รูปโปรไฟล์เพจ → ดึงภาพจากโพสต์จริงด้วย Page token (ในหน่วยความจำเท่านั้น)
     const scopes: string[] = authorization.scopes ?? [];
-    let postMedia: { enriched: number; missingPages: number; reason: string | null } = { enriched: 0, missingPages: 0, reason: null };
+    let postMedia: { enriched: number; needed: number; missingPages: number; reason: string | null } = { enriched: 0, needed: 0, missingPages: 0, reason: null };
     if (scopes.includes("pages_read_engagement") && scopes.includes("pages_show_list")) {
-      const enriched = await enrichRowsWithPosts(rows, { version: graphVersion(), fetch, token, sleep, deadline: startedAt + TIME_BUDGET_MS + 20_000 });
+      /* ให้เวลาขั้นนี้อย่างน้อย 30 วินาทีเสมอ — เดิมผูกกับ startedAt ถ้าดึง ad ใช้เวลาเต็มงบ 90 วิ
+         ขั้นนี้จะเหลือแค่ 20 วิ แล้วจบด้วย DEADLINE โดยไม่มีใครเห็น (เพดาน function จริง ~150 วิ) */
+      const budget = Math.min(startedAt + 140_000, Date.now() + 30_000);
+      const enriched = await enrichRowsWithPosts(rows, { version: graphVersion(), fetch, token, sleep, deadline: budget });
       rows = enriched.rows;
-      postMedia = { enriched: enriched.enriched, missingPages: enriched.missingPages.length, reason: enriched.reason };
+      postMedia = { enriched: enriched.enriched, needed: enriched.needed, missingPages: enriched.missingPages.length, reason: enriched.reason };
       if (enriched.reason || enriched.missingPages.length) console.error("[ads-creatives] post media", connection.id, enriched.reason ?? "", `missingPages=${enriched.missingPages.join(",")}`);
     } else if (rows.some((row) => row.source_spec?.object_type === "STATUS")) {
-      postMedia = { enriched: 0, missingPages: 0, reason: "NEEDS_RECONNECT" };
+      postMedia = { enriched: 0, needed: 0, missingPages: 0, reason: "NEEDS_RECONNECT" };
     }
     for (let i = 0; i < rows.length; i += 200) {
       const { error } = await db.from("ad_creatives").upsert(rows.slice(i, i + 200), { onConflict: "connection_id,external_creative_id,external_ad_id" });
       if (error) { console.error("[ads-creatives] write", error.message); throw syncError("SYNC_WRITE_FAILED"); }
     }
-    return json(request, { total: wanted.size, saved: rows.length, pages, nextCursor, postMedia });
+    return json(request, { total: wanted.size, saved: rows.length, pages, nextCursor, hashImages, postMedia });
   } catch (error) {
     const code = publicSyncCode(error, "CREATIVE_SYNC_FAILED");
     console.error("[ads-creatives]", code, error instanceof Error ? error.message : error, (error as { detail?: string })?.detail ?? "");

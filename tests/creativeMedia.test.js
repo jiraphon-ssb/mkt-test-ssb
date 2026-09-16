@@ -17,7 +17,17 @@ describe("mediaView — ส่วนสื่อของการ์ด Creativ
     expect(view).toMatchObject({ kind: "carousel", count: 3, label: "ชุดภาพ · 3" });
     expect(view.items.map((i) => i.type)).toEqual(["image", "video", "image"]);
     expect(view.key).toBe("3|https://s/t.jpg|https://s/3.jpg");
-    expect(mediaView({ format: "image", media: [img(), img()] })).toMatchObject({ kind: "carousel", count: 2 });
+    expect(mediaView({ format: "image", media: [img(), img({ thumbnailUrl: "https://s/t2.jpg" })] })).toMatchObject({ kind: "carousel", count: 2 });
+  });
+  it("ชุดที่ทุกชิ้นชี้ภาพเดียวกัน = ภาพเดียว ไม่โชว์ตัวนับหลอกว่ามี 8 ภาพ", () => {
+    // ของจริงจาก Meta: อัลบั้ม 8 ชิ้นที่ child ไม่มี URL ภาพติดมา ทุกชิ้นเลยตกไปใช้ภาพระดับ creative ตัวเดียวกัน
+    const same = Array.from({ length: 8 }, () => img());
+    expect(mediaView({ format: "carousel", media: same })).toMatchObject({ kind: "image", count: 1, label: "ภาพ" });
+  });
+  it("ชุดที่ซ้ำบางชิ้น = เหลือเฉพาะภาพที่ต่างกันจริง เรียงตามเดิม", () => {
+    const view = mediaView({ format: "carousel", media: [img(), img({ thumbnailUrl: "https://s/b.jpg" }), img(), img({ thumbnailUrl: "https://s/c.jpg" })] });
+    expect(view.count).toBe(3);
+    expect(view.items.map((i) => i.src)).toEqual(["https://s/t.jpg", "https://s/b.jpg", "https://s/c.jpg"]);
   });
   it("ไม่มีสื่อ / asset ว่าง = none", () => {
     expect(mediaView(null)).toEqual({ kind: "none", count: 0, label: "ไม่มีภาพ", key: "0", items: [] });

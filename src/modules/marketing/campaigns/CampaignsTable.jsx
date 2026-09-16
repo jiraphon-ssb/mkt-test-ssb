@@ -151,6 +151,6 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
       })}
     </div>}
     {shown.length > 0 && <Pagination pager={pager} sizes={PAGE_SIZES} unit="แคมเปญ" label="แบ่งหน้าแคมเปญ" onChange={() => scrollToList(listTop)} />}
-    {selected && <><button type="button" className="cp-drawer-backdrop" aria-label="ปิดรายละเอียด" onClick={() => setOpenKey(null)} /><aside className="cp-drawer" aria-label={`รายละเอียด ${selected.name}`}><header><div><span>{selected.brand} · {selected.platform}</span><h2>{selected.name}</h2></div><button type="button" aria-label="ปิดรายละเอียด" onClick={() => setOpenKey(null)}><X size={18} /></button></header><div className="cp-drawer-content">{renderDetail(selected)}</div></aside></>}
+    {selected && <><button type="button" className="cp-drawer-backdrop" tabIndex={-1} aria-hidden="true" onClick={() => setOpenKey(null)} /><aside className="cp-drawer" aria-label={`รายละเอียด ${selected.name}`}><header><div><span>{selected.brand} · {selected.platform}</span><h2>{selected.name}</h2></div><button type="button" aria-label="ปิดรายละเอียด" onClick={() => setOpenKey(null)}><X size={18} /></button></header><div className="cp-drawer-content">{renderDetail(selected)}</div></aside></>}
   </section>;
 }

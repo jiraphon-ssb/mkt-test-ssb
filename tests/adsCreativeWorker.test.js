@@ -1,6 +1,6 @@
 /* Creative worker: ดึง creative ของโฆษณาที่มียอด → ad_creatives → Creative Library โหมด Meta Pilot */
 import { describe, it, expect, vi } from "vitest";
-import { rankAdIdsBySpend, buildAccountAdsUrl, creativeRowFromAd, fetchAccountCreatives, buildAdPreviewUrl, extractPreviewSrc, previewDiagnostics, PREVIEW_FORMATS } from "../supabase/functions/_shared/metaCreative.js";
+import { rankAdIdsBySpend, buildAccountAdsUrl, creativeRowFromAd, fetchAccountCreatives, buildAdPreviewUrl, extractPreviewSrc, previewDiagnostics, PREVIEW_FORMATS, buildAdImagesUrl, imageUrlsByHash, hashesNeedingUrl, applyImageHashUrls, fetchImageUrls } from "../supabase/functions/_shared/metaCreative.js";
 import { creativeAssetFromRow, factsToAdCards } from "../src/modules/marketing/ads/adsFacts.js";
 import { creativeAssetOf } from "../src/modules/marketing/ads/metaCreativeContract.js";
 
@@ -226,6 +226,8 @@ describe("ภาพจริงของโฆษณาที่บูสต์�
     const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {} });
     expect(fetch).toHaveBeenCalledTimes(2);                                   // เพจ 1 ครั้ง + โพสต์ซ้ำกันเรียกครั้งเดียว
     expect(out.enriched).toBe(2);
+    // needed คู่กับ enriched — ถ้ามีแต่ enriched:0 จะแยกไม่ออกว่า "ไม่มีงาน" กับ "ทำไม่สำเร็จ"
+    expect(out.needed).toBe(3);
     expect(out.missingPages).toEqual(["999"]);
     expect(out.rows[0].media_assets[0]).toMatchObject({ imageUrl: "https://scontent.xx.fbcdn.net/real.jpg", source: "post" });
     expect(out.rows[0].source_spec.post_permalink).toBe("https://www.facebook.com/111/posts/222");
@@ -237,7 +239,7 @@ describe("ภาพจริงของโฆษณาที่บูสต์�
     const rows = [creativeRowFromAd(statusAd("1", "111_222"), "conn")];
     const denied = vi.fn(async () => res({ error: { code: 200, message: "Requires pages_show_list" } }, 403));
     const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch: denied, token: "USER", sleep: async () => {} });
-    expect(out).toMatchObject({ enriched: 0, reason: "META_PERMISSION" });
+    expect(out).toMatchObject({ enriched: 0, needed: 1, reason: "META_PERMISSION" });
     expect(out.rows).toEqual(rows);
     const limited = vi.fn(async (url) => new URL(url).pathname.endsWith("/me/accounts") ? res({ data: [{ id: "111", access_token: "T" }] }) : res({ error: { code: 4 } }, 400));
     const out2 = await enrichRowsWithPosts(rows, { version: "v26.0", fetch: limited, token: "USER", sleep: async () => {} });
@@ -250,5 +252,93 @@ describe("ภาพจริงของโฆษณาที่บูสต์�
     const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {}, deadline: 50_000, now: () => t, concurrency: 1 });
     expect(out.enriched).toBe(1);
     expect(out.reason).toBe("DEADLINE");
+  });
+});
+
+/* ── ภาพของอัลบั้มที่ Meta ส่งมาเป็น image_hash ไม่ใช่ URL ──
+   ของจริงที่เจอ: อัลบั้ม 8 ชิ้น child_attachments มีแต่ image_hash → ทุกชิ้นตกไปใช้ภาพระดับ creative
+   ตัวเดียวกัน หน้าจอเลยนับ 1/8 แต่ภาพไม่เปลี่ยน · ต้องไปขอ URL จาก /act_x/adimages มาเติม */
+describe("ภาพจาก image_hash", () => {
+  const rowWith = (media) => ({ external_ad_id: "1", media_assets: media });
+  const hashItem = (hash, patch = {}) => ({ id: hash, imageHash: hash, type: "image", imageUrl: "https://s/fallback.jpg", thumbnailUrl: "https://s/fallback.jpg", videoId: null, videoUrl: null, source: "creative", ...patch });
+
+  it("child ที่มีแต่ image_hash: เก็บ hash ไว้ และทำเครื่องหมายว่ายังไม่ใช่ภาพของตัวเอง", () => {
+    const ad = graphAd("1", { creative: {
+      id: "cr1", name: "Album", thumbnail_url: "https://scontent.xx.fbcdn.net/page-avatar.jpg",
+      object_story_spec: { link_data: { child_attachments: [{ image_hash: "h1", name: "A" }, { image_hash: "h2", name: "B" }] } },
+    } });
+    const media = creativeRowFromAd(ad, "conn-1").media_assets;
+    expect(media.filter((m) => m.imageHash).map((m) => m.imageHash)).toEqual(["h1", "h2"]);
+    expect(media.every((m) => m.source === "creative")).toBe(true);
+  });
+
+  it("child ที่มีภาพของตัวเองอยู่แล้ว = ไม่ต้องไปขอ URL ซ้ำ", () => {
+    const ad = graphAd("2", { creative: {
+      id: "cr2", name: "Album", image_url: "https://scontent.xx.fbcdn.net/i.jpg",
+      object_story_spec: { link_data: { child_attachments: [{ image_hash: "h9", picture: "https://scontent.xx.fbcdn.net/child.jpg" }] } },
+    } });
+    const media = creativeRowFromAd(ad, "conn-1").media_assets;
+    expect(media[0]).toMatchObject({ source: "ad", imageUrl: "https://scontent.xx.fbcdn.net/child.jpg" });
+    expect(hashesNeedingUrl([rowWith(media)])).toEqual([]);
+  });
+
+  it("เก็บเฉพาะ hash ที่ยังไม่มีภาพของตัวเอง · ไม่ซ้ำ · ตัด hash รูปแบบแปลก (กันฉีดเข้า URL)", () => {
+    const rows = [
+      rowWith([hashItem("h1"), hashItem("h2"), hashItem("h1")]),
+      rowWith([hashItem("h3", { source: "ad" }), hashItem("ฮแฮช!"), { id: "x", source: "creative" }]),
+    ];
+    expect(hashesNeedingUrl(rows)).toEqual(["h1", "h2"]);
+  });
+
+  it("URL ที่ขอ: ต่อ /act_x/adimages พร้อม hashes เป็น JSON · กันเวอร์ชัน/บัญชีเพี้ยน", () => {
+    const url = new URL(buildAdImagesUrl({ version: "v26.0", accountId: "act_123", hashes: ["h1", "h2"] }));
+    expect(url.pathname).toBe("/v26.0/act_123/adimages");
+    expect(url.searchParams.get("hashes")).toBe(JSON.stringify(["h1", "h2"]));
+    expect(url.searchParams.get("fields")).toContain("url");
+    expect(() => buildAdImagesUrl({ version: "26", accountId: "act_1", hashes: ["h"] })).toThrow();
+    expect(() => buildAdImagesUrl({ version: "v26.0", accountId: "123", hashes: ["h"] })).toThrow();
+    expect(() => buildAdImagesUrl({ version: "v26.0", accountId: "act_1", hashes: [] })).toThrow();
+  });
+
+  it("อ่านผลเป็น hash → URL · เลือกภาพใหญ่ก่อน · ทิ้งค่าที่ไม่ใช่ URL", () => {
+    const map = imageUrlsByHash({ data: [
+      { hash: "h1", url: "https://scontent.xx.fbcdn.net/big1.jpg", url_128: "https://scontent.xx.fbcdn.net/s1.jpg" },
+      { hash: "h2", url_128: "https://scontent.xx.fbcdn.net/s2.jpg" },
+      { hash: "h3", url: "javascript:alert(1)" },
+      { url: "https://scontent.xx.fbcdn.net/no-hash.jpg" },
+    ] });
+    expect(map.get("h1")).toBe("https://scontent.xx.fbcdn.net/big1.jpg");
+    expect(map.get("h2")).toBe("https://scontent.xx.fbcdn.net/s2.jpg");
+    expect(map.has("h3")).toBe(false);
+    expect(map.size).toBe(2);
+  });
+
+  it("เติม URL กลับเข้าแถว: ชิ้นที่ได้ภาพจริงเปลี่ยนเป็น ad · ชิ้นที่ยังไม่ได้คงเดิม", () => {
+    const rows = [rowWith([hashItem("h1"), hashItem("h2"), hashItem("h3", { source: "ad", imageUrl: "https://s/own.jpg" })])];
+    const out = applyImageHashUrls(rows, new Map([["h1", "https://s/real1.jpg"]]));
+    expect(out[0].media_assets[0]).toMatchObject({ imageUrl: "https://s/real1.jpg", thumbnailUrl: "https://s/real1.jpg", source: "ad" });
+    expect(out[0].media_assets[1]).toMatchObject({ imageUrl: "https://s/fallback.jpg", source: "creative" });
+    expect(out[0].media_assets[2]).toMatchObject({ imageUrl: "https://s/own.jpg", source: "ad" });
+    expect(applyImageHashUrls(rows, new Map())).toEqual(rows);
+  });
+
+  it("ดึงจริงเป็นก้อนละไม่เกิน 50 hash · ขอไม่ได้ก็ไม่ล้มทั้งงาน คืนเหตุผลแทน", async () => {
+    const calls = [];
+    const fetchOk = vi.fn(async (url) => {
+      calls.push(new URL(url).searchParams.get("hashes"));
+      const hashes = JSON.parse(new URL(url).searchParams.get("hashes"));
+      return { ok: true, status: 200, json: async () => ({ data: hashes.map((h) => ({ hash: h, url: `https://scontent.xx.fbcdn.net/${h}.jpg` })) }) };
+    });
+    const many = Array.from({ length: 120 }, (_, i) => `h${i}`);
+    const ok = await fetchImageUrls({ version: "v26.0", accountId: "act_1", hashes: many, fetch: fetchOk, token: "T", sleep: async () => {} });
+    expect(calls).toHaveLength(3);
+    expect(JSON.parse(calls[0])).toHaveLength(50);
+    expect(ok.urls.size).toBe(120);
+    expect(ok.reason).toBe(null);
+
+    const fetchBad = vi.fn(async () => ({ ok: false, status: 400, json: async () => ({ error: { code: 100, message: "bad" } }) }));
+    const bad = await fetchImageUrls({ version: "v26.0", accountId: "act_1", hashes: ["h1"], fetch: fetchBad, token: "T", sleep: async () => {} });
+    expect(bad.urls.size).toBe(0);
+    expect(bad.reason).toBeTruthy();
   });
 });

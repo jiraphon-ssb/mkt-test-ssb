@@ -91,9 +91,23 @@ SQL ที่ต้องรันในโปรเจกต์ขาย: [docs
 ### ข้อ 3 — หนี้ที่รู้ตัว
 
 - `mktStyles.css` 3,606 บรรทัด มีกฎของหน้าที่ถอดออกไปแล้วปนอยู่มาก — ตัดสินใจแล้วว่าเก็บไว้เหมือนไฟล์ JS (ดูหมายเหตุด้านบน) ถ้าจะลบวันหลังต้องไล่ยืนยันทีละคลาส เคยพังมา 3 ครั้งจากสคริปต์ลบอัตโนมัติ
-- bucket `mkt-files` ยังตั้งเป็น public (อ่านไฟล์ได้ถ้ารู้ path ตรง) — ไม่มีโค้ดใช้แล้ว ถ้าจะปิดให้รัน `update storage.buckets set public = false where id = 'mkt-files';`
+- ~~bucket `mkt-files` เป็น public~~ ปิดแล้ว 16 ก.ย. 2569 (migration `20260916200000`) — เรียก URL สาธารณะได้ 400 NoSuchBucket
 - README อ้าง path เก่า (`src/domain/rules.ts` → ที่จริงคือ `mktRules.js`)
 - ยอด purchase ของ 18 มิ.ย. 2569 วันเดียวยังเป็นเลขจากโค้ดเก่า (อยู่นอกหน้าต่าง 90 วันพอดี)
+
+### ข้อ 3.1 — ตาข่ายฝั่งหน้าจอ (เริ่ม 16 ก.ย. 2569)
+
+เดิมเทสทั้งหมดเป็น logic ล้วน ไม่มีไฟล์ไหนแตะ `.jsx` เลย — แก้ CSS หรือ JSX ผิดแล้วไม่มีอะไรเตือนจนกว่าจะเปิดหน้าดูเอง
+ตอนนี้มี 3 ไฟล์ครอบผิวที่คนใช้จริง (jsdom + @testing-library/react · ประกาศ env ด้วย `// @vitest-environment jsdom` ต่อไฟล์ ไม่เปลี่ยน env รวม เทส logic 580 ตัวจะได้ไม่ช้าลง):
+
+| ไฟล์ | ครอบอะไร |
+|---|---|
+| `tests/creativeMedia.component.test.jsx` | ตัวเลื่อนภาพ: ตัวนับ ปุ่ม คีย์บอร์ด ภาพหมดอายุ เปลี่ยนชุดภาพ ปุ่มดูตัวอย่าง |
+| `tests/campaignsTable.component.test.jsx` | ตารางแคมเปญผ่านท่อข้อมูลจริง: ยอดรวม แท็บกลุ่ม ลิ้นชัก สถานะว่าง |
+| `tests/syncStatusPanels.component.test.jsx` | แผงประวัติ cron และประวัติ sync: รหัส error ที่ต้องอ่านออก สถานะว่าง |
+
+กราฟถูก mock (Chart.js ต้องมี canvas จริง + ThemeContext) · `CronPanel`/`RunTable` ถูก export เพิ่มเพื่อเรียกตรงได้ ทั้งคู่เป็นตัวแสดงผลล้วน
+ยังไม่ครอบ: `AdsView` (Overview) · `CreativeLibraryView`/`SyncStatusView` เต็มหน้า (ต้อง mock context + network) · DateRangePicker · Dropdown
 
 ### ข้อ 4 — ที่ยังไม่ตัดสินใจ
 
