@@ -9,7 +9,7 @@ import { isoDay } from "../adsScope.js";
 import { adsCardsForSource, adsSourceAccess, factsLoadRange, factsToAdCards, normalizeAdsSource, pilotSummary } from "./adsFacts.js";
 
 const STORAGE_KEY = "ssb.ads.source";
-const EMPTY = { status: "idle", facts: [], creatives: [], connections: [], sales: [], error: null, loadedAt: null };
+const EMPTY = { status: "idle", facts: [], creatives: [], connections: [], sales: [], salesGoals: [], error: null, loadedAt: null };
 let cache = EMPTY;
 let inflight = null;
 const listeners = new Set();
@@ -26,11 +26,12 @@ export async function loadPilotFacts({ force = false } = {}) {
   inflight = (async () => {
     try {
       const range = factsLoadRange(isoDay(new Date()));
-      const [connections, facts, creatives, sales] = await Promise.all([
+      const [connections, facts, creatives, sales, salesGoals] = await Promise.all([
         apiClient.ads.connections(), apiClient.ads.facts(range), apiClient.ads.creatives().catch(() => []),   // creative ไม่มี = ยังดูยอดได้
         apiClient.ads.businessFacts(range).catch(() => []),                                                   // ยอดขายจริงยังไม่เชื่อม = ยังดูยอดแอดได้
+        apiClient.ads.salesGoals().catch(() => []),                                                           // เป้าจากระบบขาย (เฟส 3) ยังไม่มีก็ใช้เป้าในหน้าตั้งค่า
       ]);
-      publish({ status: "ready", facts, creatives, sales, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });
+      publish({ status: "ready", facts, creatives, sales, salesGoals, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });
     } catch (error) {
       publish({ ...EMPTY, status: "error", error });
     } finally {
@@ -65,6 +66,7 @@ export function useAdsData() {
   return {
     source, setSource, canSwitch, canPreview, canPilot: canSwitch, cards,
     sales: source === "meta_pilot" ? (pilot.sales ?? []) : [],   // ยอดขายจริงใช้กับยอดจริงเท่านั้น ห้ามผสมกับข้อมูลจำลอง
+    salesGoals: source === "meta_pilot" ? (pilot.salesGoals ?? []) : [],
     mockFallback: source === "mock",                   // ยอดใหม่ 62% เป็นค่าจำลอง — ห้ามใช้กับข้อมูลจริง
     pilot: { status: pilot.status, error: pilot.error, loadedAt: pilot.loadedAt, summary },
     reload: () => loadPilotFacts({ force: true }),

@@ -2540,6 +2540,15 @@ const adsData = {
     if (error) throw error;
     return data ?? [];
   },
+  /** เป้ารายเดือนจากระบบขาย (เฟส 3) — อ่านอย่างเดียว */
+  async salesGoals(month) {
+    const db = requireSupabase();
+    let query = db.from("ad_sales_goals").select("brand_id,month,version,sales_target,ad_budget,cpl,cac,roas,leads_target,orders_target,synced_at");
+    if (month) query = query.eq("month", month);
+    const { data, error } = await query.order("month", { ascending: false }).limit(100);
+    if (error) throw error;
+    return data ?? [];
+  },
   async recentSyncs(limit = 20) {
     const db = requireSupabase();
     const { data, error } = await db.from("ad_sync_runs").select("*").order("started_at", { ascending: false }).limit(limit);

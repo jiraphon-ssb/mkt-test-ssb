@@ -146,3 +146,6 @@
 .aw-sales-head b { display:block; margin-top:4px; color:var(--ink); font-size:16px; font-variant-numeric:tabular-nums; }
 .aw-sales td { font-variant-numeric:tabular-nums; }
 @media(max-width:760px){ .aw-sales-head { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.aw-sales-goals { margin-top:12px; }
+.aw-sales-goals dt small { color:var(--ink-faint); font-weight:500; }
+.aw-sales-goals dd small { color:var(--ink-soft); font-weight:500; }
