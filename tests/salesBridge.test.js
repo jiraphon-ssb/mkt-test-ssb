@@ -1,7 +1,7 @@
 /* ตรวจค่าที่ใช้ต่อระบบขาย — บอกได้ว่าใส่ URL/KEY ถูกไหมโดยไม่ต้องเห็นค่าจริง
    ของจริงที่เจอ: sales-sync ตอบ read:0 ได้ทั้งตอนใส่ถูกแต่ประตูยังไม่เปิด และตอนใส่ URL ผิด (404 เหมือนกัน) แยกไม่ออก */
 import { describe, it, expect } from "vitest";
-import { describeSalesKey, describeSalesUrl, doorState, projectRef, FACT_COLUMNS, factsProbeUrl, goalProbeUrl, summarizeFacts, summarizeGoals, probeVerdict } from "../supabase/functions/_shared/salesBridge.js";
+import { describeSalesKey, describeSalesUrl, doorState, projectRef, FACT_COLUMNS, factsProbeUrl, goalProbeUrl, summarizeFacts, summarizeGoals, probeVerdict, goalsUrl, targetsUrl, monthsToSync, PAGE_LIMIT } from "../supabase/functions/_shared/salesBridge.js";
 
 const jwt = (claims) => ["e30", Buffer.from(JSON.stringify(claims)).toString("base64url"), "sig"].join(".");
 const OWN = "https://lzvftqhffqefqupwulus.supabase.co";
@@ -163,5 +163,42 @@ describe("probeVerdict — สรุปผลเป็นข้อความ�
   it("เรียก facts ไม่ได้เพราะสิทธิ์ = no_permission · เป้าเดือนนี้ยังไม่ตั้ง = no_goal_this_month", () => {
     expect(probeVerdict({ key: { kind: "secret" }, facts: { state: "no_permission" }, goals: open({ summary: { rows: 1 } }) })).toBe("no_permission");
     expect(probeVerdict({ key: { kind: "secret" }, facts: open({ summary: { rows: 9, extraColumns: [] } }), goals: open({ summary: { rows: 0 } }) })).toBe("no_goal_this_month");
+  });
+});
+
+/* ── เฟส 2: ท่อจริง ── */
+describe("goalsUrl / targetsUrl — อ่านเป้าเฉพาะตัวเลข ไม่ดึงผู้สร้าง/เหตุผล", () => {
+  it("sale_goal: แบรนด์ เดือน เวอร์ชัน เป้า งบแอด · กรองหลายเดือน", () => {
+    const url = new URL(goalsUrl(SALES, ["2026-08-01", "2026-09-01"]));
+    expect(url.pathname).toBe("/rest/v1/sale_goal");
+    expect(url.searchParams.get("select")).toBe("brand,month,version,targets,ads");
+    expect(url.searchParams.get("month")).toBe("in.(2026-08-01,2026-09-01)");
+    for (const col of ["created_by", "reason", "inputs", "base"]) expect(url.searchParams.get("select").split(",")).not.toContain(col);
+  });
+  it("sale_target: เดือน แบรนด์ ตัวชี้วัด จำนวน · ไม่ดึงคนแก้", () => {
+    const url = new URL(targetsUrl(SALES, ["2026-09-01"]));
+    expect(url.pathname).toBe("/rest/v1/sale_target");
+    expect(url.searchParams.get("select")).toBe("month,brand,metric,amount");
+    expect(url.searchParams.get("month")).toBe("in.(2026-09-01)");
+  });
+  it("เดือนรูปแบบผิด / ไม่มีเดือน = throw (กันฉีดค่าเข้า filter)", () => {
+    expect(() => goalsUrl(SALES, ["2026-09-01)"])).toThrow();
+    expect(() => targetsUrl(SALES, [])).toThrow();
+  });
+});
+
+describe("monthsToSync — เป้าเดือนก่อนกับเดือนนี้ (ต้นเดือนหน้าจอยังดูเดือนก่อนอยู่)", () => {
+  it("ปกติ / ข้ามปี", () => {
+    expect(monthsToSync("2026-09-17")).toEqual(["2026-08-01", "2026-09-01"]);
+    expect(monthsToSync("2026-01-03")).toEqual(["2025-12-01", "2026-01-01"]);
+  });
+  it("วันที่เสีย = ไม่มีเดือน", () => {
+    expect(monthsToSync("17/09/2026")).toEqual([]);
+  });
+});
+
+describe("PAGE_LIMIT", () => {
+  it("เท่ากับเพดานแถวต่อคำขอของ PostgREST บน Supabase — ได้ครบเพดานพอดี = อาจถูกตัด ต้องแบ่งก้อนใหม่", () => {
+    expect(PAGE_LIMIT).toBe(1000);
   });
 });

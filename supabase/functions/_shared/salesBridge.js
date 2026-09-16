@@ -131,3 +131,42 @@ export function probeVerdict({ key, facts, goals } = {}) {
   if (!goals.summary?.rows) return "no_goal_this_month";
   return "ready";
 }
+
+/* ── เฟส 2: ท่อจริง ── */
+
+/** เพดานแถวต่อคำขอของ PostgREST บน Supabase — ได้กลับมาเท่านี้พอดี = อาจถูกตัด ต้องแบ่งช่วงให้เล็กลง */
+export const PAGE_LIMIT = 1000;
+
+const monthFilter = (months) => {
+  const list = Array.isArray(months) ? months : [];
+  if (!list.length || !list.every((month) => MONTH_START.test(String(month)))) throw new Error("MONTHS_INVALID");
+  return `in.(${list.join(",")})`;
+};
+
+/** sale_goal: เอาแค่ตัวเลขเป้า + งบแอด — ไม่ดึง created_by / reason / inputs / base */
+export function goalsUrl(url, months) {
+  const target = new URL(`${baseOf(url)}/rest/v1/sale_goal`);
+  target.searchParams.set("select", "brand,month,version,targets,ads");
+  target.searchParams.set("month", monthFilter(months));
+  return target.toString();
+}
+
+/** sale_target (เป้าแบบเก่า): ไม่ดึง updated_by */
+export function targetsUrl(url, months) {
+  const target = new URL(`${baseOf(url)}/rest/v1/sale_target`);
+  target.searchParams.set("select", "month,brand,metric,amount");
+  target.searchParams.set("month", monthFilter(months));
+  return target.toString();
+}
+
+/** เดือนที่ต้อง sync เป้า: เดือนก่อน + เดือนนี้ (วันที่ตามเวลาไทยที่ส่งเข้ามา) */
+export function monthsToSync(today) {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(String(today ?? ""));
+  if (!match) return [];
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const pad = (value) => String(value).padStart(2, "0");
+  return [`${prevYear}-${pad(prevMonth)}-01`, `${year}-${pad(month)}-01`];
+}

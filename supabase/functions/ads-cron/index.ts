@@ -97,8 +97,8 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
       });
       const data = await response.json().catch(() => ({}));
       // note = ปัญหาที่ไม่ถึงขั้นล้มงาน (เช่น ขอภาพจาก hash ไม่ได้ / ดึงภาพจากโพสต์ไม่ทัน) — ต้องเห็นในประวัติ ไม่งั้นเงียบหาย
-      const note = data?.hashImages?.reason ?? data?.postMedia?.reason ?? null;
-      return { ok: response.ok, code: response.ok ? null : data?.error ?? String(response.status), rows: data?.rowsWritten ?? data?.saved ?? null, ms: Date.now() - started, ...(note ? { note } : {}) };
+      const note = data?.hashImages?.reason ?? data?.postMedia?.reason ?? data?.goals?.error ?? null;
+      return { ok: response.ok, code: response.ok ? null : data?.error ?? String(response.status), rows: data?.rowsWritten ?? data?.saved ?? data?.written ?? null, ms: Date.now() - started, ...(note ? { note } : {}) };
     } catch (error) {
       return { ok: false, code: error instanceof Error ? error.name : "FETCH_FAILED", ms: Date.now() - started };
     }

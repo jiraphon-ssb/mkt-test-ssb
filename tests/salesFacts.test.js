@@ -1,29 +1,137 @@
 import { describe, it, expect } from "vitest";
-import { SALE_BRAND_BY_CODE, funnelCompareRows, funnelRowsToFacts, goalSource, goalsFromSales, mergeDailyFacts, realRoasRows, salesRevenueByBrand, salesRowsToFacts } from "../src/modules/marketing/ads/salesFacts.js";
+import { SALE_BRAND_BY_CODE, SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, funnelCompareRows, goalRowsToSalesGoals, goalSource, goalsFromSales, realRoasRows, salesRevenueByBrand } from "../src/modules/marketing/ads/salesFacts.js";
 
-const row = (patch = {}) => ({ brand: "TD", day: "2026-09-10", revenue: "12000.50", orders: 3, ...patch });
+/* แถวจาก sale_dashboard_facts ของระบบพี่ทัช (ขอแค่ 7 คอลัมน์) — ดู supabase/functions/_shared/salesBridge.js */
+const fact = (kind, patch = {}) => ({ kind, day: "2026-09-10", brand: "TD", channel: "FB", n: 1, amount: 0, is_new: null, ...patch });
+const WINDOW = { from: "2026-09-10", to: "2026-09-11" };
 
-describe("salesRowsToFacts — แถวจากระบบขาย → business_daily_facts", () => {
-  it("แปลงรหัสแบรนด์ · id ซ้ำวันเดิมไม่บวกเพิ่ม (ทับด้วย external_record_id)", () => {
-    expect(salesRowsToFacts([row()])).toEqual([{
-      brand_id: "b_td", fact_date: "2026-09-10", source: "crm", external_record_id: "TD|2026-09-10",
-      orders: 3, gross_revenue: 12000.5, refunds: 0, inquiries: 0, qualified_leads: 0, deposits: 0,
-    }]);
-  });
-  it("ยอดติดลบ (ยกเลิกออเดอร์ทั้งวัน) เก็บเป็น refunds ไม่ใช่รายได้ติดลบ", () => {
-    const [fact] = salesRowsToFacts([row({ revenue: -4500, orders: 0 })]);
-    expect(fact).toMatchObject({ gross_revenue: 0, refunds: 4500, orders: 0 });
-  });
-  it("แบรนด์ที่ยังไม่มีในระบบ ads (SF) และแถวเสีย = ข้าม ไม่ทำให้ทั้งชุดล้ม", () => {
-    expect(salesRowsToFacts([row({ brand: "SF" }), row({ brand: "XX" }), { brand: "TD" }, null, row({ day: "10/09/2026" })])).toEqual([]);
-  });
-  it("วันซ้ำในชุดเดียวกัน = เอาแถวหลังสุด (ระบบขายส่งซ้ำก็ไม่เพี้ยน)", () => {
-    const facts = salesRowsToFacts([row({ revenue: 100 }), row({ revenue: 250 })]);
-    expect(facts).toHaveLength(1);
-    expect(facts[0].gross_revenue).toBe(250);
-  });
+describe("แบรนด์และแหล่งข้อมูล", () => {
   it("รหัสแบรนด์ตรงกับที่ระบบขายนิยาม (JD = JK Design, JK = JUNTAKARN)", () => {
     expect(SALE_BRAND_BY_CODE).toEqual({ TD: "b_td", JD: "b_jk", TA: "b_ta", JK: "b_jt" });
+  });
+  it("ระบบพี่ทัชเป็นแหล่งของ TD · JD · TA เท่านั้น — JK ข้อมูลจริงอยู่อีกโปรเจกต์ ห้ามดึงจากที่นี่ไม่งั้นนับซ้ำ", () => {
+    expect(SALES_SOURCE_BRANDS).toEqual(["TD", "JD", "TA"]);
+  });
+});
+
+describe("factWindows — แบ่งช่วงวันเป็นก้อนเล็ก (PostgREST คืนไม่เกิน 1,000 แถวต่อครั้ง)", () => {
+  it("แบ่งต่อเนื่อง ไม่ซ้อน ไม่ขาด · ก้อนสุดท้ายสั้นได้", () => {
+    expect(factWindows("2026-09-01", "2026-09-07", 3)).toEqual([
+      { from: "2026-09-01", to: "2026-09-03" }, { from: "2026-09-04", to: "2026-09-06" }, { from: "2026-09-07", to: "2026-09-07" },
+    ]);
+  });
+  it("ข้ามเดือนได้ · วันเดียว = ก้อนเดียว", () => {
+    expect(factWindows("2026-08-31", "2026-09-01", 3)).toEqual([{ from: "2026-08-31", to: "2026-09-01" }]);
+    expect(factWindows("2026-09-01", "2026-09-01", 3)).toEqual([{ from: "2026-09-01", to: "2026-09-01" }]);
+  });
+  it("ช่วงกลับหัว / วันที่เสีย / ขนาดเพี้ยน = ไม่มีก้อน หรือใช้ขนาด 1", () => {
+    expect(factWindows("2026-09-05", "2026-09-01", 3)).toEqual([]);
+    expect(factWindows("xx", "2026-09-01", 3)).toEqual([]);
+    expect(factWindows("2026-09-01", "2026-09-02", 0)).toHaveLength(2);
+  });
+});
+
+describe("factsToDailyRows — facts ของระบบขาย → แถว business_daily_facts ต่อวัน×แบรนด์", () => {
+  const rows = factsToDailyRows([
+    fact("inq", { channel: "FB", n: 30 }), fact("inq", { channel: "Line", n: 12 }),
+    fact("lead", { is_new: true }), fact("lead", { is_new: true }), fact("lead", { is_new: false }),
+    fact("won", { amount: 25000.5, is_new: true }), fact("won", { amount: 8000, is_new: false }),
+    fact("book", { amount: 40000, is_new: true }), fact("book", { amount: 15000.25, is_new: false }),
+    fact("pay", { amount: 20000 }), fact("pay", { amount: -3000 }),
+    fact("canc", { amount: 9000 }), fact("lost"), fact("nosale"),
+  ], WINDOW);
+  const td10 = rows.find((r) => r.external_record_id === "TD|2026-09-10");
+
+  it("ครบทุกวัน×แบรนด์ในช่วง แม้วันนั้นไม่มีเหตุการณ์ (ทับค่าเก่าที่ถูกยกเลิกย้อนหลังได้)", () => {
+    expect(rows).toHaveLength(2 * 3);
+    expect(rows.map((r) => r.external_record_id).sort()).toEqual(["JD|2026-09-10", "JD|2026-09-11", "TA|2026-09-10", "TA|2026-09-11", "TD|2026-09-10", "TD|2026-09-11"]);
+  });
+  it("คนทัก: รวม + แยกช่องทาง + บอกว่าทีมกรอกวันนั้นหรือยัง", () => {
+    expect(td10).toMatchObject({ inquiries: 42, inquiries_by_channel: { FB: 30, Line: 12 }, inquiry_filled: true });
+    expect(rows.find((r) => r.external_record_id === "TD|2026-09-11")).toMatchObject({ inquiries: 0, inquiries_by_channel: {}, inquiry_filled: false });
+  });
+  it("ลีด · ได้ออเดอร์ (เริ่มออกแบบ) · ยืนยันออเดอร์ แยกลูกค้าใหม่", () => {
+    expect(td10).toMatchObject({ qualified_leads: 3, leads_new: 2, deposits: 2, deposit_value: 33000.5, orders: 2, orders_new: 1 });
+  });
+  it("ยอดขาย = ยอดยืนยันออเดอร์ (ไม่หักยกเลิก — ตรงกับที่เป้าของพี่ทัชใช้วัด) · แยกยอดลูกค้าใหม่", () => {
+    expect(td10).toMatchObject({ gross_revenue: 55000.25, revenue_new: 40000, refunds: 0 });
+  });
+  it("เงินเข้าสุทธิ (คืนเงินติดลบแล้ว) · ยกเลิกเก็บแยก", () => {
+    expect(td10).toMatchObject({ cash_received: 17000, cancelled: 1, cancelled_value: 9000 });
+  });
+  it("แถวเป็นรูปที่เขียนลงฐานได้ทันที", () => {
+    expect(td10).toMatchObject({ brand_id: "b_td", fact_date: "2026-09-10", source: "crm" });
+  });
+  it("ไม่รับ: แบรนด์นอกแหล่งนี้ (JK/SF) · วันนอกช่วง · วันที่เสีย · ชนิดที่ไม่รู้จัก · ค่า n เพี้ยน", () => {
+    const out = factsToDailyRows([
+      fact("book", { brand: "JK", amount: 999 }), fact("book", { brand: "SF", amount: 999 }),
+      fact("book", { day: "2026-09-09", amount: 999 }), fact("book", { day: "10/09/2026", amount: 999 }),
+      fact("mystery", { n: 5 }), fact("lead", { n: "abc" }), null,
+    ], WINDOW);
+    expect(out.every((r) => r.gross_revenue === 0 && r.orders === 0)).toBe(true);
+    expect(out.some((r) => r.brand_id === "b_jt")).toBe(false);
+  });
+  it("ชื่อช่องทางต้องเป็นรหัสสั้นๆ (FB/Line) — ข้อความแปลกรวมเป็น other ไม่คัดลอกข้อความอิสระข้ามระบบ", () => {
+    const [r] = factsToDailyRows([
+      fact("inq", { channel: "FB", n: 3 }), fact("inq", { channel: "คุณสมชาย 081-234-5678", n: 2 }),
+      fact("inq", { channel: "", n: 1 }), fact("inq", { channel: "x".repeat(40), n: 1 }),
+    ], { from: "2026-09-10", to: "2026-09-10" });
+    expect(r.inquiries_by_channel).toEqual({ FB: 3, other: 4 });
+    expect(r.inquiries).toBe(7);
+  });
+  it("ปัดเศษเงินเป็นสตางค์ ไม่สะสมทศนิยมลอย", () => {
+    const [r] = factsToDailyRows([fact("pay", { amount: 0.1 }), fact("pay", { amount: 0.2 })], { from: "2026-09-10", to: "2026-09-10" });
+    expect(r.cash_received).toBe(0.3);
+  });
+});
+
+describe("goalRowsToSalesGoals — เป้าจากระบบพี่ทัช → ad_sales_goals", () => {
+  const goal = (patch = {}) => ({
+    brand: "TD", month: "2026-09-01", version: 1,
+    targets: { sales_total: 900000, sales_new: 600000, sales_old: 300000, orders_new: 20, orders_old: 10, design_new: 30, design_old: 12,
+               leads_new: 700, leads_old: 50, inquiry: 2400, ad_budget: 90000, cpl: 120, cac: 3000, roas: 10 },
+    ads: { platforms: [{ key: "meta", budget: 70000, note: "โน้ต" }, { key: "google", budget: 20000 }] },
+    ...patch,
+  });
+  it("sale_goal: เวอร์ชันล่าสุดต่อแบรนด์×เดือน · รวมใหม่+เก่า · งบรายแพลตฟอร์ม (ไม่เก็บโน้ต)", () => {
+    const [row] = goalRowsToSalesGoals({ goals: [goal(), goal({ version: 2, targets: { ...goal().targets, sales_total: 1000000 } })] });
+    expect(row).toEqual({
+      brand_id: "b_td", month: "2026-09-01", version: 2, goal_source: "sale_goal",
+      sales_target: 1000000, sales_new_target: 600000, sales_old_target: 300000,
+      orders_target: 30, deposits_target: 42, leads_target: 750, inquiry_target: 2400,
+      ad_budget: 90000, cpl: 120, cac: 3000, roas: 10,
+      platform_budgets: { meta: 70000, google: 20000 },
+    });
+  });
+  it("เดือนที่ยังตั้งเป้าแบบเก่า (sale_target) = ใช้แทน · ไม่มีงบแอด/CPL/ROAS · version 0", () => {
+    const [row] = goalRowsToSalesGoals({ targets: [
+      { month: "2026-09-01", brand: "JD", metric: "sales_new", amount: 400000 }, { month: "2026-09-01", brand: "JD", metric: "sales_old", amount: 100000 },
+      { month: "2026-09-01", brand: "JD", metric: "orders", amount: 25 }, { month: "2026-09-01", brand: "JD", metric: "design", amount: 35 },
+      { month: "2026-09-01", brand: "JD", metric: "leads", amount: 600 }, { month: "2026-09-01", brand: "JD", metric: "inquiry", amount: 2000 },
+    ] });
+    expect(row).toEqual({
+      brand_id: "b_jk", month: "2026-09-01", version: 0, goal_source: "sale_target",
+      sales_target: 500000, sales_new_target: 400000, sales_old_target: 100000,
+      orders_target: 25, deposits_target: 35, leads_target: 600, inquiry_target: 2000,
+      ad_budget: null, cpl: null, cac: null, roas: null, platform_budgets: {},
+    });
+  });
+  it("มีทั้งสองแบบในเดือนเดียวกัน = sale_goal ชนะ (ระบบพี่ทัชก็เลือกแบบนี้)", () => {
+    const out = goalRowsToSalesGoals({ goals: [goal()], targets: [{ month: "2026-09-01", brand: "TD", metric: "sales_new", amount: 1 }] });
+    expect(out).toHaveLength(1);
+    expect(out[0].goal_source).toBe("sale_goal");
+  });
+  it("ไม่มีค่า = null ไม่ใช่ 0 · ไม่มีทั้งใหม่และเก่า = null", () => {
+    const [row] = goalRowsToSalesGoals({ goals: [goal({ targets: { sales_new: 500 }, ads: {} })] });
+    expect(row).toMatchObject({ sales_target: 500, sales_old_target: null, orders_target: null, ad_budget: null, platform_budgets: {} });
+  });
+  it("ข้าม: JK/SF · เดือนเสีย · ชื่อแพลตฟอร์มแปลก · งบไม่ใช่ตัวเลข", () => {
+    const out = goalRowsToSalesGoals({ goals: [
+      goal({ brand: "JK" }), goal({ brand: "SF" }), goal({ month: "2026-09" }),
+      goal({ brand: "TA", ads: { platforms: [{ key: "Meta Ads!", budget: 1 }, { key: "tiktok", budget: "abc" }, { key: "meta", budget: 5 }] } }),
+    ] });
+    expect(out.map((r) => r.brand_id)).toEqual(["b_ta"]);
+    expect(out[0].platform_budgets).toEqual({ meta: 5 });
   });
 });
 
@@ -61,22 +169,7 @@ describe("realRoasRows — ROAS จากยอดขายจริง", () => 
   });
 });
 
-describe("เฟส 2 — funnel จากระบบขาย", () => {
-  it("funnelRowsToFacts: แปลงจำนวนต่อวัน · แบรนด์นอกระบบ ads ข้าม", () => {
-    expect(funnelRowsToFacts([{ brand: "JK", day: "2026-09-10", inquiries: 40, leads: 12, deposits: 5, orders: 3 }, { brand: "SF", day: "2026-09-10", inquiries: 9 }])).toEqual([{
-      brand_id: "b_jt", fact_date: "2026-09-10", source: "crm", external_record_id: "JK|2026-09-10",
-      inquiries: 40, qualified_leads: 12, deposits: 5, orders: 3,
-    }]);
-  });
-  it("mergeDailyFacts: รวมรายได้กับ funnel ของวันเดียวกันเป็นแถวเดียว · ฝั่งที่ขาดใช้ค่าเริ่ม 0", () => {
-    const revenue = salesRowsToFacts([{ brand: "TD", day: "2026-09-10", revenue: 5000, orders: 2 }]);
-    const funnel = funnelRowsToFacts([{ brand: "TD", day: "2026-09-10", inquiries: 30, leads: 8, deposits: 4, orders: 2 },
-                                      { brand: "TD", day: "2026-09-11", inquiries: 11, leads: 2, deposits: 0, orders: 0 }]);
-    const merged = mergeDailyFacts(revenue, funnel);
-    expect(merged).toHaveLength(2);
-    expect(merged.find((f) => f.fact_date === "2026-09-10")).toMatchObject({ gross_revenue: 5000, orders: 2, inquiries: 30, qualified_leads: 8, deposits: 4 });
-    expect(merged.find((f) => f.fact_date === "2026-09-11")).toMatchObject({ gross_revenue: 0, refunds: 0, inquiries: 11, qualified_leads: 2 });
-  });
+describe("funnel — เทียบคนทักจาก Meta กับข้อมูลระบบขาย", () => {
   it("funnelCompareRows: เทียบคนทักจาก Meta กับที่เข้าระบบขาย · ไม่มีข้างใดข้างหนึ่ง = null ไม่เดา", () => {
     const facts = [{ brand_id: "b_td", fact_date: "2026-09-10", inquiries: 30, qualified_leads: 9, deposits: 4, orders: 2, gross_revenue: 5000, refunds: 0 }];
     const [row] = funnelCompareRows([{ brandId: "b_td", brand: "TEAMDEE", spend: 4500, metaLeads: 50 }], facts, { from: "2026-09-01", to: "2026-09-30" });

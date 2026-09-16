@@ -1,15 +1,25 @@
-/* sales-sync — ดึงยอดขายจริงรายวันต่อแบรนด์จากระบบขาย (โปรเจกต์ ssbgroup-platform) ลง business_daily_facts
-   สิทธิ์: service role เท่านั้น (ads-cron เรียกวันละครั้ง) · ปลายทางฝั่งขาย = RPC mkt_revenue_daily (อ่านอย่างเดียว)
-   ดึงย้อนหลัง 14 วันทุกครั้ง เพราะยอดปรับย้อนหลังได้ (ยกเลิกออเดอร์/แก้ยอด) แล้วทับด้วย external_record_id
-   ไม่มีข้อมูลลูกค้าไหลข้ามระบบ — RPC คืนแค่ตัวเลขรวมต่อแบรนด์ต่อวัน
-   เฟส 2 (funnel) และเฟส 3 (เป้า) เรียกเพิ่มถ้าประตูฝั่งขายเปิดแล้ว ยังไม่เปิดก็ทำงานต่อได้ตามปกติ */
+/* sales-sync — ดึงยอดขายจริงรายวันต่อแบรนด์จากระบบขายของพี่ทัช (ssbgroup-platform) ลง business_daily_facts + ad_sales_goals
+   สิทธิ์: service role เท่านั้น (ads-cron เรียกวันละครั้ง) · ฝั่งขายอ่านด้วย secret key (SALES_API_KEY)
+   แหล่ง: RPC sale_dashboard_facts (นิยามเดียวกับแดชบอร์ดขาย) + ตาราง sale_goal / sale_target
+   ดึงย้อนหลัง 14 วันทุกครั้ง เพราะยอดแก้ย้อนหลังได้ (ถอนยืนยัน/ยกเลิก) แล้วทับทั้งช่องวัน×แบรนด์ด้วย external_record_id
+   ข้อมูลลูกค้าไม่ข้ามมา: ขอ facts แค่ FACT_COLUMNS (ตัดรหัสลูกค้า/ดีล/เซล/ข้อความเหตุผลตั้งแต่ฝั่งขาย) และตรวจซ้ำก่อนเขียน
+   แบรนด์: TD · JD · TA เท่านั้น — JK ข้อมูลจริงอยู่อีกโปรเจกต์ (ดู SALES_SOURCE_BRANDS) */
 import { adminClient, corsHeaders, isServiceRole, json } from "../_shared/adsOAuth.ts";
-import { funnelRowsToFacts, goalsFromSales, mergeDailyFacts, salesRowsToFacts } from "../_shared/salesFacts.js";
-import { describeSalesKey, describeSalesUrl, doorState, factsProbeUrl, goalProbeUrl, probeVerdict, summarizeFacts, summarizeGoals } from "../_shared/salesBridge.js";
+import { SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, goalRowsToSalesGoals } from "../_shared/salesFacts.js";
+import {
+  PAGE_LIMIT, describeSalesKey, describeSalesUrl, doorState, factsProbeUrl, goalProbeUrl,
+  goalsUrl, monthsToSync, probeVerdict, summarizeFacts, summarizeGoals, targetsUrl,
+} from "../_shared/salesBridge.js";
+import { todayInTimeZone } from "../_shared/metaInsights.js";
 
 const LOOKBACK_DAYS = 14;
 const MAX_DAYS = 400;
+const WINDOW_DAYS = 3;        // 7 วันจริงได้ ~680 แถว → ก้อนละ 3 วัน ~300 แถว เผื่อวันพีคให้ห่างเพดาน 1,000
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const day = (date: Date) => date.toISOString().slice(0, 10);
+
+/** error ที่ตั้งใจโยน — code เป็นค่าที่ส่งกลับไปให้ ads-cron บันทึก (ไม่มีรายละเอียดจากฝั่งขาย) */
+const fail = (code: string, extra: Record<string, unknown> = {}) => Object.assign(new Error(code), { code, ...extra });
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
@@ -54,62 +64,87 @@ Deno.serve(async (request) => {
     });
   }
 
-  // ยังไม่ได้ตั้งค่า = ไม่ใช่ความผิดพลาด (ประตูฝั่งขายอาจยังไม่เปิด) — บอกให้รู้แล้วจบ
+  // ยังไม่ได้ตั้งค่า = ไม่ใช่ความผิดพลาด — บอกให้รู้แล้วจบ
   if (!url || !key) return json(request, { skipped: "SALES_API_NOT_CONFIGURED" }, 200);
 
-  const to = typeof body?.to === "string" ? body.to : day(new Date());
+  const today = todayInTimeZone(new Date(), "Asia/Bangkok");
+  const to = typeof body?.to === "string" && ISO.test(body.to) ? body.to : today;
   const span = Math.min(MAX_DAYS, Math.max(1, Number(body?.days) || LOOKBACK_DAYS));
-  const from = typeof body?.from === "string" ? body.from : day(new Date(Date.parse(`${to}T00:00:00Z`) - (span - 1) * 86_400_000));
+  const from = typeof body?.from === "string" && ISO.test(body.from) ? body.from
+    : day(new Date(Date.parse(`${to}T00:00:00Z`) - (span - 1) * 86_400_000));
+  if (from > to) return json(request, { error: "SALES_RANGE_INVALID" }, 400);
 
-  const base = url.replace(/\/+$/, "");
-  /** เรียก RPC ฝั่งระบบขาย — ประตูที่ยังไม่เปิด (404/42883) ไม่ถือว่าพัง แค่ยังไม่มีเฟสนั้น */
-  const rpc = async (name: string, args: Record<string, unknown>) => {
-    const response = await fetch(`${base}/rest/v1/rpc/${name}`, {
-      method: "POST",
-      headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify(args),
-      signal: AbortSignal.timeout(60_000),
-    });
+  const headers = { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" };
+  const call = async (target: string, init: RequestInit = {}) => {
+    const response = await fetch(target, { ...init, headers, signal: AbortSignal.timeout(60_000) });
     const payload = await response.json().catch(() => null);
-    if (response.ok) return { rows: Array.isArray(payload) ? payload : [], missing: false };
-    const code = (payload as { code?: string } | null)?.code ?? "";
-    // "ยังไม่เปิด" นับเฉพาะ code ของ PostgREST — 404 เฉยๆ แปลว่า URL ผิด ต้องล้มให้เห็น ไม่ใช่ข้ามเงียบ
-    if (doorState(response.status, code) === "missing") return { rows: [], missing: true };
-    throw Object.assign(new Error(name), { status: response.status, detail: JSON.stringify(payload)?.slice(0, 200) });
+    if (!response.ok) {
+      const code = (payload as { code?: string } | null)?.code ?? null;
+      throw fail("SALES_READ_FAILED", { status: response.status, state: doorState(response.status, code) });
+    }
+    if (!Array.isArray(payload)) throw fail("SALES_RESPONSE_INVALID");
+    return payload as Record<string, unknown>[];
   };
 
-  let revenue, funnel, goalRows;
+  /** facts ของช่วงหนึ่ง — ได้ครบเพดานพอดีแปลว่าอาจถูกตัด: แตกเป็นรายวันแล้วขอใหม่ · วันเดียวยังชนเพดาน = หยุด ไม่เขียนข้อมูลขาด */
+  const factsFor = async (range: { from: string; to: string }): Promise<Record<string, unknown>[]> => {
+    const rows = await call(factsProbeUrl(url), {
+      method: "POST",
+      body: JSON.stringify({ p_from: range.from, p_to: range.to, p_brands: SALES_SOURCE_BRANDS, p_scope: "all" }),
+    });
+    if (rows.length < PAGE_LIMIT) return rows;
+    if (range.from === range.to) throw fail("SALES_PAGE_LIMIT", { day: range.from });
+    const out: Record<string, unknown>[] = [];
+    for (const single of factWindows(range.from, range.to, 1)) out.push(...await factsFor(single));
+    return out;
+  };
+
+  let facts: Record<string, unknown>[] = [];
   try {
-    revenue = await rpc("mkt_revenue_daily", { p_from: from, p_to: to });
-    funnel = await rpc("mkt_funnel_daily", { p_from: from, p_to: to });            // เฟส 2 — ยังไม่เปิดก็ข้าม
-    goalRows = await rpc("mkt_goal_current", { p_month: `${to.slice(0, 7)}-01` }); // เฟส 3 — ยังไม่เปิดก็ข้าม
+    for (const range of factWindows(from, to, WINDOW_DAYS)) facts.push(...await factsFor(range));
   } catch (error) {
-    const detail = error as { status?: number; detail?: string };
-    console.error("[sales-sync] upstream", detail.status, detail.detail);
-    return json(request, { error: "SALES_READ_FAILED", status: detail.status ?? null }, 502);
+    const detail = error as { code?: string; status?: number; state?: string; day?: string };
+    console.error("[sales-sync] facts", detail.code, detail.status ?? "", detail.state ?? "", detail.day ?? "");
+    return json(request, { error: detail.code ?? "SALES_READ_FAILED", status: detail.status ?? null, state: detail.state ?? null }, 502);
   }
 
-  const goals = [...goalsFromSales(goalRows.rows)].map(([brandId, goal]) => ({ brandId, ...goal }));
-  const facts = mergeDailyFacts(salesRowsToFacts(revenue.rows), funnelRowsToFacts(funnel.rows));
-  const phases = { revenue: !revenue.missing, funnel: !funnel.missing, goals: !goalRows.missing };
-  if (!facts.length) return json(request, { from, to, read: revenue.rows.length, written: 0, phases, goals });
+  // ด่านสุดท้ายก่อนเขียน: ฝั่งขายต้องไม่ส่งคอลัมน์เกินที่ขอ (เช่นถ้ามีคนแก้ฟังก์ชันจนไม่สน select)
+  const { extraColumns } = summarizeFacts(facts);
+  if (extraColumns.length) {
+    console.error("[sales-sync] column leak", extraColumns.join(","));
+    return json(request, { error: "SALES_COLUMN_LEAK" }, 502);
+  }
+  // 14 วัน 3 แบรนด์ไม่มีเหตุการณ์เลยเป็นไปไม่ได้ — น่าจะเป็นด่านสิทธิ์ของฝั่งขายคืนชุดว่าง ห้ามเขียนศูนย์ทับของจริง
+  if (!facts.length) return json(request, { error: "SALES_EMPTY_RESULT", from, to }, 502);
 
+  const rows = factsToDailyRows(facts, { from, to }).map((row) => ({ ...row, source_updated_at: new Date().toISOString() }));
   const db = adminClient();
-  const { error } = await db.from("business_daily_facts")
-    .upsert(facts.map((fact) => ({ ...fact, source_updated_at: new Date().toISOString() })), { onConflict: "source,external_record_id" });
-  if (error) {
-    console.error("[sales-sync] write", error.message);
+  const { error: writeError } = await db.from("business_daily_facts").upsert(rows, { onConflict: "source,external_record_id" });
+  if (writeError) {
+    console.error("[sales-sync] write", writeError.message);
     return json(request, { error: "SALES_WRITE_FAILED" }, 502);
   }
-  if (goals.length) {
-    const { error: goalError } = await db.from("ad_sales_goals").upsert(goals.map((goal) => ({
-      brand_id: goal.brandId, month: goal.month, version: goal.version,
-      sales_target: goal.salesTarget, ad_budget: goal.adBudget, cpl: goal.cpl, cac: goal.cac,
-      roas: goal.roas, leads_target: goal.leadsTarget, orders_target: goal.ordersTarget, synced_at: new Date().toISOString(),
-    })), { onConflict: "brand_id,month" });
-    if (goalError) console.error("[sales-sync] goals", goalError.message);   // เป้าพังไม่ควรทำให้ยอดขายที่เขียนสำเร็จแล้วพังตาม
+
+  /* เป้า — พังได้โดยไม่ทำให้ยอดขายที่เขียนสำเร็จแล้วพังตาม แต่ต้องบอกในผลลัพธ์ ไม่เงียบ */
+  const months = monthsToSync(today);
+  let goals: { written: number; bySource: Record<string, number>; error: string | null } = { written: 0, bySource: {}, error: null };
+  try {
+    const [goalRows, targetRows] = await Promise.all([call(goalsUrl(url, months)), call(targetsUrl(url, months))]);
+    const goalOut = goalRowsToSalesGoals({ goals: goalRows, targets: targetRows });
+    if (goalOut.length) {
+      const { error } = await db.from("ad_sales_goals")
+        .upsert(goalOut.map((goal) => ({ ...goal, synced_at: new Date().toISOString() })), { onConflict: "brand_id,month" });
+      if (error) throw fail("SALES_GOALS_WRITE_FAILED", { detail: error.message });
+    }
+    const bySource: Record<string, number> = {};
+    for (const goal of goalOut) bySource[goal.goal_source] = (bySource[goal.goal_source] ?? 0) + 1;
+    goals = { written: goalOut.length, bySource, error: null };
+  } catch (error) {
+    const detail = error as { code?: string; detail?: string };
+    console.error("[sales-sync] goals", detail.code, detail.detail ?? "");
+    goals = { written: 0, bySource: {}, error: detail.code ?? "SALES_GOALS_FAILED" };
   }
 
-  console.log(`[sales-sync] ${from}→${to} revenue=${revenue.rows.length} funnel=${funnel.rows.length} goals=${goals.length} written=${facts.length}`);
-  return json(request, { from, to, read: revenue.rows.length, written: facts.length, phases, goals });
+  console.log(`[sales-sync] ${from}→${to} facts=${facts.length} rows=${rows.length} goals=${goals.written}${goals.error ? ` goalsError=${goals.error}` : ""}`);
+  return json(request, { from, to, read: facts.length, written: rows.length, brands: SALES_SOURCE_BRANDS, goals });
 });

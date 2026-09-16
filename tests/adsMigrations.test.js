@@ -135,3 +135,30 @@ describe("ads-oauth-callback ขอเฉพาะ field ที่สิทธ�
     expect(fields).not.toContain("business");
   });
 });
+
+describe("20260917090000 ช่องเก็บของท่อยอดขายจากระบบพี่ทัช", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20260917090000_sales_bridge_direct.sql", import.meta.url), "utf8");
+  const code = sql.replace(/--[^\n]*/g, "");
+  it("เพิ่มคอลัมน์ที่ factsToDailyRows / goalRowsToSalesGoals เขียนครบ แบบรันซ้ำได้", () => {
+    for (const col of ["leads_new", "deposit_value", "orders_new", "revenue_new", "cash_received", "cancelled", "cancelled_value", "inquiries_by_channel", "inquiry_filled"]) {
+      expect(code, col).toMatch(new RegExp(`add column if not exists ${col}\\b`));
+    }
+    for (const col of ["sales_new_target", "sales_old_target", "deposits_target", "inquiry_target", "platform_budgets", "goal_source"]) {
+      expect(code, col).toMatch(new RegExp(`add column if not exists ${col}\\b`));
+    }
+  });
+  it("jsonb ต้องเป็น object และมีเพดานขนาด · ที่มาของเป้ารับแค่ 2 ค่า", () => {
+    expect(code).toMatch(/inquiries_by_channel jsonb not null default '\{\}'::jsonb\s+check \(jsonb_typeof\(inquiries_by_channel\) = 'object' and pg_column_size\(inquiries_by_channel\) < \d+\)/);
+    expect(code).toMatch(/platform_budgets jsonb not null default '\{\}'::jsonb\s+check \(jsonb_typeof\(platform_budgets\) = 'object' and pg_column_size\(platform_budgets\) < \d+\)/);
+    expect(code).toContain("check (goal_source in ('sale_goal', 'sale_target'))");
+  });
+  it("ไม่เปิดช่องเขียนจาก client — ไม่สร้าง policy และไม่ grant สิทธิ์เขียนเพิ่ม", () => {
+    expect(code).not.toMatch(/create policy/i);
+    expect(code).not.toMatch(/grant\s+(insert|update|delete|all)/i);
+  });
+  it("มีวิธีย้อนกลับครบทุกคอลัมน์", () => {
+    for (const col of ["leads_new", "inquiries_by_channel", "inquiry_filled", "platform_budgets", "goal_source"]) {
+      expect(sql, col).toMatch(new RegExp(`--.*drop column if exists[^\\n]*${col}`));
+    }
+  });
+});

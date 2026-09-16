@@ -1,10 +1,20 @@
-/* ยอดขายจริงจากระบบขาย (ssbgroup-platform) → หน้า ads — pure · เทสใน tests/salesFacts.test.js
-   นิยามรายได้ = วันจ่ายงวดแรก (revenue_recognized_date) + correction ตามวันที่แก้ — ตรงกับ P&L
+/* ยอดขายจริงจากระบบขายของพี่ทัช (ssbgroup-platform) → หน้า ads — pure · เทสใน tests/salesFacts.test.js
+   แหล่งข้อมูล: RPC sale_dashboard_facts (ตัวเดียวกับแดชบอร์ดขาย) + ตาราง sale_goal / sale_target — อ่านด้วย secret key
+   นิยามยอดขาย = ยืนยันออเดอร์ ณ วันจ่ายงวดแรก (revenue_recognized_date) ตรงกับ P&L และตรงกับที่เป้าของพี่ทัชใช้วัด
    กติกา: ยอดจริงมาถึงระดับ "แบรนด์ × วัน" เท่านั้น แยกรายโฆษณาไม่ได้ · ไม่มีข้อมูล = null ไม่ใช่ 0 */
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_START = /^\d{4}-\d{2}-01$/;
+const PLATFORM_KEY = /^[a-z0-9_]{1,24}$/;
+/* ช่องทางคนทักของระบบขายเป็นรายการตายตัว (INQUIRY_CHANNELS: FB · Line) แต่คอลัมน์ฝั่งนั้นเป็นข้อความอิสระ ≤24 ตัว
+   รับเฉพาะรหัสสั้นๆ — ถ้าวันหนึ่งมีคนพิมพ์ชื่อ/เบอร์ลงไป จะไม่ถูกคัดลอกมาให้ทุกคนในระบบ marketing เห็น */
+const CHANNEL_KEY = /^[A-Za-z0-9_]{1,16}$/;
 
 /** รหัสแบรนด์ฝั่งระบบขาย → brand id ฝั่ง marketing (ดู orgConfig ของ ssbgroup-platform: JD = JK Design, JK = JUNTAKARN) */
 export const SALE_BRAND_BY_CODE = { TD: "b_td", JD: "b_jk", TA: "b_ta", JK: "b_jt" };   // SF (SAIFAH) ยังไม่มีในระบบ ads
+
+/** แบรนด์ที่ใช้ระบบพี่ทัชเป็นแหล่งข้อมูล — JK (JUNTAKARN) ข้อมูลจริงอยู่อีกโปรเจกต์ Supabase
+    ห้ามเพิ่ม JK ตรงนี้: ระบบพี่ทัชมีแถวของ JK อยู่บ้างแต่ไม่ครบ (ไม่มีคนทักเลยสักวัน) และพอต่อแหล่งของ JK จะนับซ้ำ */
+export const SALES_SOURCE_BRANDS = ["TD", "JD", "TA"];
 
 const num = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -12,29 +22,140 @@ const num = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** แถวจาก mkt_revenue_daily → แถวของ business_daily_facts (พร้อม upsert ทับด้วย external_record_id) */
-export function salesRowsToFacts(rows = []) {
-  const byKey = new Map();
-  for (const row of rows ?? []) {
-    const brandId = SALE_BRAND_BY_CODE[row?.brand];
-    const day = typeof row?.day === "string" && ISO.test(row.day) ? row.day : null;
-    const revenue = num(row?.revenue);
-    if (!brandId || !day || revenue === null) continue;
-    byKey.set(`${row.brand}|${day}`, {
-      brand_id: brandId,
-      fact_date: day,
-      source: "crm",
-      external_record_id: `${row.brand}|${day}`,
-      // ยอดรวมของวันติดลบได้เมื่อยกเลิกออเดอร์ย้อนหลัง — เก็บเป็นคืนเงิน ไม่ให้รายได้ติดลบ
-      orders: Math.max(0, Math.trunc(num(row?.orders) ?? 0)),
-      gross_revenue: revenue > 0 ? revenue : 0,
-      refunds: revenue < 0 ? Math.abs(revenue) : 0,
-      inquiries: 0,
-      qualified_leads: 0,
-      deposits: 0,
+const money = (value) => Math.round(value * 100) / 100;
+const count = (value) => Math.max(0, Math.trunc(num(value) ?? 0));
+const addDays = (iso, days) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/** แบ่งช่วงวันเป็นก้อนละ size วัน (รวมหัวท้าย) — PostgREST คืนไม่เกิน 1,000 แถวต่อครั้ง ถ้าขอทีเดียวจะได้ข้อมูลขาดแบบเงียบ */
+export function factWindows(from, to, size = 3) {
+  if (!ISO.test(String(from ?? "")) || !ISO.test(String(to ?? "")) || from > to) return [];
+  const step = Math.max(1, Math.trunc(Number(size) || 1));
+  const out = [];
+  for (let start = from; start <= to; start = addDays(start, step)) {
+    const end = addDays(start, step - 1);
+    out.push({ from: start, to: end < to ? end : to });
+  }
+  return out;
+}
+
+/** แถว sale_dashboard_facts → แถว business_daily_facts ครบทุกวัน×แบรนด์ในช่วง (วันไม่มีเหตุการณ์ = 0)
+    ต้องครบทุกช่อง เพราะยอดแก้ย้อนหลังได้ (ถอนยืนยัน/ยกเลิก) — ถ้าเขียนเฉพาะวันที่มีเหตุการณ์ วันที่ยอดหายไปจะค้างตัวเลขเก่า
+    นิยามตาม kind ของพี่ทัช: inq คนทัก · lead ลีด · won ได้ออเดอร์(เริ่มออกแบบ) · book ยืนยันออเดอร์ = ยอดขาย
+    · pay เงินเข้าสุทธิ · canc ยกเลิก · lost/nosale ไม่เก็บ (หลุดแทบไม่มีคนกด · งานไม่ใช่ยอดขายไม่เกี่ยวกับแอด)
+    ยอดขายไม่หักยกเลิก — sale_goal_period ของพี่ทัชวัดเป้าจาก book ล้วน ถ้าหักเองเลขจะไม่ตรงหน้าเป้า */
+export function factsToDailyRows(facts = [], { from, to, brands = SALES_SOURCE_BRANDS } = {}) {
+  const grid = new Map();
+  for (const { from: start, to: end } of factWindows(from, to, 3650)) {
+    for (let day = start; day <= end; day = addDays(day, 1)) {
+      for (const code of brands) {
+        const brandId = SALE_BRAND_BY_CODE[code];
+        if (!brandId) continue;
+        grid.set(`${code}|${day}`, {
+          brand_id: brandId, fact_date: day, source: "crm", external_record_id: `${code}|${day}`,
+          inquiries: 0, inquiries_by_channel: {}, inquiry_filled: false,
+          qualified_leads: 0, leads_new: 0, deposits: 0, deposit_value: 0,
+          orders: 0, orders_new: 0, gross_revenue: 0, revenue_new: 0, refunds: 0,
+          cash_received: 0, cancelled: 0, cancelled_value: 0,
+        });
+      }
+    }
+  }
+  for (const fact of facts ?? []) {
+    const row = grid.get(`${fact?.brand}|${fact?.day}`);
+    if (!row) continue;
+    const n = count(fact.n);
+    const amount = num(fact.amount) ?? 0;
+    switch (fact.kind) {
+      case "inq": {
+        const channel = CHANNEL_KEY.test(String(fact.channel ?? "")) ? String(fact.channel) : "other";
+        row.inquiries += n;
+        row.inquiries_by_channel[channel] = (row.inquiries_by_channel[channel] ?? 0) + n;
+        row.inquiry_filled = true;
+        break;
+      }
+      case "lead":
+        row.qualified_leads += n;
+        if (fact.is_new === true) row.leads_new += n;
+        break;
+      case "won":
+        row.deposits += n;
+        row.deposit_value += amount;
+        break;
+      case "book":
+        row.orders += n;
+        row.gross_revenue += Math.max(0, amount);
+        if (fact.is_new === true) { row.orders_new += n; row.revenue_new += Math.max(0, amount); }
+        break;
+      case "pay":
+        row.cash_received += amount;
+        break;
+      case "canc":
+        row.cancelled += n;
+        row.cancelled_value += Math.max(0, amount);
+        break;
+      default:
+        break;
+    }
+  }
+  return [...grid.values()].map((row) => ({
+    ...row,
+    deposit_value: money(row.deposit_value), gross_revenue: money(row.gross_revenue), revenue_new: money(row.revenue_new),
+    cash_received: money(row.cash_received), cancelled_value: money(row.cancelled_value),
+  }));
+}
+
+const sumOrNull = (...values) => {
+  const present = values.map(num).filter((value) => value !== null);
+  return present.length ? present.reduce((total, value) => total + value, 0) : null;
+};
+
+/** เป้าจากระบบพี่ทัช → แถว ad_sales_goals · ลำดับเดียวกับหน้าประวัติเป้าของพี่ทัช: sale_goal (ใหม่ มีเวอร์ชัน) ก่อน
+    ไม่มีค่อยใช้ sale_target (แบบเก่า 6 ตัว ไม่มีงบแอด/CPL/ROAS) · version 0 = มาจากแบบเก่า */
+export function goalRowsToSalesGoals({ goals = [], targets = [], brands = SALES_SOURCE_BRANDS } = {}) {
+  const out = new Map();
+  for (const row of goals ?? []) {
+    const brandId = brands.includes(row?.brand) ? SALE_BRAND_BY_CODE[row.brand] : null;
+    const month = String(row?.month ?? "").slice(0, 10);
+    if (!brandId || !MONTH_START.test(month)) continue;
+    const version = Math.trunc(num(row.version) ?? 0);
+    const key = `${brandId}|${month}`;
+    if ((out.get(key)?.version ?? -1) >= version) continue;
+    const t = row.targets && typeof row.targets === "object" ? row.targets : {};
+    const platformBudgets = {};
+    for (const platform of Array.isArray(row.ads?.platforms) ? row.ads.platforms : []) {
+      const budget = num(platform?.budget);
+      if (PLATFORM_KEY.test(String(platform?.key ?? "")) && budget !== null) platformBudgets[platform.key] = budget;
+    }
+    out.set(key, {
+      brand_id: brandId, month, version, goal_source: "sale_goal",
+      sales_target: num(t.sales_total) ?? sumOrNull(t.sales_new, t.sales_old),
+      sales_new_target: num(t.sales_new), sales_old_target: num(t.sales_old),
+      orders_target: sumOrNull(t.orders_new, t.orders_old), deposits_target: sumOrNull(t.design_new, t.design_old),
+      leads_target: sumOrNull(t.leads_new, t.leads_old), inquiry_target: num(t.inquiry),
+      ad_budget: num(t.ad_budget), cpl: num(t.cpl), cac: num(t.cac), roas: num(t.roas),
+      platform_budgets: platformBudgets,
     });
   }
-  return [...byKey.values()];
+  const legacy = new Map();
+  for (const row of targets ?? []) {
+    const brandId = brands.includes(row?.brand) ? SALE_BRAND_BY_CODE[row.brand] : null;
+    const month = String(row?.month ?? "").slice(0, 10);
+    if (!brandId || !MONTH_START.test(month)) continue;
+    const key = `${brandId}|${month}`;
+    const metrics = legacy.get(key) ?? { brandId, month };
+    metrics[row.metric] = num(row.amount);
+    legacy.set(key, metrics);
+  }
+  for (const [key, m] of legacy) {
+    if (out.has(key)) continue;   // เดือนที่มี sale_goal แล้ว แบบเก่าไม่มีสิทธิ์ทับ
+    out.set(key, {
+      brand_id: m.brandId, month: m.month, version: 0, goal_source: "sale_target",
+      sales_target: sumOrNull(m.sales_new, m.sales_old), sales_new_target: m.sales_new ?? null, sales_old_target: m.sales_old ?? null,
+      orders_target: m.orders ?? null, deposits_target: m.design ?? null, leads_target: m.leads ?? null, inquiry_target: m.inquiry ?? null,
+      ad_budget: null, cpl: null, cac: null, roas: null, platform_budgets: {},
+    });
+  }
+  return [...out.values()];
 }
 
 /** รวมยอดจริงต่อแบรนด์ในช่วงที่หน้าจอกำลังดู — แบรนด์ที่ไม่มีข้อมูลจะไม่มีคีย์ (ไม่ใช่ 0) */
@@ -76,35 +197,6 @@ export function realRoasRows(brandSpend = [], salesByBrand = new Map()) {
   });
 }
 
-/* ── เฟส 2: funnel จากระบบขาย (mkt_funnel_daily) ─────────────────────────── */
-
-/** แถวจาก mkt_funnel_daily → แถวของ business_daily_facts (จำนวนล้วน ไม่มียอดเงิน) */
-export function funnelRowsToFacts(rows = []) {
-  const byKey = new Map();
-  for (const row of rows ?? []) {
-    const brandId = SALE_BRAND_BY_CODE[row?.brand];
-    const day = typeof row?.day === "string" && ISO.test(row.day) ? row.day : null;
-    if (!brandId || !day) continue;
-    const int = (value) => Math.max(0, Math.trunc(num(value) ?? 0));
-    byKey.set(`${row.brand}|${day}`, {
-      brand_id: brandId, fact_date: day, source: "crm", external_record_id: `${row.brand}|${day}`,
-      inquiries: int(row.inquiries), qualified_leads: int(row.leads), deposits: int(row.deposits), orders: int(row.orders),
-    });
-  }
-  return [...byKey.values()];
-}
-
-/** รวมแถวรายได้กับแถว funnel ของวันเดียวกันให้เป็นแถวเดียวก่อนเขียนลงฐาน (upsert ทับทั้งแถว) */
-export function mergeDailyFacts(revenueFacts = [], funnelFacts = []) {
-  const base = { source: "crm", inquiries: 0, qualified_leads: 0, deposits: 0, orders: 0, gross_revenue: 0, refunds: 0 };
-  const byKey = new Map();
-  for (const fact of [...(revenueFacts ?? []), ...(funnelFacts ?? [])]) {
-    if (!fact?.external_record_id) continue;
-    byKey.set(fact.external_record_id, { ...base, ...(byKey.get(fact.external_record_id) ?? {}), ...fact });
-  }
-  return [...byKey.values()];
-}
-
 /** เทียบ funnel: คนทักที่ Meta นับ กับคนที่เข้าระบบขายจริง — ขาดข้างใดข้างหนึ่ง = null ไม่เดาแทน */
 export function funnelCompareRows(brands = [], facts = [], range = {}) {
   const byBrand = new Map();
@@ -141,7 +233,7 @@ export function funnelCompareRows(brands = [], facts = [], range = {}) {
   });
 }
 
-/* ── เฟส 3: เป้าจากระบบขาย (mkt_goal_current) ────────────────────────────── */
+/* ── เป้าที่หน้าจออ่านจาก ad_sales_goals ─────────────────────────────────── */
 
 /** แถวเป้าจากระบบขาย → Map brandId → เป้าเวอร์ชันล่าสุด */
 export function goalsFromSales(rows = []) {
