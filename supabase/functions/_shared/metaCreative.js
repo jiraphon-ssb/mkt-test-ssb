@@ -451,6 +451,9 @@ export async function enrichRowsWithPosts(rows, { version, token, deadline = Inf
       const page = story.split("_")[0];
       // ไม่มี token ของเพจนั้น → ลองด้วย token ผู้ใช้ บางเพจที่ผู้ใช้มีบทบาทอยู่ก็อ่านโพสต์ได้
       const pageToken = pageTokens.get(page);
+      /* เพจที่ไม่มี token และลองด้วย token ผู้ใช้แล้วไม่ผ่าน = ไม่ผ่านทั้งเพจ ไม่ใช่เฉพาะโพสต์นั้น
+         ถ้าไม่จำไว้ จะยิงพลาดทีละโพสต์จนครบ (ของจริงคือ 130 ครั้งต่อรอบ) เปลืองโควตาเปล่าๆ */
+      if (!pageToken && missingPages.has(page)) continue;
       try {
         const { payload } = await fetchGraphJson(buildPostMediaUrl({ version, storyId: story }), { ...graphOpts, token: pageToken ?? token });
         const post = postMediaFrom(payload);

@@ -417,6 +417,20 @@ describe("หาเพจจาก Business + ใช้ token ผู้ใช้
     expect(out.rows[0]).toBe(rows[0]);
   });
 
+  it("token ผู้ใช้อ่านเพจนั้นไม่ได้ = เลิกลองเพจนั้นทั้งรอบ ไม่ยิงซ้ำทีละโพสต์จนหมดโควตา", async () => {
+    // ของจริง: 130 โพสต์ของเพจเดียวกัน ถ้าไม่จำว่าเพจนี้เข้าไม่ได้ จะยิงพลาด 130 ครั้งทุกรอบ
+    const rows = Array.from({ length: 5 }, (_, i) => creativeRowFromAd(statusAd2(String(i), `111_${i}`), "conn"));
+    let postCalls = 0;
+    const fetch = vi.fn(async (url) => {
+      if (url.includes("/me/accounts")) return res2({ data: [] });
+      postCalls += 1;
+      return res2({ error: { code: 200, message: "no permission" } }, 403);
+    });
+    const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {}, concurrency: 1 });
+    expect(postCalls).toBe(1);
+    expect(out).toMatchObject({ enriched: 0, needed: 5, missingPages: ["111"], usedUserToken: 0 });
+  });
+
   it("ไม่มีสิทธิ์ business_management = ไม่ต้องเสียคำขอไปถาม Business", async () => {
     const rows = [creativeRowFromAd(statusAd2("1", "111_222"), "conn")];
     const seen = [];
