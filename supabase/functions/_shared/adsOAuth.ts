@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.110.9";
 import { parseOrigins, publicErrorCode, requestAppOrigin, resolveReturnUrl, returnTarget } from "./returnTo.js";
+import { bearerToken, isServiceRoleToken } from "./serviceAuth.js";
 export { publicErrorCode };
 
 const encoder = new TextEncoder();
@@ -17,14 +18,9 @@ export function adminClient() {
   });
 }
 
-/** ผู้เรียกเป็น service role หรือไม่ (pg_cron → ads-cron → ads-sync) — เทียบแบบเวลาคงที่ ไม่ให้เดาทีละตัวอักษร */
+/** ผู้เรียกเป็น service role หรือไม่ (pg_cron → ads-cron → ads-sync) — ตรรกะอยู่ใน serviceAuth.js พร้อมเทส */
 export function isServiceRole(request: Request) {
-  const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  const key = env("SUPABASE_SERVICE_ROLE_KEY");
-  if (token.length !== key.length) return false;
-  let diff = 0;
-  for (let i = 0; i < key.length; i += 1) diff |= token.charCodeAt(i) ^ key.charCodeAt(i);
-  return diff === 0;
+  return isServiceRoleToken(bearerToken(request.headers.get("authorization")), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "");
 }
 
 export function allowedOrigins() {
