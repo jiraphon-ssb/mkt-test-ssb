@@ -4,6 +4,8 @@
    ช่องทางที่ไม่รู้จัก → จุดกลมสีเทา (ไม่พังหน้า)
    ============================================================ */
 
+import { inkOn } from "./BrandMark.jsx";
+
 /* path จาก simple-icons (viewBox 24) — ช่องทางที่ระบบใช้จริง */
 const LOGOS = {
   Facebook: {
@@ -44,7 +46,8 @@ export function PlatformIcon({ channel, size = 16, color }) {
   const meta = platformMeta(channel);
   const fill = color ?? meta.color;
   if (!meta.path) {
-    return <span aria-hidden="true" style={{ display: "inline-grid", placeItems: "center", width: size, height: size, borderRadius: 4, background: fill, color: "white", fontSize: Math.max(9, size * 0.62), fontWeight: 800, lineHeight: 1 }}>{meta.glyph ?? ""}</span>;
+    // ตัวอักษรบนสีแพลตฟอร์ม: ขาวตายตัวได้คอนทราสต์แค่ ~3.5 บนสีอิ่มตัว (Google/Shopee) — ให้ inkOn คิดให้
+    return <span aria-hidden="true" style={{ display: "inline-grid", placeItems: "center", width: size, height: size, borderRadius: 4, background: fill, color: inkOn(fill), fontSize: Math.max(10, size * 0.62), fontWeight: 800, lineHeight: 1 }}>{meta.glyph ?? ""}</span>;
   }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label={channel} style={{ flexShrink: 0 }}>
