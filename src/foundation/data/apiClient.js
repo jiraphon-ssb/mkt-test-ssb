@@ -2530,6 +2530,16 @@ const adsData = {
     if (error) throw error;
     return data ?? [];
   },
+  /** ยอดขายจริงรายวันต่อแบรนด์ (มาจากระบบขายผ่าน sales-sync) — อ่านอย่างเดียว */
+  async businessFacts({ from, to } = {}) {
+    const db = requireSupabase();
+    let query = db.from("business_daily_facts").select("brand_id,fact_date,source,orders,gross_revenue,refunds,net_revenue").eq("source", "crm");
+    if (from) query = query.gte("fact_date", from);
+    if (to) query = query.lte("fact_date", to);
+    const { data, error } = await query.order("fact_date", { ascending: false }).limit(2000);
+    if (error) throw error;
+    return data ?? [];
+  },
   async recentSyncs(limit = 20) {
     const db = requireSupabase();
     const { data, error } = await db.from("ad_sync_runs").select("*").order("started_at", { ascending: false }).limit(limit);

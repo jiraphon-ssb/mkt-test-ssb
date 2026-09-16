@@ -96,3 +96,13 @@ export function summarizeTick({ planned = 0, sync = [], reconcile = [] } = {}) {
     status: !failed ? "success" : done ? "partial" : "failed",
   };
 }
+
+/** ถึงเวลาดึงยอดขายจริงหรือยัง — วันละครั้ง หลังเวลาที่ระบบขายปิดยอดของเมื่อวานแล้ว
+    lastAt = เวลาที่ดึงสำเร็จครั้งล่าสุด (เก็บใน ad_cron_ticks.detail) · เทียบเป็นวันตามโซนเวลาบัญชี */
+export function salesDue({ lastAt = null, now, hour = 0, today, afterHour = RECONCILE_AFTER_HOUR } = {}) {
+  if (!Number.isFinite(time(now)) || hour < afterHour) return false;
+  if (!lastAt) return true;
+  const last = time(lastAt);
+  if (!Number.isFinite(last)) return true;
+  return new Date(last).toISOString().slice(0, 10) < String(today ?? "");
+}

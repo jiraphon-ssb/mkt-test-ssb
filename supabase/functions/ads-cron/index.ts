@@ -3,7 +3,7 @@
    ทำทีละน้อยต่อรอบ (ดึง ≤4 ก้อน · ตรวจยอด ≤4 บัญชี) เพราะ Edge Function มีเพดานเวลา — ที่เหลือรอบหน้าค่อยทำ
    ทุกรอบบันทึกลง ad_cron_ticks แม้ไม่มีอะไรต้องทำ เพื่อให้ตอบได้ว่าระบบยังวิ่งอยู่จริง */
 import { adminClient, corsHeaders, env, isServiceRole, json } from "../_shared/adsOAuth.ts";
-import { DEFAULT_SYNC_EVERY_HOURS, planCronJobs, planReconcileTargets, summarizeTick } from "../_shared/adsCron.js";
+import { DEFAULT_SYNC_EVERY_HOURS, planCronJobs, planReconcileTargets, salesDue, summarizeTick } from "../_shared/adsCron.js";
 import { hourInTimeZone, todayInTimeZone } from "../_shared/metaInsights.js";
 
 const MAX_SYNC_JOBS = 4;
@@ -85,12 +85,20 @@ Deno.serve(async (request) => {
   const reconcile: JobResult[] = [];
   for (const connectionId of targets) reconcile.push({ connectionId, ...(await call("ads-reconcile", { connectionId })) });
 
+  // ยอดขายจริงจากระบบขาย — วันละครั้ง หลัง 9 โมงตามเวลาไทย (ใช้รอบก่อนหน้าจาก ad_cron_ticks เป็นตัวจำ)
+  const { data: lastSales } = await db.from("ad_cron_ticks").select("started_at")
+    .not("detail->sales", "is", null).order("started_at", { ascending: false }).limit(1).maybeSingle();
+  let sales: Record<string, unknown> | null = null;
+  if (salesDue({ lastAt: lastSales?.started_at ?? null, now, hour: hourOf("Asia/Bangkok"), today: todayOf("Asia/Bangkok") })) {
+    sales = await call("sales-sync", {});
+  }
+
   const summary = summarizeTick({ planned: jobs.length + targets.length, sync, reconcile });
   await finish({
     status: summary.status, planned: summary.planned, synced: summary.synced, reconciled: summary.reconciled,
     failed: summary.failed, rows_written: summary.rowsWritten, sync_every_hours: syncEveryHours,
-    detail: { sync, reconcile },
+    detail: { sync, reconcile, ...(sales ? { sales } : {}) },
   });
   console.log(`[ads-cron] planned=${summary.planned} synced=${summary.synced} reconciled=${summary.reconciled} failed=${summary.failed}`);
-  return json(request, { at: now, tickId, syncEveryHours, ...summary, sync, reconcile });
+  return json(request, { at: now, tickId, syncEveryHours, ...summary, sync, reconcile, sales });
 });

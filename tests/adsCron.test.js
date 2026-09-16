@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cronDue, planCronJobs, planReconcileTargets, summarizeTick } from "../supabase/functions/_shared/adsCron.js";
+import { cronDue, planCronJobs, planReconcileTargets, salesDue, summarizeTick } from "../supabase/functions/_shared/adsCron.js";
 
 const NOW = "2026-09-16T10:00:00.000Z";
 const conn = (id, patch = {}) => ({ id, status: "connected", authorization_id: "auth-" + id, timezone: "Asia/Bangkok", config: { backfillDays: 31 }, ...patch });
@@ -95,6 +95,17 @@ describe("planReconcileTargets — ตรวจยอดอัตโนมัต
   it("บัญชีปิด/ไม่มี token = ไม่ตรวจ · ตรวจที่ล้มเหลววันนี้ไม่นับว่าตรวจแล้ว", () => {
     expect(target({ connections: [conn("c1", { status: "disabled" })], runs: [run("c1")] })).toEqual([]);
     expect(target({ connections: [conn("c1")], runs: [run("c1"), recon("c1", { status: "failed" })] })).toEqual(["c1"]);
+  });
+});
+
+describe("salesDue — ดึงยอดขายจริงวันละครั้ง", () => {
+  it("หลัง 9 โมงและวันนี้ยังไม่ได้ดึง = ดึง", () => {
+    expect(salesDue({ lastAt: "2026-09-15T23:00:00.000Z", now: NOW, hour: 17, today: "2026-09-16" })).toBe(true);
+    expect(salesDue({ lastAt: null, now: NOW, hour: 17, today: "2026-09-16" })).toBe(true);
+  });
+  it("ยังเช้าอยู่ = ยังไม่ดึง · ดึงไปแล้ววันนี้ = ไม่ดึงซ้ำ", () => {
+    expect(salesDue({ lastAt: null, now: NOW, hour: 6, today: "2026-09-16" })).toBe(false);
+    expect(salesDue({ lastAt: "2026-09-16T03:00:00.000Z", now: NOW, hour: 17, today: "2026-09-16" })).toBe(false);
   });
 });
 

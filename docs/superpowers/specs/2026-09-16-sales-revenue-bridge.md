@@ -19,7 +19,7 @@
 | ข้อมูลที่ไหลข้ามระบบ | ตัวเลขรวมรายวันเท่านั้น ไม่มีชื่อ/เบอร์/ที่อยู่/รายการสินค้า |
 | เก็บที่ไหน | `business_daily_facts` (มีอยู่แล้ว) `source='crm'` · `external_record_id = '<brand>|<day>'` |
 | ความถี่ | วันละครั้งผ่าน cron ที่มีอยู่ · ดึงย้อนหลัง 14 วันทุกครั้ง เพราะยอดปรับย้อนหลังได้ |
-| คีย์ | service key ของโปรเจกต์ขายอยู่ใน Vault ของ marketing เท่านั้น (อาร์ตใส่เอง) ชื่อ `sales_api_url` · `sales_api_key` |
+| คีย์ | ตั้งเป็น Edge Function secret ของ marketing: `SALES_API_URL` · `SALES_API_KEY` (อาร์ตใส่เองผ่าน Dashboard → Edge Functions → Secrets) · ยังไม่ตั้ง = `sales-sync` ข้ามเงียบๆ ไม่ error |
 | แบรนด์ | TD→b_td · JD→b_jk (JK Design) · TA→b_ta · JK→b_jt (JUNTAKARN) · SF ยังไม่มีในระบบ ads = ข้าม |
 | การแสดงผล | ยอดขายจริงและ ROAS จริงเป็นตัวหลัก · ค่าที่ Meta attribute ยังแสดงคู่กันแต่ติดป้ายว่าคนละนิยาม · แบรนด์/วันที่ยังไม่มีข้อมูล = "—" ไม่ใช่ ฿0 |
 
