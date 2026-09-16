@@ -51,8 +51,10 @@ export class SupabaseStore {
     timer = setTimeout(() => this.flush(data), 400);
   }
 
-  /** ยิงจริง — แยกไว้ให้ boot/reset เรียกตรงได้โดยไม่ต้องรอ debounce */
+  /** ยิงจริง — แยกไว้ให้ boot/reset เรียกตรงได้โดยไม่ต้องรอ debounce
+      ไม่ได้ใส่คีย์ (โหมดเดโม) = ทำงานจากข้อมูลในหน่วยความจำอย่างเดียว ไม่ยิงและไม่พัง */
   async flush(data) {
+    if (!isSupabaseConfigured || !supabase) return;
     const { error } = await supabase.rpc("mkt_save_state", { payload: data });
     if (error) console.error("[supabaseStore] บันทึกไม่สำเร็จ:", error.message);
   }
