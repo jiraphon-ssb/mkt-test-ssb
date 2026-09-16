@@ -57,7 +57,7 @@
 .mkt-root .acc-target-group .acc-input-unit b { white-space:nowrap; }
 
 /* เป้าบนหน้า Overview/แคมเปญ: "เป้า X · ทำได้ Y% · สถานะ" + แถบความคืบหน้า */
-.mkt-root .ads-goal { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-top:6px; font-size:10px; line-height:1.4; color:var(--ink-soft); }
+.mkt-root .ads-goal { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-top:6px; font-size:11px; line-height:1.45; color:var(--ink-soft); }
 .mkt-root .ads-goal b { font-weight:700; }
 .mkt-root .ads-goal .emerald { color:var(--ok-text); }.mkt-root .ads-goal .amber { color:var(--warn-text); }.mkt-root .ads-goal .rose { color:var(--bad-text); }.mkt-root .ads-goal .zinc { color:var(--ink-faint); }
 .mkt-root .ads-goal-bar { position:relative; flex:1 1 100%; height:4px; border-radius:99px; background:var(--surface-2); overflow:hidden; }
