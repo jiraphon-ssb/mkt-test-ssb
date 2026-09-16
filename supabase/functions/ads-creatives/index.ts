@@ -5,7 +5,7 @@
 import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { syncError, todayInTimeZone } from "../_shared/metaInsights.js";
-import { applyImageHashUrls, creativeRowFromAd, enrichRowsWithPosts, fetchAccountCreatives, fetchImageUrls, hashesNeedingUrl, rankAdIdsBySpend } from "../_shared/metaCreative.js";
+import { applyImageHashUrls, creativeRowFromAd, enrichRowsWithPosts, fetchAccountCreatives, fetchImageUrls, hashesNeedingUrl, OAUTH_SCOPES, rankAdIdsBySpend } from "../_shared/metaCreative.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ADS = 400;
@@ -71,23 +71,29 @@ Deno.serve(async (request) => {
 
     // โฆษณาแบบบูสต์โพสต์เพจ: Meta ให้แค่รูปโปรไฟล์เพจ → ดึงภาพจากโพสต์จริงด้วย Page token (ในหน่วยความจำเท่านั้น)
     const scopes: string[] = authorization.scopes ?? [];
-    let postMedia: { enriched: number; needed: number; missingPages: number; reason: string | null } = { enriched: 0, needed: 0, missingPages: 0, reason: null };
+    let postMedia: { enriched: number; needed: number; missingPages: number; usedUserToken: number; businesses: number; reason: string | null } = { enriched: 0, needed: 0, missingPages: 0, usedUserToken: 0, businesses: 0, reason: null };
     if (scopes.includes("pages_read_engagement") && scopes.includes("pages_show_list")) {
       /* ให้เวลาขั้นนี้อย่างน้อย 30 วินาทีเสมอ — เดิมผูกกับ startedAt ถ้าดึง ad ใช้เวลาเต็มงบ 90 วิ
          ขั้นนี้จะเหลือแค่ 20 วิ แล้วจบด้วย DEADLINE โดยไม่มีใครเห็น (เพดาน function จริง ~150 วิ) */
       const budget = Math.min(startedAt + 140_000, Date.now() + 30_000);
-      const enriched = await enrichRowsWithPosts(rows, { version: graphVersion(), fetch, token, sleep, deadline: budget });
+      const enriched = await enrichRowsWithPosts(rows, { version: graphVersion(), fetch, token, sleep, deadline: budget, scopes });
       rows = enriched.rows;
-      postMedia = { enriched: enriched.enriched, needed: enriched.needed, missingPages: enriched.missingPages.length, reason: enriched.reason };
+      postMedia = {
+        enriched: enriched.enriched, needed: enriched.needed, missingPages: enriched.missingPages.length,
+        usedUserToken: enriched.usedUserToken, businesses: enriched.businesses, reason: enriched.reason,
+      };
       if (enriched.reason || enriched.missingPages.length) console.error("[ads-creatives] post media", connection.id, enriched.reason ?? "", `missingPages=${enriched.missingPages.join(",")}`);
     } else if (rows.some((row) => row.source_spec?.object_type === "STATUS")) {
-      postMedia = { enriched: 0, needed: 0, missingPages: 0, reason: "NEEDS_RECONNECT" };
+      postMedia = { enriched: 0, needed: 0, missingPages: 0, usedUserToken: 0, businesses: 0, reason: "NEEDS_RECONNECT" };
     }
     for (let i = 0; i < rows.length; i += 200) {
       const { error } = await db.from("ad_creatives").upsert(rows.slice(i, i + 200), { onConflict: "connection_id,external_creative_id,external_ad_id" });
       if (error) { console.error("[ads-creatives] write", error.message); throw syncError("SYNC_WRITE_FAILED"); }
     }
-    return json(request, { total: wanted.size, saved: rows.length, pages, nextCursor, hashImages, postMedia });
+    /* สิทธิ์ที่ token ปัจจุบันยังไม่มี — บอกตรงๆ ว่าต้องกดเชื่อม Meta ใหม่ถึงจะได้ความสามารถนั้น
+       (เช่น business_management ที่เพิ่มทีหลัง: ไม่มีแล้วเพจใต้ Business จะยังหาไม่เจอ) */
+    const missingScopes = OAUTH_SCOPES.filter((scope) => !scopes.includes(scope));
+    return json(request, { total: wanted.size, saved: rows.length, pages, nextCursor, hashImages, postMedia, missingScopes });
   } catch (error) {
     const code = publicSyncCode(error, "CREATIVE_SYNC_FAILED");
     console.error("[ads-creatives]", code, error instanceof Error ? error.message : error, (error as { detail?: string })?.detail ?? "");

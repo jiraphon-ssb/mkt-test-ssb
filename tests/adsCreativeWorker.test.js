@@ -177,14 +177,15 @@ describe("isPreviewSrc (ตรวจซ้ำฝั่ง browser)", () => {
   });
 });
 
-import { needsPostMedia, buildPageTokensUrl, buildPostMediaUrl, postMediaFrom, enrichRowsWithPosts, OAUTH_SCOPES } from "../supabase/functions/_shared/metaCreative.js";
+import { needsPostMedia, buildPageTokensUrl, buildPostMediaUrl, postMediaFrom, enrichRowsWithPosts, OAUTH_SCOPES, buildBusinessesUrl, buildBusinessPagesUrl } from "../supabase/functions/_shared/metaCreative.js";
 describe("ภาพจริงของโฆษณาที่บูสต์โพสต์เพจ (pages_read_engagement)", () => {
   const LOGO = "https://scontent.xx.fbcdn.net/v/t39.30808-1/logo.jpg";
   const statusAd = (id, story) => ({ id, name: `Ad ${id}`, campaign_id: "c", adset_id: "s", creative: { id: `cr${id}`, object_type: "STATUS", thumbnail_url: LOGO, effective_object_story_id: story } });
   const res = (body, status = 200) => ({ ok: status < 300, status, json: async () => body });
 
-  it("OAuth ขอ ads_read เป็นหลัก + สิทธิ์อ่านเพจแบบอ่านอย่างเดียว", () => {
-    expect(OAUTH_SCOPES).toEqual(["ads_read", "pages_show_list", "pages_read_engagement"]);
+  it("OAuth ขอ ads_read เป็นหลัก + สิทธิ์อ่านเพจแบบอ่านอย่างเดียว + หาเพจจาก Business ได้", () => {
+    expect(OAUTH_SCOPES).toEqual(["ads_read", "pages_show_list", "pages_read_engagement", "business_management"]);
+    expect(OAUTH_SCOPES.some((scope) => /publish|manage_posts|ads_management/.test(scope))).toBe(false);   // อ่านอย่างเดียว ไม่ขอสิทธิ์เขียน
   });
   it("needsPostMedia: มีโพสต์ id และมีแค่ภาพย่อระดับ creative (รูปโปรไฟล์เพจ) · โฆษณาที่มีภาพของตัวเองไม่ต้อง", () => {
     expect(needsPostMedia(creativeRowFromAd(statusAd("1", "111_222"), "conn"))).toBe(true);
@@ -224,7 +225,7 @@ describe("ภาพจริงของโฆษณาที่บูสต์�
       throw new Error("unexpected " + url);
     });
     const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {} });
-    expect(fetch).toHaveBeenCalledTimes(2);                                   // เพจ 1 ครั้ง + โพสต์ซ้ำกันเรียกครั้งเดียว
+    expect(fetch).toHaveBeenCalledTimes(3);                                   // เพจ 1 + โพสต์ซ้ำกันเรียกครั้งเดียว + เพจที่ไม่มี token ลองด้วย token ผู้ใช้อีก 1
     expect(out.enriched).toBe(2);
     // needed คู่กับ enriched — ถ้ามีแต่ enriched:0 จะแยกไม่ออกว่า "ไม่มีงาน" กับ "ทำไม่สำเร็จ"
     expect(out.needed).toBe(3);
@@ -340,5 +341,91 @@ describe("ภาพจาก image_hash", () => {
     const bad = await fetchImageUrls({ version: "v26.0", accountId: "act_1", hashes: ["h1"], fetch: fetchBad, token: "T", sleep: async () => {} });
     expect(bad.urls.size).toBe(0);
     expect(bad.reason).toBeTruthy();
+  });
+});
+
+/* ── เพจที่ไม่โผล่ใน /me/accounts ──
+   ของจริง: ทุกบัญชีคืน missingPages: 1 เพราะเพจอยู่ใต้ Business Manager ผู้ใช้ไม่ได้เป็น admin ของเพจตรงๆ
+   ทางออก: หาเพจจาก Business ด้วย (ต้องมี business_management) และถ้ายังไม่ได้ token เพจ ให้ลองใช้ token ผู้ใช้ยิงโพสต์ตรง */
+describe("หาเพจจาก Business + ใช้ token ผู้ใช้เป็นทางสำรอง", () => {
+  const statusAd2 = (id, story) => ({
+    id, name: `Ad ${id}`, campaign_id: "c1", adset_id: "s1",
+    creative: { id: `cr${id}`, object_type: "STATUS", thumbnail_url: "https://scontent.xx.fbcdn.net/page-logo.jpg", effective_object_story_id: story },
+  });
+  const res2 = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
+
+  it("ขอ business_management ตอนเชื่อม Meta (ไม่งั้นเพจใต้ Business จะหาไม่เจอ)", () => {
+    expect(OAUTH_SCOPES).toContain("business_management");
+    expect(OAUTH_SCOPES).toContain("pages_read_engagement");
+  });
+
+  it("URL ของ business: /me/businesses และ /{id}/owned_pages · กันเวอร์ชัน/รหัสเพี้ยน", () => {
+    expect(new URL(buildBusinessesUrl({ version: "v26.0" })).pathname).toBe("/v26.0/me/businesses");
+    const owned = new URL(buildBusinessPagesUrl({ version: "v26.0", businessId: "123", edge: "owned_pages" }));
+    expect(owned.pathname).toBe("/v26.0/123/owned_pages");
+    expect(owned.searchParams.get("fields")).toBe("id,access_token");
+    expect(new URL(buildBusinessPagesUrl({ version: "v26.0", businessId: "123", edge: "client_pages" })).pathname).toBe("/v26.0/123/client_pages");
+    expect(() => buildBusinessPagesUrl({ version: "v26.0", businessId: "abc", edge: "owned_pages" })).toThrow();
+    expect(() => buildBusinessPagesUrl({ version: "v26.0", businessId: "123", edge: "../me" })).toThrow();
+  });
+
+  it("เพจไม่อยู่ใน /me/accounts แต่อยู่ใต้ Business = ได้ token เพจมาใช้", async () => {
+    const rows = [creativeRowFromAd(statusAd2("1", "111_222"), "conn")];
+    const fetch = vi.fn(async (url, init) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith("/me/accounts")) return res2({ data: [] });
+      if (u.pathname.endsWith("/me/businesses")) return res2({ data: [{ id: "900" }] });
+      if (u.pathname.endsWith("/900/owned_pages")) return res2({ data: [{ id: "111", access_token: "BIZ_PAGE_TOKEN" }] });
+      if (u.pathname.endsWith("/900/client_pages")) return res2({ data: [] });
+      if (u.pathname.endsWith("/111_222")) {
+        expect(init.headers.Authorization).toBe("Bearer BIZ_PAGE_TOKEN");
+        return res2({ full_picture: "https://scontent.xx.fbcdn.net/from-business.jpg", permalink_url: "https://www.facebook.com/111/posts/222" });
+      }
+      throw new Error("unexpected " + url);
+    });
+    const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {}, scopes: ["business_management"] });
+    expect(out).toMatchObject({ enriched: 1, needed: 1, missingPages: [] });
+    expect(out.rows[0].media_assets[0]).toMatchObject({ imageUrl: "https://scontent.xx.fbcdn.net/from-business.jpg", source: "post" });
+    expect(JSON.stringify(out)).not.toContain("BIZ_PAGE_TOKEN");
+  });
+
+  it("ไม่มี token เพจจากทางไหนเลย = ลองด้วย token ผู้ใช้ ถ้าได้ก็ถือว่าสำเร็จ", async () => {
+    const rows = [creativeRowFromAd(statusAd2("1", "111_222"), "conn")];
+    const fetch = vi.fn(async (url, init) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith("/me/accounts")) return res2({ data: [] });
+      if (u.pathname.endsWith("/111_222")) {
+        expect(init.headers.Authorization).toBe("Bearer USER");
+        return res2({ full_picture: "https://scontent.xx.fbcdn.net/via-user.jpg", permalink_url: "https://www.facebook.com/111/posts/222" });
+      }
+      throw new Error("unexpected " + url);
+    });
+    const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {} });
+    expect(out).toMatchObject({ enriched: 1, usedUserToken: 1 });
+    expect(out.rows[0].media_assets[0].imageUrl).toBe("https://scontent.xx.fbcdn.net/via-user.jpg");
+  });
+
+  it("token ผู้ใช้ก็อ่านโพสต์นั้นไม่ได้ = รายงานเพจที่ขาด ไม่ล้มงาน", async () => {
+    const rows = [creativeRowFromAd(statusAd2("1", "111_222"), "conn")];
+    const fetch = vi.fn(async (url) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith("/me/accounts")) return res2({ data: [] });
+      return res2({ error: { code: 200, message: "no permission" } }, 403);
+    });
+    const out = await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {} });
+    expect(out).toMatchObject({ enriched: 1 - 1, needed: 1, missingPages: ["111"] });
+    expect(out.rows[0]).toBe(rows[0]);
+  });
+
+  it("ไม่มีสิทธิ์ business_management = ไม่ต้องเสียคำขอไปถาม Business", async () => {
+    const rows = [creativeRowFromAd(statusAd2("1", "111_222"), "conn")];
+    const seen = [];
+    const fetch = vi.fn(async (url) => {
+      seen.push(new URL(url).pathname);
+      if (url.includes("/me/accounts")) return res2({ data: [] });
+      return res2({ full_picture: "https://scontent.xx.fbcdn.net/u.jpg" });
+    });
+    await enrichRowsWithPosts(rows, { version: "v26.0", fetch, token: "USER", sleep: async () => {}, scopes: ["ads_read"] });
+    expect(seen.some((path) => path.includes("businesses"))).toBe(false);
   });
 });

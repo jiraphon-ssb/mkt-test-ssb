@@ -336,7 +336,9 @@ export async function fetchImageUrls({ version, accountId, hashes = [], deadline
 
 /* ── ภาพจริงของโพสต์เพจ (โฆษณาแบบบูสต์โพสต์เดิม) · ต้องมี pages_show_list + pages_read_engagement ──
    ใช้ Page access token จาก /me/accounts เฉพาะในหน่วยความจำของคำขอนั้น ไม่เก็บ ไม่ log ไม่ส่งออก */
-export const OAUTH_SCOPES = ["ads_read", "pages_show_list", "pages_read_engagement"];
+/* business_management: เพจที่อยู่ใต้ Business Manager ไม่โผล่ใน /me/accounts ถ้าผู้ใช้ไม่ได้เป็น admin ของเพจตรงๆ
+   (เจอจริงทุกบัญชี — ทุกเพจของโฆษณาบูสต์โพสต์หายหมด) ต้องถาม Business เพิ่มถึงจะได้ token เพจ */
+export const OAUTH_SCOPES = ["ads_read", "pages_show_list", "pages_read_engagement", "business_management"];
 const STORY_ID = /^\d+_\d+$/;
 
 export function needsPostMedia(row) {
@@ -348,6 +350,27 @@ export function needsPostMedia(row) {
 export function buildPageTokensUrl({ version }) {
   if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
   const url = new URL(`https://graph.facebook.com/${version}/me/accounts`);
+  url.searchParams.set("fields", "id,access_token");
+  url.searchParams.set("limit", "100");
+  return url.toString();
+}
+
+const BIZ_EDGES = new Set(["owned_pages", "client_pages"]);
+
+export function buildBusinessesUrl({ version }) {
+  if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
+  const url = new URL(`https://graph.facebook.com/${version}/me/businesses`);
+  url.searchParams.set("fields", "id");
+  url.searchParams.set("limit", "50");
+  return url.toString();
+}
+
+/** เพจที่ Business เป็นเจ้าของ (owned_pages) และเพจของลูกค้าที่ Business ดูแล (client_pages) */
+export function buildBusinessPagesUrl({ version, businessId, edge }) {
+  if (!/^v\d+\.\d+$/.test(String(version ?? ""))) throw syncError("GRAPH_VERSION_INVALID");
+  if (!/^\d+$/.test(String(businessId ?? ""))) throw syncError("BUSINESS_ID_INVALID");
+  if (!BIZ_EDGES.has(String(edge ?? ""))) throw syncError("BUSINESS_EDGE_INVALID");
+  const url = new URL(`https://graph.facebook.com/${version}/${businessId}/${edge}`);
   url.searchParams.set("fields", "id,access_token");
   url.searchParams.set("limit", "100");
   return url.toString();
@@ -380,41 +403,65 @@ export function postMediaFrom(post = {}) {
 }
 
 /** เติมภาพจากโพสต์จริงให้แถวที่มีแค่ภาพย่อระดับ creative · ไม่มีสิทธิ์/rate limit/หมดเวลา = คืนแถวเดิม + เหตุผล (ไม่ throw) */
-export async function enrichRowsWithPosts(rows, { version, token, deadline = Infinity, now = Date.now, concurrency = 4, ...opts }) {
+export async function enrichRowsWithPosts(rows, { version, token, deadline = Infinity, now = Date.now, concurrency = 4, scopes = [], ...opts }) {
   const graphOpts = { ...opts, maxRetries: 0, baseDelayMs: 1000, maxDelayMs: 1000 };
   // needed = แถวที่ยังไม่มีภาพของตัวเอง — ต้องรายงานคู่กับ enriched ไม่งั้น "enriched: 0" แปลไม่ออกว่าไม่มีงาน หรือทำไม่สำเร็จ
   const needed = rows.filter(needsPostMedia).length;
-  if (!needed) return { rows, enriched: 0, needed: 0, missingPages: [], reason: null };
-  let pageTokens;
+  if (!needed) return { rows, enriched: 0, needed: 0, missingPages: [], usedUserToken: 0, businesses: 0, reason: null };
+  const pageTokens = new Map();
+  const addPages = (pages) => {
+    for (const page of pages ?? []) {
+      if (/^\d+$/.test(String(page?.id ?? "")) && typeof page.access_token === "string" && page.access_token) pageTokens.set(String(page.id), page.access_token);
+    }
+  };
   try {
     const { rows: pages } = await fetchAllPages(buildPageTokensUrl({ version }), { ...graphOpts, token, maxPages: 10 });
-    pageTokens = new Map(pages
-      .filter((page) => /^\d+$/.test(String(page?.id ?? "")) && typeof page.access_token === "string" && page.access_token)
-      .map((page) => [String(page.id), page.access_token]));
+    addPages(pages);
   } catch (error) {
-    return { rows, enriched: 0, needed, missingPages: [], reason: error?.code ?? "META_API_ERROR" };
+    return { rows, enriched: 0, needed, missingPages: [], usedUserToken: 0, businesses: 0, reason: error?.code ?? "META_API_ERROR" };
+  }
+  /* เพจใต้ Business Manager ไม่อยู่ใน /me/accounts — ถามจาก Business ต่อ (ต้องมี business_management)
+     ล้มตรงนี้ไม่ใช่เรื่องใหญ่: ยังมี token ผู้ใช้เป็นทางสำรองอยู่ จึงกลืน error แล้วไปต่อ */
+  let businesses = 0;
+  if (scopes.includes("business_management")) {
+    try {
+      const { rows: bizRows } = await fetchAllPages(buildBusinessesUrl({ version }), { ...graphOpts, token, maxPages: 5 });
+      const ids = bizRows.map((biz) => String(biz?.id ?? "")).filter((id) => /^\d+$/.test(id));
+      businesses = ids.length;
+      for (const businessId of ids) {
+        for (const edge of ["owned_pages", "client_pages"]) {
+          try {
+            const { rows: pages } = await fetchAllPages(buildBusinessPagesUrl({ version, businessId, edge }), { ...graphOpts, token, maxPages: 5 });
+            addPages(pages);
+          } catch { /* Business นี้ไม่ให้ดู edge นี้ → ข้าม */ }
+        }
+      }
+    } catch { /* ถาม Business ไม่ได้ → ใช้เท่าที่มี */ }
   }
   const stories = [...new Set(rows.filter(needsPostMedia).map((row) => row.effective_story_id))];
   const missingPages = new Set();
-  const queue = stories.filter((story) => {
-    const page = story.split("_")[0];
-    if (pageTokens.has(page)) return true;
-    missingPages.add(page);
-    return false;
-  });
   const results = new Map();
+  const queue = [...stories];
   let reason = null;
+  let usedUserToken = 0;
   const worker = async () => {
     while (queue.length && !reason) {
       if (now() >= deadline) { reason = "DEADLINE"; return; }
       const story = queue.shift();
+      const page = story.split("_")[0];
+      // ไม่มี token ของเพจนั้น → ลองด้วย token ผู้ใช้ บางเพจที่ผู้ใช้มีบทบาทอยู่ก็อ่านโพสต์ได้
+      const pageToken = pageTokens.get(page);
       try {
-        const { payload } = await fetchGraphJson(buildPostMediaUrl({ version, storyId: story }), { ...graphOpts, token: pageTokens.get(story.split("_")[0]) });
+        const { payload } = await fetchGraphJson(buildPostMediaUrl({ version, storyId: story }), { ...graphOpts, token: pageToken ?? token });
         const post = postMediaFrom(payload);
-        if (post.media.length) results.set(story, post);
+        if (post.media.length) {
+          results.set(story, post);
+          if (!pageToken) usedUserToken += 1;
+        } else if (!pageToken) missingPages.add(page);
       } catch (error) {
         if (error?.code === "META_RATE_LIMIT" || error?.code === "META_TOKEN_INVALID") { reason = error.code; return; }
-        // โพสต์ถูกลบ / ไม่มีสิทธิ์โพสต์นี้ → ข้าม
+        // โพสต์ถูกลบ / ไม่มีสิทธิ์โพสต์นี้ → ข้าม · ถ้าไม่มี token เพจด้วย ให้รายงานว่าเพจนี้เข้าไม่ถึง
+        if (!pageToken) missingPages.add(page);
       }
     }
   };
@@ -426,5 +473,5 @@ export async function enrichRowsWithPosts(rows, { version, token, deadline = Inf
     enriched += 1;
     return { ...row, media_assets: post.media.slice(0, 20), format: FORMATS.has(post.format) ? post.format : row.format, source_spec: { ...row.source_spec, ...(post.permalink ? { post_permalink: post.permalink } : {}) } };
   });
-  return { rows: out, enriched, needed, missingPages: [...missingPages], reason };
+  return { rows: out, enriched, needed, missingPages: [...missingPages], usedUserToken, businesses, reason };
 }
