@@ -2533,21 +2533,62 @@ const adsData = {
   /** ยอดขายจริงรายวันต่อแบรนด์ (มาจากระบบขายผ่าน sales-sync) — อ่านอย่างเดียว */
   async businessFacts({ from, to } = {}) {
     const db = requireSupabase();
-    let query = db.from("business_daily_facts").select("brand_id,fact_date,source,orders,gross_revenue,refunds,net_revenue").eq("source", "crm");
+    let query = db.from("business_daily_facts").select([
+      "brand_id,fact_date,source",
+      "inquiries,inquiries_by_channel,inquiry_filled,channel_funnel",
+      "qualified_leads,leads_new,deposits,deposit_value",
+      "orders,orders_new,gross_revenue,revenue_new,refunds,net_revenue,cash_received,cancelled,cancelled_value",
+      "source_updated_at",
+    ].join(",")).eq("source", "crm");
     if (from) query = query.gte("fact_date", from);
     if (to) query = query.lte("fact_date", to);
     const { data, error } = await query.order("fact_date", { ascending: false }).limit(2000);
     if (error) throw error;
     return data ?? [];
   },
-  /** เป้ารายเดือนจากระบบขาย (เฟส 3) — อ่านอย่างเดียว */
+  /** เป้ารายเดือนจากหน้าเป้าหมายของระบบขาย (sale_goal → sale_target) — อ่านอย่างเดียว */
   async salesGoals(month) {
     const db = requireSupabase();
-    let query = db.from("ad_sales_goals").select("brand_id,month,version,sales_target,ad_budget,cpl,cac,roas,leads_target,orders_target,synced_at");
+    let query = db.from("ad_sales_goals").select([
+      "brand_id,month,version,goal_source,synced_at",
+      "sales_target,sales_new_target,sales_old_target,orders_target,deposits_target,leads_target,inquiry_target",
+      "ad_budget,platform_budgets,platform_pct,other_cost,cpl,cac,roas,pct_ads_new,cpi,i2l,caps,assumptions,share_new",
+    ].join(","));
     if (month) query = query.eq("month", month);
     const { data, error } = await query.order("month", { ascending: false }).limit(100);
     if (error) throw error;
     return data ?? [];
+  },
+  /** ประวัติรอบดึงข้อมูลนอก Meta insights: sales · creatives · inventory (หน้า Sync) */
+  async pipelineRuns({ pipeline = null, limit = 30 } = {}) {
+    const db = requireSupabase();
+    let query = db.from("data_pipeline_runs")
+      .select("id,pipeline,connection_id,trigger_kind,triggered_by,status,range_from,range_to,rows_read,rows_written,summary,error_code,started_at,finished_at");
+    if (pipeline) query = query.eq("pipeline", pipeline);
+    const { data, error } = await query.order("started_at", { ascending: false }).limit(Math.min(200, Math.max(1, limit)));
+    if (error) throw error;
+    return data ?? [];
+  },
+  /** สั่งดึงยอดขายจากระบบขายตอนนี้ (หัวหน้าทีม) — ไม่ส่งช่วง = 14 วันล่าสุด · ครั้งละไม่เกิน 93 วัน */
+  async salesSync({ from = null, to = null } = {}) {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("sales-sync", { body: from && to ? { from, to } : {} });
+    if (error) throw await adsFunctionError(error, "SALES_SYNC_FAILED");
+    return data;
+  },
+  /** ตรวจการเชื่อมต่อระบบขาย (อ่านอย่างเดียว คืนผลตัดสิน + จำนวนสรุป) */
+  async salesCheck() {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("sales-sync", { body: { check: true } });
+    if (error) throw await adsFunctionError(error, "SALES_CHECK_FAILED");
+    return data;
+  },
+  /** สำรวจว่าระบบขายมีข้อมูลอะไรจริง (อ่านอย่างเดียว · บันทึกเป็นรอบ inventory) */
+  async salesInventory() {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("sales-sync", { body: { inventory: true } });
+    if (error) throw await adsFunctionError(error, "SALES_INVENTORY_FAILED");
+    return data;
   },
   async recentSyncs(limit = 20) {
     const db = requireSupabase();

@@ -44,8 +44,10 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
 
   const finish = async (patch: Record<string, unknown>) => {
     if (tickId) await db.from("ad_cron_ticks").update({ finished_at: new Date().toISOString(), ...patch }).eq("id", tickId);
-    // เก็บประวัติ 90 วันพอ — ตารางนี้โตวันละ 24 แถว
-    await db.from("ad_cron_ticks").delete().lt("started_at", new Date(Date.now() - KEEP_TICK_DAYS * 86_400_000).toISOString());
+    // เก็บประวัติ 90 วันพอ — ticks โตวันละ 24 แถว · data_pipeline_runs (ยอดขาย/creative/สำรวจ) ไม่กี่แถวต่อวัน
+    const keepSince = new Date(Date.now() - KEEP_TICK_DAYS * 86_400_000).toISOString();
+    await db.from("ad_cron_ticks").delete().lt("started_at", keepSince);
+    await db.from("data_pipeline_runs").delete().lt("started_at", keepSince);
   };
 
   /** ประวัติ run — PostgREST คืนทีละ ≤1000 แถว ต้องไล่หน้าเอง ไม่งั้นความครอบคลุมจะคำนวณผิดเมื่อประวัติโต
@@ -152,8 +154,11 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
   const salesTries = (salesTicks ?? [])
     .filter((row) => salesOf(row) && todayInTimeZone(new Date(String(row.started_at)), "Asia/Bangkok") === salesToday).length;
   let sales: Record<string, unknown> | null = null;
+  let inventory: Record<string, unknown> | null = null;
   if (salesDue({ lastAt: lastSalesOk, now, hour: hourOf("Asia/Bangkok"), today: salesToday, tries: salesTries })) {
     sales = await call("sales-sync", {});
+    // สำรวจแหล่งของระบบขายวันละครั้งพร้อมกัน — หน้า Sync ใช้บอกว่าแหล่งไหนมีข้อมูล/ยังไม่มีคนกรอก
+    inventory = await call("sales-sync", { inventory: true });
   }
 
   /* รูป/ข้อความโฆษณา — Meta เปลี่ยนได้ตลอดและ URL สื่อหมดอายุ ถ้าไม่รีเฟรชเองหน้า Creative จะค้างที่ครั้งที่กดมือล่าสุด
@@ -174,16 +179,16 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
 
   const summary = summarizeTick({
     planned: jobs.length + targets.length + creativeTargets.length, sync, reconcile,
-    extra: [...(sales ? [sales as JobResult] : []), ...creatives],
+    extra: [...(sales ? [sales as JobResult] : []), ...(inventory ? [inventory as JobResult] : []), ...creatives],
   });
   await finish({
     status: summary.status, planned: summary.planned, synced: summary.synced, reconciled: summary.reconciled,
     failed: summary.failed, rows_written: summary.rowsWritten, sync_every_hours: syncEveryHours,
     detail: {
-      sync, reconcile, ...(sales ? { sales } : {}), ...(creatives.length ? { creatives } : {}),
+      sync, reconcile, ...(sales ? { sales } : {}), ...(inventory ? { inventory } : {}), ...(creatives.length ? { creatives } : {}),
       ...(Object.keys(tokenWarnings).length ? { tokenWarnings } : {}),
     },
   });
   console.log(`[ads-cron] planned=${summary.planned} synced=${summary.synced} reconciled=${summary.reconciled} failed=${summary.failed}`);
-  return json(request, { at: now, tickId, syncEveryHours, ...summary, sync, reconcile, sales, creatives });
+  return json(request, { at: now, tickId, syncEveryHours, ...summary, sync, reconcile, sales, inventory, creatives });
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SALE_BRAND_BY_CODE, SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, funnelCompareRows, goalRowsToSalesGoals, goalSource, goalsFromSales, realRoasRows, salesRevenueByBrand } from "../src/modules/marketing/ads/salesFacts.js";
+import { SALE_BRAND_BY_CODE, SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, funnelCompareRows, goalRowsToSalesGoals, goalSource, goalsFromSales, metricCoverage, realRoasRows, salesRevenueByBrand } from "../src/modules/marketing/ads/salesFacts.js";
 
 /* แถวจาก sale_dashboard_facts ของระบบพี่ทัช (ขอแค่ 7 คอลัมน์) — ดู supabase/functions/_shared/salesBridge.js */
 const fact = (kind, patch = {}) => ({ kind, day: "2026-09-10", brand: "TD", channel: "FB", n: 1, amount: 0, is_new: null, ...patch });
@@ -79,6 +79,22 @@ describe("factsToDailyRows — facts ของระบบขาย → แถ�
     expect(r.inquiries_by_channel).toEqual({ FB: 3, other: 4 });
     expect(r.inquiries).toBe(7);
   });
+  it("funnel แยกช่องทาง: คนทัก → ลีด → ได้ออเดอร์ → ยืนยัน ต่อ FB/Line (ช่องแปลกรวมเป็น other · เงินเข้าไม่มีช่องทาง)", () => {
+    const [r] = factsToDailyRows([
+      fact("inq", { channel: "FB", n: 30 }), fact("inq", { channel: "Line", n: 10 }),
+      fact("lead", { channel: "FB" }), fact("lead", { channel: "FB" }), fact("lead", { channel: "Line" }),
+      fact("won", { channel: "FB", amount: 1000 }), fact("book", { channel: "Line", amount: 5000 }),
+      fact("lead", { channel: "ชื่อคน" }), fact("pay", { channel: null, amount: 100 }),
+    ], { from: "2026-09-10", to: "2026-09-10" });
+    expect(r.channel_funnel).toEqual({
+      FB: { inquiries: 30, leads: 2, deposits: 1, orders: 0 },
+      Line: { inquiries: 10, leads: 1, deposits: 0, orders: 1 },
+      other: { inquiries: 0, leads: 1, deposits: 0, orders: 0 },
+    });
+  });
+  it("วันไม่มีเหตุการณ์ = funnel ว่าง {} ไม่ใช่ศูนย์ทุกช่องทาง", () => {
+    expect(factsToDailyRows([], { from: "2026-09-10", to: "2026-09-10" })[0].channel_funnel).toEqual({});
+  });
   it("ปัดเศษเงินเป็นสตางค์ ไม่สะสมทศนิยมลอย", () => {
     const [r] = factsToDailyRows([fact("pay", { amount: 0.1 }), fact("pay", { amount: 0.2 })], { from: "2026-09-10", to: "2026-09-10" });
     expect(r.cash_received).toBe(0.3);
@@ -101,7 +117,21 @@ describe("goalRowsToSalesGoals — เป้าจากระบบพี่ท
       orders_target: 30, deposits_target: 42, leads_target: 750, inquiry_target: 2400,
       ad_budget: 90000, cpl: 120, cac: 3000, roas: 10,
       platform_budgets: { meta: 70000, google: 20000 },
+      pct_ads_new: null, cpi: null, i2l: null, caps: {}, assumptions: {}, share_new: null, other_cost: null, platform_pct: {},
     });
+  });
+  it("sale_goal ครบช่อง: %Ads ต่อยอดใหม่ · ต้นทุนต่อทัก · ทัก→Lead · เพดาน · สมมติฐานอัตราแปลง · สัดส่วนลูกค้าใหม่ · ค่าการตลาดอื่น · % แพลตฟอร์ม", () => {
+    const [row] = goalRowsToSalesGoals({ goals: [goal({
+      targets: { ...goal().targets, pct_ads_new: 0.15, cpi: 38, i2l: 0.12, caps: { cpl: 400, cpi: 42, i2l: 11.4, note: "x" } },
+      ads: { split: { meta: 80, google: 20, "Bad Key": 5 }, platforms: [{ key: "meta", budget: 72000, pct: 80 }], other_cost: 15000, other_note: "ถ่ายรูป" },
+      inputs: { share_new: 0.6, sales_total: 900000, inq_per_day: 80, assumptions: { aovN: 18000, aovO: 25000, i2l: 0.12, l2dN: 0.3, l2dO: 0.5, d2oN: 0.6, d2oO: 0.8, junk: "abc" } },
+    })] });
+    expect(row).toMatchObject({
+      pct_ads_new: 0.15, cpi: 38, i2l: 0.12, caps: { cpl: 400, cpi: 42, i2l: 11.4 },
+      assumptions: { aov_new: 18000, aov_old: 25000, lead_to_deposit_new: 0.3, lead_to_deposit_old: 0.5, deposit_to_order_new: 0.6, deposit_to_order_old: 0.8 },
+      share_new: 0.6, other_cost: 15000, platform_pct: { meta: 80, google: 20 },
+    });
+    expect(JSON.stringify(row)).not.toContain("ถ่ายรูป");
   });
   it("เดือนที่ยังตั้งเป้าแบบเก่า (sale_target) = ใช้แทน · ไม่มีงบแอด/CPL/ROAS · version 0", () => {
     const [row] = goalRowsToSalesGoals({ targets: [
@@ -114,6 +144,7 @@ describe("goalRowsToSalesGoals — เป้าจากระบบพี่ท
       sales_target: 500000, sales_new_target: 400000, sales_old_target: 100000,
       orders_target: 25, deposits_target: 35, leads_target: 600, inquiry_target: 2000,
       ad_budget: null, cpl: null, cac: null, roas: null, platform_budgets: {},
+      pct_ads_new: null, cpi: null, i2l: null, caps: {}, assumptions: {}, share_new: null, other_cost: null, platform_pct: {},
     });
   });
   it("มีทั้งสองแบบในเดือนเดียวกัน = sale_goal ชนะ (ระบบพี่ทัชก็เลือกแบบนี้)", () => {
@@ -194,5 +225,22 @@ describe("เฟส 3 — เป้าจากระบบขาย", () => {
     expect(goalSource("b_td", fromSales, { revenue: 500000, budget: 50000 })).toMatchObject({ source: "sales", revenue: 1000000, budget: 95000, roas: 10.5 });
     expect(goalSource("b_jk", fromSales, { revenue: 500000, budget: 50000 })).toMatchObject({ source: "settings", revenue: 500000, budget: 50000 });
     expect(goalSource("b_jk", fromSales, null)).toMatchObject({ source: "none", revenue: null, budget: null });
+  });
+});
+
+describe("metricCoverage — วันแรกที่แต่ละตัวชี้วัดมีข้อมูล (ก่อนหน้านั้น = ยังไม่มีข้อมูล ไม่ใช่ 0)", () => {
+  const day = (brand_id, fact_date, patch = {}) => ({ brand_id, fact_date, inquiries: 0, inquiry_filled: false, qualified_leads: 0, deposits: 0, orders: 0, gross_revenue: 0, ...patch });
+  it("ของจริง: ได้ออเดอร์เพิ่งมีตั้งแต่ ก.ย. · คนทักนับจากวันที่ทีมกรอก", () => {
+    const out = metricCoverage([
+      day("b_td", "2026-08-30", { qualified_leads: 3, orders: 2, gross_revenue: 5000 }),
+      day("b_td", "2026-09-01", { deposits: 4, inquiry_filled: true, inquiries: 50 }),
+      day("b_td", "2026-08-15", { inquiry_filled: true, inquiries: 0 }),
+      day("b_ta", "2026-09-02", { orders: 1, gross_revenue: 100 }),
+    ]);
+    expect(out.get("b_td")).toEqual({ inquiries: "2026-08-15", qualified_leads: "2026-08-30", deposits: "2026-09-01", orders: "2026-08-30", gross_revenue: "2026-08-30" });
+    expect(out.get("b_ta")).toEqual({ inquiries: null, qualified_leads: null, deposits: null, orders: "2026-09-02", gross_revenue: "2026-09-02" });
+  });
+  it("ไม่มีแถวของแบรนด์นั้น = ไม่มีคีย์", () => {
+    expect(metricCoverage([]).has("b_td")).toBe(false);
   });
 });

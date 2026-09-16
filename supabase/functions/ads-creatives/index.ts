@@ -3,6 +3,7 @@
    งบเวลา 90 วินาทีต่อคำขอ · ยังไม่จบคืน nextCursor ให้ client เรียกต่อ (คืนแค่ cursor ไม่คืน URL)
    สิทธิ์ team_lead · token ถอดรหัสฝั่ง server · ไม่เก็บไฟล์สื่อ เก็บ URL ที่ Meta ส่งมา (หมดอายุได้ ดึงใหม่ทับ) */
 import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { finishRun, runCode, startRun } from "../_shared/pipelineRuns.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { syncError, todayInTimeZone } from "../_shared/metaInsights.js";
 import { applyImageHashUrls, creativeRowFromAd, enrichRowsWithPosts, fetchAccountCreatives, fetchImageUrls, hashesNeedingUrl, OAUTH_SCOPES, rankAdIdsBySpend } from "../_shared/metaCreative.js";
@@ -17,9 +18,12 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
   const startedAt = Date.now();
+  let db: ReturnType<typeof adminClient> | null = null;
+  let runId: string | null = null;
   try {
     // service role = ads-cron รีเฟรชอัตโนมัติวันละครั้ง · นอกนั้นต้องเป็น team_lead ตามเดิม
-    const { db } = isServiceRole(request) ? { db: adminClient() } : await requireTeamLead(request);
+    const auth = isServiceRole(request) ? { db: adminClient(), user: null } : await requireTeamLead(request);
+    db = auth.db;
     const body = await request.json().catch(() => ({}));
     const connectionId = typeof body.connectionId === "string" && UUID.test(body.connectionId) ? body.connectionId : null;
     if (!connectionId) throw syncError("CONNECTION_ID_REQUIRED");
@@ -35,6 +39,9 @@ Deno.serve(async (request) => {
     if (!authorization || authorization.status !== "connected" || !(await activeMemberUserIds(db)).has(authorization.user_id)) throw syncError("AUTHORIZATION_NOT_READY");
     if (authorization.expires_at && new Date(authorization.expires_at).getTime() <= Date.now()) throw syncError("META_TOKEN_INVALID");
 
+    // บันทึกรอบ (หน้า Sync) — หน้าต่อ (after) ไม่เปิดรอบใหม่ นับรวมเป็นรอบเดียวของการกดครั้งนั้น
+    if (!after) runId = await startRun(db, { pipeline: "creatives", trigger: auth.user ? "manual" : "cron", userId: auth.user?.id ?? null, connectionId: connection.id });
+
     // ad ที่มีค่าแอดใน 30 วันล่าสุด (ตาม timezone บัญชี)
     const today = todayInTimeZone(new Date(), connection.timezone);
     const since = new Date(Date.parse(`${today}T00:00:00Z`) - (WINDOW_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
@@ -47,7 +54,10 @@ Deno.serve(async (request) => {
       if (!data || data.length < 1000) break;
     }
     const wanted = new Set(rankAdIdsBySpend(facts, MAX_ADS));
-    if (!wanted.size) return json(request, { total: 0, saved: 0, pages: 0, nextCursor: null });
+    if (!wanted.size) {
+      await finishRun(db, runId, { status: "success", rowsRead: 0, rowsWritten: 0, summary: { total: 0, reason: "NO_SPEND_30D" } });
+      return json(request, { total: 0, saved: 0, pages: 0, nextCursor: null });
+    }
 
     const token = await decryptToken(authorization.token_ciphertext, authorization.token_iv);
     const { ads, pages, after: nextCursor, lastError } = await fetchAccountCreatives(connection.external_account_id, wanted, {
@@ -93,9 +103,21 @@ Deno.serve(async (request) => {
     /* สิทธิ์ที่ token ปัจจุบันยังไม่มี — บอกตรงๆ ว่าต้องกดเชื่อม Meta ใหม่ถึงจะได้ความสามารถนั้น
        (เช่น business_management ที่เพิ่มทีหลัง: ไม่มีแล้วเพจใต้ Business จะยังหาไม่เจอ) */
     const missingScopes = OAUTH_SCOPES.filter((scope) => !scopes.includes(scope));
+    const incomplete = Boolean(nextCursor) || Boolean(hashImages.reason) || Boolean(postMedia.reason) || postMedia.missingPages > 0;
+    await finishRun(db, runId, {
+      status: incomplete ? "partial" : "success", rowsRead: wanted.size, rowsWritten: rows.length,
+      summary: {
+        total: wanted.size, pages, hasMore: Boolean(nextCursor), missingScopes,
+        withPostMedia: rows.filter((row) => Array.isArray(row.media_assets) && row.media_assets.some((m: { source?: string }) => m?.source === "post")).length,
+        creativeOnly: rows.filter((row) => Array.isArray(row.media_assets) && row.media_assets.length > 0 && row.media_assets.every((m: { source?: string }) => m?.source === "creative")).length,
+        hashImages, postMedia,
+      },
+      errorCode: hashImages.reason ?? postMedia.reason ?? null,
+    });
     return json(request, { total: wanted.size, saved: rows.length, pages, nextCursor, hashImages, postMedia, missingScopes });
   } catch (error) {
     const code = publicSyncCode(error, "CREATIVE_SYNC_FAILED");
+    if (db) await finishRun(db, runId, { status: "failed", errorCode: runCode(code, "CREATIVE_SYNC_FAILED") });
     console.error("[ads-creatives]", code, error instanceof Error ? error.message : error, (error as { detail?: string })?.detail ?? "");
     const status = code === "AUTH_REQUIRED" ? 401 : code === "TEAM_LEAD_REQUIRED" ? 403 : code === "CONNECTION_NOT_FOUND" ? 404
       : ["CONNECTION_ID_REQUIRED", "CURSOR_INVALID"].includes(code) ? 400 : ["CONNECTION_NOT_READY", "AUTHORIZATION_NOT_READY", "PROVIDER_NOT_SUPPORTED"].includes(code) ? 409 : 502;

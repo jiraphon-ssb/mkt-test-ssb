@@ -1,10 +1,12 @@
 /* sales-sync — ดึงยอดขายจริงรายวันต่อแบรนด์จากระบบขายของพี่ทัช (ssbgroup-platform) ลง business_daily_facts + ad_sales_goals
-   สิทธิ์: service role เท่านั้น (ads-cron เรียกวันละครั้ง) · ฝั่งขายอ่านด้วย secret key (SALES_API_KEY)
+   สิทธิ์: service role (ads-cron วันละครั้ง) หรือหัวหน้าทีม (ปุ่มในหน้า Sync) · ฝั่งขายอ่านด้วย secret key (SALES_API_KEY)
+   ทุกรอบดึงและรอบสำรวจบันทึกลง data_pipeline_runs (โหมดตรวจการเชื่อมต่อไม่บันทึก)
    แหล่ง: RPC sale_dashboard_facts (นิยามเดียวกับแดชบอร์ดขาย) + ตาราง sale_goal / sale_target
    ดึงย้อนหลัง 14 วันทุกครั้ง เพราะยอดแก้ย้อนหลังได้ (ถอนยืนยัน/ยกเลิก) แล้วทับทั้งช่องวัน×แบรนด์ด้วย external_record_id
    ข้อมูลลูกค้าไม่ข้ามมา: ขอ facts แค่ FACT_COLUMNS (ตัดรหัสลูกค้า/ดีล/เซล/ข้อความเหตุผลตั้งแต่ฝั่งขาย) และตรวจซ้ำก่อนเขียน
    แบรนด์: TD · JD · TA เท่านั้น — JK ข้อมูลจริงอยู่อีกโปรเจกต์ (ดู SALES_SOURCE_BRANDS) */
-import { adminClient, corsHeaders, isServiceRole, json } from "../_shared/adsOAuth.ts";
+import { adminClient, corsHeaders, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { finishRun, runCode, startRun } from "../_shared/pipelineRuns.ts";
 import { SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, goalRowsToSalesGoals } from "../_shared/salesFacts.js";
 import {
   PAGE_LIMIT, describeSalesKey, describeSalesUrl, doorState, factsProbeUrl, goalProbeUrl,
@@ -18,6 +20,7 @@ import {
 
 const LOOKBACK_DAYS = 14;
 const MAX_DAYS = 400;
+const MANUAL_MAX_DAYS = 93;   // ดึงย้อนหลังจากปุ่ม: ครั้งละไม่เกิน ~3 เดือน ให้จบในเพดานเวลาของ function (หน้าจอแบ่งเป็นรายเดือนให้)
 const WINDOW_DAYS = 3;        // 7 วันจริงได้ ~680 แถว → ก้อนละ 3 วัน ~300 แถว เผื่อวันพีคให้ห่างเพดาน 1,000
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const day = (date: Date) => date.toISOString().slice(0, 10);
@@ -28,7 +31,20 @@ const fail = (code: string, extra: Record<string, unknown> = {}) => Object.assig
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
-  if (!isServiceRole(request)) return json(request, { error: "SERVICE_ROLE_REQUIRED" }, 401);
+  let auth: Awaited<ReturnType<typeof requireTeamLead>> | { db: ReturnType<typeof adminClient>; user: null };
+  if (isServiceRole(request)) {
+    auth = { db: adminClient(), user: null };
+  } else {
+    try {
+      auth = await requireTeamLead(request);
+    } catch (error) {
+      const code = error instanceof Error && error.message === "AUTH_REQUIRED" ? "AUTH_REQUIRED" : "TEAM_LEAD_REQUIRED";
+      return json(request, { error: code }, code === "AUTH_REQUIRED" ? 401 : 403);
+    }
+  }
+  const trigger = auth.user ? "manual" : "cron";
+  const userId = auth.user?.id ?? null;
+  const db = auth.db;
 
   const url = Deno.env.get("SALES_API_URL")?.trim();
   const key = Deno.env.get("SALES_API_KEY")?.trim();
@@ -73,6 +89,7 @@ Deno.serve(async (request) => {
      คืนแค่จำนวน ชื่อช่อง และช่วงวันที่ — ไม่คืนยอดเงิน ข้อความ หรือแถวดิบ */
   if (body?.inventory === true) {
     if (!url || !key) return json(request, { inventory: true, verdict: "not_configured" });
+    const inventoryRun = await startRun(db, { pipeline: "inventory", trigger, userId });
     const headers = { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" };
     const today = todayInTimeZone(new Date(), "Asia/Bangkok");
     const since = monthsBackStart(today, 3) as string;
@@ -118,7 +135,7 @@ Deno.serve(async (request) => {
       ? { status: lines.status, state: "open", rowCount: (lines.rows ?? []).length, truncated: lines.truncated ?? false, summary: summarizeBudgetInventory(lines.rows, versions.payload) }
       : { lines: { status: lines.status, state: lines.state, code: lines.code }, versions: { status: versions.status, state: versions.state, code: versions.code } };
 
-    return json(request, {
+    const report = {
       inventory: true, since, today,
       goals: summarize(goals, summarizeGoalInventory),
       legacyTargets: summarize(targets, summarizeTargetInventory),
@@ -132,7 +149,15 @@ Deno.serve(async (request) => {
       }),
       pipeline: summarize(pipeline, rpcShape),
       insight: summarize(insight, rpcShape),
+    };
+    const doors = [goals, targets, spend, pct, ap, pl, versions, lines, pipeline, insight];
+    const opened = doors.filter((door) => door.state === "open").length;
+    await finishRun(db, inventoryRun, {
+      status: opened === doors.length ? "success" : opened ? "partial" : "failed",
+      rowsRead: null, rowsWritten: 0, summary: report,
+      errorCode: opened ? null : "SALES_INVENTORY_FAILED",
     });
+    return json(request, report);
   }
 
   // ยังไม่ได้ตั้งค่า = ไม่ใช่ความผิดพลาด — บอกให้รู้แล้วจบ
@@ -144,6 +169,16 @@ Deno.serve(async (request) => {
   const from = typeof body?.from === "string" && ISO.test(body.from) ? body.from
     : day(new Date(Date.parse(`${to}T00:00:00Z`) - (span - 1) * 86_400_000));
   if (from > to) return json(request, { error: "SALES_RANGE_INVALID" }, 400);
+  const rangeDays = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+  if (!Number.isFinite(rangeDays) || rangeDays > (trigger === "manual" ? MANUAL_MAX_DAYS : MAX_DAYS)) {
+    return json(request, { error: "SALES_RANGE_TOO_LONG", maxDays: trigger === "manual" ? MANUAL_MAX_DAYS : MAX_DAYS }, 400);
+  }
+
+  const runId = await startRun(db, { pipeline: "sales", trigger, userId, rangeFrom: from, rangeTo: to });
+  const failRun = async (code: string, status: number, extra: Record<string, unknown> = {}) => {
+    await finishRun(db, runId, { status: "failed", errorCode: code, summary: extra });
+    return json(request, { error: code, runId, ...extra }, status);
+  };
 
   const headers = { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" };
   const call = async (target: string, init: RequestInit = {}) => {
@@ -170,52 +205,61 @@ Deno.serve(async (request) => {
     return out;
   };
 
-  let facts: Record<string, unknown>[] = [];
   try {
-    for (const range of factWindows(from, to, WINDOW_DAYS)) facts.push(...await factsFor(range));
-  } catch (error) {
-    const detail = error as { code?: string; status?: number; state?: string; day?: string };
-    console.error("[sales-sync] facts", detail.code, detail.status ?? "", detail.state ?? "", detail.day ?? "");
-    return json(request, { error: detail.code ?? "SALES_READ_FAILED", status: detail.status ?? null, state: detail.state ?? null }, 502);
-  }
-
-  // ด่านสุดท้ายก่อนเขียน: ฝั่งขายต้องไม่ส่งคอลัมน์เกินที่ขอ (เช่นถ้ามีคนแก้ฟังก์ชันจนไม่สน select)
-  const { extraColumns } = summarizeFacts(facts);
-  if (extraColumns.length) {
-    console.error("[sales-sync] column leak", extraColumns.join(","));
-    return json(request, { error: "SALES_COLUMN_LEAK" }, 502);
-  }
-  // 14 วัน 3 แบรนด์ไม่มีเหตุการณ์เลยเป็นไปไม่ได้ — น่าจะเป็นด่านสิทธิ์ของฝั่งขายคืนชุดว่าง ห้ามเขียนศูนย์ทับของจริง
-  if (!facts.length) return json(request, { error: "SALES_EMPTY_RESULT", from, to }, 502);
-
-  const rows = factsToDailyRows(facts, { from, to }).map((row) => ({ ...row, source_updated_at: new Date().toISOString() }));
-  const db = adminClient();
-  const { error: writeError } = await db.from("business_daily_facts").upsert(rows, { onConflict: "source,external_record_id" });
-  if (writeError) {
-    console.error("[sales-sync] write", writeError.message);
-    return json(request, { error: "SALES_WRITE_FAILED" }, 502);
-  }
-
-  /* เป้า — พังได้โดยไม่ทำให้ยอดขายที่เขียนสำเร็จแล้วพังตาม แต่ต้องบอกในผลลัพธ์ ไม่เงียบ */
-  const months = monthsToSync(today);
-  let goals: { written: number; bySource: Record<string, number>; error: string | null } = { written: 0, bySource: {}, error: null };
-  try {
-    const [goalRows, targetRows] = await Promise.all([call(goalsUrl(url, months)), call(targetsUrl(url, months))]);
-    const goalOut = goalRowsToSalesGoals({ goals: goalRows, targets: targetRows });
-    if (goalOut.length) {
-      const { error } = await db.from("ad_sales_goals")
-        .upsert(goalOut.map((goal) => ({ ...goal, synced_at: new Date().toISOString() })), { onConflict: "brand_id,month" });
-      if (error) throw fail("SALES_GOALS_WRITE_FAILED", { detail: error.message });
+    const facts: Record<string, unknown>[] = [];
+    try {
+      for (const range of factWindows(from, to, WINDOW_DAYS)) facts.push(...await factsFor(range));
+    } catch (error) {
+      const detail = error as { code?: string; status?: number; state?: string; day?: string };
+      console.error("[sales-sync] facts", detail.code, detail.status ?? "", detail.state ?? "", detail.day ?? "");
+      return await failRun(runCode(detail.code, "SALES_READ_FAILED"), 502, { status: detail.status ?? null, state: detail.state ?? null });
     }
-    const bySource: Record<string, number> = {};
-    for (const goal of goalOut) bySource[goal.goal_source] = (bySource[goal.goal_source] ?? 0) + 1;
-    goals = { written: goalOut.length, bySource, error: null };
-  } catch (error) {
-    const detail = error as { code?: string; detail?: string };
-    console.error("[sales-sync] goals", detail.code, detail.detail ?? "");
-    goals = { written: 0, bySource: {}, error: detail.code ?? "SALES_GOALS_FAILED" };
-  }
 
-  console.log(`[sales-sync] ${from}→${to} facts=${facts.length} rows=${rows.length} goals=${goals.written}${goals.error ? ` goalsError=${goals.error}` : ""}`);
-  return json(request, { from, to, read: facts.length, written: rows.length, brands: SALES_SOURCE_BRANDS, goals });
+    // ด่านสุดท้ายก่อนเขียน: ฝั่งขายต้องไม่ส่งคอลัมน์เกินที่ขอ (เช่นถ้ามีคนแก้ฟังก์ชันจนไม่สน select)
+    const { extraColumns } = summarizeFacts(facts);
+    if (extraColumns.length) {
+      console.error("[sales-sync] column leak", extraColumns.join(","));
+      return await failRun("SALES_COLUMN_LEAK", 502);
+    }
+    // ช่วงทั้งหมดไม่มีเหตุการณ์เลย — น่าจะเป็นด่านสิทธิ์ของฝั่งขายคืนชุดว่าง ห้ามเขียนศูนย์ทับของจริง
+    if (!facts.length) return await failRun("SALES_EMPTY_RESULT", 502, { from, to });
+
+    const rows = factsToDailyRows(facts, { from, to }).map((row) => ({ ...row, source_updated_at: new Date().toISOString() }));
+    const { error: writeError } = await db.from("business_daily_facts").upsert(rows, { onConflict: "source,external_record_id" });
+    if (writeError) {
+      console.error("[sales-sync] write", writeError.message);
+      return await failRun("SALES_WRITE_FAILED", 502);
+    }
+
+    /* เป้า — พังได้โดยไม่ทำให้ยอดขายที่เขียนสำเร็จแล้วพังตาม แต่ต้องบอกในผลลัพธ์ ไม่เงียบ */
+    const months = monthsToSync(today);
+    let goals: { written: number; bySource: Record<string, number>; error: string | null } = { written: 0, bySource: {}, error: null };
+    try {
+      const [goalRows, targetRows] = await Promise.all([call(goalsUrl(url, months)), call(targetsUrl(url, months))]);
+      const goalOut = goalRowsToSalesGoals({ goals: goalRows, targets: targetRows });
+      if (goalOut.length) {
+        const { error } = await db.from("ad_sales_goals")
+          .upsert(goalOut.map((goal) => ({ ...goal, synced_at: new Date().toISOString() })), { onConflict: "brand_id,month" });
+        if (error) throw fail("SALES_GOALS_WRITE_FAILED", { detail: error.message });
+      }
+      const bySource: Record<string, number> = {};
+      for (const goal of goalOut) bySource[goal.goal_source] = (bySource[goal.goal_source] ?? 0) + 1;
+      goals = { written: goalOut.length, bySource, error: null };
+    } catch (error) {
+      const detail = error as { code?: string; detail?: string };
+      console.error("[sales-sync] goals", detail.code, detail.detail ?? "");
+      goals = { written: 0, bySource: {}, error: runCode(detail.code, "SALES_GOALS_FAILED") };
+    }
+
+    await finishRun(db, runId, {
+      status: goals.error ? "partial" : "success", rowsRead: facts.length, rowsWritten: rows.length,
+      summary: { brands: SALES_SOURCE_BRANDS, goals, months }, errorCode: goals.error,
+    });
+    console.log(`[sales-sync] ${trigger} ${from}→${to} facts=${facts.length} rows=${rows.length} goals=${goals.written}${goals.error ? ` goalsError=${goals.error}` : ""}`);
+    return json(request, { runId, from, to, read: facts.length, written: rows.length, brands: SALES_SOURCE_BRANDS, goals });
+  } catch (error) {
+    // พังนอกเหนือที่คาดไว้ — ปิดรอบให้เป็น failed ไม่ให้ค้าง running ในหน้า Sync
+    console.error("[sales-sync] crash", error instanceof Error ? error.message : error);
+    return await failRun("SALES_SYNC_CRASHED", 500);
+  }
 });

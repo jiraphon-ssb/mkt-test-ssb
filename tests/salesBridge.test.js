@@ -168,12 +168,12 @@ describe("probeVerdict — สรุปผลเป็นข้อความ�
 
 /* ── เฟส 2: ท่อจริง ── */
 describe("goalsUrl / targetsUrl — อ่านเป้าเฉพาะตัวเลข ไม่ดึงผู้สร้าง/เหตุผล", () => {
-  it("sale_goal: แบรนด์ เดือน เวอร์ชัน เป้า งบแอด · กรองหลายเดือน", () => {
+  it("sale_goal: แบรนด์ เดือน เวอร์ชัน เป้า งบแอด สมมติฐาน (inputs เป็นตัวเลขล้วน) · กรองหลายเดือน", () => {
     const url = new URL(goalsUrl(SALES, ["2026-08-01", "2026-09-01"]));
     expect(url.pathname).toBe("/rest/v1/sale_goal");
-    expect(url.searchParams.get("select")).toBe("brand,month,version,targets,ads");
+    expect(url.searchParams.get("select")).toBe("brand,month,version,targets,ads,inputs");
     expect(url.searchParams.get("month")).toBe("in.(2026-08-01,2026-09-01)");
-    for (const col of ["created_by", "reason", "inputs", "base"]) expect(url.searchParams.get("select").split(",")).not.toContain(col);
+    for (const col of ["created_by", "reason", "base"]) expect(url.searchParams.get("select").split(",")).not.toContain(col);
   });
   it("sale_target: เดือน แบรนด์ ตัวชี้วัด จำนวน · ไม่ดึงคนแก้", () => {
     const url = new URL(targetsUrl(SALES, ["2026-09-01"]));

@@ -52,7 +52,7 @@ export function factsToDailyRows(facts = [], { from, to, brands = SALES_SOURCE_B
         if (!brandId) continue;
         grid.set(`${code}|${day}`, {
           brand_id: brandId, fact_date: day, source: "crm", external_record_id: `${code}|${day}`,
-          inquiries: 0, inquiries_by_channel: {}, inquiry_filled: false,
+          inquiries: 0, inquiries_by_channel: {}, inquiry_filled: false, channel_funnel: {},
           qualified_leads: 0, leads_new: 0, deposits: 0, deposit_value: 0,
           orders: 0, orders_new: 0, gross_revenue: 0, revenue_new: 0, refunds: 0,
           cash_received: 0, cancelled: 0, cancelled_value: 0,
@@ -60,14 +60,20 @@ export function factsToDailyRows(facts = [], { from, to, brands = SALES_SOURCE_B
       }
     }
   }
+  const FUNNEL_STEP = { inq: "inquiries", lead: "leads", won: "deposits", book: "orders" };
   for (const fact of facts ?? []) {
     const row = grid.get(`${fact?.brand}|${fact?.day}`);
     if (!row) continue;
     const n = count(fact.n);
     const amount = num(fact.amount) ?? 0;
+    const channel = CHANNEL_KEY.test(String(fact.channel ?? "")) ? String(fact.channel) : "other";
+    const step = FUNNEL_STEP[fact.kind];
+    if (step) {
+      const lane = row.channel_funnel[channel] ?? (row.channel_funnel[channel] = { inquiries: 0, leads: 0, deposits: 0, orders: 0 });
+      lane[step] += n;
+    }
     switch (fact.kind) {
       case "inq": {
-        const channel = CHANNEL_KEY.test(String(fact.channel ?? "")) ? String(fact.channel) : "other";
         row.inquiries += n;
         row.inquiries_by_channel[channel] = (row.inquiries_by_channel[channel] ?? 0) + n;
         row.inquiry_filled = true;
@@ -104,6 +110,17 @@ export function factsToDailyRows(facts = [], { from, to, brands = SALES_SOURCE_B
   }));
 }
 
+/** หยิบเฉพาะคีย์ที่รู้จักและเป็นตัวเลข แล้วเปลี่ยนชื่อ — กันข้อความ/โน้ตหลุดเข้ามากับ jsonb */
+const pickNumbers = (source, mapping) => {
+  const out = {};
+  if (!source || typeof source !== "object") return out;
+  for (const [from, to] of Object.entries(mapping)) {
+    const value = num(source[from]);
+    if (value !== null) out[to] = value;
+  }
+  return out;
+};
+
 const sumOrNull = (...values) => {
   const present = values.map(num).filter((value) => value !== null);
   return present.length ? present.reduce((total, value) => total + value, 0) : null;
@@ -126,6 +143,12 @@ export function goalRowsToSalesGoals({ goals = [], targets = [], brands = SALES_
       const budget = num(platform?.budget);
       if (PLATFORM_KEY.test(String(platform?.key ?? "")) && budget !== null) platformBudgets[platform.key] = budget;
     }
+    const inputs = row.inputs && typeof row.inputs === "object" ? row.inputs : {};
+    const a = inputs.assumptions && typeof inputs.assumptions === "object" ? inputs.assumptions : {};
+    const platformPct = {};
+    for (const [platform, pct] of Object.entries(row.ads?.split && typeof row.ads.split === "object" ? row.ads.split : {})) {
+      if (PLATFORM_KEY.test(platform) && num(pct) !== null) platformPct[platform] = num(pct);
+    }
     out.set(key, {
       brand_id: brandId, month, version, goal_source: "sale_goal",
       sales_target: num(t.sales_total) ?? sumOrNull(t.sales_new, t.sales_old),
@@ -134,6 +157,11 @@ export function goalRowsToSalesGoals({ goals = [], targets = [], brands = SALES_
       leads_target: sumOrNull(t.leads_new, t.leads_old), inquiry_target: num(t.inquiry),
       ad_budget: num(t.ad_budget), cpl: num(t.cpl), cac: num(t.cac), roas: num(t.roas),
       platform_budgets: platformBudgets,
+      // หน้าเป้าหมายของพี่ทัช: %Ads ต่อยอดใหม่ · ต้นทุนต่อทัก · ทัก→Lead · เพดานที่ต้องคุม (หยิบเฉพาะคีย์ตัวเลขที่รู้จัก)
+      pct_ads_new: num(t.pct_ads_new), cpi: num(t.cpi), i2l: num(t.i2l),
+      caps: pickNumbers(t.caps, { cpl: "cpl", cpi: "cpi", i2l: "i2l" }),
+      assumptions: pickNumbers(a, { aovN: "aov_new", aovO: "aov_old", l2dN: "lead_to_deposit_new", l2dO: "lead_to_deposit_old", d2oN: "deposit_to_order_new", d2oO: "deposit_to_order_old" }),
+      share_new: num(inputs.share_new), other_cost: num(row.ads?.other_cost), platform_pct: platformPct,
     });
   }
   const legacy = new Map();
@@ -153,6 +181,7 @@ export function goalRowsToSalesGoals({ goals = [], targets = [], brands = SALES_
       sales_target: sumOrNull(m.sales_new, m.sales_old), sales_new_target: m.sales_new ?? null, sales_old_target: m.sales_old ?? null,
       orders_target: m.orders ?? null, deposits_target: m.design ?? null, leads_target: m.leads ?? null, inquiry_target: m.inquiry ?? null,
       ad_budget: null, cpl: null, cac: null, roas: null, platform_budgets: {},
+      pct_ads_new: null, cpi: null, i2l: null, caps: {}, assumptions: {}, share_new: null, other_cost: null, platform_pct: {},
     });
   }
   return [...out.values()];
@@ -272,4 +301,27 @@ export function goalSource(brandId, salesGoals = new Map(), settingsGoal = null)
     return { source: "settings", month: null, version: null, revenue: settingsGoal.revenue ?? null, budget: settingsGoal.budget ?? null, roas: settingsGoal.roas ?? null, cpl: settingsGoal.cpl ?? null, cac: null, leads: settingsGoal.leads ?? null, orders: null };
   }
   return { source: "none", month: null, version: null, revenue: null, budget: null, roas: null, cpl: null, cac: null, leads: null, orders: null };
+}
+
+/* ── ความครบของข้อมูล ────────────────────────────────────────────────────── */
+
+const COVERAGE_METRICS = ["inquiries", "qualified_leads", "deposits", "orders", "gross_revenue"];
+
+/** วันแรกที่แต่ละตัวชี้วัดมีข้อมูลจริง ต่อแบรนด์ — ก่อนวันนั้นหน้าจอต้องบอก "ยังไม่มีข้อมูล" ไม่ใช่ 0
+    เหตุ: ระบบขายไม่มีประวัติสเตจก่อน 1 ก.ย. ("ได้ออเดอร์" เป็น 0 ทุกวัน) และบางเดือนทีมไม่ได้กรอกคนทักเลย
+    คนทักนับจากวันที่ทีมกรอก (inquiry_filled) ไม่ใช่วันที่ค่ามากกว่า 0 */
+export function metricCoverage(facts = []) {
+  const out = new Map();
+  for (const fact of facts ?? []) {
+    const brandId = fact?.brand_id ?? fact?.brandId;
+    const day = fact?.fact_date ?? fact?.factDate;
+    if (!brandId || typeof day !== "string" || !ISO.test(day)) continue;
+    const entry = out.get(brandId) ?? Object.fromEntries(COVERAGE_METRICS.map((metric) => [metric, null]));
+    for (const metric of COVERAGE_METRICS) {
+      const has = metric === "inquiries" ? fact.inquiry_filled === true : (num(fact[metric]) ?? 0) > 0;
+      if (has && (entry[metric] === null || day < entry[metric])) entry[metric] = day;
+    }
+    out.set(brandId, entry);
+  }
+  return out;
 }

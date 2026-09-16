@@ -162,3 +162,41 @@ describe("20260917090000 ช่องเก็บของท่อยอดข�
     }
   });
 });
+
+describe("20260917120000 ประวัติรอบดึงข้อมูลกลาง + ช่องเป้าครบ + funnel แยกช่องทาง", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20260917120000_sales_rollout.sql", import.meta.url), "utf8");
+  const code = sql.replace(/--[^\n]*/g, "");
+  it("data_pipeline_runs: แยกท่อ · ผู้สั่ง · สถานะ · summary จำกัดขนาด · error code รูปแบบตายตัว", () => {
+    expect(code).toContain("create table if not exists public.data_pipeline_runs");
+    expect(code).toContain("check (pipeline in ('sales', 'creatives', 'inventory'))");
+    expect(code).toContain("check (trigger_kind in ('cron', 'manual'))");
+    expect(code).toContain("check (status in ('running', 'success', 'partial', 'failed'))");
+    expect(code).toMatch(/summary\s+jsonb not null default '\{\}'::jsonb\s+check \(jsonb_typeof\(summary\) = 'object' and pg_column_size\(summary\) < \d+\)/);
+    expect(code).toMatch(/error_code\s+text check \(error_code is null or error_code ~ '\^\[A-Z0-9_\]\{1,64\}\$'\)/);
+    expect(code).toContain("references public.ad_connections(id) on delete set null");
+    expect(code).toContain("references auth.users(id) on delete set null");
+  });
+  it("RLS เปิด · อ่านได้เฉพาะ authenticated · client เขียนไม่ได้", () => {
+    expect(code).toContain("alter table public.data_pipeline_runs enable row level security");
+    expect(code).toMatch(/create policy data_pipeline_runs_read on public\.data_pipeline_runs\s+for select to authenticated using \(true\)/);
+    expect(code).toContain("revoke insert, update, delete, truncate on public.data_pipeline_runs from anon, authenticated");
+    expect(code).not.toMatch(/grant\s+(insert|update|delete|all)/i);
+  });
+  it("index สำหรับหน้า Sync อ่านรอบล่าสุดต่อท่อ", () => {
+    expect(code).toMatch(/create index if not exists data_pipeline_runs_recent_idx\s+on public\.data_pipeline_runs \(pipeline, started_at desc\)/);
+  });
+  it("ช่องเป้าครบตามหน้าเป้าหมายของพี่ทัช · funnel แยกช่องทาง · jsonb เป็น object มีเพดาน", () => {
+    for (const col of ["pct_ads_new", "cpi", "i2l", "caps", "assumptions", "share_new", "other_cost", "platform_pct"]) {
+      expect(code, col).toMatch(new RegExp(`alter table public\\.ad_sales_goals[\\s\\S]*add column if not exists ${col}\\b`));
+    }
+    for (const col of ["caps", "assumptions", "platform_pct"]) {
+      expect(code, col).toMatch(new RegExp(`${col} jsonb not null default '\\{\\}'::jsonb\\s+check \\(jsonb_typeof\\(${col}\\) = 'object' and pg_column_size\\(${col}\\) < \\d+\\)`));
+    }
+    expect(code).toMatch(/channel_funnel jsonb not null default '\{\}'::jsonb\s+check \(jsonb_typeof\(channel_funnel\) = 'object' and pg_column_size\(channel_funnel\) < \d+\)/);
+  });
+  it("มีวิธีย้อนกลับ", () => {
+    expect(sql).toMatch(/--.*drop table if exists public\.data_pipeline_runs/);
+    expect(sql).toMatch(/--.*drop column if exists[^\n]*channel_funnel/);
+    expect(sql).toMatch(/--.*drop column if exists[^\n]*platform_pct/);
+  });
+});

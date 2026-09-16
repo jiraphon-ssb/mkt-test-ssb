@@ -143,10 +143,11 @@ const monthFilter = (months) => {
   return `in.(${list.join(",")})`;
 };
 
-/** sale_goal: เอาแค่ตัวเลขเป้า + งบแอด — ไม่ดึง created_by / reason / inputs / base */
+/** sale_goal: ตัวเลขเป้า + งบแอด + สมมติฐาน (inputs เป็นตัวเลขล้วน: อัตราแปลง AOV สัดส่วนลูกค้าใหม่)
+    ไม่ดึง created_by / reason / base — goalRowsToSalesGoals หยิบเฉพาะคีย์ตัวเลขที่ระบุชื่อไว้ */
 export function goalsUrl(url, months) {
   const target = new URL(`${baseOf(url)}/rest/v1/sale_goal`);
-  target.searchParams.set("select", "brand,month,version,targets,ads");
+  target.searchParams.set("select", "brand,month,version,targets,ads,inputs");
   target.searchParams.set("month", monthFilter(months));
   return target.toString();
 }
