@@ -1,7 +1,7 @@
 /* รอบดึงอัตโนมัติ (pure · Deno + vitest ใช้ไฟล์เดียวกัน · เทสใน tests/adsCron.test.js)
    pg_cron ยิง ads-cron ทุกชั่วโมง → ไฟล์นี้ตัดสินว่ารอบนี้บัญชีไหนถึงคิว และดึงช่วงไหน
    กติกา: บัญชีที่ค้างนานสุดได้ก่อน · ทำทีละน้อยต่อรอบ (Edge Function มีเพดานเวลา) · ไม่ยิงซ้อน run ที่กำลังวิ่ง */
-import { planSyncJobs } from "./adsBackfill.js";
+import { missingDaysOf, planSyncJobs } from "./adsBackfill.js";
 
 export const DEFAULT_SYNC_EVERY_HOURS = 6;
 export const STALE_RUN_MINUTES = 8;      // ตรงกับ ads-sync — run ที่เกินนี้ถือว่าตายแล้ว
@@ -23,6 +23,8 @@ export function cronDue(lastSuccessAt, now, everyHours = DEFAULT_SYNC_EVERY_HOUR
   return current - last >= gap * HOUR;
 }
 
+const entryRuns = (runs) => runs.map((r) => ({ ...r, connection_id: r.connection_id ?? r.connectionId }));
+
 export function planCronJobs({
   connections = [], runs = [], now, todayOf, syncEveryHours = DEFAULT_SYNC_EVERY_HOURS,
   maxPerConnection = 1, maxJobs = 4, staleMinutes = STALE_RUN_MINUTES,
@@ -39,7 +41,10 @@ export function planCronJobs({
     if (own.some((r) => ["queued", "running"].includes(r.status) && time(r.started_at) >= staleBefore)) continue;
     const lastSuccess = own.filter((r) => r.status === "success")
       .reduce((latest, r) => Math.max(latest, time(r.finished_at) || 0), 0) || null;
-    if (!cronDue(lastSuccess ? new Date(lastSuccess).toISOString() : null, now, syncEveryHours)) continue;
+    // ยังไม่ครบรอบก็ยอมทำ ถ้าบัญชีนั้นมีวันที่ขาดอยู่ — ช่องว่างค้างไว้เสียหายกว่าดึงถี่ไปหน่อย
+    const today = todayOf(connection.timezone);
+    const missing = missingDaysOf(entryRuns(own), today, connection.config?.backfillDays);
+    if (!missing && !cronDue(lastSuccess ? new Date(lastSuccess).toISOString() : null, now, syncEveryHours)) continue;
     ready.push({ connection, lastSuccess: lastSuccess ?? 0, own });
   }
 

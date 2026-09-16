@@ -34,6 +34,15 @@ describe("planCronJobs — งานที่รอบนี้จะดึง",
     expect(jobs[0].to).toBe("2026-09-16");                 // ก้อนล่าสุดมาก่อน (รวม 3 วันที่ยอดยังขยับ)
     expect(jobs[1].to < jobs[0].from).toBe(true);          // แล้วค่อยไล่ย้อนหลังทีละก้อน
   });
+  it("มีวันที่ขาดอยู่ = เติมได้เลยไม่ต้องรอครบรอบ (ช่องว่างสำคัญกว่าความถี่)", () => {
+    const fresh = run("c1", { finished_at: "2026-09-16T09:50:00.000Z", range_from: "2026-09-14", range_to: "2026-09-16" });
+    const jobs = plan({ connections: [conn("c1")], runs: [fresh], syncEveryHours: 6 });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].from < "2026-09-14").toBe(true);   // ก้อนนี้กินวันที่ขาดด้วย ไม่ใช่ดึงแค่ 3 วันล่าสุดซ้ำ
+  });
+  it("ไม่มีวันที่ขาด + ยังไม่ครบรอบ = ไม่ทำอะไร", () => {
+    expect(plan({ connections: [conn("c1")], runs: [run("c1")], syncEveryHours: 6 })).toEqual([]);
+  });
   it("บัญชีที่ปิด · ยังไม่ผูก token · กำลังรันอยู่ = ข้าม", () => {
     const busy = run("c3", { status: "running", finished_at: null, started_at: "2026-09-16T09:57:00.000Z" });
     const jobs = plan({ connections: [conn("c1", { status: "disabled" }), conn("c2", { authorization_id: null }), conn("c3")], runs: [busy], syncEveryHours: 6 });
