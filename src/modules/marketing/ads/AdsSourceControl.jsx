@@ -10,7 +10,12 @@ const when = (iso) => iso ? new Intl.DateTimeFormat("th-TH", { dateStyle: "mediu
 const day = (iso) => iso ? new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(new Date(`${iso}T12:00:00`)) : "—";
 
 export function AdsSourceControl({ ads }) {
-  if (!ads.canPilot) return <span className="aw-demo" title="ยอดจริงจาก Meta เปิดดูได้เฉพาะหัวหน้าทีมระหว่างช่วง Pilot"><i /> ข้อมูลจำลอง</span>;
+  // สลับได้เฉพาะหัวหน้าทีม · คนอื่นเห็นป้ายบอกแหล่งข้อมูลที่กำลังดูอยู่ ไม่ต้องเดาว่าเลขจริงหรือจำลอง
+  if (!ads.canSwitch) {
+    return ads.source === "mock"
+      ? <span className="aw-demo" title="โหมดเดโม — ตัวเลขทั้งหมดเป็นข้อมูลจำลอง"><i /> ข้อมูลจำลอง</span>
+      : <span className="aw-live" title="ยอดจริงจาก Meta Ads (อ่านอย่างเดียว)"><i /> ยอดจริง · Meta</span>;
+  }
   return <Dropdown label="ข้อมูล" ariaLabel="แหล่งข้อมูล" align="end" options={ADS_SOURCE_OPTIONS} value={ads.source} onChange={ads.setSource} active={ads.source !== "mock"} />;
 }
 

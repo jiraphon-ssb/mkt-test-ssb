@@ -29,7 +29,7 @@ function CreativeCard({ creative, onPreview }) {
   </article>;
 }
 
-export function CampaignDetail({ row, compareLabel }) {
+export function CampaignDetail({ row, compareLabel, canPreview = false }) {
   const [metric, setMetric] = useState("spend");
   const [previewRow, setPreviewRow] = useState(null);
   const [, label, kind] = METRICS.find((m) => m[0] === metric);
@@ -58,7 +58,7 @@ export function CampaignDetail({ row, compareLabel }) {
 
     <section className="cp-creative-section" aria-label="ครีเอทีฟ">
       <header><div><h4>ครีเอทีฟ</h4><p>{row.creatives.length} ชิ้นในแคมเปญ</p></div><div className="cp-creative-status">{creativeAssets ? <span className="ads-badge ads-badge--emerald">มีสื่อ {creativeAssets}</span> : <span className="ads-badge ads-badge--zinc">รอ Creative API</span>}{fatigued.length > 0 && <span className="ads-badge ads-badge--amber">เสี่ยงล้า {fatigued.length}</span>}</div></header>
-      {row.creatives.length ? <div className="cp-creatives">{row.creatives.map((c) => <CreativeCard key={c.key} creative={c} onPreview={setPreviewRow} />)}</div> : <p className="cp-no-value">ไม่มีข้อมูลครีเอทีฟ</p>}
+      {row.creatives.length ? <div className="cp-creatives">{row.creatives.map((c) => <CreativeCard key={c.key} creative={c} onPreview={canPreview ? setPreviewRow : undefined} />)}</div> : <p className="cp-no-value">ไม่มีข้อมูลครีเอทีฟ</p>}
     </section>
 
     <details className="cp-lineage"><summary>ที่มาและวิธีคำนวณ</summary><ul>

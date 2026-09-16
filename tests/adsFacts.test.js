@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { factsToAdCards, adsCardsForSource, pilotSummary, factsLoadRange, normalizeAdsSource, ADS_SOURCE_OPTIONS } from "../src/modules/marketing/ads/adsFacts.js";
+import { adsSourceAccess, factsToAdCards, adsCardsForSource, pilotSummary, factsLoadRange, normalizeAdsSource, ADS_SOURCE_OPTIONS } from "../src/modules/marketing/ads/adsFacts.js";
 import { adFactRows } from "../src/modules/marketing/adsOverview.js";
 import { adsRollup } from "../src/modules/marketing/mktAnalytics.js";
 
@@ -79,5 +79,19 @@ describe("pilotSummary / factsLoadRange", () => {
   });
   it("โหลดย้อนหลังพอสำหรับเทียบเดือนก่อน + backfill (200 วัน)", () => {
     expect(factsLoadRange("2026-09-14")).toEqual({ from: "2026-02-27", to: "2026-09-14" });
+  });
+});
+
+describe("adsSourceAccess — ใครเห็นยอดจริง ใครสลับได้", () => {
+  it("สมาชิกทั่วไปเห็นยอดจริงเป็นค่าเริ่ม และสลับกลับไปข้อมูลจำลองไม่ได้", () => {
+    expect(adsSourceAccess({ demo: false, role: "creator", stored: "mock" })).toEqual({ source: "meta_pilot", canSwitch: false, canPreview: false });
+  });
+  it("team_lead สลับได้ และระบบจำค่าที่เลือกไว้", () => {
+    expect(adsSourceAccess({ demo: false, role: "team_lead", stored: "mock" })).toEqual({ source: "mock", canSwitch: true, canPreview: true });
+    expect(adsSourceAccess({ demo: false, role: "team_lead", stored: null })).toEqual({ source: "meta_pilot", canSwitch: true, canPreview: true });
+  });
+  it("โหมดเดโม/ยังไม่ล็อกอิน = ข้อมูลจำลองเท่านั้น (ไม่มีทางเห็นยอดจริงหลุดออกไป)", () => {
+    expect(adsSourceAccess({ demo: true, role: "team_lead", stored: "meta_pilot" })).toEqual({ source: "mock", canSwitch: false, canPreview: false });
+    expect(adsSourceAccess({ demo: false, role: null, stored: "meta_pilot" })).toEqual({ source: "mock", canSwitch: false, canPreview: false });
   });
 });

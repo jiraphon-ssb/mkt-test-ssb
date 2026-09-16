@@ -6,6 +6,15 @@
 export const ADS_SOURCE_OPTIONS = [["mock", "ข้อมูลจำลอง"], ["meta_pilot", "Meta Pilot"]];
 export const normalizeAdsSource = (value) => ADS_SOURCE_OPTIONS.some(([key]) => key === value) ? value : "mock";
 
+/** สิทธิ์ดูยอดจริง: สมาชิกที่ล็อกอินจริงเห็นยอดจริงเป็นค่าเริ่ม · team_lead สลับไปข้อมูลจำลองได้ (ใช้ตอนสาธิต)
+    · โหมดเดโมหรือยังไม่มีสิทธิ์ = ข้อมูลจำลองเท่านั้น · ดูตัวอย่างโฆษณาจาก Meta = team_lead (Edge Function บังคับอยู่แล้ว) */
+export function adsSourceAccess({ demo = false, role = null, stored = null } = {}) {
+  if (demo || !role) return { source: "mock", canSwitch: false, canPreview: false };
+  const isLead = role === "team_lead";
+  if (!isLead) return { source: "meta_pilot", canSwitch: false, canPreview: false };
+  return { source: stored ? normalizeAdsSource(stored) : "meta_pilot", canSwitch: true, canPreview: true };
+}
+
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const num = (value) => {
   if (value === null || value === undefined || value === "") return null;

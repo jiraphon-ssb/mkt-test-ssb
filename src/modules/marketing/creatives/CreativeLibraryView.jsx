@@ -82,7 +82,7 @@ export function CreativeLibraryView() {
     <section className="cl-summary"><div><span>ชิ้นงานในช่วงนี้</span><b>{v.summary.count}</b></div><div><span>ค่าแอดรวม</span><b>{metric(v.summary.spend, "money")}</b></div><div><span>มีภาพ/วิดีโอแล้ว</span><b>{v.summary.withMedia}</b></div><div className={v.summary.tired ? "warn" : ""}><span>เริ่มล้า</span><b>{v.summary.tired}</b></div></section>
     <CompareTray rows={chosen} onRemove={(key) => setSelected((current) => current.filter((item) => item !== key))} onClear={() => setSelected([])} />
     <div ref={listTop} className="cl-list-top" />
-    {v.rows.length ? <><section className="cl-grid">{pager.pageItems.map((row) => <CreativeCard key={row.key} row={row} checked={selected.includes(row.key)} onToggle={() => toggle(row.key)} onPreview={setPreviewRow} />)}</section>
+    {v.rows.length ? <><section className="cl-grid">{pager.pageItems.map((row) => <CreativeCard key={row.key} row={row} checked={selected.includes(row.key)} onToggle={() => toggle(row.key)} onPreview={ads.canPreview ? setPreviewRow : undefined} />)}</section>
       <Pagination pager={pager} sizes={PAGE_SIZES} unit="ชิ้นงาน" label="แบ่งหน้า Creative" onChange={() => scrollToList(listTop)} /></>
       : <section className="cl-empty"><ImageIcon size={28} /><strong>ไม่พบชิ้นงานในช่วงนี้</strong><span>ลองเปลี่ยนช่วงเวลาหรือล้างตัวกรอง</span></section>}
     {previewRow && <CreativePreview row={previewRow} onClose={() => setPreviewRow(null)} />}
