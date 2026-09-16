@@ -20,7 +20,10 @@ export function adminClient() {
 
 /** ผู้เรียกเป็น service role หรือไม่ (pg_cron → ads-cron → ads-sync) — ตรรกะอยู่ใน serviceAuth.js พร้อมเทส */
 export function isServiceRole(request: Request) {
-  return isServiceRoleToken(bearerToken(request.headers.get("authorization")), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "");
+  return isServiceRoleToken(bearerToken(request.headers.get("authorization")), {
+    serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "",
+    projectUrl: Deno.env.get("SUPABASE_URL")?.trim() ?? "",
+  });
 }
 
 export function allowedOrigins() {

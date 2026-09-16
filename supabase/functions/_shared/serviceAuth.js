@@ -25,10 +25,25 @@ const sameSecret = (a, b) => {
   return diff === 0;
 };
 
-export function isServiceRoleToken(token, serviceKey, now = Date.now()) {
+/** ref ของโปรเจกต์จาก SUPABASE_URL — https://<ref>.supabase.co */
+export function projectRefOf(url) {
+  const host = String(url ?? "").replace(/^https?:\/\//, "").split("/")[0];
+  const ref = host.split(".")[0];
+  return /^[a-z0-9]{16,}$/i.test(ref) ? ref : null;
+}
+
+/** ผู้เรียกเป็น service role ไหม
+    ทางลัด: ตรงกับคีย์ใน env (รองรับคีย์รูปแบบใหม่ที่ไม่ใช่ JWT)
+    ทางรอง: JWT ที่ gateway ตรวจลายเซ็นมาแล้ว — ต้องเป็น role service_role ของ "โปรเจกต์นี้" และยังไม่หมดอายุ
+    เงื่อนไข ref + exp มีไว้กันกรณีเผลอ deploy แบบ --no-verify-jwt: token ที่ปั้นเองจะไม่ผ่านง่ายๆ
+    (ฟังก์ชันเหล่านี้ต้อง deploy โดยเปิด verify_jwt เสมอ — ห้ามใส่ --no-verify-jwt) */
+export function isServiceRoleToken(token, { serviceKey = "", projectUrl = "", now = Date.now() } = {}) {
   if (!token) return false;
   if (sameSecret(token, serviceKey)) return true;
   const claims = jwtClaims(token);
   if (claims?.role !== "service_role") return false;
-  return !Number.isFinite(Number(claims.exp)) || Number(claims.exp) * 1000 > now;
+  const exp = Number(claims.exp);
+  if (!Number.isFinite(exp) || exp * 1000 <= now) return false;
+  const ref = projectRefOf(projectUrl);
+  return Boolean(ref) && claims.ref === ref;
 }
