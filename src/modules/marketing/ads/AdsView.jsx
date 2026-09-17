@@ -342,6 +342,7 @@ export function AdsView() {
     }
     return {
       scoped,
+      scopedAll, // ทุกช่องทาง — กราฟแนวโน้มแท็บที่ใช้ระบบขายหารด้วยค่าแอดทุกช่องทาง (ยอดขายไม่แยกตามแพลตฟอร์มโฆษณา)
       range,
       before,
       monthView,

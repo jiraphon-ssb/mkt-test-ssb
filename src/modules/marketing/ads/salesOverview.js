@@ -224,3 +224,23 @@ export function campaignSalesSummary({ sales = [], brandIds = [], spendByBrand =
     excludedWaiting, excludedNoData,
   };
 }
+
+/** แท็บของกราฟแนวโน้มที่ต้องใช้ระบบขาย (ตัวอื่น CTR/CPC/CPM ฯลฯ ยังเป็นของ Meta) */
+export const SALES_TREND_KEYS = ["revenue", "roas", "inquiry", "cpl"];
+
+/** ค่าของกราฟแนวโน้มช่วงหนึ่ง (วันเดียวหรือทั้งช่วง) จากระบบขาย — นิยามเดียวกับ hero และ funnel ด้านบน
+    ROAS = ยอดขาย ÷ ค่าแอด Meta · CPL = ค่าแอด Meta ÷ Lead ในระบบขาย · คนทักนับเฉพาะวันที่ทีมกรอก
+    ไม่มีแถว = null (วันที่ยังไม่ sync ไม่ใช่ยอด 0) · key อื่น = undefined ให้ผู้เรียกใช้ของ Meta */
+export function salesTrendValue({ sales = [], key, brandIds = [], spend = null, basis = "total", from, to } = {}) {
+  if (!SALES_TREND_KEYS.includes(key)) return undefined;
+  const byBrand = salesFactsByBrand(sales, { from, to });
+  const rows = brandIds.map((id) => byBrand.get(id)).filter(Boolean);
+  if (!rows.length) return null;
+  const sum = (pick) => rows.reduce((n, row) => n + (pick(row) ?? 0), 0);
+  const revenue = sum((row) => (basis === "new" ? row.revenueNew : row.revenue));
+  if (key === "revenue") return revenue;
+  if (key === "roas") return roasOf(revenue, spend);
+  if (key === "cpl") return share(spend, sum((row) => row.leads));
+  const filled = rows.filter((row) => row.inquiryFilledDays > 0);
+  return filled.length ? filled.reduce((n, row) => n + row.inquiries, 0) : null;
+}

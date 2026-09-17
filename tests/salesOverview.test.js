@@ -1,7 +1,7 @@
 /* Overview ใช้ยอดจริงและเป้าจากระบบขาย (pure) — ค่าแอดยังเป็นของ Meta · ไม่มีข้อมูล = null พร้อมเหตุผล */
 import { describe, it, expect } from "vitest";
 import {
-  goalTargetsByBrand, combineGoalTargets, plansFromSalesGoals, salesFactsByBrand, applySalesToBrands, applySalesToSummary, salesPipeline, campaignSalesSummary,
+  goalTargetsByBrand, combineGoalTargets, plansFromSalesGoals, salesFactsByBrand, applySalesToBrands, applySalesToSummary, salesPipeline, campaignSalesSummary, salesTrendValue,
 } from "../src/modules/marketing/ads/salesOverview.js";
 
 const goal = (brand_id, patch = {}) => ({ brand_id, month: "2026-09-01", version: 2, goal_source: "sale_goal", sales_target: 1000000, sales_new_target: 600000, ad_budget: 100000,
@@ -170,5 +170,40 @@ describe("campaignSalesSummary — แถบยอดจริงบนหน้
   it("มีแหล่งแต่ช่วงนี้ไม่มีแถว = excludedNoData", () => {
     const out = campaignSalesSummary({ sales, brandIds: ["b_jk"], spendByBrand, names: { b_jk: "JK Design" }, from: "2026-09-01", to: "2026-09-17", sourceBrandIds: ["b_td", "b_ta", "b_jk"] });
     expect(out).toMatchObject({ revenue: null, excludedNoData: ["JK Design"] });
+  });
+});
+
+describe("salesTrendValue — กราฟแนวโน้มใช้ตัวเลขชุดเดียวกับด้านบน (ระบบขาย)", () => {
+  const sales = [
+    { brand_id: "b_td", fact_date: "2026-09-01", gross_revenue: 50000, revenue_new: 20000, inquiries: 30, inquiry_filled: true, qualified_leads: 10 },
+    { brand_id: "b_ta", fact_date: "2026-09-01", gross_revenue: 10000, revenue_new: 10000, inquiries: 0, inquiry_filled: false, qualified_leads: 5 },
+    { brand_id: "b_td", fact_date: "2026-09-02", gross_revenue: 0, revenue_new: 0, inquiries: 0, inquiry_filled: false, qualified_leads: 0 },
+  ];
+  const day1 = { from: "2026-09-01", to: "2026-09-01" };
+  const both = ["b_td", "b_ta"];
+
+  it("ยอดขาย: รวมแบรนด์ที่มีแหล่ง · ยอดใหม่ใช้ revenue_new", () => {
+    expect(salesTrendValue({ sales, key: "revenue", brandIds: both, ...day1 })).toBe(60000);
+    expect(salesTrendValue({ sales, key: "revenue", brandIds: both, basis: "new", ...day1 })).toBe(30000);
+  });
+
+  it("ROAS = ยอดขาย ÷ ค่าแอด · CPL = ค่าแอด ÷ Lead ในระบบขาย · ค่าแอด 0 = null", () => {
+    expect(salesTrendValue({ sales, key: "roas", brandIds: both, spend: 6000, ...day1 })).toBe(10);
+    expect(salesTrendValue({ sales, key: "cpl", brandIds: both, spend: 6000, ...day1 })).toBe(400);
+    expect(salesTrendValue({ sales, key: "roas", brandIds: both, spend: 0, ...day1 })).toBeNull();
+  });
+
+  it("คนทัก: นับเฉพาะแบรนด์/วันที่ทีมกรอก · ไม่มีใครกรอก = null ไม่ใช่ 0", () => {
+    expect(salesTrendValue({ sales, key: "inquiry", brandIds: both, ...day1 })).toBe(30);
+    expect(salesTrendValue({ sales, key: "inquiry", brandIds: ["b_td"], from: "2026-09-02", to: "2026-09-02" })).toBeNull();
+  });
+
+  it("วันที่ยังไม่มีแถว (เช่น วันนี้ยังไม่ sync) หรือไม่มีแบรนด์ที่มีแหล่ง = null", () => {
+    expect(salesTrendValue({ sales, key: "revenue", brandIds: both, from: "2026-09-03", to: "2026-09-03" })).toBeNull();
+    expect(salesTrendValue({ sales, key: "revenue", brandIds: [], ...day1 })).toBeNull();
+  });
+
+  it("key ที่ไม่ใช่ของระบบขาย = undefined (ให้กราฟใช้ของ Meta ต่อ)", () => {
+    expect(salesTrendValue({ sales, key: "ctr", brandIds: both, ...day1 })).toBeUndefined();
   });
 });
