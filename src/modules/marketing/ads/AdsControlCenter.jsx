@@ -19,9 +19,6 @@ const SOURCE_DETAILS = {
 };
 
 const DEFAULT_RULES = {
-  paceTolerance: 10,
-  overspendLimit: 5,
-  lowRoasDays: 3,
   staleHours: 6,
   missingDataHours: 12,
 };
@@ -123,10 +120,9 @@ function HealthSummary({ config }) {
   </section>;
 }
 
+/* เฉพาะกฎที่โค้ดใช้จริง: ล่าช้า/ขาดหาย (adsDataHealth) · ผลต่างยอด (ads-reconcile)
+   pace · เพดานเกินงบ · ROAS ต่ำต่อเนื่อง เคยมีช่องแต่ไม่มีโค้ดไหนอ่าน — ถอดออก 17 ก.ย. (ค่าเดิมใน settings ยังอยู่ ไม่กระทบ) */
 const RULE_FIELDS = [
-  ["paceTolerance", "ช่วงยอมรับของ pace", "%", "เตือนเมื่อยอดใช้เงินจริงต่างจากจังหวะที่ควรถึงเกินค่านี้"],
-  ["overspendLimit", "เพดานเกินงบ", "%", "ขึ้นสถานะวิกฤตเมื่อคาดการณ์สิ้นเดือนเกินงบมากกว่าค่านี้"],
-  ["lowRoasDays", "ROAS ต่ำกว่าเป้าต่อเนื่อง", "วัน", "เตือนเมื่อ ROAS ต่ำกว่าเป้าติดต่อกันตามจำนวนวัน"],
   ["staleHours", "ข้อมูลเริ่มล่าช้า", "ชม.", "แสดงสถานะข้อมูลล่าช้าเมื่อยังไม่มีการ sync ใหม่"],
   ["missingDataHours", "ข้อมูลขาดหาย", "ชม.", "ยกระดับเป็นข้อมูลขาดเมื่อเลยเวลานี้"],
   ["reconciliationTolerance", "ผลต่างยอดที่ยอมรับ", "%", "ยอดค่าแอดจากระบบกับแพลตฟอร์มต้องต่างกันไม่เกินค่านี้"],
@@ -137,7 +133,7 @@ function Rules({ rules, setRules }) {
     <section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">ALERT RULES</span><h2>กฎตัดสินใจและแจ้งเตือน</h2><p>ทุกกฎแสดงเหตุผลและค่าที่ใช้ตัดสิน เพื่อให้ทีมตรวจย้อนกลับได้</p></div></header>
       <div className="acc-rule-list">{RULE_FIELDS.map(([key, label, unit, help]) => <label className="acc-rule" key={key}><span><strong>{label}</strong><small>{help}</small></span><div className="acc-input-unit"><input type="number" min="0" value={rules[key]} onChange={(e) => setRules((current) => ({ ...current, [key]: numberValue(e.target.value) }))} /><b>{unit}</b></div></label>)}</div>
     </section>
-    <aside className="acc-sheet acc-guardrails"><ShieldAlert size={22} /><h3>กฎที่ระบบต้องรักษา</h3><ul><li>งบรวมต้องเท่ากับผลรวมรายบัญชี</li><li>ยอดขายจริงใช้ CRM หรือออเดอร์เป็นหลัก</li><li>Conversion จาก Ads API ต้องติดป้ายว่าเป็นยอด Attribution</li><li>ตัวเลขที่ข้อมูลไม่ครบแสดง “—” ไม่แทนด้วยศูนย์</li><li>ทุกค่าเก็บเวลา sync และแหล่งที่มา</li></ul></aside>
+    <aside className="acc-sheet acc-guardrails"><ShieldAlert size={22} /><h3>กฎที่ระบบต้องรักษา</h3><ul><li>งบรวมต้องเท่ากับผลรวมรายบัญชี</li><li>ยอดขาย เป้า และ funnel มาจากระบบขาย (อ่านอย่างเดียว)</li><li>ยอดที่ Meta เห็น (Attribution) ต้องติดป้ายว่าเป็นของ Meta</li><li>ตัวเลขที่ข้อมูลไม่ครบแสดง “—” ไม่แทนด้วยศูนย์</li><li>ทุกค่าเก็บเวลา sync และแหล่งที่มา</li></ul></aside>
   </div>;
 }
 

@@ -27,4 +27,14 @@ describe("AdsControlCenter", () => {
     fireEvent.click(screen.getByRole("button", { name: /บันทึก/ }));
     expect(onSave.mock.calls[0][0].targets).toEqual({ b_td: { revenue: 123 } });
   });
+
+  it("แท็บกฎ: เหลือเฉพาะช่องที่ระบบใช้จริง (ล่าช้า · ขาดหาย · ผลต่างยอด) · ไม่อ้าง CRM แล้ว", () => {
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    const labels = [...document.querySelectorAll(".acc-rule strong")].map((el) => el.textContent);
+    expect(labels).toEqual(["ข้อมูลเริ่มล่าช้า", "ข้อมูลขาดหาย", "ผลต่างยอดที่ยอมรับ"]);
+    expect(document.body.textContent).not.toMatch(/CRM/);
+    expect(document.body.textContent).toMatch(/ระบบขาย/);
+  });
 });
+
