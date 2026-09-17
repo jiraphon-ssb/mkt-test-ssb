@@ -95,6 +95,9 @@ describe("applySalesToSummary — ภาพรวมรวมเฉพาะแ�
     expect(out).toMatchObject({ revenue: 400000, revTarget: 1000000, budget: 80000, spend: 15000, excluded: ["JUNTAKARN"] });
     expect(out.revPct).toBe(0.4);
     expect(out.revPace.expectedSpend).toBe(500000);
+    // กล่องงบ Meta: ค่าแอดทุกแบรนด์ (อาร์ตยืนยัน 17 ก.ย.) · งบคงเหลือ/เฉลี่ย/คาดใช้ คิดจากยอดเดียวกับตัวเลขหัวกล่อง
+    expect(out.budgetSpend).toBeUndefined();
+    expect(out.pace.remaining).toBe(65000);   // 80,000 − 15,000 (ไม่ใช่ − 10,000)
   });
 
   it("%Ads ภาพรวม = ค่าแอดของแบรนด์ที่มียอด ÷ ยอดลูกค้าใหม่รวม (ไม่เอาค่าแอดแบรนด์รอเชื่อม และไม่หารยอดรวม)", () => {

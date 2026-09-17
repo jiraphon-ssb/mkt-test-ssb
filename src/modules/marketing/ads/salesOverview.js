@@ -154,7 +154,8 @@ export function applySalesToSummary(summary = {}, rows = [], asOf) {
     revPace,
     revPctOfExpected: share(revenue, revPace.expectedSpend),
     revChangePct: change(revenue, prevRevenue),
-    pace: budgetPace(includedSpend, budget, asOf),
+    // กล่องงบ Meta ใช้ค่าแอดทุกแบรนด์ (อาร์ตยืนยัน 17 ก.ย.) — งบคงเหลือ/เฉลี่ย/คาดใช้ ต้องคิดจากยอดเดียวกับหัวกล่อง
+    pace: budgetPace(summary.spend ?? includedSpend, budget, asOf),
     pctAds: included.length ? share(includedSpend, included.reduce((n, row) => n + (row.revenueNew ?? 0), 0)) : null,
     excluded: rows.filter((row) => row.salesSource !== "sales").map((row) => row.name),
     excludedWaiting: rows.filter((row) => row.salesSource === "waiting").map((row) => row.name),

@@ -50,11 +50,11 @@ const format=(key,n)=>n==null?'—':['ctr','pctAds'].includes(key)?fmtPct(n):['r
 const tick=(key,n)=>['ctr','pctAds'].includes(key)?`${fmtNum(n*100,1)}%`:['roas','frequency'].includes(key)?`${n}×`:fmtCompact(n);
 const readMode=()=>{try{const m=localStorage.getItem(MODE_KEY);return TREND_MODES.some(([k])=>k===m)?m:'line';}catch{return 'line';}};
 const SALES_NOTE={inquiry:'จากระบบขาย · คนทักที่ทีมขายกรอก',revenue:'จากระบบขาย',leads:'จากระบบขาย',deposits:'จากระบบขาย · ได้ออเดอร์ = เข้าสเตจออกแบบครั้งแรก',orders:'จากระบบขาย · ยืนยันออเดอร์ = รับรู้ยอด',roas:'ยอดขายจริง ÷ ค่าแอด Meta',cpl:'ค่าแอด Meta ÷ Lead ในระบบขาย',cac:'ค่าแอด Meta ÷ ออเดอร์ลูกค้าใหม่ในระบบขาย',pctAds:'ค่าแอด Meta ÷ ยอดลูกค้าใหม่ในระบบขาย'};
-/* เป้ารายเดือนของตัวที่บวกได้ — ค่าแอด = งบ (ภาพรวมต้องตั้งครบทุกแบรนด์ เพราะเส้นค่าแอดรวมทุกแบรนด์) · ที่เหลือจากเป้าระบบขาย */
+/* เป้ารายเดือนของตัวที่บวกได้ — ค่าแอด = งบ Meta (ภาพรวมใช้งบรวมชุดเดียวกับกล่องงบ เทียบค่าแอดทุกแบรนด์) · ที่เหลือจากเป้าระบบขาย */
 function monthTarget(v, brandId, key) {
   const row=brandId?v.brands.find(b=>b.id===brandId):v.summary;
   const goals=brandId?v.goals?.byBrand?.[brandId]:v.goals?.overall;
-  if(key==='spend') return brandId?row?.budget ?? null:v.brands.length&&v.brands.every(b=>b.budget>0)?v.brands.reduce((n,b)=>n+b.budget,0):null;
+  if(key==='spend') return row?.budget ?? null;
   if(key==='revenue') return row?.revTarget ?? null;
   const goalKey={inquiry:'inquiries',leads:'qualified',deposits:'deposits',orders:'closed'}[key];
   return goalKey?goals?.[goalKey]?.monthTarget ?? null:null;
@@ -132,7 +132,7 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
     {result.current==null&&<p className="aw-key">{emptyNote}</p>}
     {cumulativeBlocked&&<p className="aw-key">{label} สะสมไม่ได้ (Reach นับคนซ้ำข้ามวัน รวมกันแล้วผิด) · แสดงรายวันแทน</p>}
     <ChartBox type={chartType} height={260} ariaLabel={`${label}${mode==='cumulative'?'สะสม':'รายวัน'}`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(paint)}} options={baseOpts({plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:tooltipLabel}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{precision:COUNT_KEYS.includes(key)?0:undefined,callback:n=>tick(key,n)}}}})}/>
-    <p className="aw-key">{openNote}{modeNote}{needsTarget?(key==='spend'&&!brandId?' · งบ Meta ยังตั้งไม่ครบทุกแบรนด์ จึงไม่มีเส้นเป้า':' · ยังไม่ตั้งเป้าเดือนของตัวนี้ในระบบขาย จึงไม่มีเส้นเป้า'):''}</p>
+    <p className="aw-key">{openNote}{modeNote}{needsTarget?' · ยังไม่ตั้งเป้าเดือนของตัวนี้ในระบบขาย จึงไม่มีเส้นเป้า':''}</p>
     <details><summary>ดูข้อมูลเป็นตาราง</summary><div className="aw-table-scroll"><table><thead><tr><th>วันที่</th>{result.datasets.map(d=><th key={d.label}>{d.label}{mode==='cumulative'&&d.kind!=='target'?' (สะสม)':''}</th>)}{mode==='cumulative'&&!result.splitOn&&<th>วันนั้น</th>}</tr></thead><tbody>{result.days.map((d,i)=><tr key={d}><th>{new Date(d).toLocaleDateString('th-TH')}</th>{result.datasets.map(s=><td key={s.label}>{format(key,s.data[i])}</td>)}{mode==='cumulative'&&!result.splitOn&&<td>{format(key,result.datasets[0].daily?.[i] ?? null)}</td>}</tr>)}</tbody></table></div></details>
   </section>;
 }
