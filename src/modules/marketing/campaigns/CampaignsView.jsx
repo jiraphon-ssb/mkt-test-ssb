@@ -4,43 +4,28 @@ import { Link } from "react-router-dom";
 import { Search, Settings2 } from "lucide-react";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { useApp } from "../useMkt.jsx";
-import { analyticsCards } from "../mktAnalytics.js";
-import { adChannelsByBrand, adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
-import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
-import { compareRange, isoDay, periodRange } from "../adsScope.js";
+import { isoDay } from "../adsScope.js";
+import { buildCampaignsModel } from "./campaignsModel.js";
 import { useReportFilters } from "../ui/useReportFilters.js";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
-import { combineTargets, normalizeTargets, periodForTargets, plansFromTargets } from "../adsTargets.js";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { CampaignsTable } from "./CampaignsTable.jsx";
 import { CampaignDetail } from "./CampaignDetail.jsx";
-import { adsDataHealth } from "../ads/adsDataHealth.js";
 import { useAdsData } from "../ads/useAdsData.js";
 import { AdsSourceControl, AdsSourceNotice } from "../ads/AdsSourceControl.jsx";
-import { campaignSalesSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals } from "../ads/salesOverview.js";
-import { SALES_BRAND_IDS } from "../ads/syncSources.js";
 import "../ads/adsWorkspace.css";
 import "./campaigns.css";
 
-/* เป้ารวมจากระบบขาย: แบรนด์ที่เลือก หรือถ่วงรวมแบรนด์ที่มีแหล่งยอดขาย (แบรนด์รอเชื่อมไม่ดึงเป้ารวมเป็น null) */
-function realGoalTargets(brands, selectedBrand, salesTargets, salesGoals, goalMonth) {
-  if (selectedBrand !== "all") return salesTargets.get(selectedBrand) ?? {};
-  const rows = new Map((salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
-  return combineGoalTargets(brands.filter((b) => SALES_BRAND_IDS.includes(b.id)).map((b) => ({
-    targets: salesTargets.get(b.id) ?? {},
-    weights: { budget: rows.get(b.id)?.ad_budget, revenue: rows.get(b.id)?.sales_target, inquiries: rows.get(b.id)?.inquiry_target },
-  })));
-}
 
 /* ตัวกรองเฉพาะหน้าแคมเปญ (อยู่ในลิงก์ ไม่ข้ามหน้า) */
-const CAMPAIGN_FILTERS = { status: { default: "all" }, objective: { default: "all" }, budget: { default: "all", allowed: ["all", "set", "unset"] }, q: { default: "" } };
+const CAMPAIGN_FILTERS = { status: { default: "all" }, objective: { default: "all" }, budget: { default: "all", allowed: ["all", "set", "missing"] }, q: { default: "" } };
 
 export function CampaignsView() {
   const { data, inBrandScope, brandFilter } = useApp();
   const ads = useAdsData();
   const todayLocal = isoDay(new Date());
   const [filters, setFilters] = useReportFilters(CAMPAIGN_FILTERS);
-  const { period, from: customFrom, to: customTo, compare, channel, brand: brandSel, status, objective, budget: budgetState, basis: revenueBasis, q: query } = filters;
+  const { period, compare, channel, status, objective, budget: budgetState, basis: revenueBasis, q: query } = filters;
   const setCompare = (next) => setFilters({ compare: next });
   const setChannel = (next) => setFilters({ channel: next });
   const setBrandSel = (next) => setFilters({ brand: next });
@@ -50,59 +35,9 @@ export function CampaignsView() {
   const setRevenueBasis = (next) => setFilters({ basis: next });
   const setQuery = (next) => setFilters({ q: next });
 
-  const v = useMemo(() => {
-    const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
-    const scoped = filterByChannel(scopedAll, channel);
-    const range = periodRange(period, customFrom, customTo);
-    const before = compareRange(period, range, compare);
-    const brands = (data.brands ?? []).filter((b) => b.active !== false && (brandFilter === "all" || b.id === brandFilter));
-    const selectedBrand = brandSel === "all" || brands.some((b) => b.id === brandSel) ? brandSel : "all";
-    const month = isoDay(new Date()).slice(0, 7);
-    const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));
-    /* ข้อมูลจริง = เป้าและงบ Meta จากระบบขายของพี่ทัช (แท็บเป้าของเราถอดแล้ว) · ข้อมูลจำลอง = ค่าที่เคยบันทึกไว้ในตั้งค่า (สาธิตอย่างเดียว) */
-    const real = ads.source === "meta_pilot";
-    const goalMonth = `${(period === "mtd" ? todayLocal : shownTo).slice(0, 7)}-01`;
-    const salesTargets = real ? goalTargetsByBrand(ads.salesGoals, goalMonth) : null;
-    const targets = real ? Object.fromEntries(salesTargets) : data.settings?.ads_control?.targets ?? {};
-    const { adBudgets } = real
-      ? plansFromSalesGoals({ goals: ads.salesGoals, month })
-      : plansFromTargets({ targets, adBudgets: data.ad_budgets ?? [], month, channelsByBrand: adChannelsByBrand(scopedAll, periodRange("mtd", null, null)) });
-    const all = campaignRows(scoped, range, {
-      brands, adBudgets, campaignBudgets: data.campaign_budgets ?? [],
-      today: isoDay(new Date()), prevRange: before,
-    });
-    const q = query.trim().toLowerCase();
-    const filtered = all.filter((r) =>
-      (selectedBrand === "all" || r.brandId === selectedBrand)
-      && (status === "all" || r.status === status)
-      && (objective === "all" || (r.objective ?? "unknown") === objective)
-      && (budgetState === "all" || (budgetState === "set" ? r.budget != null : r.budget == null))
-      && (!q || r.name.toLowerCase().includes(q))
-    );
-    /* ข้อมูลจริง: ตัดสินรายแคมเปญด้วยเพดาน CPL จากระบบขายเท่านั้น — ROAS เป้าเป็นยอดจริงระดับแบรนด์ ส่วน ROAS แคมเปญเป็นยอดที่ Meta เห็น
-       เทียบกันตรงๆ จะติด "ตรวจแก้" ทุกแคมเปญ · ไม่มีเพดาน = กฎกลาง */
-    const decisionTargets = (brandId) => real ? (targets[brandId]?.cpl != null ? { cpl: targets[brandId].cpl } : null) : targets[brandId] ?? null;
-    const rows = withSpendShare(filtered).map((r) => ({ ...r, decision: campaignDecision(r, decisionTargets(r.brandId), undefined, { roasFromMeta: !real }) }));
-    const brandSums = campaignsByBrand(all);
-    const dataHealth = adsDataHealth(data.settings?.ads_control ?? {});
-    return {
-      rows, brands, selectedBrand, byBrand: brandSums.byBrand,
-      /* เป้า: แบรนด์ที่เลือก หรือรวมทุกแบรนด์ในขอบเขต — ตัวเลขจริงเทียบใน CampaignsTable (ตามมุมมองที่กรองอยู่) */
-      goalTargets: real ? realGoalTargets(brands, selectedBrand, salesTargets, ads.salesGoals, goalMonth)
-        : selectedBrand === "all" ? combineTargets(brands.map((b) => targets[b.id])) : normalizeTargets(targets[selectedBrand]),
-      targetPeriod: periodForTargets({ monthView: period === "mtd", from: shownFrom, to: shownTo, today: todayLocal }),
-      salesSummary: real ? campaignSalesSummary({
-        sales: ads.sales, from: shownFrom, to: shownTo, sourceBrandIds: SALES_BRAND_IDS, basis: revenueBasis,
-        brandIds: (selectedBrand === "all" ? brands : brands.filter((b) => b.id === selectedBrand)).map((b) => b.id),
-        names: Object.fromEntries(brands.map((b) => [b.id, b.name])),
-        spendByBrand: Object.fromEntries(brands.map((b) => [b.id, filtered.filter((r) => r.brandId === b.id).reduce((n, r) => n + (r.spend ?? 0), 0)])),
-      }) : null,
-      channelList: adsChannelList(scopedAll), scopeEmpty: all.length === 0, range,
-      statuses: [...new Set(all.map((r) => r.status))], objectives: [...new Set(all.map((r) => r.objective ?? "unknown"))],
-      compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
-      dataHealth,
-    };
-  }, [data, ads.cards, ads.mockFallback, ads.source, ads.sales, ads.salesGoals, inBrandScope, brandFilter, period, customFrom, customTo, compare, channel, brandSel, status, objective, budgetState, query, revenueBasis, todayLocal]);
+  const v = useMemo(() => buildCampaignsModel({ data, ads, inBrandScope, brandFilter, filters, todayLocal }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, ads.cards, ads.mockFallback, ads.source, ads.sales, ads.salesGoals, inBrandScope, brandFilter, filters, todayLocal]);
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
