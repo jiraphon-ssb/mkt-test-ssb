@@ -1,4 +1,4 @@
-import { adminClient, appRedirect, encryptToken, env, graph, graphVersion, publicErrorCode, sha256 } from "../_shared/adsOAuth.ts";
+import { adminClient, appRedirect, encryptToken, env, graph, graphVersion, metaTokenExpiry, publicErrorCode, sha256 } from "../_shared/adsOAuth.ts";
 
 async function allAdAccounts(token: string) {
   const rows: Record<string,unknown>[] = [];
@@ -54,15 +54,18 @@ Deno.serve(async (request) => {
     const longPayload = await longResponse.json();
     const accessToken = longResponse.ok && longPayload.access_token ? longPayload.access_token : shortToken.access_token;
     const expiresIn = Number(longPayload.expires_in ?? shortToken.expires_in) || null;
-    const [identity, permissions, accounts, encrypted] = await Promise.all([
+    const [identity, permissions, accounts, encrypted, debug] = await Promise.all([
       graph("/me", accessToken, { fields: "id,name" }), graph("/me/permissions", accessToken), allAdAccounts(accessToken), encryptToken(accessToken),
+      metaTokenExpiry(accessToken),
     ]);
+    // วันหมดอายุ: ถาม Meta ตรงๆ ก่อน (expires_in มักไม่มากับ token อายุยาว) · ถามไม่ได้ค่อยใช้ expires_in
+    const expiresAt = debug?.valid ? debug.effectiveExpiresAt : expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
     const scopes = (permissions.data ?? []).filter((item: Record<string,string>) => item.status === "granted").map((item: Record<string,string>) => item.permission);
     if (!scopes.includes("ads_read")) throw new Error("ADS_READ_NOT_GRANTED");
     const authRecord = {
       provider: "meta", user_id: state.user_id, provider_user_id: String(identity.id), provider_user_name: identity.name ?? "",
       token_ciphertext: encrypted.ciphertext, token_iv: encrypted.iv, scopes,
-      expires_at: expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null,
+      expires_at: expiresAt,
       status: "connected", last_verified_at: new Date().toISOString(),
     };
     const { data: authorization, error: authError } = await db.from("ad_provider_authorizations").upsert(authRecord, { onConflict: "provider,user_id,provider_user_id" }).select("id").single();

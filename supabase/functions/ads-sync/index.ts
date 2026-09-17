@@ -1,6 +1,7 @@
 /* ads-sync — ดึง Meta Insights รายวันของ connection เดียว แล้วแทนที่ยอดช่วงนั้นใน ad_daily_facts
    สิทธิ์: team_lead (verify_jwt) · token ถอดรหัสฝั่ง server เท่านั้น · ข้อมูลไม่ครบ = run failed และไม่เขียนยอด */
-import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, metaTokenExpiry, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { authorizationTokenPatch, tokenCheckDue } from "../_shared/metaTokenDebug.js";
 import { collectMetaFacts, pickSyncMode, publicSyncCode, syncFailureStatus } from "../_shared/adsSyncJob.js";
 import { syncError, syncRange, todayInTimeZone } from "../_shared/metaInsights.js";
 import { validateExplicitRange } from "../_shared/adsBackfill.js";
@@ -38,7 +39,7 @@ Deno.serve(async (request) => {
     if (connection.status === "disabled" || !connection.authorization_id) throw syncError("CONNECTION_NOT_READY");
 
     const { data: authorization } = await db.from("ad_provider_authorizations")
-      .select("id,user_id,token_ciphertext,token_iv,status,expires_at").eq("id", connection.authorization_id).maybeSingle();
+      .select("id,user_id,token_ciphertext,token_iv,status,expires_at,last_verified_at").eq("id", connection.authorization_id).maybeSingle();
     if (!authorization || authorization.status !== "connected") throw syncError("AUTHORIZATION_NOT_READY");
     // เจ้าของ token ต้องยังเป็นสมาชิกที่ active — คนออกจากทีมแล้ว token ไม่ถูกใช้ต่อ
     if (!(await activeMemberUserIds(db)).has(authorization.user_id)) throw syncError("AUTHORIZATION_NOT_READY");
@@ -61,6 +62,16 @@ Deno.serve(async (request) => {
     runId = run.id;
 
     const token = await decryptToken(authorization.token_ciphertext, authorization.token_iv);
+    /* วันหมดอายุจริงจาก Meta วันละครั้งต่อ token — ads-cron ใช้ค่านี้เตือนล่วงหน้า 7 วัน (ตัว cron ไม่แตะ token เอง)
+       ตรวจไม่ได้ = ดึงข้อมูลต่อตามปกติ · Meta บอกว่า token ใช้ไม่ได้แล้ว = หยุดเลย ไม่ยิง insights ให้เสียโควตา */
+    if (tokenCheckDue(authorization)) {
+      const patch = authorizationTokenPatch(await metaTokenExpiry(token), new Date().toISOString());
+      if (patch) {
+        const { error: patchError } = await db.from("ad_provider_authorizations").update(patch).eq("id", authorization.id);
+        if (patchError) console.error("[ads-sync] token expiry", patchError.message);
+        if (patch.status === "expired") throw syncError("META_TOKEN_INVALID");
+      }
+    }
     const { facts, summary } = await collectMetaFacts({
       accountId: connection.external_account_id, from: range.from, to: range.to, config,
       version: graphVersion(), token, fetch, sleep,

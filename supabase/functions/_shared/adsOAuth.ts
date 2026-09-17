@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.110.9";
 import { parseOrigins, publicErrorCode, requestAppOrigin, resolveReturnUrl, returnTarget } from "./returnTo.js";
 import { bearerToken, isServiceRoleToken } from "./serviceAuth.js";
+import { debugTokenRequest, tokenExpiryFromDebug } from "./metaTokenDebug.js";
 export { publicErrorCode };
 
 const encoder = new TextEncoder();
@@ -144,4 +145,19 @@ export async function graph(path: string, token: string, params: Record<string,s
   const payload = await response.json();
   if (!response.ok || payload?.error) throw new Error(payload?.error?.message || `Meta API ${response.status}`);
   return payload;
+}
+
+/** ถามวันหมดอายุ token จาก Meta (/debug_token) · พัง/ตอบผิดรูป = null ผู้เรียกต้องไม่ล้มงานหลักเพราะเรื่องนี้
+    ไม่ log token หรือ URL (URL มี input_token) */
+export async function metaTokenExpiry(accessToken: string) {
+  try {
+    const req = debugTokenRequest({ version: graphVersion(), inputToken: accessToken, appId: env("META_APP_ID"), appSecret: env("META_APP_SECRET") });
+    const response = await fetch(req.url, { headers: req.headers, signal: AbortSignal.timeout(10_000) });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) { console.error("[meta-token] debug_token", response.status); return null; }
+    return tokenExpiryFromDebug(payload);
+  } catch (error) {
+    console.error("[meta-token] debug_token", error instanceof Error ? error.name : "FAILED");
+    return null;
+  }
 }
