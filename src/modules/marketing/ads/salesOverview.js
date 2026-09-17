@@ -4,6 +4,7 @@
    ยอดขาย · ROAS · %Ads · CPL · CAC ต้องมาจากระบบขาย · ไม่มีข้อมูล = null พร้อมเหตุผล ห้ามโชว์ 0 แทน */
 import { fmtInt } from "../dash/charts/theme.js";
 import { budgetPace, change, revenuePace, roasOf, share } from "../adsOverview.js";
+import { metricCoverage } from "./salesFacts.js";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const num = (value) => {
@@ -230,21 +231,42 @@ export function campaignSalesSummary({ sales = [], brandIds = [], spendByBrand =
 }
 
 /** แท็บของกราฟแนวโน้มที่ต้องใช้ระบบขาย (ตัวอื่น CTR/CPC/CPM ฯลฯ ยังเป็นของ Meta) */
-export const SALES_TREND_KEYS = ["revenue", "roas", "inquiry", "cpl"];
+export const SALES_TREND_KEYS = ["revenue", "roas", "inquiry", "leads", "deposits", "orders", "cpl", "cac", "pctAds"];
+/** ตัวที่ต้องหารด้วยค่าแอด Meta */
+export const SPEND_TREND_KEYS = ["roas", "cpl", "cac", "pctAds"];
 
 /** ค่าของกราฟแนวโน้มช่วงหนึ่ง (วันเดียวหรือทั้งช่วง) จากระบบขาย — นิยามเดียวกับ hero และ funnel ด้านบน
-    ROAS = ยอดขาย ÷ ค่าแอด Meta · CPL = ค่าแอด Meta ÷ Lead ในระบบขาย · คนทักนับเฉพาะวันที่ทีมกรอก
-    ไม่มีแถว = null (วันที่ยังไม่ sync ไม่ใช่ยอด 0) · key อื่น = undefined ให้ผู้เรียกใช้ของ Meta */
-export function salesTrendValue({ sales = [], key, brandIds = [], spend = null, basis = "total", from, to } = {}) {
+    ROAS = ยอดขาย ÷ ค่าแอด Meta · CPL = ค่าแอด Meta ÷ Lead · CAC = ค่าแอด ÷ ออเดอร์ลูกค้าใหม่ · %Ads = ค่าแอด ÷ ยอดใหม่
+    คนทักนับเฉพาะวันที่ทีมกรอก · ได้ออเดอร์ก่อนวันแรกที่ระบบขายมีข้อมูล = null (ไม่มีประวัติสเตจ ไม่ใช่ 0)
+    ไม่มีแถว = null (วันที่ยังไม่ sync ไม่ใช่ยอด 0) · key อื่น = undefined ให้ผู้เรียกใช้ของ Meta
+    coverage = ผลของ metricCoverage(sales) ส่งมาได้เพื่อไม่ต้องคิดซ้ำทุกจุดบนกราฟ */
+export function salesTrendValue({ sales = [], key, brandIds = [], spend = null, basis = "total", from, to, coverage = null } = {}) {
   if (!SALES_TREND_KEYS.includes(key)) return undefined;
   const byBrand = salesFactsByBrand(sales, { from, to });
-  const rows = brandIds.map((id) => byBrand.get(id)).filter(Boolean);
-  if (!rows.length) return null;
+  const ids = brandIds.filter((id) => byBrand.has(id));
+  if (!ids.length) return null;
+  const rows = ids.map((id) => byBrand.get(id));
   const sum = (pick) => rows.reduce((n, row) => n + (pick(row) ?? 0), 0);
   const revenue = sum((row) => (basis === "new" ? row.revenueNew : row.revenue));
-  if (key === "revenue") return revenue;
-  if (key === "roas") return roasOf(revenue, spend);
-  if (key === "cpl") return share(spend, sum((row) => row.leads));
-  const filled = rows.filter((row) => row.inquiryFilledDays > 0);
-  return filled.length ? filled.reduce((n, row) => n + row.inquiries, 0) : null;
+  switch (key) {
+    case "revenue": return revenue;
+    case "roas": return roasOf(revenue, spend);
+    case "leads": return sum((row) => row.leads);
+    case "orders": return sum((row) => row.orders);
+    case "cpl": return share(spend, sum((row) => row.leads));
+    case "cac": return share(spend, sum((row) => row.ordersNew));
+    case "pctAds": return share(spend, sum((row) => row.revenueNew));
+    case "deposits": {
+      const since = coverage ?? metricCoverage(sales);
+      const ready = ids.every((id) => {
+        const start = since.get(id)?.deposits ?? null;
+        return start != null && (to ?? from) >= start;
+      });
+      return ready ? sum((row) => row.deposits) : null;
+    }
+    default: {
+      const filled = rows.filter((row) => row.inquiryFilledDays > 0);
+      return filled.length ? filled.reduce((n, row) => n + row.inquiries, 0) : null;
+    }
+  }
 }

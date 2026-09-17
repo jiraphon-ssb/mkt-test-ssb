@@ -216,6 +216,31 @@ describe("salesTrendValue — กราฟแนวโน้มใช้ตั�
     expect(salesTrendValue({ sales, key: "revenue", brandIds: [], ...day1 })).toBeNull();
   });
 
+  it("Lead · ยืนยันออเดอร์ = จำนวนในระบบขาย · CAC = ค่าแอด ÷ ออเดอร์ลูกค้าใหม่ · %Ads = ค่าแอด ÷ ยอดใหม่", () => {
+    const rows = [
+      { brand_id: "b_td", fact_date: "2026-09-01", gross_revenue: 50000, revenue_new: 20000, qualified_leads: 10, orders: 3, orders_new: 2, deposits: 4 },
+      { brand_id: "b_ta", fact_date: "2026-09-01", gross_revenue: 10000, revenue_new: 10000, qualified_leads: 5, orders: 1, orders_new: 1, deposits: 0 },
+    ];
+    expect(salesTrendValue({ sales: rows, key: "leads", brandIds: both, ...day1 })).toBe(15);
+    expect(salesTrendValue({ sales: rows, key: "orders", brandIds: both, ...day1 })).toBe(4);
+    expect(salesTrendValue({ sales: rows, key: "cac", brandIds: both, spend: 6000, ...day1 })).toBe(2000);
+    expect(salesTrendValue({ sales: rows, key: "pctAds", brandIds: both, spend: 6000, ...day1 })).toBe(0.2);
+    expect(salesTrendValue({ sales: rows, key: "cac", brandIds: both, spend: null, ...day1 })).toBeNull();
+  });
+
+  it("ได้ออเดอร์: ก่อนวันแรกที่ระบบขายมีข้อมูล = null ไม่ใช่ 0 · ภาพรวมต้องครบทุกแบรนด์ถึงจะนับ", () => {
+    const rows = [
+      { brand_id: "b_td", fact_date: "2026-08-31", deposits: 0 },
+      { brand_id: "b_td", fact_date: "2026-09-01", deposits: 4 },
+      { brand_id: "b_ta", fact_date: "2026-09-01", deposits: 0 },
+      { brand_id: "b_ta", fact_date: "2026-09-02", deposits: 2 },
+    ];
+    expect(salesTrendValue({ sales: rows, key: "deposits", brandIds: ["b_td"], from: "2026-08-31", to: "2026-08-31" })).toBeNull();
+    expect(salesTrendValue({ sales: rows, key: "deposits", brandIds: ["b_td"], from: "2026-08-31", to: "2026-09-01" })).toBe(4);
+    expect(salesTrendValue({ sales: rows, key: "deposits", brandIds: both, ...day1 })).toBeNull();
+    expect(salesTrendValue({ sales: rows, key: "deposits", brandIds: both, from: "2026-09-01", to: "2026-09-02" })).toBe(6);
+  });
+
   it("key ที่ไม่ใช่ของระบบขาย = undefined (ให้กราฟใช้ของ Meta ต่อ)", () => {
     expect(salesTrendValue({ sales, key: "ctr", brandIds: both, ...day1 })).toBeUndefined();
   });

@@ -161,3 +161,10 @@
 @media(max-width:680px){.aw-header-actions { align-items:flex-start; flex-direction:column; }.acc-header>div { align-items:flex-start; flex-direction:column; gap:6px; }.acc-header a { padding:0; border:0; }.acc-source-list,.acc-target-grid,.acc-field-grid,.acc-mapping-row,.acc-ready-grid,.acc-health-grid,.acc-source-config { grid-template-columns:1fr; }.acc-sheet { padding:16px; }.acc-lineage,.acc-reconcile { overflow:auto; }.acc-lineage-row { min-width:680px; }.acc-reconcile-row { min-width:690px; }}
 
 /* ยอดขายจริงจากระบบขาย */
+/* รูปแบบกราฟแนวโน้ม: เส้น / แท่ง / สะสม — ปุ่มกลุ่มเดียว เลือกได้ทีละแบบ */
+.aw-trend-view { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.aw-seg { display:inline-flex; padding:2px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+.mkt-root .aw-seg button { font:inherit; font-size:12px; min-height:28px; min-width:48px; padding:4px 12px; border-radius:6px; color:var(--ink-soft); cursor:pointer; }
+.mkt-root .aw-seg button[aria-pressed=true] { background:var(--line); color:var(--ink); font-weight:700; }
+.mkt-root .aw-seg button:disabled { opacity:.4; cursor:not-allowed; }
+.mkt-root .aw-seg button:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:1px; }

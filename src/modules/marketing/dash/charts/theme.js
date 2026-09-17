@@ -131,5 +131,12 @@ export const lineSeries = (pointCount, { openFrom = null, ...over } = {}) => {
     ...over,
   };
 };
+/* ---------- กราฟแท่งรายวัน ----------
+   วันที่ไม่มีค่า = ไม่มีแท่ง (null ไม่ใช่ 0) · openFrom = แท่งของวันที่ยังไม่จบ (วันนี้) สีจาง */
+export const barSeries = (color, { openFrom = null, ...over } = {}) => ({
+  backgroundColor: (ctx) => (openFrom != null && ctx.dataIndex >= openFrom ? faded(color) : color),
+  borderWidth: 0, borderRadius: 3, maxBarThickness: 22, categoryPercentage: 0.8, barPercentage: 0.9,
+  ...over,
+});
 /** ป้ายวันบนแกน X / tooltip: "14 ก.ย." (ไม่ใส่ปีให้รก) */
 export const dayLabel = (iso) => new Date(iso.length === 10 ? `${iso}T00:00:00` : iso).toLocaleDateString("th-TH", { day: "numeric", month: "short" });

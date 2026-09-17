@@ -3,7 +3,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-vi.mock("../src/modules/marketing/dash/charts/ChartBox.jsx", () => ({ ChartBox: ({ ariaLabel }) => <div data-testid="chart" aria-label={ariaLabel} /> }));
+// เก็บ props ล่าสุดของกราฟไว้ตรวจชนิดกราฟและค่าในแต่ละชุด
+const chart = { last: null };
+vi.mock("../src/modules/marketing/dash/charts/ChartBox.jsx", () => ({ ChartBox: (props) => { chart.last = props; return <div data-testid="chart" aria-label={props.ariaLabel} />; } }));
 const { WorkspaceTrends } = await import("../src/modules/marketing/ads/WorkspaceTrends.jsx");
 
 afterEach(cleanup);
@@ -19,10 +21,12 @@ const v = {
 };
 v.scopedAll = v.scoped;
 const sales = [
-  { brand_id: "b_td", fact_date: "2026-09-01", gross_revenue: 20000, revenue_new: 5000, inquiries: 12, inquiry_filled: true, qualified_leads: 4 },
-  { brand_id: "b_td", fact_date: "2026-09-02", gross_revenue: 10000, revenue_new: 0, inquiries: 0, inquiry_filled: false, qualified_leads: 1 },
+  { brand_id: "b_td", fact_date: "2026-09-01", gross_revenue: 20000, revenue_new: 5000, inquiries: 12, inquiry_filled: true, qualified_leads: 4, deposits: 0, orders: 2, orders_new: 1 },
+  { brand_id: "b_td", fact_date: "2026-09-02", gross_revenue: 10000, revenue_new: 0, inquiries: 0, inquiry_filled: false, qualified_leads: 1, deposits: 3, orders: 1, orders_new: 1 },
 ];
 const total = () => document.querySelector(".aw-trend-total b").textContent;
+const series = (label) => chart.last.data.datasets.find((d) => d.label === label).data;
+const mode = (name) => fireEvent.click(screen.getByRole("button", { name }));
 
 describe("WorkspaceTrends — ข้อมูลจริง", () => {
   it("ยอดขาย = ระบบขาย (ไม่ใช่ ฿1,400.00 ที่ Meta เห็น) พร้อมป้ายที่มา", () => {
@@ -56,5 +60,79 @@ describe("WorkspaceTrends — ข้อมูลจริง", () => {
     fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
     expect(total()).toBe("฿1,400.00");
     expect(screen.queryByText("จาก Meta")).toBeNull();
+  });
+});
+
+describe("WorkspaceTrends — Lead · ได้ออเดอร์ · ยืนยันออเดอร์ จากระบบขาย", () => {
+  it("Lead และยืนยันออเดอร์เป็นจำนวนนับ · เส้นรายวันตรงกับระบบขาย", () => {
+    render(<WorkspaceTrends v={v} sales={sales} />);
+    fireEvent.click(screen.getByRole("button", { name: "Lead" }));
+    expect(total()).toBe("5");
+    expect(series("ช่วงนี้")).toEqual([4, 1]);
+    fireEvent.click(screen.getByRole("button", { name: "ยืนยันออเดอร์" }));
+    expect(total()).toBe("3");
+    expect(screen.getByText("จากระบบขาย · ยืนยันออเดอร์ = รับรู้ยอด · รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย")).toBeTruthy();
+  });
+
+  it("ได้ออเดอร์: วันก่อนระบบขายมีข้อมูลสเตจ = ช่องว่าง ไม่ใช่ 0 · บอกวันที่เริ่มมีข้อมูล", () => {
+    render(<WorkspaceTrends v={v} sales={sales} />);
+    fireEvent.click(screen.getByRole("button", { name: "ได้ออเดอร์" }));
+    expect(series("ช่วงนี้")).toEqual([null, 3]);
+    expect(total()).toBe("3");
+    expect(screen.getByText(/มีข้อมูลตั้งแต่ 2 ก\.ย\./)).toBeTruthy();
+  });
+
+  it("CAC · %Ads อยู่ในเมนูตัวชี้วัดอื่น คิดจากค่าแอด Meta ÷ ระบบขาย", () => {
+    render(<WorkspaceTrends v={v} sales={sales} />);
+    expect(screen.queryByRole("button", { name: "CAC" })).toBeNull();
+  });
+});
+
+describe("WorkspaceTrends — รูปแบบกราฟ เส้น / แท่ง / สะสม", () => {
+  it("ค่าเริ่มต้นเป็นเส้น · กดแท่งแล้วกราฟเป็นแท่ง ค่ายังเป็นรายวัน", () => {
+    render(<WorkspaceTrends v={v} sales={sales} />);
+    expect(chart.last.type).toBe("line");
+    expect(screen.getByRole("button", { name: "เส้น" }).getAttribute("aria-pressed")).toBe("true");
+    mode("แท่ง");
+    expect(chart.last.type).toBe("bar");
+    fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
+    expect(series("ช่วงนี้")).toEqual([20000, 10000]);
+  });
+
+  it("สะสม: ยอดขายบวกต่อกันทุกวัน · ตัวเลขหัวกราฟยังเป็นยอดทั้งช่วง", () => {
+    render(<WorkspaceTrends v={v} sales={sales} />);
+    mode("สะสม");
+    fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
+    expect(chart.last.type).toBe("line");
+    expect(series("ช่วงนี้")).toEqual([20000, 30000]);
+    expect(total()).toBe("฿30,000.00");
+    expect(screen.getByText(/แต่ละจุด = ยอดรวมตั้งแต่ต้นช่วงถึงวันนั้น/)).toBeTruthy();
+  });
+
+  it("สะสม ROAS: คิดใหม่จากยอดรวมถึงวันนั้น (30,000 ÷ 1,000) ไม่ใช่เอา ROAS รายวันมาบวก", () => {
+    render(<WorkspaceTrends v={v} sales={sales} />);
+    mode("สะสม");
+    fireEvent.click(screen.getByRole("button", { name: "ROAS" }));
+    expect(series("ช่วงนี้")).toEqual([20, 30]);
+  });
+
+  it("Frequency สะสมไม่ได้: ปุ่มสะสมกดไม่ได้และกราฟกลับเป็นรายวัน", () => {
+    render(<WorkspaceTrends v={v} sales={sales} />);
+    mode("สะสม");
+    fireEvent.click(screen.getByRole("button", { name: "ตัวชี้วัดอื่น" }));
+    fireEvent.click(screen.getByRole("option", { name: "Frequency" }));
+    expect(screen.getByRole("button", { name: "สะสม" }).disabled).toBe(true);
+    expect(chart.last.type).toBe("line");
+    expect(screen.getByText(/Frequency สะสมไม่ได้/)).toBeTruthy();
+  });
+
+  it("สะสม + เดือนนี้ + มีเป้า: มีเส้นเป้าตามจังหวะ (เป้าเดือน × วันที่ ÷ วันในเดือน)", () => {
+    const month = { ...v, monthView: true, brands: [{ id: "b_td", name: "TEAMDEE", revTarget: 300000, budget: 30000 }], summary: { revTarget: 300000, budget: 30000 } };
+    render(<WorkspaceTrends v={month} sales={sales} />);
+    mode("สะสม");
+    fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
+    expect(series("เป้าตามจังหวะ")).toEqual([10000, 20000]);
+    mode("เส้น");
+    expect(chart.last.data.datasets.some((d) => d.label === "เป้าตามจังหวะ")).toBe(false);
   });
 });
