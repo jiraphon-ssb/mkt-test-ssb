@@ -1,158 +1,219 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Database, Download, RefreshCw, Scale, Settings2, Timer } from "lucide-react";
+/* สถานะ Sync (รื้อใหม่ 17 ก.ย.) — ตอบคำถามเดียว: ข้อมูลแต่ละแหล่งมาครบ สด เชื่อถือได้ไหม และต้องแก้อะไร
+   โครง: สรุปบนสุด → เรื่องที่ควรดู → ตารางแหล่งข้อมูล (แหล่งละแถว) → แท็บรายละเอียด (บัญชี Meta · ยอดขาย · สิทธิ์และคีย์ · ประวัติ)
+   โหลดแยกทีละส่วน — ส่วนไหนยังไม่มาขึ้น "กำลังตรวจ…" ห้ามสรุปว่า "ยังไม่มี" จากค่าเก่า (บั๊กหน้าเดิมบน production)
+   logic อยู่ใน syncOverview.js (มีเทส) · ไฟล์นี้ประกอบหน้าและสั่งงานเท่านั้น */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ChevronDown, Clock3, Database, Download, Image as ImageIcon, Info,
+  KeyRound, LoaderCircle, Radar, ReceiptText, RefreshCw, Scale, Settings2, ShoppingBag,
+} from "lucide-react";
 import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { useApp } from "../useMkt.jsx";
-import { adsDataHealth, cronHealth, normalizeCronTicks, normalizeSyncRuns, syncAccountRows } from "./adsDataHealth.js";
+import { cronHealth, normalizeCronTicks, normalizeSyncRuns, syncAccountRows } from "./adsDataHealth.js";
 import { ADS_PROVIDERS } from "./adsConnectorContract.js";
 import { applyConnectionResult, applyCoverage, applyReconciliation, latestReconcileByConnection, runSyncJobs, syncCreativesFor } from "./adsConnectionSync.js";
 import { missingDaysOf, planSyncJobs } from "../../../../supabase/functions/_shared/adsBackfill.js";
 import { todayInTimeZone } from "../../../../supabase/functions/_shared/metaInsights.js";
+import { monthsBackStart } from "../../../../supabase/functions/_shared/salesInventory.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
-import { AccessPanel, BusinessSourceCards, CreativeRunsPanel, SalesSourcePanel } from "./SalesSyncPanels.jsx";
-import { SALES_BRAND_IDS, backfillRanges, latestBy } from "./syncSources.js";
-import { monthsBackStart } from "../../../../supabase/functions/_shared/salesInventory.js";
+import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalGapList, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
+import { SALES_BRAND_IDS, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
+import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import "./adsWorkspace.css";
 import "./syncStatus.css";
 
-const when = (value) => value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "ยังไม่เคยสำเร็จ";
-const stateIcon = (state) => state === "healthy" ? CheckCircle2 : state === "error" || state === "missing" ? AlertTriangle : Clock3;
+const when = (value) => value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
+const clock = (value) => value ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
 
-function SourceSummary({ source, rowCount }) {
-  return <article className={`sy-source sy-${source.state}`}><header><i style={{ background: source.color }} /><span>{source.name}</span><b>{source.label}</b></header><strong>{source.connected}<small> / {source.configured} บัญชีเชื่อมแล้ว</small></strong><p>{source.detail}</p><footer><span>{rowCount} mapping เปิดใช้</span><span>{source.reconciled ? "ตรวจยอดผ่าน" : "ยังไม่ผ่านตรวจยอด"}</span></footer></article>;
+const TABS = [["meta", "บัญชี Meta"], ["sales", "ยอดขาย"], ["access", "สิทธิ์และคีย์"], ["history", "ประวัติ"]];
+const LEVEL = { bad: "ต้องแก้", warn: "เตือน", wait: "รอคนอื่น" };
+const STATE_ICON = { ok: CheckCircle2, bad: AlertTriangle, warn: AlertTriangle, waiting: Clock3, muted: Clock3, loading: LoaderCircle };
+const SOURCE_ICON = { meta: Database, creative: ImageIcon, sales: ReceiptText };
+const HISTORY_FILTERS = [["all", "ทั้งหมด"], ["meta", "Meta"], ["sales", "ยอดขาย"], ["creatives", "Creative"], ["cron", "รอบอัตโนมัติ"]];
+
+/** โหลดข้อมูลหลายชุดแยกกัน — ชุดไหนเสร็จขึ้นก่อน · โหลดซ้ำเก็บข้อมูลเดิมไว้ระหว่างรอ (ไม่กระพริบเป็นค่าว่าง) */
+function useResources(loaders) {
+  const [state, setState] = useState({});
+  const generation = useRef(0);
+  const latest = useRef(loaders);
+  latest.current = loaders;
+  const reload = useCallback(() => {
+    const gen = ++generation.current;
+    for (const [key, load] of Object.entries(latest.current)) {
+      setState((s) => ({ ...s, [key]: { data: s[key]?.data, settled: s[key]?.settled ?? false, loading: true, error: null } }));
+      Promise.resolve(load ? load() : null)
+        .then((data) => { if (gen === generation.current) setState((s) => ({ ...s, [key]: { data, settled: true, loading: false, error: null } })); })
+        .catch((error) => { if (gen === generation.current) setState((s) => ({ ...s, [key]: { data: s[key]?.data, settled: true, loading: false, error } })); });
+    }
+  }, []);
+  return [state, reload];
 }
 
+function StateChip({ state, label }) {
+  const Icon = STATE_ICON[state] ?? Clock3;
+  return <span className={`sy-chip ${state}`}><Icon size={13} aria-hidden="true" className={state === "loading" ? "spin" : undefined} />{label}</span>;
+}
+
+function Skeleton({ lines = 1, wide = false }) {
+  return <span className="sy-skel-group" aria-hidden="true">{Array.from({ length: lines }, (_, i) => <span key={i} className={`sy-skel${wide ? " wide" : ""}`} />)}</span>;
+}
+
+/** แถวแหล่งข้อมูล — แหล่งละแถว ตอบ 3 อย่างเหมือนกัน: สถานะ · สดแค่ไหน · ครบแค่ไหน */
+function SourceRow({ row, onOpen }) {
+  const Icon = SOURCE_ICON[row.icon] ?? Database;
+  const loading = row.state === "loading";
+  return <div className="sy-src" role="row">
+    <div role="cell" className="sy-src-name"><Icon size={17} aria-hidden="true" /><span><b>{row.name}</b>{row.sub && <small>{row.sub}</small>}</span></div>
+    <div role="cell"><StateChip state={row.state} label={row.stateLabel} /></div>
+    <div role="cell" className="sy-src-fact" data-label="สดแค่ไหน">{loading ? <Skeleton lines={2} /> : row.fresh ? <><b>{row.fresh.text}</b>{row.fresh.sub && <small>{row.fresh.sub}</small>}</> : <b>—</b>}</div>
+    <div role="cell" className="sy-src-fact" data-label="ครบแค่ไหน">{loading ? <Skeleton lines={2} /> : row.complete ? <><b>{row.complete.text}</b>{row.complete.sub && <small>{row.complete.sub}</small>}</> : <small>{row.hint ?? "—"}</small>}</div>
+    <div role="cell" className="sy-src-go">{onOpen && <button type="button" onClick={onOpen} aria-label={`ดูรายละเอียด ${row.name}`}>รายละเอียด <ArrowRight size={13} aria-hidden="true" /></button>}</div>
+  </div>;
+}
+
+/** แถวบัญชี Meta ในแท็บ */
 function AccountRow({ row }) {
-  const StateIcon = stateIcon(row.state);
-  return <div className="sy-account-row"><div className="sy-account"><i style={{ background: row.color }} /><span><strong>{row.brand}</strong><small>{row.provider} · {row.accountId}</small></span></div><span className={`sy-state sy-${row.state}`}><StateIcon size={13} />{row.label}</span><div><strong>{when(row.lastSuccessAt)}</strong><small>{row.ageHours == null ? "—" : `${row.ageHours.toFixed(1)} ชม.ก่อน`}</small></div><div><strong>{row.missingDays ? `${row.missingDays} วัน` : row.connected ? "ไม่พบช่องว่าง" : "—"}</strong><small>วันที่ขาด</small></div><div><strong>{row.reconciliation?.ready ? "ผ่าน 7 และ 30 วัน" : "ยังไม่ผ่าน"}</strong><small>{row.errorCode ? `Error: ${row.errorCode}` : row.creativeEnabled ? "รวม Creative" : "สถิติเท่านั้น"}</small></div><Link to="/mkt/ads?panel=settings&tab=reconcile">ตรวจสอบ <ArrowRight size={13} /></Link></div>;
+  const state = row.state === "healthy" ? "ok" : row.state === "error" || row.state === "missing" ? "bad" : row.state === "stale" || row.state === "syncing" ? "warn" : "waiting";
+  return <div className="sy-acct" role="row">
+    <div role="cell" className="sy-acct-name"><b>{row.brand}</b><small>{row.provider} · {row.accountId}</small></div>
+    <div role="cell"><StateChip state={state} label={row.label} /></div>
+    <div role="cell" data-label="ดึงล่าสุด"><b>{row.lastSuccessAt ? when(row.lastSuccessAt) : "ยังไม่เคยสำเร็จ"}</b><small>{row.ageHours == null ? "—" : `${row.ageHours.toFixed(1)} ชม.ก่อน`}</small></div>
+    <div role="cell" data-label="วันที่ขาด"><b>{row.missingDays ? `${row.missingDays} วัน` : row.connected ? "ไม่มี" : "—"}</b><small>{row.errorCode ? adsErrorText(row.errorCode, row.errorCode) : row.creativeEnabled ? "รวม Creative" : "สถิติเท่านั้น"}</small></div>
+    <div role="cell" data-label="ตรวจยอดกับ Meta"><b>{row.reconciliation?.ready ? "ผ่าน 7 และ 30 วัน" : "ยังไม่ผ่าน"}</b></div>
+  </div>;
 }
 
-/* export เพื่อให้เทสระดับหน้าจอเรียกตรงได้ (tests/syncStatusPanels.component.test.jsx)
-   — ทั้งสองแผงเป็นตัวแสดงผลล้วน รับข้อมูลที่ normalize แล้ว ไม่แตะ network เอง */
-export function RunTable({ runs, accounts }) {
-  const names = new Map(accounts.map((row) => [row.connectionId, `${row.brand} · ${row.provider}`]));
-  return <section className="sy-panel"><header><div><h2>ประวัติการ Sync</h2><p>หลักฐานการดึงข้อมูลล่าสุดจาก backend</p></div></header>{runs.length ? <div className="sy-run-table"><div className="sy-run-row head"><span>บัญชี</span><span>เริ่ม</span><span>โหมด</span><span>ผู้สั่ง</span><span>เขียนข้อมูล</span><span>ผล</span></div>{runs.slice(0, 20).map((run) => <div className="sy-run-row" key={run.id}><span>{names.get(run.connectionId) ?? run.connectionId ?? "ไม่ทราบบัญชี"}</span><span>{when(run.startedAt)}</span><span>{run.mode === "backfill" ? "ย้อนหลัง" : run.mode === "reconcile" ? "ตรวจยอด" : "ล่าสุด"}</span><span>{run.auto ? "อัตโนมัติ" : "กดเอง"}</span><span>{run.mode === "reconcile" ? "—" : `${run.rowsWritten.toLocaleString("th-TH")} แถว`}</span><span className={`sy-run-${run.status}`}>{run.errorCode ? `${run.status} · ${run.errorCode}` : run.status}</span></div>)}</div> : <div className="sy-empty"><Database size={25} /><strong>ยังไม่มีประวัติจาก backend</strong><span>ประวัติจะเริ่มแสดงหลังเชื่อม OAuth และ Sync ครั้งแรก</span></div>}</section>;
-}
-
-const TICK_STATUS = { success: "สำเร็จ", partial: "สำเร็จบางส่วน", failed: "ไม่สำเร็จ", running: "กำลังทำงาน" };
-const seconds = (ms) => (ms == null ? "—" : ms < 1000 ? "<1 วิ" : `${Math.round(ms / 1000)} วิ`);
-
-export function CronPanel({ ticks, everyHours }) {
-  const health = cronHealth(ticks);
-  const last = ticks[0] ?? null;
-  return <section className="sy-panel sy-cron" aria-label="การดึงข้อมูลอัตโนมัติ">
-    <header>
-      <div><h2>ดึงอัตโนมัติ</h2><p>ตัวตั้งเวลาในฐานข้อมูลเรียกทุกชั่วโมง แล้วดึง/ตรวจยอดเท่าที่ถึงคิว</p></div>
-      <span className={`sy-cron-pill ${health.state}`}><Timer size={13} aria-hidden="true" />{health.label}{last ? ` · ${when(last.startedAt)}` : ""}</span>
-    </header>
-    <dl className="sy-cron-facts">
-      <div><dt>รอบถัดไป</dt><dd>ทุกชั่วโมง นาทีที่ 7</dd></div>
-      <div><dt>ดึงซ้ำทุก</dt><dd>{everyHours ? `${everyHours} ชั่วโมง` : "—"}</dd></div>
-      <div><dt>ตรวจยอด</dt><dd>วันละครั้ง หลัง 9 โมงเช้า</dd></div>
-      <div><dt>รอบที่เก็บไว้</dt><dd>90 วันล่าสุด</dd></div>
-    </dl>
-    {ticks.length ? <div className="sy-run-table sy-tick-table">
-      <div className="sy-run-row sy-tick-row head"><span>เวลา</span><span>ที่มา</span><span>ดึง</span><span>ตรวจยอด</span><span>เขียนข้อมูล</span><span>ยอดขาย</span><span>Creative</span><span>ใช้เวลา</span><span>ผล</span></div>
-      {ticks.slice(0, 12).map((tick) => <div className="sy-run-row sy-tick-row" key={tick.id}>
-        <span>{when(tick.startedAt)}</span>
-        <span>{tick.auto ? "อัตโนมัติ" : "สั่งเอง"}</span>
-        <span>{tick.synced ? `${tick.synced} ก้อน` : "—"}</span>
-        <span>{tick.reconciled ? `${tick.reconciled} บัญชี` : "—"}</span>
-        <span>{tick.rowsWritten ? `${tick.rowsWritten.toLocaleString("th-TH")} แถว` : "—"}</span>
-        <span>{tick.sales ? (tick.sales.ok ? (tick.sales.rows != null ? `${tick.sales.rows.toLocaleString("th-TH")} แถว` : "สำเร็จ") : "ไม่สำเร็จ") : "—"}</span>
-        <span>{tick.creatives ? `${tick.creatives.ok}/${tick.creatives.total} บัญชี` : "—"}</span>
-        <span>{seconds(tick.durationMs)}</span>
-        <span className={`sy-run-${tick.status}`} title={tick.notes?.length ? tick.notes.map((code) => adsErrorText(code, code)).join("\n") : undefined}>{tick.errorCode ? `${TICK_STATUS[tick.status] ?? tick.status} · ${tick.errorCode}` : tick.planned === 0 && tick.status === "success" && !tick.sales && !tick.creatives ? "ไม่มีอะไรต้องทำ" : TICK_STATUS[tick.status] ?? tick.status}{tick.notes?.length ? ` · หมายเหตุ ${tick.notes.length}` : ""}</span>
-      </div>)}
-    </div> : <div className="sy-empty"><Timer size={25} /><strong>ยังไม่มีรอบอัตโนมัติ</strong><span>ประวัติจะขึ้นหลังตัวตั้งเวลาทำงานรอบแรก</span></div>}
-  </section>;
+function HistoryList({ items, filter, onFilter }) {
+  return <div className="sy-history">
+    <div className="sy-filter" role="group" aria-label="กรองประวัติ">{HISTORY_FILTERS.map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => onFilter(key)}>{label}</button>)}</div>
+    <p className="sy-note">ตัวตั้งเวลาเรียกทุกชั่วโมงนาทีที่ 7 · ดึงค่าแอดซ้ำตามรอบที่ตั้ง · ตรวจยอดและดึงยอดขายวันละครั้งหลัง 9 โมง · เก็บประวัติ 90 วัน · รอบที่ไม่มีงานไม่แสดง</p>
+    {items.length ? <ol className="sy-timeline">{items.map((item) => <li key={item.id}>
+      <time dateTime={item.at}>{when(item.at)}</time>
+      <span className="sy-tl-main"><b>{item.title}</b>{item.detail && <small>{item.detail}</small>}</span>
+      <span className="sy-tl-who">{item.auto ? "อัตโนมัติ" : "กดเอง"}</span>
+      <span className={`sy-tl-status ${item.tone}`}>{item.statusLabel}</span>
+    </li>)}</ol> : <div className="sy-empty"><Clock3 size={22} aria-hidden="true" /><strong>ยังไม่มีประวัติในหมวดนี้</strong></div>}
+  </div>;
 }
 
 export function SyncStatusView() {
   const { data, toast } = useApp();
   const { user, demo } = useAuth();
   const canSync = !demo && user?.role === "team_lead";
-  /* สถานะ connection จริงจากฐาน (last_success_at / last_error_code) ทับ mapping ใน settings — ไม่บันทึกกลับ ใช้แสดงผลเท่านั้น */
-  const [dbConnections, setDbConnections] = useState(null);
-  const [reconRuns, setReconRuns] = useState([]);
-  const [coverageRuns, setCoverageRuns] = useState([]);
-  const [ticks, setTicks] = useState([]);
-  /* ระบบขาย · creative · สิทธิ์ (ข้อ 2 ของแผนยึดข้อมูลระบบขาย) */
-  const [pipelineRuns, setPipelineRuns] = useState([]);
-  const [salesFacts, setSalesFacts] = useState([]);
-  const [salesGoals, setSalesGoals] = useState([]);
-  const [authorizations, setAuthorizations] = useState([]);
-  const [salesBusy, setSalesBusy] = useState(null);
-  const [checkResult, setCheckResult] = useState(null);
+  const [params, setParams] = useSearchParams();
+  const tab = TABS.some(([key]) => key === params.get("tab")) ? params.get("tab") : "meta";
+  const setTab = (key) => setParams((p) => { const next = new URLSearchParams(p); next.set("tab", key); return next; }, { replace: true });
+  const [historyFilter, setHistoryFilter] = useState("all");
   const today = todayInTimeZone(new Date(), "Asia/Bangkok");
   const salesSince = monthsBackStart(today, 3);
+  const brands = useMemo(() => (data.brands ?? []).filter((brand) => brand.active !== false), [data.brands]);
+
+  const [res, reload] = useResources({
+    syncRuns: () => apiClient.ads.recentSyncs(30),
+    connections: canSync ? () => apiClient.ads.connections() : null,
+    recons: () => apiClient.ads.reconciliations(),
+    coverage: canSync ? () => apiClient.ads.syncCoverage() : null,
+    ticks: () => apiClient.ads.cronTicks(),
+    pipes: () => apiClient.ads.pipelineRuns({ limit: 120 }),
+    facts: () => apiClient.ads.businessFacts({ from: salesSince, to: today }),
+    goals: () => apiClient.ads.salesGoals(`${today.slice(0, 7)}-01`),
+    oauth: () => apiClient.ads.oauthStatus(),
+  });
+  useEffect(() => { reload(); }, [reload, canSync]);
+  const ready = (...keys) => keys.every((key) => res[key]?.settled);
+  const dataOf = (key, fallback) => res[key]?.data ?? fallback;
+  const anyLoading = Object.values(res).some((item) => item.loading) || Object.keys(res).length === 0;
+
+  /* สถานะบัญชีจริงจากฐานทับ mapping ใน settings (แสดงผลเท่านั้น ไม่บันทึกกลับ) */
   const saved = data.settings?.ads_control;
+  const dbConnections = useMemo(() => (res.connections?.data ?? null)?.filter((c) => c.provider === "meta") ?? null, [res.connections?.data]);
   const config = useMemo(() => {
     const merged = dbConnections ? applyConnectionResult(saved ?? {}, { connections: dbConnections }) : (saved ?? {});
-    // ช่องว่างวันที่จากประวัติ run จริง (ไม่นับ 3 วันล่าสุดที่ยอดยังขยับ)
+    const coverageRuns = res.coverage?.data ?? [];
     const missing = new Map((dbConnections ?? []).map((c) => [c.id, missingDaysOf(coverageRuns.filter((r) => r.connection_id === c.id), todayInTimeZone(new Date(), c.timezone), c.config?.backfillDays)]));
-    return applyReconciliation(applyCoverage(merged, missing), latestReconcileByConnection(reconRuns));
-  }, [saved, dbConnections, reconRuns, coverageRuns]);
+    return applyReconciliation(applyCoverage(merged, missing), latestReconcileByConnection(res.recons?.data ?? []));
+  }, [saved, dbConnections, res.coverage?.data, res.recons?.data]);
+  const accounts = useMemo(() => syncAccountRows(config, brands), [config, brands]);
+  const metaAccounts = accounts.filter((row) => row.providerId === "meta");
+  const ticks = useMemo(() => normalizeCronTicks(dataOf("ticks", [])), [res.ticks?.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const syncRuns = useMemo(() => normalizeSyncRuns(dataOf("syncRuns", [])), [res.syncRuns?.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pipes = dataOf("pipes", []);
+  const facts = dataOf("facts", []);
+  const goals = dataOf("goals", []);
+  const authorizations = res.oauth?.data?.authorizations ?? [];
+  const now = Date.now();
+
+  const rows = {
+    meta: metaSourceRow({ accounts: metaAccounts, ready: ready("connections", "coverage", "recons"), everyHours: config.sources?.meta?.syncEveryHours ?? null, now }),
+    creatives: creativeSourceRow({ runs: pipes, accounts: metaAccounts, ready: ready("pipes", "connections"), now }),
+    sales: salesSourceRow({ runs: pipes, facts, ready: ready("pipes", "facts"), today, now }),
+  };
+  // โหลดส่วนไหนไม่สำเร็จ = บอกที่แถวนั้น ไม่ปล่อยให้ดูเหมือนไม่มีข้อมูล
+  const failedLoad = (keys, row) => keys.some((key) => res[key]?.error && res[key]?.data == null) ? { ...row, state: "bad", stateLabel: "โหลดสถานะไม่สำเร็จ", hint: "กดตรวจใหม่", fresh: null, complete: null } : row;
+  rows.meta = failedLoad(["connections", "recons"], rows.meta);
+  rows.creatives = failedLoad(["pipes"], rows.creatives);
+  rows.sales = failedLoad(["pipes", "facts"], rows.sales);
+  const cron = res.ticks?.settled && !res.ticks?.error ? cronHealth(ticks) : null;
+  const issues = syncIssues({
+    rows, cron, now,
+    authorizations: { ready: ready("oauth") && !res.oauth?.error, items: authorizations },
+    goals: {
+      ready: ready("goals") && !res.goals?.error,
+      missingByBrand: brands.filter((brand) => SALES_BRAND_IDS.includes(brand.id)).map((brand) => ({ name: brand.name, missing: goalGaps(goals.find((goal) => goal.brand_id === brand.id) ?? null).missing })),
+    },
+  });
+  const verdict = syncVerdict({ loading: anyLoading, issues });
+  const lastData = [rows.meta.state !== "loading" ? metaAccounts.map((row) => row.lastSuccessAt).filter(Boolean).sort().at(-1) : null, pipes.filter((run) => run.pipeline === "sales" && run.status !== "failed").map((run) => run.started_at).sort().at(-1)].filter(Boolean).sort().at(-1);
+  const unusedProviders = ADS_PROVIDERS.filter((provider) => provider.id !== "meta" && !accounts.some((row) => row.providerId === provider.id)).map((provider) => provider.name);
+  const waitingBrands = brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id));
+  const timeline = useMemo(() => historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts: metaAccounts, kind: historyFilter }), [ticks, syncRuns, pipes, metaAccounts, historyFilter]);
+
+  /* ── งานที่สั่งได้ (หัวหน้าทีม) ── */
   const [syncing, setSyncing] = useState(null);
   const [reconciling, setReconciling] = useState(false);
-  const brands = useMemo(() => (data.brands ?? []).filter((brand) => brand.active !== false), [data.brands]);
-  const accounts = useMemo(() => syncAccountRows(config, brands), [config, brands]);
-  const health = useMemo(() => adsDataHealth(config), [config]);
-  const [remoteRuns, setRemoteRuns] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [checkedAt, setCheckedAt] = useState(null);
-  const connected = accounts.some((row) => row.connected);
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      const [runsFromDb, connections, recons, coverage, cronTicks, pipes, facts, goals, oauth] = await Promise.all([
-        apiClient.ads.recentSyncs(20), canSync ? apiClient.ads.connections() : Promise.resolve(null),
-        apiClient.ads.reconciliations().catch(() => []), canSync ? apiClient.ads.syncCoverage().catch(() => []) : Promise.resolve([]),
-        apiClient.ads.cronTicks().catch(() => []),
-        apiClient.ads.pipelineRuns({ limit: 120 }).catch(() => []),
-        apiClient.ads.businessFacts({ from: salesSince, to: today }).catch(() => []),
-        apiClient.ads.salesGoals(`${today.slice(0, 7)}-01`).catch(() => []),
-        apiClient.ads.oauthStatus().catch(() => ({ authorizations: [] })),
-      ]);
-      setTicks(normalizeCronTicks(cronTicks));
-      setPipelineRuns(pipes ?? []);
-      setSalesFacts(facts ?? []);
-      setSalesGoals(goals ?? []);
-      setAuthorizations(oauth?.authorizations ?? []);
-      setRemoteRuns(normalizeSyncRuns(runsFromDb));
-      setReconRuns(recons ?? []);
-      setCoverageRuns(coverage ?? []);
-      if (connections) setDbConnections(connections.filter((c) => c.provider === "meta"));
-    }
-    catch { setRemoteRuns(normalizeSyncRuns(data.ad_sync_runs ?? config.syncRuns ?? [])); }
-    finally { setCheckedAt(new Date().toISOString()); setLoading(false); }
-  };
-  const syncable = accounts.filter((row) => row.providerId === "meta" && row.connectionId && row.connected);
+  const [salesBusy, setSalesBusy] = useState(null);
+  const [checkResult, setCheckResult] = useState(null);
+  const menuRef = useRef(null);
+  const closeMenu = () => { if (menuRef.current) menuRef.current.open = false; };
+  // เมนูแบบ details ไม่ปิดเองเมื่อคลิกข้างนอก / กด Esc — ปิดให้ แล้วคืนโฟกัสที่ปุ่มเมนู
+  useEffect(() => {
+    const onDown = (event) => { if (menuRef.current?.open && !menuRef.current.contains(event.target)) closeMenu(); };
+    const onKey = (event) => { if (event.key === "Escape" && menuRef.current?.open) { closeMenu(); menuRef.current.querySelector("summary")?.focus(); } };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
+  }, []);
+  const syncable = metaAccounts.filter((row) => row.connectionId && row.connected);
+  const busy = Boolean(syncing) || reconciling || Boolean(salesBusy);
+
   const reconcileNow = async () => {
+    closeMenu();
     if (reconciling) return;
     setReconciling(true);
     try {
       const { results } = await apiClient.ads.reconcile();
       const passed = results.filter((item) => item.ok && item.summary?.passed).length;
       const failed = results.filter((item) => !item.ok || !item.summary?.passed);
-      toast?.(failed.length ? `ตรวจยอดแล้ว · ผ่าน ${passed}/${results.length} บัญชี${failed[0].code ? ` · ${adsErrorText(failed[0].code, "บางบัญชีตรวจไม่ได้")}` : " · ยอดบางบัญชีไม่ตรง ดูรายละเอียดด้านล่าง"}` : `ตรวจยอดผ่านทั้ง ${passed} บัญชี`, failed.length ? "bad" : "ok");
-      await refresh();
+      toast?.(failed.length ? `ตรวจยอดแล้ว · ผ่าน ${passed}/${results.length} บัญชี${failed[0].code ? ` · ${adsErrorText(failed[0].code, "บางบัญชีตรวจไม่ได้")}` : " · ยอดบางบัญชีไม่ตรง ดูแท็บบัญชี Meta"}` : `ตรวจยอดผ่านทั้ง ${passed} บัญชี`, failed.length ? "bad" : "ok");
     } catch (error) {
       toast?.(adsErrorText(error, "ตรวจยอดไม่สำเร็จ"), "bad");
     } finally {
       setReconciling(false);
+      reload();
     }
   };
   const salesAction = async (kind, run) => {
+    closeMenu();
     if (salesBusy) return;
     setSalesBusy(kind);
     try { await run(); }
     catch (error) { toast?.(adsErrorText(error, "ทำรายการกับระบบขายไม่สำเร็จ"), "bad"); }
-    finally { setSalesBusy(null); await refresh(); }
+    finally { setSalesBusy(null); reload(); }
   };
-  const checkSales = () => salesAction("check", async () => { setCheckResult(await apiClient.ads.salesCheck()); });
+  const checkSales = () => salesAction("check", async () => { setCheckResult(await apiClient.ads.salesCheck()); setTab("sales"); });
   const surveySales = () => salesAction("inventory", async () => { await apiClient.ads.salesInventory(); toast?.("สำรวจแหล่งข้อมูลของระบบขายแล้ว", "ok"); });
   const syncSales = () => salesAction("sync", async () => {
     const out = await apiClient.ads.salesSync();
@@ -170,9 +231,9 @@ export function SyncStatusView() {
     toast?.(failed.length ? `ดึงย้อนหลังสำเร็จ ${ranges.length - failed.length}/${ranges.length} เดือน · ไม่สำเร็จ: ${failed.join(", ")}` : `ดึงย้อนหลังครบ ${ranges.length} เดือน`, failed.length ? "bad" : "ok");
     await loadPilotFacts({ force: true });
   });
-
-  /* ดึงยอด: หาช่องว่างวันที่จากประวัติ run → แบ่งก้อน ≤10 วัน (กันเพดาน 546) → ดึง Creative ต่อ → โหลดยอดใหม่ */
+  /* ดึงค่าแอด: หาช่องว่างวันที่จากประวัติ run → แบ่งก้อน ≤10 วัน (กันเพดาน 546) → ดึง Creative ต่อ → โหลดยอดใหม่ */
   const syncNow = async () => {
+    closeMenu();
     if (!syncable.length || syncing) return;
     setSyncing({ phase: "plan", done: 0, total: 0 });
     try {
@@ -191,43 +252,107 @@ export function SyncStatusView() {
         needsReconnect ||= out.needsReconnect;
         creativeError ??= out.error;
       }
-      const rows = Object.values(result.byConnection).reduce((n, s) => n + s.rowsWritten, 0);
+      const written = Object.values(result.byConnection).reduce((n, s) => n + s.rowsWritten, 0);
       const firstError = Object.values(result.byConnection).find((s) => s.firstError)?.firstError;
       toast?.(result.failed
         ? `ดึงสำเร็จ ${result.total - result.failed}/${result.total} ช่วง · ${adsErrorText(firstError, "บางช่วงดึงไม่สำเร็จ")} · กดดึงอีกครั้งจะเติมเฉพาะช่วงที่ขาด`
-        : `ดึงข้อมูลแล้ว ${result.total} ช่วง · ${rows.toLocaleString("th-TH")} แถว · Creative ${creatives.toLocaleString("th-TH")} ชิ้น (ภาพจากโพสต์ ${postEnriched.toLocaleString("th-TH")})${creativeError ? ` · ${adsErrorText(creativeError, "ดึง Creative ไม่ครบ")}` : ""}${needsReconnect ? " · เชื่อม Meta ใหม่ในหน้าตั้งค่าเพื่อให้โฆษณาแบบบูสต์โพสต์แสดงภาพจริง" : ""}`,
+        : `ดึงข้อมูลแล้ว ${result.total} ช่วง · ${written.toLocaleString("th-TH")} แถว · Creative ${creatives.toLocaleString("th-TH")} ชิ้น (ภาพจากโพสต์ ${postEnriched.toLocaleString("th-TH")})${creativeError ? ` · ${adsErrorText(creativeError, "ดึง Creative ไม่ครบ")}` : ""}${needsReconnect ? " · เชื่อม Meta ใหม่ในหน้าตั้งค่าเพื่อให้โฆษณาแบบบูสต์โพสต์แสดงภาพจริง" : ""}`,
       result.failed ? "bad" : "ok");
     } catch (error) {
       toast?.(adsErrorText(error, "ดึงข้อมูลไม่สำเร็จ"), "bad");
     } finally {
       setSyncing(null);
-      await Promise.all([refresh(), loadPilotFacts({ force: true })]);
+      reload();
+      loadPilotFacts({ force: true });
     }
   };
-  useEffect(() => { if (connected || canSync) refresh(); else setRemoteRuns(normalizeSyncRuns(data.ad_sync_runs ?? config.syncRuns ?? [])); }, [connected, canSync]); // eslint-disable-line react-hooks/exhaustive-deps
-  const runs = remoteRuns ?? normalizeSyncRuns(data.ad_sync_runs ?? config.syncRuns ?? []);
-  const ready = accounts.filter((row) => row.reconciliation?.ready).length;
-  const problems = accounts.filter((row) => ["error", "missing", "stale"].includes(row.state)).length;
+
+  const progress = syncing ? syncing.phase === "plan" ? "กำลังวางแผนช่วงที่ต้องดึง…" : syncing.phase === "creatives" ? `กำลังดึง Creative ${syncing.done + 1}/${syncing.total} บัญชี…` : `กำลังดึงค่าแอด ${syncing.done}/${syncing.total} ช่วง…`
+    : reconciling ? "กำลังตรวจยอดกับ Meta…" : salesBusy ? String(salesBusy).startsWith("backfill") ? `กำลังดึงยอดขายย้อนหลัง ${salesBusy.replace("backfill:", "")} เดือน…` : { check: "กำลังตรวจการเชื่อมต่อระบบขาย…", inventory: "กำลังสำรวจแหล่งข้อมูล…", sync: "กำลังดึงยอดขาย…" }[salesBusy] : null;
+
+  /* ปุ่มของแต่ละเรื่องที่ควรดู */
+  const issueAction = (issue) => {
+    if (issue.source === "meta" && canSync) return <button type="button" onClick={syncNow} disabled={busy || !syncable.length}>ดึงข้อมูลตอนนี้</button>;
+    if (issue.source === "sales" && canSync) return <button type="button" onClick={syncSales} disabled={busy}>ดึงยอดขายตอนนี้</button>;
+    if (issue.key === "token") return <Link to="/mkt/ads?panel=settings&tab=sources">ไปเชื่อม Meta</Link>;
+    const target = issue.tab ?? (issue.source === "sales" ? "sales" : issue.source ? "meta" : null);
+    return target ? <button type="button" onClick={() => setTab(target)}>ดูรายละเอียด</button> : null;
+  };
+  const VerdictIcon = { ok: CheckCircle2, bad: AlertTriangle, warn: Info, loading: LoaderCircle }[verdict.state];
+
   return <main className="aw sy">
-    <header className="sy-header"><div><h1>สถานะ Sync</h1><p>ดูว่าข้อมูลมาครบ สดพอ และตรงกับต้นทางหรือยัง</p></div><div><span className={`acc-health-pill ${health.state}`}>{health.label}</span><button type="button" onClick={refresh} disabled={loading || !(connected || canSync)}><RefreshCw size={14} className={loading ? "spin" : ""} />{loading ? "กำลังตรวจ" : "ตรวจใหม่"}</button>{canSync && <button type="button" onClick={reconcileNow} disabled={!syncable.length || reconciling || Boolean(syncing)} aria-busy={reconciling} title="เทียบค่าแอด 7 และ 30 วัน (จบเมื่อวาน) กับ Meta"><Scale size={14} className={reconciling ? "spin" : ""} />{reconciling ? "กำลังตรวจยอด" : "ตรวจยอด"}</button>}{canSync && <button type="button" className="sy-sync-now" onClick={syncNow} disabled={!syncable.length || Boolean(syncing)} aria-busy={Boolean(syncing)} title={syncable.length ? "เติมช่วงวันที่ขาดทีละ 10 วัน + 3 วันล่าสุด แล้วดึง Creative" : "ต้องเชื่อม OAuth และบันทึก mapping Meta ก่อน"}><Download size={14} className={syncing ? "spin" : ""} />{syncing ? syncing.phase === "plan" ? "กำลังวางแผน…" : syncing.phase === "creatives" ? `กำลังดึง Creative ${syncing.done + 1}/${syncing.total}` : `กำลังดึง ${syncing.done}/${syncing.total} ช่วง` : "ดึงข้อมูลตอนนี้"}</button>}<Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div></header>
-    <section className="sy-kpis"><div><span>Mapping เปิดใช้</span><b>{accounts.length}</b><small>{accounts.filter((row) => row.connected).length} เชื่อม OAuth แล้ว</small></div><div><span>พร้อมเปิดใช้</span><b>{ready}</b><small>ผ่านตรวจยอด 7 และ 30 วัน</small></div><div className={problems ? "bad" : ""}><span>ต้องแก้</span><b>{problems}</b><small>ข้อมูลขาด ล่าช้า หรือ Sync ผิดพลาด</small></div><div><span>ตรวจสถานะล่าสุด</span><b className="sy-time">{checkedAt ? when(checkedAt) : "ยังไม่ได้ตรวจ backend"}</b><small>หน้านี้ไม่สร้างสถานะสำเร็จจำลอง</small></div></section>
-    <section className="sy-sources">{ADS_PROVIDERS.map((provider) => { const source = health.sources.find((item) => item.provider === provider.id); return <SourceSummary key={provider.id} source={{ ...source, color: provider.color }} rowCount={accounts.filter((row) => row.providerId === provider.id).length} />; })}</section>
-    <BusinessSourceCards
-      salesRun={pipelineRuns.find((run) => run.pipeline === "sales") ?? null}
-      creativeRuns={pipelineRuns.filter((run) => run.pipeline === "creatives")}
-      waitingBrands={brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id))}
-    />
-    <section className="sy-panel"><header><div><h2>บัญชีที่ต้องดู</h2><p>เรียงจากสถานะที่ต้องแก้ก่อน</p></div><Link to="/mkt/ads?panel=settings&tab=sources">จัดการบัญชี <ArrowRight size={13} /></Link></header>{accounts.length ? <div className="sy-accounts"><div className="sy-account-row head"><span>บัญชี</span><span>สถานะ</span><span>Sync ล่าสุด</span><span>ช่องว่าง</span><span>ตรวจยอด / Creative</span><span /></div>{[...accounts].sort((a, b) => ({ error: 5, missing: 4, stale: 3, waiting: 2, syncing: 1, healthy: 0 }[b.state] - ({ error: 5, missing: 4, stale: 3, waiting: 2, syncing: 1, healthy: 0 }[a.state]))).map((row) => <AccountRow key={row.key} row={row} />)}</div> : <div className="sy-empty"><Database size={25} /><strong>ยังไม่มีบัญชีที่เปิดใช้</strong><span>เพิ่ม Account ID และเปิด “เตรียมดึง” ในหน้าตั้งค่าก่อน</span><Link to="/mkt/ads?panel=settings&tab=sources">ไปตั้งค่าบัญชี</Link></div>}</section>
-    <AccessPanel authorizations={authorizations} salesRun={pipelineRuns.find((run) => run.pipeline === "sales") ?? null} />
-    <SalesSourcePanel
-      brands={brands} facts={salesFacts} goals={salesGoals} runs={pipelineRuns}
-      inventoryRun={pipelineRuns.find((run) => run.pipeline === "inventory") ?? null}
-      from={salesFacts.reduce((min, fact) => (!min || fact.fact_date < min ? fact.fact_date : min), null) ?? salesSince} to={today}
-      canSync={canSync} busy={salesBusy} checkResult={checkResult}
-      onCheck={checkSales} onSync={syncSales} onBackfill={backfillSales} onInventory={surveySales}
-    />
-    <CreativeRunsPanel latestByConnection={latestBy(pipelineRuns.filter((run) => run.pipeline === "creatives"), (run) => run.connection_id)} accounts={accounts} />
-    <CronPanel ticks={ticks} everyHours={config.sources?.meta?.syncEveryHours ?? null} />
-    <RunTable runs={runs} accounts={accounts} />
+    <section className="sy-top" aria-label="สรุปสถานะข้อมูล">
+      <header className="sy-head">
+        <div><h1>สถานะ Sync</h1><p>ข้อมูลแต่ละแหล่งมาครบ สด และเชื่อถือได้ไหม</p></div>
+        <div className="sy-head-actions">
+          <button type="button" className="sy-btn" onClick={reload} disabled={anyLoading} aria-busy={anyLoading}><RefreshCw size={14} className={anyLoading ? "spin" : ""} aria-hidden="true" />{anyLoading ? "กำลังตรวจ…" : "ตรวจใหม่"}</button>
+          {canSync && <button type="button" className="sy-btn primary" onClick={syncNow} disabled={busy || !syncable.length} aria-busy={Boolean(syncing)} title={syncable.length ? "เติมช่วงวันที่ขาด + 3 วันล่าสุด แล้วดึง Creative" : "ต้องเชื่อม Meta และผูกบัญชีก่อน"}><Download size={14} aria-hidden="true" />ดึงข้อมูลตอนนี้</button>}
+          {canSync && <details className="sy-menu" ref={menuRef}>
+            <summary className="sy-btn" aria-label="งานอื่น"><span>งานอื่น</span><ChevronDown size={14} aria-hidden="true" /></summary>
+            <div className="sy-menu-list" role="menu">
+              <button type="button" role="menuitem" onClick={reconcileNow} disabled={busy || !syncable.length}><Scale size={14} aria-hidden="true" />ตรวจยอดกับ Meta</button>
+              <button type="button" role="menuitem" onClick={syncSales} disabled={busy}><ShoppingBag size={14} aria-hidden="true" />ดึงยอดขายตอนนี้</button>
+              <button type="button" role="menuitem" onClick={backfillSales} disabled={busy}><CalendarClock size={14} aria-hidden="true" />ดึงยอดขายย้อนหลัง 3 เดือน</button>
+              <button type="button" role="menuitem" onClick={checkSales} disabled={busy}><KeyRound size={14} aria-hidden="true" />ตรวจการเชื่อมต่อระบบขาย</button>
+              <button type="button" role="menuitem" onClick={surveySales} disabled={busy}><Radar size={14} aria-hidden="true" />สำรวจแหล่งข้อมูลระบบขาย</button>
+            </div>
+          </details>}
+          <Link className="sy-btn ghost" to="/mkt/ads?panel=settings"><Settings2 size={14} aria-hidden="true" />ตั้งค่า</Link>
+        </div>
+      </header>
+      <div className={`sy-verdict ${verdict.state}`} role="status" aria-live="polite">
+        <VerdictIcon size={22} aria-hidden="true" className={verdict.state === "loading" ? "spin" : undefined} />
+        <div>
+          <strong>{verdict.title}</strong>
+          <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${clock(lastData)} (${ago(lastData, now)})` : "—"} · รอบอัตโนมัติถัดไป {clock(nextCronAt(now))}</>}</span>
+        </div>
+      </div>
+      {issues.length > 0 && <ul className="sy-issues" aria-label="เรื่องที่ควรดู">{issues.map((issue) => <li key={issue.key} className={issue.level}>
+        <span className={`sy-level ${issue.level}`}>{LEVEL[issue.level]}</span>
+        <span className="sy-issue-text"><b>{issue.text}</b>{issue.hint && <small>{issue.hint}</small>}</span>
+        <span className="sy-issue-act">{issueAction(issue)}</span>
+      </li>)}</ul>}
+    </section>
+
+    <section className="sy-card" aria-labelledby="sy-sources-title">
+      <header className="sy-card-head"><h2 id="sy-sources-title">แหล่งข้อมูล</h2></header>
+      <div className="sy-src-table" role="table" aria-label="สถานะแหล่งข้อมูล">
+        <div className="sy-src head" role="row"><span role="columnheader">แหล่ง</span><span role="columnheader">สถานะ</span><span role="columnheader">สดแค่ไหน</span><span role="columnheader">ครบแค่ไหน</span><span role="columnheader"><span className="sr-only">รายละเอียด</span></span></div>
+        <SourceRow row={rows.meta} onOpen={() => setTab("meta")} />
+        <SourceRow row={rows.creatives} onOpen={() => setTab("meta")} />
+        <SourceRow row={rows.sales} onOpen={() => setTab("sales")} />
+        {waitingBrands.map((brand) => <SourceRow key={brand.id} row={{ key: brand.id, name: `ยอดขาย ${brand.name}`, icon: "sales", state: "waiting", stateLabel: "รอเชื่อมแหล่งข้อมูล", fresh: null, complete: null, hint: "ค่าแอด Meta ยังดึงตามปกติ" }} />)}
+      </div>
+      {unusedProviders.length > 0 && <p className="sy-note">ยังไม่ใช้: {unusedProviders.join(" · ")}</p>}
+    </section>
+
+    <section className="sy-card" aria-label="รายละเอียด">
+      <div className="sy-tabs" role="tablist" aria-label="รายละเอียดแต่ละเรื่อง" onKeyDown={(e) => {
+        const i = TABS.findIndex(([key]) => key === tab);
+        if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); const next = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length][0]; setTab(next); document.getElementById(`sy-tab-${next}`)?.focus(); }
+      }}>
+        {TABS.map(([key, label]) => <button type="button" key={key} id={`sy-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls={`sy-panel-${key}`} tabIndex={tab === key ? 0 : -1} onClick={() => setTab(key)}>{label}</button>)}
+      </div>
+      <div className="sy-tabpanel" role="tabpanel" id={`sy-panel-${tab}`} aria-labelledby={`sy-tab-${tab}`}>
+        {tab === "meta" && (rows.meta.state === "loading" ? <Skeleton lines={4} wide /> : <>
+          {metaAccounts.length ? <div className="sy-acct-table" role="table" aria-label="บัญชี Meta">
+            <div className="sy-acct head" role="row"><span role="columnheader">บัญชี</span><span role="columnheader">สถานะ</span><span role="columnheader">ดึงล่าสุด</span><span role="columnheader">วันที่ขาด</span><span role="columnheader">ตรวจยอดกับ Meta</span></div>
+            {[...metaAccounts].sort((a, b) => ({ error: 5, missing: 4, stale: 3, waiting: 2, syncing: 1, healthy: 0 }[b.state] - { error: 5, missing: 4, stale: 3, waiting: 2, syncing: 1, healthy: 0 }[a.state])).map((row) => <AccountRow key={row.key} row={row} />)}
+          </div> : <div className="sy-empty"><Database size={22} aria-hidden="true" /><strong>ยังไม่มีบัญชี Meta ที่เปิดใช้</strong><Link to="/mkt/ads?panel=settings&tab=sources">ไปตั้งค่าบัญชี</Link></div>}
+          <CreativeRunsPanel latestByConnection={latestBy(pipes.filter((run) => run.pipeline === "creatives"), (run) => run.connection_id)} accounts={metaAccounts} />
+        </>)}
+        {tab === "sales" && (!ready("facts", "goals", "pipes") ? <Skeleton lines={5} wide /> : <div className="sy-sales-tab">
+          <SalesCheckResult result={checkResult} />
+          <h3 className="sy-sub">เป้าเดือนนี้</h3>
+          <GoalGapList brands={brands} goals={goals} />
+          <h3 className="sy-sub">ความครบของข้อมูล</h3>
+          <CoverageTable facts={facts} brands={brands} from={facts.reduce((min, fact) => (!min || fact.fact_date < min ? fact.fact_date : min), null) ?? salesSince} to={today} />
+          <h3 className="sy-sub">แหล่งอื่นในระบบขาย</h3>
+          <InventoryList run={pipes.find((run) => run.pipeline === "inventory") ?? null} />
+        </div>)}
+        {tab === "access" && (!ready("oauth", "pipes") ? <Skeleton lines={3} wide /> : <AccessPanel authorizations={authorizations} salesRun={pipes.find((run) => run.pipeline === "sales") ?? null} />)}
+        {tab === "history" && (!ready("ticks", "syncRuns", "pipes") ? <Skeleton lines={6} wide /> : <HistoryList items={timeline} filter={historyFilter} onFilter={setHistoryFilter} />)}
+      </div>
+    </section>
   </main>;
 }

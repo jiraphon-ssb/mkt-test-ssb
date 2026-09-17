@@ -1,8 +1,8 @@
-/* หน้า Sync — ส่วนระบบขาย · creative · สิทธิ์และคีย์ (ข้อ 2 ของแผน docs/superpowers/plans/2026-09-17-sales-data-rollout.md)
+/* หน้า Sync — ส่วนรายละเอียดในแท็บ: ยอดขาย · creative · สิทธิ์และคีย์
    ตัวแสดงผลล้วน รับข้อมูลที่ SyncStatusView โหลดมาแล้ว · ตรรกะอยู่ใน syncSources.js (มีเทส)
    ทุกสถานะบอกเป็นตัวหนังสือ ไม่ใช้สีอย่างเดียว · ไม่มีข้อมูลต้องบอกว่าเพราะอะไร */
 import { Link } from "react-router-dom";
-import { CalendarClock, Database, Image as ImageIcon, KeyRound, ListChecks, PlugZap, Radar, RefreshCw, ShoppingBag } from "lucide-react";
+import { Database, Image as ImageIcon, Radar } from "lucide-react";
 import {
   checkVerdictView, coverageMatrix, creativeRunView, goalGaps, inventorySources, pipelineRunView, tokenDaysLeft, SALES_BRAND_IDS,
 } from "./syncSources.js";
@@ -11,7 +11,6 @@ const when = (value) => value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "m
 const monthLabel = (month) => new Intl.DateTimeFormat("th-TH", { month: "short", year: "2-digit" }).format(new Date(`${month}-01T00:00:00Z`));
 const dayLabel = (iso) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00Z`));
 const num = (value) => Number(value ?? 0).toLocaleString("th-TH");
-const seconds = (ms) => (ms == null ? "—" : ms < 1000 ? "<1 วิ" : `${Math.round(ms / 1000)} วิ`);
 
 const CELL_TEXT = {
   full: () => "ครบ",
@@ -21,31 +20,6 @@ const CELL_TEXT = {
   waiting_source: () => "รอเชื่อมแหล่งข้อมูล",
 };
 const SOURCE_STATE = { has_data: "มีข้อมูล", empty: "ยังไม่มีข้อมูล", callable: "เรียกได้", unreadable: "อ่านไม่ได้" };
-
-/** การ์ดแหล่งข้อมูลธุรกิจ: ระบบขาย · creative · แบรนด์ที่ยังไม่มีแหล่ง */
-export function BusinessSourceCards({ salesRun, creativeRuns = [], waitingBrands = [] }) {
-  const sales = salesRun ? pipelineRunView(salesRun) : null;
-  const creativeLatest = creativeRuns[0] ? pipelineRunView(creativeRuns[0]) : null;
-  return <section className="sy-biz" aria-label="แหล่งข้อมูลธุรกิจ">
-    <article className={`sy-biz-card ${sales?.tone ?? "muted"}`}>
-      <header><ShoppingBag size={15} aria-hidden="true" /><span>ระบบขาย (TD · JD · TA)</span></header>
-      <strong>{sales ? sales.statusLabel : "ยังไม่เคยดึง"}</strong>
-      <p>{salesRun ? `รอบล่าสุด ${when(salesRun.started_at)} · ${sales.trigger}` : "ยังไม่มีรอบดึงยอดขายที่บันทึกไว้"}</p>
-      {salesRun?.range_to && <small>ข้อมูลถึง {dayLabel(salesRun.range_to)}{salesRun.rows_written != null ? ` · เขียน ${num(salesRun.rows_written)} แถว` : ""}</small>}
-      {sales?.errorText && <small className="sy-biz-error">{sales.errorText}</small>}
-    </article>
-    <article className={`sy-biz-card ${creativeLatest?.tone ?? "muted"}`}>
-      <header><ImageIcon size={15} aria-hidden="true" /><span>Creative (Meta)</span></header>
-      <strong>{creativeLatest ? creativeLatest.statusLabel : "รอรอบถัดไป"}</strong>
-      <p>{creativeRuns[0] ? `รอบล่าสุด ${when(creativeRuns[0].started_at)} · ${creativeLatest.trigger}` : "ยังไม่มีรอบที่บันทึก · รีเฟรชอัตโนมัติวันละครั้งต่อบัญชี"}</p>
-    </article>
-    {waitingBrands.map((brand) => <article key={brand.id} className="sy-biz-card muted">
-      <header><PlugZap size={15} aria-hidden="true" /><span>ยอดขาย {brand.name}</span></header>
-      <strong>รอเชื่อมแหล่งข้อมูล</strong>
-      <p>ยังไม่มีแหล่งยอดขายของแบรนด์นี้ · ค่าแอด Meta ยังดึงตามปกติ</p>
-    </article>)}
-  </section>;
-}
 
 /** ตรวจการเชื่อมต่อ — ผลล่าสุดที่กดในหน้านี้ */
 export function SalesCheckResult({ result }) {
@@ -117,54 +91,6 @@ export function InventoryList({ run }) {
       <small>{source.detail}</small>
     </li>)}</ul>
   </div>;
-}
-
-/** ประวัติรอบดึงยอดขาย / สำรวจแหล่ง */
-export function PipelineRunTable({ runs = [], emptyText = "ยังไม่มีรอบที่บันทึกไว้" }) {
-  if (!runs.length) return <div className="sy-empty"><ListChecks size={22} aria-hidden="true" /><strong>{emptyText}</strong></div>;
-  return <div className="sy-run-table">
-    <div className="sy-run-row sy-pipe-row head"><span>เวลา</span><span>งาน</span><span>ผู้สั่ง</span><span>ช่วงวัน</span><span>อ่าน / เขียน</span><span>ใช้เวลา</span><span>ผล</span></div>
-    {runs.slice(0, 15).map((run) => {
-      const view = pipelineRunView(run);
-      return <div className="sy-run-row sy-pipe-row" key={run.id}>
-        <span>{when(run.started_at)}</span>
-        <span>{run.pipeline === "inventory" ? "สำรวจแหล่ง" : run.pipeline === "creatives" ? "Creative" : "ยอดขาย"}</span>
-        <span>{view.trigger}</span>
-        <span>{run.range_from ? `${dayLabel(run.range_from)} – ${dayLabel(run.range_to)}` : "—"}</span>
-        <span>{run.rows_read == null && run.rows_written == null ? "—" : `${run.rows_read == null ? "—" : num(run.rows_read)} / ${run.rows_written == null ? "—" : num(run.rows_written)}`}</span>
-        <span>{seconds(view.durationMs)}</span>
-        <span className={`sy-run-${run.status}`}>{view.errorText ? `${view.statusLabel} · ${view.errorText}` : view.statusLabel}</span>
-      </div>;
-    })}
-  </div>;
-}
-
-/** ส่วนระบบขายทั้งก้อน */
-export function SalesSourcePanel({
-  brands = [], facts = [], goals = [], runs = [], inventoryRun = null, from, to,
-  canSync = false, busy = null, checkResult = null, onCheck, onSync, onBackfill, onInventory,
-}) {
-  const salesRuns = runs.filter((run) => run.pipeline === "sales" || run.pipeline === "inventory");
-  return <section className="sy-panel sy-sales" aria-labelledby="sy-sales-title">
-    <header>
-      <div><h2 id="sy-sales-title">ระบบขาย</h2><p>ยอดขาย · funnel · เป้า จากระบบขายของพี่ทัช (อ่านอย่างเดียว) · ดึงเองทุกวันหลัง 9 โมง ย้อน 14 วัน</p></div>
-      {canSync && <div className="sy-actions">
-        <button type="button" onClick={onCheck} disabled={Boolean(busy)} aria-busy={busy === "check"}><KeyRound size={14} aria-hidden="true" />{busy === "check" ? "กำลังตรวจ…" : "ตรวจการเชื่อมต่อ"}</button>
-        <button type="button" onClick={onInventory} disabled={Boolean(busy)} aria-busy={busy === "inventory"}><Radar size={14} aria-hidden="true" />{busy === "inventory" ? "กำลังสำรวจ…" : "สำรวจแหล่ง"}</button>
-        <button type="button" onClick={onBackfill} disabled={Boolean(busy)} aria-busy={String(busy ?? "").startsWith("backfill")}><CalendarClock size={14} aria-hidden="true" />{String(busy ?? "").startsWith("backfill") ? busy.replace("backfill:", "กำลังดึงย้อนหลัง ") : "ดึงย้อนหลัง 3 เดือน"}</button>
-        <button type="button" className="sy-primary" onClick={onSync} disabled={Boolean(busy)} aria-busy={busy === "sync"}><RefreshCw size={14} className={busy === "sync" ? "spin" : ""} aria-hidden="true" />{busy === "sync" ? "กำลังดึง…" : "ดึงยอดขายตอนนี้"}</button>
-      </div>}
-    </header>
-    <SalesCheckResult result={checkResult} />
-    <h3 className="sy-sub">เป้าเดือนนี้</h3>
-    <GoalGapList brands={brands} goals={goals} />
-    <h3 className="sy-sub">ความครบของข้อมูล</h3>
-    <CoverageTable facts={facts} brands={brands} from={from} to={to} />
-    <h3 className="sy-sub">แหล่งอื่นในระบบขาย</h3>
-    <InventoryList run={inventoryRun} />
-    <h3 className="sy-sub">ประวัติรอบ</h3>
-    <PipelineRunTable runs={salesRuns} emptyText="ยังไม่มีรอบดึงยอดขาย" />
-  </section>;
 }
 
 /** Creative: รอบล่าสุดต่อบัญชี */

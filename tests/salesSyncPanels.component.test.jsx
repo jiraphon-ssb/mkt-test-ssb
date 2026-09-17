@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /* หน้า Sync — ส่วนระบบขาย · creative · สิทธิ์ ระดับหน้าจอ: ทุกสถานะ "ไม่มีข้อมูล" ต้องอ่านออกว่าเพราะอะไร */
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalGapList, InventoryList, SalesSourcePanel } from "../src/modules/marketing/ads/SalesSyncPanels.jsx";
+import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalGapList, InventoryList } from "../src/modules/marketing/ads/SalesSyncPanels.jsx";
 
 afterEach(cleanup);
 const brands = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jt", name: "JUNTAKARN" }];
@@ -53,31 +53,6 @@ describe("InventoryList", () => {
     expect(screen.getByText("มีข้อมูล")).toBeTruthy();
     expect(screen.getByText("เรียกได้")).toBeTruthy();
     expect(screen.getByText("อ่านไม่ได้")).toBeTruthy();
-  });
-});
-
-describe("SalesSourcePanel — ปุ่มของหัวหน้าทีม", () => {
-  const base = { brands, facts: [], goals: [], runs: [], from: "2026-09-01", to: "2026-09-17" };
-  it("ไม่ใช่หัวหน้าทีม = ไม่มีปุ่มสั่งงาน", () => {
-    render(<MemoryRouter><SalesSourcePanel {...base} canSync={false} /></MemoryRouter>);
-    expect(screen.queryByRole("button", { name: /ดึงยอดขายตอนนี้/ })).toBeNull();
-  });
-  it("หัวหน้าทีม = ครบ 4 ปุ่ม กดแล้วเรียกคำสั่งที่ถูกต้อง · ระหว่างทำปุ่มกดซ้ำไม่ได้และบอกความคืบหน้า", () => {
-    const handlers = { onCheck: vi.fn(), onSync: vi.fn(), onBackfill: vi.fn(), onInventory: vi.fn() };
-    const { rerender } = render(<MemoryRouter><SalesSourcePanel {...base} canSync {...handlers} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: "ตรวจการเชื่อมต่อ" }));
-    fireEvent.click(screen.getByRole("button", { name: "ดึงยอดขายตอนนี้" }));
-    fireEvent.click(screen.getByRole("button", { name: "ดึงย้อนหลัง 3 เดือน" }));
-    fireEvent.click(screen.getByRole("button", { name: "สำรวจแหล่ง" }));
-    expect([handlers.onCheck, handlers.onSync, handlers.onBackfill, handlers.onInventory].every((fn) => fn.mock.calls.length === 1)).toBe(true);
-    rerender(<MemoryRouter><SalesSourcePanel {...base} canSync busy="backfill:2/4" {...handlers} /></MemoryRouter>);
-    expect(screen.getByRole("button", { name: "กำลังดึงย้อนหลัง 2/4" }).disabled).toBe(true);
-    expect(screen.getByRole("button", { name: "ดึงยอดขายตอนนี้" }).disabled).toBe(true);
-  });
-  it("ผลตรวจการเชื่อมต่อเป็นภาษาคน", () => {
-    render(<MemoryRouter><SalesSourcePanel {...base} checkResult={{ verdict: "no_goal_this_month", key: { kind: "secret" }, facts: { summary: { rows: 681 } } }} /></MemoryRouter>);
-    expect(screen.getByRole("status").textContent).toContain("เดือนนี้ยังไม่มีเป้าในหน้าเป้าหมายแบบใหม่");
-    expect(screen.getByRole("status").textContent).toContain("681");
   });
 });
 
