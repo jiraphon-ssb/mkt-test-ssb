@@ -7,7 +7,8 @@ vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => ({ dem
 vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({ data: {}, toast: () => {} }) }));
 const { HistoryList } = await import("../src/modules/marketing/ads/SyncStatusView.jsx");
 
-beforeEach(() => { try { window.localStorage.clear(); } catch { /* ไม่มี storage */ } });
+// jsdom ไม่มี scrollIntoView — เปลี่ยนหน้าแล้วหน้าจอเลื่อนขึ้นหัวรายการ (scrollToList)
+beforeEach(() => { Element.prototype.scrollIntoView = () => {}; try { window.localStorage.clear(); } catch { /* ไม่มี storage */ } });
 afterEach(cleanup);
 // 45 รายการ ย้อนทีละชั่วโมงจาก 17 ก.ย. 09:00 (ไทย) → คร่อม 2 วัน
 const items = Array.from({ length: 45 }, (_, i) => ({ id: `x${i}`, at: new Date(Date.parse("2026-09-17T02:00:00Z") - i * 3_600_000).toISOString(), kind: i % 2 ? "meta" : "sales", title: `งาน ${i + 1}`, detail: null, statusLabel: "สำเร็จ", tone: "ok", auto: true }));
