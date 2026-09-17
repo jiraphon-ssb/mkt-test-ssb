@@ -11,6 +11,8 @@ import { adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
 import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
 import { applyConnectionResult, applyReconciliation, enabledMetaMappings, latestReconcileByConnection, needsPostScopeReconnect } from "./adsConnectionSync.js";
 import { adsErrorText } from "./adsSyncMessages.js";
+import { CreativeRulesEditor } from "../creatives/CreativeRulesEditor.jsx";
+import { normalizeCreativeRules } from "../creatives/creativeRules.js";
 
 const SOURCE_DETAILS = {
   meta: "Spend · Delivery · Messaging",
@@ -129,13 +131,13 @@ const RULE_FIELDS = [
   ["reconciliationTolerance", "ผลต่างยอดที่ยอมรับ", "%", "ยอดค่าแอดจากระบบกับแพลตฟอร์มต้องต่างกันไม่เกินค่านี้"],
 ];
 
-function Rules({ rules, setRules }) {
-  return <div className="acc-rules-layout">
+function Rules({ rules, setRules, creativeRules, setCreativeRules, brands, isLead }) {
+  return <><div className="acc-rules-layout">
     <section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">ALERT RULES</span><h2>กฎตัดสินใจและแจ้งเตือน</h2><p>ทุกกฎแสดงเหตุผลและค่าที่ใช้ตัดสิน เพื่อให้ทีมตรวจย้อนกลับได้</p></div></header>
       <div className="acc-rule-list">{RULE_FIELDS.map(([key, label, unit, help]) => <label className="acc-rule" key={key}><span><strong>{label}</strong><small>{help}</small></span><div className="acc-input-unit"><input type="number" min="0" value={rules[key]} onChange={(e) => setRules((current) => ({ ...current, [key]: numberValue(e.target.value) }))} /><b>{unit}</b></div></label>)}</div>
     </section>
     <aside className="acc-sheet acc-guardrails"><ShieldAlert size={22} /><h3>กฎที่ระบบต้องรักษา</h3><ul><li>งบรวมต้องเท่ากับผลรวมรายบัญชี</li><li>ยอดขาย เป้า และ funnel มาจากระบบขาย (อ่านอย่างเดียว)</li><li>ยอดที่ Meta เห็น (Attribution) ต้องติดป้ายว่าเป็นของ Meta</li><li>ตัวเลขที่ข้อมูลไม่ครบแสดง “—” ไม่แทนด้วยศูนย์</li><li>ทุกค่าเก็บเวลา sync และแหล่งที่มา</li></ul></aside>
-  </div>;
+  </div><CreativeRulesEditor rules={creativeRules} setRules={setCreativeRules} brands={brands} disabled={!isLead} /></>;
 }
 
 const money = (value) => fmtMoney(value);
@@ -194,6 +196,7 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   }, [toast]);
   const [config, setConfig] = useState(() => ({ mappings: initial.mappings ?? {}, sources: initial.sources ?? {} }));
   const [rules, setRules] = useState(() => ({ ...DEFAULT_RULES, reconciliationTolerance: 1, ...(initial.rules ?? {}) }));
+  const [creativeRules, setCreativeRules] = useState(() => normalizeCreativeRules(initial.creativeRules));
   const { demo, user } = useAuth();
   const isLead = user?.role === "team_lead";
   const [linking, setLinking] = useState(false);
@@ -201,7 +204,7 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
      ผูกไม่สำเร็จ = ค่าที่กรอกยังอยู่ครบ แจ้งเหตุผลรายแบรนด์ในแถว mapping */
   const save = async () => {
     /* targets: แท็บเป้าถอดแล้ว (ข้อมูลจริงใช้เป้าระบบขาย) — เก็บค่าเดิมไว้ให้โหมดข้อมูลจำลองอ่านต่อ ไม่ลบทิ้ง */
-    const next = { mappings: config.mappings, sources: config.sources, targets: initial.targets ?? {}, rules, updatedAt: new Date().toISOString() };
+    const next = { mappings: config.mappings, sources: config.sources, targets: initial.targets ?? {}, rules, creativeRules: normalizeCreativeRules(creativeRules), updatedAt: new Date().toISOString() };
     onSave(next);
     const meta = next.mappings?.meta ?? {};
     const touchesMeta = Object.keys(enabledMetaMappings(next)).length > 0 || Object.values(meta).some((row) => row?.connectionId);
@@ -230,7 +233,7 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
     </nav>
     <p className="acc-goal-note" role="note">เป้ายอดขาย งบแอด และเพดาน CPL / ROAS / %Ads ใช้ของระบบขาย (หน้าเป้าหมาย) ทั้งหมด · ดูว่าเดือนนี้ตั้งช่องไหนแล้วที่ <Link to="/mkt/ads/sync">สถานะ Sync</Link></p>
     {tab === "sources" && <Connections brands={brands} config={config} setConfig={setConfig} toast={toast} isLead={isLead} />}
-    {tab === "rules" && <Rules rules={rules} setRules={setRules} />}
+    {tab === "rules" && <Rules rules={rules} setRules={setRules} creativeRules={creativeRules} setCreativeRules={setCreativeRules} brands={brands} isLead={isLead} />}
     {tab === "reconcile" && <Reconciliation config={currentConfig} brands={brands} toast={toast} isLead={isLead} />}
   </main>;
 }

@@ -36,5 +36,32 @@ describe("AdsControlCenter", () => {
     expect(document.body.textContent).not.toMatch(/CRM/);
     expect(document.body.textContent).toMatch(/ระบบขาย/);
   });
-});
 
+  it("กฎคัดครีเอทีฟ: เพิ่มกฎ เลือกตัวชี้วัด ใส่เพดาน แล้วบันทึกลง settings", () => {
+    const onSave = vi.fn();
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={onSave} toast={() => {}} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    expect(screen.getByRole("heading", { name: "กฎคัดครีเอทีฟ" })).toBeTruthy();
+    expect(screen.getByText(/ยังไม่มีกฎ/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "เพิ่มกฎ" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "ชื่อกฎ 1" }), { target: { value: "ซื้อคุ้ม" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "ค่าเกณฑ์ กฎ 1" }), { target: { value: "1000" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "ใช้เงินขั้นต่ำ กฎ 1" }), { target: { value: "500" } });
+    expect(screen.getByText("ต้นทุนต่อการซื้อ ไม่เกิน ฿1,000.00 · เมื่อใช้เงินแล้วอย่างน้อย ฿500.00")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^บันทึก/ }));
+    expect(onSave.mock.calls[0][0].creativeRules).toEqual([
+      expect.objectContaining({ name: "ซื้อคุ้ม", brandId: "all", metric: "cpa", op: "lte", value: 1000, minSpend: 500 }),
+    ]);
+  });
+
+  it("กฎคัดครีเอทีฟ: เปลี่ยนตัวชี้วัดแล้วเงื่อนไขเปลี่ยนตามค่าเริ่มของตัวนั้น · ลบกฎได้", () => {
+    const saved = { creativeRules: [{ id: "r1", name: "", brandId: "all", metric: "cpa", op: "lte", value: 900, minSpend: 0 }] };
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={saved} onSave={() => {}} toast={() => {}} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    fireEvent.click(screen.getByRole("button", { name: "ตัวชี้วัด กฎ 1" }));
+    fireEvent.click(screen.getByRole("option", { name: "ROAS (Meta)" }));
+    expect(screen.getByRole("button", { name: "เงื่อนไข กฎ 1" }).textContent).toMatch(/อย่างน้อย/);
+    fireEvent.click(screen.getByRole("button", { name: "ลบกฎ 1" }));
+    expect(screen.getByText(/ยังไม่มีกฎ/)).toBeTruthy();
+  });
+});

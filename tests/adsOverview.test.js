@@ -564,6 +564,16 @@ describe("ครีเอทีฟ — ตัวไหนเวิร์ค / �
     expect(rows[0].roas).toBe(4);
     expect(rows[0].brand).toBe("TEAMDEE");
   });
+  it("จำนวนการซื้อรวมรายชิ้นงาน + ต้นทุนต่อการซื้อ · ไม่มีการซื้อ = CPA null · บัญชีไม่วัดการซื้อ = null ไม่ใช่ 0", () => {
+    const [row] = adsCreativeRows([shot("a", "ซื้อ", 5, { purchases: 3 }), shot("b", "ซื้อ", 20, { purchases: 1 })], RANGE_M, brands);
+    expect(row.purchases).toBe(4);
+    expect(row.cpa).toBe(1000);
+    const [zero] = adsCreativeRows([shot("z", "ศูนย์", 5, { purchases: 0 })], RANGE_M, brands);
+    expect(zero.purchases).toBe(0);
+    expect(zero.cpa).toBeNull();
+    const [unknown] = adsCreativeRows([shot("u", "ไม่รู้", 5)], RANGE_M, brands);
+    expect(unknown.purchases).toBeNull();
+  });
   it("CTR ครึ่งหลังตกแรง = ติดธงเริ่มล้า แล้วสั่ง Fix", () => {
     const rows = adsCreativeRows([
       shot("early", "วิดีโอ B", 5),                                   // CTR 2%

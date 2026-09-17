@@ -37,6 +37,13 @@ describe("factsToAdCards", () => {
     ], [conn(), conn({ id: "conn-2", brand_id: "jk", external_account_id: "act_222" })], { today: "2026-09-14" });
     expect(cards.map((c) => c.metrics.revenue)).toEqual([12000, 0, null]);
   });
+  it("จำนวนการซื้อ: บัญชีที่วัด purchase ได้ แถวที่ไม่มี = 0 · บัญชีที่ไม่เคยมี = null (ไม่ใช่ 0)", () => {
+    const cards = factsToAdCards([
+      fact({ attributed_conversions: "3" }), fact({ ad_id: "a2" }),
+      fact({ connection_id: "conn-2", ad_id: "b1" }),
+    ], [conn(), conn({ id: "conn-2", brand_id: "jk", external_account_id: "act_222" })], { today: "2026-09-14" });
+    expect(cards.map((c) => c.metrics.purchases)).toEqual([3, 0, null]);
+  });
   it("วันนี้ = provisional · connection ที่ปิด/ไม่รู้จัก ไม่แสดง · ชื่อว่างใช้ id แทน", () => {
     const cards = factsToAdCards([
       fact({ fact_date: "2026-09-14", campaign_name: "", ad_name: "" }),

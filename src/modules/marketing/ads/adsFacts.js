@@ -52,6 +52,7 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
   const live = new Map(connections.filter((c) => c.status !== "disabled").map((c) => [c.id, c]));
   const creativeByAd = new Map(creatives.map((row) => [`${row.connection_id}|${row.external_ad_id}`, row]));
   const tracksValue = new Set(facts.filter((f) => f.attributed_value != null).map((f) => f.connection_id));
+  const tracksPurchases = new Set(facts.filter((f) => f.attributed_conversions != null).map((f) => f.connection_id));
   const cards = [];
   for (const f of facts) {
     const connection = live.get(f.connection_id);
@@ -88,6 +89,8 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
         cpl: spend != null && leads > 0 ? spend / leads : null,
         // Meta ไม่ส่ง action_values ที่เป็นศูนย์ → บัญชีที่วัด purchase ได้ แถวที่ไม่มี = 0 · บัญชีที่ไม่เคยมี = ไม่รู้ (null)
         revenue: value ?? (tracksValue.has(f.connection_id) ? 0 : null),
+        // จำนวนการซื้อที่ Meta นับ (attribution ของ Meta) — กติกาเดียวกับยอด: บัญชีที่ไม่เคยมี = ไม่รู้ ไม่ใช่ 0
+        purchases: num(f.attributed_conversions) ?? (tracksPurchases.has(f.connection_id) ? 0 : null),
         new_revenue: null,
         measured_at: localNoonISO(f.fact_date),
       },

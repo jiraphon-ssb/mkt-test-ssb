@@ -168,3 +168,19 @@
 .mkt-root .aw-seg button[aria-pressed=true] { background:var(--line); color:var(--ink); font-weight:700; }
 .mkt-root .aw-seg button:disabled { opacity:.4; cursor:not-allowed; }
 .mkt-root .aw-seg button:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:1px; }
+/* กฎคัดครีเอทีฟ (หน้าตั้งค่า แท็บกฎ) */
+.acc-creative-rules { margin-top:20px; }
+.mkt-root .acc-rule-add { display:inline-flex; align-items:center; gap:6px; min-height:34px; padding:0 12px; border:1px solid var(--line); border-radius:8px; color:var(--ink); font:inherit; font-size:12px; font-weight:650; cursor:pointer; }
+.mkt-root .acc-rule-add:disabled { opacity:.45; cursor:not-allowed; }
+.acc-rule-empty,.acc-rule-help { margin:12px 0 0; color:var(--ink-soft); font-size:12px; line-height:1.6; }
+.acc-crule-list { display:grid; gap:0; margin:8px 0 0; padding:0; list-style:none; }
+.acc-crule { padding:14px 0; border-bottom:1px solid var(--line); }
+.acc-crule-grid { display:grid; grid-template-columns:minmax(120px,1.2fr) minmax(110px,1fr) minmax(150px,1.4fr) minmax(100px,.8fr) minmax(110px,.9fr) minmax(110px,.9fr) 36px; gap:10px; align-items:end; }
+.acc-crule-grid label>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }
+.acc-crule-grid input { width:100%; min-width:0; padding:8px 9px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); font:inherit; font-size:12px; }
+.mkt-root .acc-crule-remove { display:grid; place-items:center; width:36px; height:36px; border:1px solid var(--line); border-radius:8px; color:var(--ink-soft); cursor:pointer; }
+.mkt-root .acc-crule-remove:hover { color:var(--bad-text); border-color:var(--bad-text); }
+.acc-crule>small { display:block; margin-top:8px; color:var(--ink-soft); font-size:12px; }.acc-crule>small.acc-crule-incomplete { color:var(--warn-text); }
+@media(max-width:960px){.acc-crule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.acc-crule-remove { justify-self:end; }}
+.acc-crule-grid .acc-input-unit input { padding-inline:0; border:0; outline:0; background:transparent; }
+.acc-crule-grid .acc-input-unit:focus-within,.acc-crule-grid input[type=text]:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:1px; }

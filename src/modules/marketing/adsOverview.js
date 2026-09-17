@@ -724,7 +724,7 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     if (!row) {
       row = {
         key, creative, platform, brandId: c.brand_id, brand: names.get(c.brand_id) ?? c.brand_id,
-        campaigns: new Set(), asset, spend: 0, leads: 0, revenue: 0, impressions: 0, clicks: 0, reach: 0,
+        campaigns: new Set(), asset, spend: 0, leads: 0, revenue: 0, purchases: undefined, impressions: 0, clicks: 0, reach: 0,
         early: { imp: 0, clk: 0 }, late: { imp: 0, clk: 0 }, complete: true,
       };
       acc.set(key, row);
@@ -736,6 +736,8 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     row.spend += m.spend ?? 0;
     row.leads += m.leads ?? 0;
     row.revenue = row.revenue == null || m.revenue == null ? null : row.revenue + m.revenue;
+    // การซื้อ: แถวไหนไม่รู้ (บัญชีไม่วัด) ทั้งชิ้น = ไม่รู้ ไม่ใช่ 0 (กติกาเดียวกับยอด)
+    row.purchases = row.purchases === null || m.purchases == null ? null : (row.purchases ?? 0) + m.purchases;
     row.impressions += m.impressions ?? 0;
     row.clicks += m.clicks ?? m.link_clicks ?? 0;
     row.reach += m.reach ?? 0;
@@ -757,6 +759,8 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
       ctr, ctrEarly, ctrLate, ctrDrop, frequency, fatigue,
       cpc: share(row.spend, row.clicks),
       cpl: row.leads > 0 ? row.spend / row.leads : null,
+      cpa: row.purchases > 0 ? row.spend / row.purchases : null,
+      cpm: row.impressions > 0 ? (row.spend / row.impressions) * 1000 : null,
       roas: roasOf(row.revenue, row.spend),
     };
     return { ...base, ...decideAction(base, rules) };

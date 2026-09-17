@@ -1,0 +1,68 @@
+// @vitest-environment jsdom
+/* หน้า Creative Library — จำนวนการซื้อ + กรองตามกฎคัดครีเอทีฟที่ตั้งในหน้าตั้งค่า */
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+
+const state = { settings: {} };
+const day = new Date(); day.setHours(12, 0, 0, 0);
+const ad = (id, creative, metrics) => ({ id, track: "project", status: "measured", archived: true, brand_id: "b_td", campaign: "c1", creative, source: "meta", ad_platform: "Meta Ads",
+  brief: { channels: ["Meta Ads"] }, metrics: { impressions: 10000, clicks: 100, reach: 8000, leads: 5, revenue: null, measured_at: day.toISOString(), ...metrics } });
+const cards = [
+  ad("a", "ชิ้นแพง", { spend: 3000, purchases: 2 }),      // 1,500 ต่อการซื้อ
+  ad("b", "ชิ้นคุ้ม", { spend: 1600, purchases: 2 }),      // 800
+  ad("c", "ชิ้นเผาเงิน", { spend: 2500, purchases: 0 }),   // ใช้เกินเพดานยังไม่มีการซื้อ
+  ad("d", "ชิ้นใหม่", { spend: 200, purchases: 0 }),       // ต่ำกว่าขั้นต่ำ
+];
+vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({ data: { brands: [{ id: "b_td", name: "TEAMDEE" }], settings: state.settings }, inBrandScope: () => true, brandFilter: "all", toast: () => {} }) }));
+vi.mock("../src/modules/marketing/ads/useAdsData.js", () => ({ useAdsData: () => ({ cards, source: "meta_pilot", canPreview: false }) }));
+vi.mock("../src/modules/marketing/ads/AdsSourceControl.jsx", () => ({ AdsSourceControl: () => null, AdsSourceNotice: () => null }));
+vi.mock("../src/modules/marketing/creatives/CreativeMedia.jsx", () => ({ CreativeMedia: () => null }));
+const { CreativeLibraryView } = await import("../src/modules/marketing/creatives/CreativeLibraryView.jsx");
+
+afterEach(() => { cleanup(); state.settings = {}; });
+const view = () => render(<MemoryRouter><CreativeLibraryView /></MemoryRouter>);
+const card = (name) => screen.getByText(name).closest("article");
+const shown = () => [...document.querySelectorAll(".cl-card strong")].map((el) => el.textContent);
+
+describe("CreativeLibraryView", () => {
+  it("การ์ดแสดงจำนวนการซื้อและต้นทุนต่อการซื้อ · สรุปการซื้อรวม", () => {
+    view();
+    const a = within(card("ชิ้นแพง"));
+    expect(a.getByText("การซื้อ").nextSibling.textContent).toBe("2");
+    expect(a.getByText("ต่อการซื้อ").nextSibling.textContent).toBe("฿1,500.00");
+    expect(within(card("ชิ้นเผาเงิน")).getByText("ต่อการซื้อ").nextSibling.textContent).toBe("—");
+    expect(screen.getByText("การซื้อ (Meta)").nextSibling.textContent).toBe("4");
+  });
+
+  it("ยังไม่มีกฎ: บอกให้ไปตั้งกฎพร้อมลิงก์ไปแท็บกฎ", () => {
+    view();
+    expect(screen.getByRole("link", { name: "ตั้งกฎ" }).getAttribute("href")).toBe("/mkt/ads?panel=settings&tab=rules");
+  });
+
+  it("เลือกกฎ: การ์ดบอกผ่าน/ไม่ผ่านพร้อมเหตุผล · สรุปนับชิ้นและเงินที่ใช้กับชิ้นที่ไม่ผ่าน · กดกรองเฉพาะไม่ผ่าน", () => {
+    state.settings = { ads_control: { creativeRules: [{ id: "r1", name: "CPA ไม่เกิน 1,000", brandId: "all", metric: "cpa", op: "lte", value: 1000, minSpend: 500 }] } };
+    view();
+    fireEvent.click(screen.getByRole("button", { name: "กฎ" }));
+    fireEvent.click(screen.getByRole("option", { name: "CPA ไม่เกิน 1,000" }));
+    expect(within(card("ชิ้นแพง")).getByText("ไม่ผ่านกฎ")).toBeTruthy();
+    expect(within(card("ชิ้นเผาเงิน")).getByText("ใช้ไป ฿2,500.00 ยังไม่มีการซื้อ (เพดาน ฿1,000.00 ต่อการซื้อ)")).toBeTruthy();
+    expect(within(card("ชิ้นคุ้ม")).getByText("ผ่านกฎ")).toBeTruthy();
+    expect(within(card("ชิ้นใหม่")).getByText("ยังตัดสินไม่ได้")).toBeTruthy();
+    const summary = within(screen.getByRole("region", { name: "ผลตามกฎ" }));
+    const fail = summary.getByRole("button", { name: /ไม่ผ่าน/ });
+    expect(fail.textContent).toContain("2");
+    expect(fail.textContent).toContain("ค่าแอด ฿5,500.00");
+    fireEvent.click(fail);
+    expect(shown().sort()).toEqual(["ชิ้นเผาเงิน", "ชิ้นแพง"]);
+    fireEvent.click(summary.getByRole("button", { name: /ไม่ผ่าน/ }));
+    expect(shown()).toHaveLength(4);
+  });
+
+  it("เรียงตามต้นทุนต่อการซื้อต่ำสุด", () => {
+    view();
+    fireEvent.click(screen.getByRole("button", { name: "เรียง" }));
+    fireEvent.click(screen.getByRole("option", { name: "ต้นทุนต่อการซื้อต่ำสุด" }));
+    expect(shown().slice(0, 2)).toEqual(["ชิ้นคุ้ม", "ชิ้นแพง"]);
+  });
+});
