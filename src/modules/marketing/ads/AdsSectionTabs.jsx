@@ -1,10 +1,9 @@
-import { BarChart3, Images, LayoutList, Presentation, RefreshCw } from "lucide-react";
+import { BarChart3, Images, LayoutList, RefreshCw } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import "./adsSectionTabs.css";
 
 const TABS = [
   ["/mkt/ads", "ภาพรวม", BarChart3],
-  ["/mkt/report", "รายงานประชุม", Presentation],
   ["/mkt/campaigns", "แคมเปญ", LayoutList],
   ["/mkt/creatives", "Creative", Images],
   ["/mkt/ads/sync", "สถานะ Sync", RefreshCw],

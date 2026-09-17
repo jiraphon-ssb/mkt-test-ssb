@@ -1,4 +1,4 @@
-/* ตัวเลขทั้งหน้าแคมเปญจากข้อมูล + ตัวกรอง — logic ล้วน ใช้ร่วมกับหน้ารายงานประชุม */
+/* ตัวเลขทั้งหน้าแคมเปญจากข้อมูล + ตัวกรอง — logic ล้วน (แยกจาก component ให้เทสได้) */
 import { analyticsCards } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
 import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";

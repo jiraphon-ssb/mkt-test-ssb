@@ -3,7 +3,7 @@ import {
   ShoppingCart, Megaphone, Users, UserRound, LayoutDashboard, HandCoins, ClipboardList,
   CalendarClock, Building2, Store, Sliders, ListTree, Landmark, Shirt, Settings, BookOpen,
   LayoutList,
-  Images, RefreshCw, Presentation } from "lucide-react";
+  Images, RefreshCw } from "lucide-react";
 
 /* Single source of truth for platform navigation + routing.
    Top level = the 6 SSB GROUP PLATFORM modules (FINANCE / SALE·CRM /
@@ -181,11 +181,6 @@ const MARKETING_GROUPS = [
         id: "mkt_ads", path: "/mkt/ads", label: "Overview ads", icon: Megaphone,
         perm: "marketing.dash.view", status: "live", view: "ads",
         purpose: "ค่าแอด · CPL · สัดส่วนรายช่องทาง · แบรนด์ × ช่องทาง · กรวย Reach → Engagement → Leads",
-      },
-      {
-        id: "mkt_report", path: "/mkt/report", label: "รายงานประชุม", icon: Presentation,
-        perm: "marketing.dash.view", status: "live", view: "report", sidebar: false,
-        purpose: "รายงานรายสัปดาห์/รายเดือนสำหรับประชุม · เรียงตามคำถาม ยอดขาย งบ funnel สาเหตุ แคมเปญ ครีเอทีฟ ความน่าเชื่อถือ",
       },
       {
         id: "mkt_campaigns", path: "/mkt/campaigns", label: "แคมเปญ", icon: LayoutList,
