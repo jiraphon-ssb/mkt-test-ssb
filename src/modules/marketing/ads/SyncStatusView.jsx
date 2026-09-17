@@ -144,16 +144,17 @@ export function SyncStatusView() {
 
   const [res, reload] = useResources({
     syncRuns: () => apiClient.ads.recentSyncs(30),
-    connections: canSync ? () => apiClient.ads.connections() : null,
+    // สถานะบัญชีจริงอ่านได้ทุกคนที่ล็อกอิน (RLS read authenticated) — ถ้ากั้นเฉพาะหัวหน้าทีม คนอื่นจะเห็นค่าเก่าในหน้าตั้งค่า
+    connections: !demo ? () => apiClient.ads.connections() : null,
     recons: () => apiClient.ads.reconciliations(),
-    coverage: canSync ? () => apiClient.ads.syncCoverage() : null,
+    coverage: !demo ? () => apiClient.ads.syncCoverage() : null,
     ticks: () => apiClient.ads.cronTicks(),
     pipes: () => apiClient.ads.pipelineRuns({ limit: 120 }),
     facts: () => apiClient.ads.businessFacts({ from: salesSince, to: today }),
     goals: () => apiClient.ads.salesGoals(`${today.slice(0, 7)}-01`),
     oauth: () => apiClient.ads.oauthStatus(),
   });
-  useEffect(() => { reload(); }, [reload, canSync]);
+  useEffect(() => { reload(); }, [reload, canSync, demo]);
   const ready = (...keys) => keys.every((key) => res[key]?.settled);
   const dataOf = (key, fallback) => res[key]?.data ?? fallback;
   const anyLoading = Object.values(res).some((item) => item.loading) || Object.keys(res).length === 0;

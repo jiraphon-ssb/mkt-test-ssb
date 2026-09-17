@@ -48,7 +48,19 @@
 .aw-middle { display:grid; grid-template-columns:1.5fr 1fr; gap:18px; }.aw-spend { font-size:28px; font-weight:650; margin-top:18px; font-variant-numeric:tabular-nums; }.aw-spend small { font-size:14px;color:var(--ink-soft);font-weight:400; }
 .aw-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0 0; }.aw-facts dt { font-size:11px;color:var(--ink-soft);margin-bottom:4px; }.aw-facts dd { font-size:16px;font-weight:600;margin:0;font-variant-numeric:tabular-nums; }
 .aw-efficiency>div:not(:first-child) { display:flex; align-items:center; justify-content:space-between; padding:15px 0;border-bottom:1px solid var(--line); }.aw-efficiency small { display:block;font-size:11px;color:var(--ink-soft); }.aw-efficiency b { font-size:27px; }.aw-efficiency p { font-size:11px;color:var(--ink-soft);line-height:1.7; }
-.aw-journey .ads-pipe--row { width:100%; grid-template-columns:repeat(4,minmax(0,1fr)); margin-top:20px; }.aw-journey .ads-pipe-item { border-top:0;border-left:1px solid var(--line);padding:0 16px; }.aw-journey .ads-pipe-item:first-child { border-left:0;padding-left:0; }.aw-key { color:var(--ink-soft); font-size:11px; line-height:1.5; margin-top:16px; }
+.aw-journey { container-type:inline-size; }
+/* ต้องเป็น grid จริง — สไตล์กลาง .ads-pipe--row เป็น flex ตัดบรรทัด การ์ดที่ 4 เคยตกบรรทัดไปทับแถบเป้าที่จอ ~800px */
+.aw-journey .ads-pipe--row { display:grid; width:100%; grid-template-columns:repeat(4,minmax(0,1fr)); row-gap:14px; margin-top:20px; }
+@container (max-width:640px) {
+  .aw-journey .ads-pipe--row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .aw-journey .ads-pipe--row .ads-pipe-item:nth-child(odd) { padding-left:0; border-left:0; }
+  .aw-journey .ads-pipe--row .ads-pipe-item:nth-child(n+3) { padding-top:12px; border-top:1px solid var(--line); }
+}
+@container (max-width:340px) {
+  .aw-journey .ads-pipe--row { grid-template-columns:minmax(0,1fr); }
+  .aw-journey .ads-pipe--row .ads-pipe-item { padding-left:0; border-left:0; }
+  .aw-journey .ads-pipe--row .ads-pipe-item:nth-child(n+2) { padding-top:12px; border-top:1px solid var(--line); }
+}.aw-journey .ads-pipe-item { border-top:0;border-left:1px solid var(--line);padding:0 16px; }.aw-journey .ads-pipe-item:first-child { border-left:0;padding-left:0; }.aw-key { color:var(--ink-soft); font-size:11px; line-height:1.5; margin-top:16px; }
 .aw-tabs { display:flex;gap:24px;border-bottom:1px solid var(--line);margin-bottom:20px; }.mkt-root .aw-tabs button { font:inherit;font-size:13px;min-width:24px;padding:2px 2px 12px;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent; }.mkt-root .aw-tabs button[aria-selected=true] { color:var(--ink);border-color:var(--aw-accent);font-weight:700; }.aw-tabs span { font-size:11px;margin-left:5px; }
 .aw-channel-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px; }.aw-channel-grid .ads-chan-card { margin:0; }.aw button:focus-visible,.aw a:focus-visible { outline:2px solid var(--aw-accent);outline-offset:4px; }
 @media(max-width:1100px){.aw-layout { grid-template-columns:200px minmax(0,1fr);gap:18px; }.aw-hero-grid { grid-template-columns:1fr;gap:24px; }.aw-forecast { border-left:0;border-top:1px solid #ffffff25;padding:20px 0 0; }.aw-middle { grid-template-columns:1fr; }}

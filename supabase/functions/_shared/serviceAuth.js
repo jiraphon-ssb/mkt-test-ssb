@@ -47,3 +47,11 @@ export function isServiceRoleToken(token, { serviceKey = "", projectUrl = "", no
   const ref = projectRefOf(projectUrl);
   return Boolean(ref) && claims.ref === ref;
 }
+
+/** ป้ายผู้สั่งของรอบดึงข้อมูล — มีผู้ใช้ = กดเอง · service role = ตัวตั้งเวลา
+    เว้นแต่คนสั่งผ่าน service key เอง (ดึงย้อนหลังด้วย pg_net/curl) ให้ส่ง { trigger: "manual" } มา
+    ไม่งั้นประวัติจะขึ้น "อัตโนมัติ" ทั้งที่มีคนสั่ง */
+export function runTriggerOf(user, body) {
+  if (user) return "manual";
+  return body?.trigger === "manual" ? "manual" : "cron";
+}

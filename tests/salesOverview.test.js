@@ -168,6 +168,13 @@ describe("campaignSalesSummary — แถบยอดจริงบนหน้
     expect(out.pctAds).toBeCloseTo(15000 / 60000);
   });
 
+  it("basis new = การ์ดใช้ยอดลูกค้าใหม่ · ROAS คิดจากยอดใหม่ (ปุ่มยอดใหม่/ยอดรวมในหน้าแคมเปญต้องมีผล)", () => {
+    const out = campaignSalesSummary({ sales, brandIds: ["b_td", "b_ta", "b_jt"], spendByBrand, names, from: "2026-09-01", to: "2026-09-17", sourceBrandIds: ["b_td", "b_ta", "b_jk"], basis: "new" });
+    expect(out).toMatchObject({ basis: "new", revenue: 60000, revenueTotal: 80000, revenueNew: 60000 });
+    expect(out.roas).toBeCloseTo(60000 / 15000);
+    expect(out.pctAds).toBeCloseTo(15000 / 60000);
+  });
+
   it("แบรนด์ที่เลือกยังไม่มีแหล่ง = revenue null + waiting (ไม่ขึ้น ฿0)", () => {
     const out = campaignSalesSummary({ sales, brandIds: ["b_jt"], spendByBrand, names, from: "2026-09-01", to: "2026-09-17", sourceBrandIds: ["b_td", "b_ta", "b_jk"] });
     expect(out).toMatchObject({ revenue: null, roas: null, pctAds: null, excludedWaiting: ["JUNTAKARN"] });

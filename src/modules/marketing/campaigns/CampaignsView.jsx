@@ -89,7 +89,7 @@ export function CampaignsView() {
         : selectedBrand === "all" ? combineTargets(brands.map((b) => targets[b.id])) : normalizeTargets(targets[selectedBrand]),
       targetPeriod: periodForTargets({ monthView: period === "mtd", from: shownFrom, to: shownTo, today: todayLocal }),
       salesSummary: real ? campaignSalesSummary({
-        sales: ads.sales, from: shownFrom, to: shownTo, sourceBrandIds: SALES_BRAND_IDS,
+        sales: ads.sales, from: shownFrom, to: shownTo, sourceBrandIds: SALES_BRAND_IDS, basis: revenueBasis,
         brandIds: (selectedBrand === "all" ? brands : brands.filter((b) => b.id === selectedBrand)).map((b) => b.id),
         names: Object.fromEntries(brands.map((b) => [b.id, b.name])),
         spendByBrand: Object.fromEntries(brands.map((b) => [b.id, filtered.filter((r) => r.brandId === b.id).reduce((n, r) => n + (r.spend ?? 0), 0)])),

@@ -7,6 +7,7 @@
    แบรนด์: TD · JD · TA เท่านั้น — JK ข้อมูลจริงอยู่อีกโปรเจกต์ (ดู SALES_SOURCE_BRANDS) */
 import { adminClient, corsHeaders, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { finishRun, runCode, startRun } from "../_shared/pipelineRuns.ts";
+import { runTriggerOf } from "../_shared/serviceAuth.js";
 import { SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, goalRowsToSalesGoals } from "../_shared/salesFacts.js";
 import {
   PAGE_LIMIT, describeSalesKey, describeSalesUrl, doorState, factsProbeUrl, goalProbeUrl,
@@ -42,13 +43,13 @@ Deno.serve(async (request) => {
       return json(request, { error: code }, code === "AUTH_REQUIRED" ? 401 : 403);
     }
   }
-  const trigger = auth.user ? "manual" : "cron";
   const userId = auth.user?.id ?? null;
   const db = auth.db;
 
   const url = Deno.env.get("SALES_API_URL")?.trim();
   const key = Deno.env.get("SALES_API_KEY")?.trim();
   const body = await request.json().catch(() => ({}));
+  const trigger = runTriggerOf(auth.user, body);
 
   /* โหมดตรวจ { check: true } — เฟส 1: secret key ใช้กับของจริงของพี่ทัชได้ไหม ก่อนสร้างท่อจริง
      อ่านอย่างเดียว · ไม่เขียนอะไรลงฐานข้อมูล · คืนแค่จำนวนสรุป ไม่คืนแถวดิบ ไม่คืนค่า URL/KEY จริง

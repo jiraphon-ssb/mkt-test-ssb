@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bearerToken, isServiceRoleToken, jwtClaims } from "../supabase/functions/_shared/serviceAuth.js";
+import { bearerToken, isServiceRoleToken, jwtClaims, runTriggerOf } from "../supabase/functions/_shared/serviceAuth.js";
 
 const NOW = Date.UTC(2026, 8, 16, 10, 0, 0);
 const b64 = (obj) => btoa(JSON.stringify(obj)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
@@ -50,5 +50,18 @@ describe("isServiceRoleToken", () => {
     const opts = { serviceKey: "k", projectUrl: PROJECT, now: NOW };
     expect(isServiceRoleToken(jwt({ role: "service_role", ref: "someotherprojectref", exp: 2000000000 }), opts)).toBe(false);
     expect(isServiceRoleToken(jwt({ role: "service_role", exp: 2000000000 }), opts)).toBe(false);   // ไม่มี ref เลย
+  });
+});
+
+describe("runTriggerOf — ป้ายผู้สั่งในประวัติรอบ (data_pipeline_runs.trigger_kind)", () => {
+  it("มีผู้ใช้ = manual · service role เฉยๆ (ads-cron) = cron", () => {
+    expect(runTriggerOf({ id: "u1" }, {})).toBe("manual");
+    expect(runTriggerOf(null, {})).toBe("cron");
+    expect(runTriggerOf(null, { inventory: true })).toBe("cron");
+  });
+  it("service role ที่คนสั่งเอง (ดึงย้อนหลังผ่าน pg_net/curl) ส่ง trigger: manual ได้ · ค่าอื่นไม่นับ", () => {
+    expect(runTriggerOf(null, { trigger: "manual" })).toBe("manual");
+    expect(runTriggerOf(null, { trigger: "admin" })).toBe("cron");
+    expect(runTriggerOf(null, null)).toBe("cron");
   });
 });

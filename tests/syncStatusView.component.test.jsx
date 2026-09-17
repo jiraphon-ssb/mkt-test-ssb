@@ -12,7 +12,8 @@ vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   syncCoverage: () => deferred("coverage"), cronTicks: () => deferred("ticks"), pipelineRuns: () => deferred("pipes"),
   businessFacts: () => deferred("facts"), salesGoals: () => deferred("goals"), oauthStatus: () => deferred("oauth"),
 } } }));
-vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => ({ demo: false, user: { role: "team_lead" } }) }));
+const auth = { demo: false, user: { role: "team_lead" } };
+vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => auth }));
 vi.mock("../src/modules/marketing/ads/useAdsData.js", () => ({ loadPilotFacts: () => Promise.resolve() }));
 const brands = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jt", name: "JUNTAKARN" }];
 vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({ toast: () => {}, data: { brands, settings: { ads_control: {
@@ -22,7 +23,7 @@ vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({ toast: 
 } } } }) }));
 const { SyncStatusView } = await import("../src/modules/marketing/ads/SyncStatusView.jsx");
 
-beforeEach(() => { vi.useFakeTimers({ now: new Date("2026-09-17T03:00:00Z"), toFake: ["Date"] }); });
+beforeEach(() => { auth.user = { role: "team_lead" }; for (const key of Object.keys(pending)) delete pending[key]; vi.useFakeTimers({ now: new Date("2026-09-17T03:00:00Z"), toFake: ["Date"] }); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const show = () => render(<MemoryRouter initialEntries={["/mkt/ads/sync"]}><SyncStatusView /></MemoryRouter>);
 const settle = async (key, value) => { await act(async () => { pending[key].resolve(value); }); };
@@ -78,5 +79,16 @@ describe("SyncStatusView — โหลดเสร็จ", () => {
     const sales = screen.getByText("ยอดขาย TD · JD · TA").closest('[role="row"]');
     expect(within(sales).getByText("โหลดสถานะไม่สำเร็จ")).toBeTruthy();
     expect(within(sales).queryByText("ยังไม่เคยดึง")).toBeNull();
+  });
+});
+
+describe("SyncStatusView — สมาชิกที่ไม่ใช่หัวหน้าทีม", () => {
+  it("ยังโหลดสถานะบัญชีจริงจากฐาน (อ่านได้ทุกคน) · ไม่เห็นปุ่มสั่งงาน", async () => {
+    auth.user = { role: "member" };
+    show();
+    expect(pending.connections).toBeTruthy();
+    expect(pending.coverage).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /ดึงข้อมูลตอนนี้/ })).toBeNull();
+    expect(screen.queryByText("งานอื่น")).toBeNull();
   });
 });

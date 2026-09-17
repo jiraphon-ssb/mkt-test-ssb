@@ -209,18 +209,20 @@ export function salesPipeline({ sales = null, prevSales = null, metaInquiries = 
 
 /** หน้าแคมเปญ: ยอดจริงของแบรนด์ที่อยู่ในขอบเขต — ROAS/%Ads หารด้วยค่าแอดของแบรนด์ที่มียอดเท่านั้น
     (ยอดระดับแคมเปญยังเป็นของ Meta · ยอดจริงมาถึงแค่แบรนด์×วัน) · ไม่มีแบรนด์ไหนมียอด = null ไม่ใช่ ฿0 */
-export function campaignSalesSummary({ sales = [], brandIds = [], spendByBrand = {}, names = {}, from, to, sourceBrandIds = [] } = {}) {
+export function campaignSalesSummary({ sales = [], brandIds = [], spendByBrand = {}, names = {}, from, to, sourceBrandIds = [], basis = "total" } = {}) {
   const byBrand = salesFactsByBrand(sales, { from, to });
   const included = brandIds.filter((id) => sourceBrandIds.includes(id) && byBrand.has(id));
   const excludedWaiting = brandIds.filter((id) => !sourceBrandIds.includes(id)).map((id) => names[id] ?? id);
   const excludedNoData = brandIds.filter((id) => sourceBrandIds.includes(id) && !byBrand.has(id)).map((id) => names[id] ?? id);
-  if (!included.length) return { revenue: null, revenueNew: null, orders: null, spend: null, roas: null, pctAds: null, excludedWaiting, excludedNoData };
+  if (!included.length) return { basis, revenue: null, revenueTotal: null, revenueNew: null, orders: null, spend: null, roas: null, pctAds: null, excludedWaiting, excludedNoData };
   const sum = (pick) => included.reduce((n, id) => n + (pick(id) ?? 0), 0);
-  const revenue = sum((id) => byBrand.get(id).revenue);
+  const revenueTotal = sum((id) => byBrand.get(id).revenue);
   const revenueNew = sum((id) => byBrand.get(id).revenueNew);
   const spend = sum((id) => num(spendByBrand[id]));
+  // ปุ่ม ยอดใหม่/ยอดรวม: การ์ดและ ROAS ใช้ฐานเดียวกับที่เลือก · %Ads หารยอดลูกค้าใหม่เสมอ (นิยามเป้าของระบบขาย)
+  const revenue = basis === "new" ? revenueNew : revenueTotal;
   return {
-    revenue, revenueNew, orders: sum((id) => byBrand.get(id).orders), spend,
+    basis, revenue, revenueTotal, revenueNew, orders: sum((id) => byBrand.get(id).orders), spend,
     roas: roasOf(revenue, spend), pctAds: share(spend, revenueNew),
     excludedWaiting, excludedNoData,
   };

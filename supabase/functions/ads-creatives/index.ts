@@ -3,6 +3,7 @@
    งบเวลา 90 วินาทีต่อคำขอ · ยังไม่จบคืน nextCursor ให้ client เรียกต่อ (คืนแค่ cursor ไม่คืน URL)
    สิทธิ์ team_lead · token ถอดรหัสฝั่ง server · ไม่เก็บไฟล์สื่อ เก็บ URL ที่ Meta ส่งมา (หมดอายุได้ ดึงใหม่ทับ) */
 import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { runTriggerOf } from "../_shared/serviceAuth.js";
 import { finishRun, runCode, startRun } from "../_shared/pipelineRuns.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { syncError, todayInTimeZone } from "../_shared/metaInsights.js";
@@ -40,7 +41,7 @@ Deno.serve(async (request) => {
     if (authorization.expires_at && new Date(authorization.expires_at).getTime() <= Date.now()) throw syncError("META_TOKEN_INVALID");
 
     // บันทึกรอบ (หน้า Sync) — หน้าต่อ (after) ไม่เปิดรอบใหม่ นับรวมเป็นรอบเดียวของการกดครั้งนั้น
-    if (!after) runId = await startRun(db, { pipeline: "creatives", trigger: auth.user ? "manual" : "cron", userId: auth.user?.id ?? null, connectionId: connection.id });
+    if (!after) runId = await startRun(db, { pipeline: "creatives", trigger: runTriggerOf(auth.user, body), userId: auth.user?.id ?? null, connectionId: connection.id });
 
     // ad ที่มีค่าแอดใน 30 วันล่าสุด (ตาม timezone บัญชี)
     const today = todayInTimeZone(new Date(), connection.timezone);

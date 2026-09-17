@@ -61,6 +61,13 @@ describe("CampaignsTable — ข้อมูลจริง: การ์ดย�
     expect(within(summary).getByText("ไม่รวม JUNTAKARN (รอเชื่อมแหล่งข้อมูล)")).toBeTruthy();
   });
 
+  it("basis ยอดใหม่ = หัวการ์ดบอกว่าเป็นยอดลูกค้าใหม่ · ROAS ยอดใหม่", () => {
+    const { container } = show({ salesSummary: { basis: "new", revenue: 60000, revenueTotal: 80000, revenueNew: 60000, spend: 4000, roas: 15, pctAds: 4000 / 60000, excludedWaiting: [], excludedNoData: [] } });
+    const summary = container.querySelector(".cp-summary");
+    expect(within(summary).getByText("ยอดลูกค้าใหม่ · ระบบขาย")).toBeTruthy();
+    expect(within(summary).getByText(/ROAS ยอดใหม่ 15\.0x · %Ads ยอดใหม่ 6\.7% · ยอดรวม ฿80,000/)).toBeTruthy();
+  });
+
   it("แบรนด์ที่เลือกยังไม่มีแหล่ง = บอกเหตุผล ไม่ขึ้น ฿0", () => {
     const { container } = show({ salesSummary: { revenue: null, roas: null, pctAds: null, excludedWaiting: ["JUNTAKARN"], excludedNoData: [] } });
     const summary = container.querySelector(".cp-summary");
