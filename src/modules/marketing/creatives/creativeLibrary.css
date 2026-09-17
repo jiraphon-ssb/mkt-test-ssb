@@ -67,3 +67,15 @@
 .cl-rule--pass { background:var(--ok-soft); }.cl-rule--pass b { color:var(--ok-text); }
 .cl-rule--pending b,.cl-rule--nodata b { color:var(--warn-text); }
 @media(max-width:650px){.mkt-root .cl-rule-summary>button,.cl-rule-summary>div{flex:1 1 140px;min-width:0}.cl-rule-summary>a{margin-left:0}}
+
+/* เทียบตามรูปแบบชิ้นงาน */
+.cl-formats { margin:16px 0 0; padding:16px 18px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.cl-formats h2 { margin:0 0 4px; font-size:14px; }
+.cl-formats table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+.cl-formats th,.cl-formats td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.cl-formats th:first-child { text-align:left; }
+.cl-formats thead th { color:var(--ink-soft); font-size:11px; font-weight:600; }
+.mkt-root .cl-formats tbody th button { min-height:28px; padding:0; color:var(--ink); font:inherit; font-weight:650; cursor:pointer; text-decoration:underline; text-decoration-color:var(--line); text-underline-offset:3px; }
+.cl-formats tr.is-selected { background:var(--surface-2); }
+.cl-best { color:var(--ok-text); font-size:11px; font-weight:650; }
+.cl-formats .aw-key { margin:8px 0 0; font-size:11px; color:var(--ink-soft); }

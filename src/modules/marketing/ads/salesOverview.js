@@ -274,3 +274,37 @@ export function salesTrendValue({ sales = [], key, brandIds = [], spend = null, 
     }
   }
 }
+
+const CHANNEL_LABELS = { FB: "Facebook", Line: "LINE", LINE: "LINE", IG: "Instagram", TT: "TikTok", other: "อื่นๆ" };
+
+/** funnel แยกช่องทางที่ลูกค้าทัก (channel_funnel ของระบบขาย) — ตอบว่าลูกค้าจากช่องไหนปิดการขายได้ดีกว่า
+    คนทักนับเฉพาะวันที่ทีมกรอก · Lead ก่อน LEADS_TRACKED_SINCE = null · ได้ออเดอร์ก่อนวันเริ่มเก็บ = null (กติกาเดียวกับ funnel รวม) */
+export function channelFunnel(facts = [], { brandIds = [], from, to, depositsSince = null } = {}) {
+  const lanes = new Map();
+  let leadsBefore = false;
+  for (const fact of facts ?? []) {
+    const day = fact?.fact_date;
+    if (!brandIds.includes(fact?.brand_id) || !ISO.test(String(day ?? "")) || (from && day < from) || (to && day > to)) continue;
+    if (day < LEADS_TRACKED_SINCE) leadsBefore = true;
+    for (const [channel, lane] of Object.entries(fact.channel_funnel ?? {})) {
+      const c = lanes.get(channel) ?? { channel, inquiries: null, leads: 0, deposits: 0, orders: 0 };
+      if (fact.inquiry_filled === true) c.inquiries = (c.inquiries ?? 0) + (num(lane?.inquiries) ?? 0);
+      c.leads += num(lane?.leads) ?? 0;
+      c.deposits += num(lane?.deposits) ?? 0;
+      c.orders += num(lane?.orders) ?? 0;
+      lanes.set(channel, c);
+    }
+  }
+  const depositsKnown = Boolean(depositsSince) && (from ?? to ?? "") >= depositsSince;
+  const totalOrders = [...lanes.values()].reduce((n, c) => n + c.orders, 0);
+  return [...lanes.values()].map((c) => {
+    const leads = leadsBefore ? null : c.leads;
+    const deposits = depositsKnown ? c.deposits : null;
+    return {
+      channel: c.channel, label: CHANNEL_LABELS[c.channel] ?? c.channel,
+      inquiries: c.inquiries, leads, deposits, orders: c.orders,
+      leadRate: share(leads, c.inquiries), depositRate: share(deposits, leads), closeRate: share(c.orders, leads),
+      orderShare: share(c.orders, totalOrders),
+    };
+  }).sort((a, b) => b.orders - a.orders);
+}

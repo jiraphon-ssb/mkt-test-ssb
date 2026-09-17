@@ -275,3 +275,35 @@ describe("Lead ก่อน 1 ก.ย. — ย้ายจาก sheet เข้
     expect(salesTrendValue({ sales: rows, key: "orders", brandIds: ["b_td"], ...day })).toBe(5);
   });
 });
+
+import { channelFunnel } from "../src/modules/marketing/ads/salesOverview.js";
+
+describe("channelFunnel — คนทัก → Lead → ได้ออเดอร์ → ยืนยันออเดอร์ แยกช่องทางที่ลูกค้าทัก", () => {
+  const f = (brand_id, fact_date, channel_funnel, inquiry_filled = true) => ({ brand_id, fact_date, inquiry_filled, channel_funnel });
+  const rows = [
+    f("b_td", "2026-09-01", { FB: { inquiries: 40, leads: 8, deposits: 6, orders: 3 }, Line: { inquiries: 10, leads: 5, deposits: 4, orders: 3 } }),
+    f("b_td", "2026-09-02", { FB: { inquiries: 0, leads: 2, deposits: 1, orders: 1 }, other: { inquiries: 0, leads: 0, deposits: 0, orders: 1 } }, false),
+    f("b_jk", "2026-09-01", { FB: { inquiries: 20, leads: 4, deposits: 2, orders: 2 } }),
+  ];
+  const range = { from: "2026-09-01", to: "2026-09-02", depositsSince: "2026-09-01" };
+
+  it("รวมรายช่องทาง · อัตราผ่านแต่ละขั้น · สัดส่วนออเดอร์ · เรียงออเดอร์มากก่อน · คนทักนับเฉพาะวันที่ทีมกรอก", () => {
+    const out = channelFunnel(rows, { brandIds: ["b_td", "b_jk"], ...range });
+    expect(out.map((c) => c.channel)).toEqual(["FB", "Line", "other"]);
+    expect(out[0]).toMatchObject({ label: "Facebook", inquiries: 60, leads: 14, deposits: 9, orders: 6, orderShare: 0.6 });
+    expect(out[0].leadRate).toBeCloseTo(14 / 60);
+    expect(out[0].closeRate).toBeCloseTo(6 / 14);
+    expect(out[1]).toMatchObject({ label: "LINE", inquiries: 10, leads: 5, orders: 3, leadRate: 0.5 });
+    expect(out[2]).toMatchObject({ label: "อื่นๆ", inquiries: null, orders: 1 });
+  });
+
+  it("แบรนด์ที่เลือก · Lead ก่อน 1 ก.ย. = null · ได้ออเดอร์ก่อนวันเริ่มเก็บ = null", () => {
+    const aug = [f("b_td", "2026-08-31", { FB: { inquiries: 5, leads: 90, deposits: 0, orders: 2 } }), ...rows];
+    const [fb] = channelFunnel(aug, { brandIds: ["b_td"], from: "2026-08-31", to: "2026-09-01", depositsSince: "2026-09-01" });
+    expect(fb).toMatchObject({ channel: "FB", inquiries: 45, leads: null, deposits: null, orders: 5, leadRate: null, closeRate: null });
+  });
+
+  it("ไม่มีข้อมูลช่องทาง = []", () => {
+    expect(channelFunnel([], { brandIds: ["b_td"], ...range })).toEqual([]);
+  });
+});

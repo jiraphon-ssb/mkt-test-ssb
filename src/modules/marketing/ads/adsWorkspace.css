@@ -193,3 +193,9 @@
 .acc-crule-grid .acc-crule-remove { align-self:end; }
 /* ฐานเทียบที่ล็อกไว้ (ช่วงเดือนนี้) — ขอบประ บอกว่าไม่ใช่ปุ่ม */
 .aw-fixed-compare { display:inline-flex; align-items:center; min-height:34px; padding:0 11px; border:1px dashed var(--line); border-radius:8px; color:var(--ink-soft); font-size:12px; white-space:nowrap; }
+/* funnel แยกช่องทางที่ลูกค้าทัก (ใต้กล่องจากความสนใจ สู่ยอดขาย) */
+.aw-channel-funnel { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
+.aw-channel-funnel h3 { margin:0; font-size:13px; }
+.aw-channel-funnel table { margin-top:8px; }
+.aw-channel-funnel td small { color:var(--ink-soft); font-size:11px; }
+.aw-channel-funnel td small.emerald { color:var(--ok-text); font-weight:650; }

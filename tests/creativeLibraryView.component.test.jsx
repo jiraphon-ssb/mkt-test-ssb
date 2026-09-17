@@ -77,4 +77,14 @@ describe("CreativeLibraryView", () => {
     view();
     expect(document.querySelector(".drp-trigger").textContent).toContain("7 วันล่าสุด");
   });
+  it("เทียบตามรูปแบบชิ้นงาน: ชื่อไม่มีคำนำหน้า = ไม่ระบุ · กดชื่อรูปแบบแล้วกรองและใส่ในลิงก์", () => {
+    view();
+    const table = within(screen.getByRole("region", { name: "เทียบตามรูปแบบชิ้นงาน" }));
+    const row = table.getByRole("button", { name: "ไม่ระบุ" }).closest("tr");
+    expect(row.textContent).toContain("4");
+    expect(row.textContent).toContain("฿7,300.00");
+    fireEvent.click(table.getByRole("button", { name: "ไม่ระบุ" }));
+    expect(table.getByRole("button", { name: "ไม่ระบุ" }).getAttribute("aria-pressed")).toBe("true");
+    expect(shown()).toHaveLength(4);
+  });
 });

@@ -1,9 +1,9 @@
-/* ตัวเลขทั้งหน้า Overview จากข้อมูล + ตัวกรอง — logic ล้วน ใช้ร่วมกับหน้ารายงานประชุม (ตัวเลขชุดเดียวกันทุกหน้า) */
+/* ตัวเลขทั้งหน้า Overview จากข้อมูล + ตัวกรอง — logic ล้วน (แยกจาก component ให้เทสได้) */
 import { analyticsCards } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, filterByChannel, revenueBasisCards, share } from "../adsOverview.js";
 import { compareRange, effectiveCompare, isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
 import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues, plansFromTargets } from "../adsTargets.js";
-import { applySalesToBrands, applySalesToSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals, salesFactsByBrand, salesPipeline } from "./salesOverview.js";
+import { applySalesToBrands, applySalesToSummary, channelFunnel, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals, salesFactsByBrand, salesPipeline } from "./salesOverview.js";
 import { metricCoverage } from "./salesFacts.js";
 import { SALES_BRAND_IDS } from "./syncSources.js";
 
@@ -48,6 +48,7 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
     let pipelines = metaPipelines;
     let overallPipeline = metaOverall;
     let goals;
+    let channelFunnels = null;
     if (real) {
       const coverage = metricCoverage(ads.sales);
       const pipeSales = salesFactsByBrand(ads.sales, { from: shownFrom, to: shownTo, today });
@@ -82,6 +83,12 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
         spend: sumOf((row) => row.spend), prevSpend: sumOf((row) => row.prevSpend),
         basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: shownTo,
       });
+      /* funnel แยกช่องทางที่ลูกค้าทัก (FB / LINE) — ภาพรวมรวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย */
+      const sourceIds = SALES_BRAND_IDS.filter((id) => brands.some((brand) => brand.id === id));
+      channelFunnels = {
+        overall: channelFunnel(ads.sales, { brandIds: sourceIds, from: shownFrom, to: shownTo, depositsSince: starts[starts.length - 1] ?? null }),
+        byBrand: Object.fromEntries(sourceIds.map((id) => [id, channelFunnel(ads.sales, { brandIds: [id], from: shownFrom, to: shownTo, depositsSince: coverage.get(id)?.deposits ?? null })])),
+      };
       const targets = goalTargetsByBrand(ads.salesGoals, goalMonth);
       const goalRows = new Map((ads.salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
       goals = {
@@ -113,5 +120,6 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       pipelines,
       overallPipeline,
       goals,
+      channelFunnels,
     };
 }
