@@ -2,6 +2,7 @@
    โครง: สรุปบนสุด → เรื่องที่ควรดู → ตารางแหล่งข้อมูล (แหล่งละแถว) → แท็บรายละเอียด (บัญชี Meta · ยอดขาย · สิทธิ์และคีย์ · ประวัติ)
    โหลดแยกทีละส่วน — ส่วนไหนยังไม่มาขึ้น "กำลังตรวจ…" ห้ามสรุปว่า "ยังไม่มี" จากค่าเก่า (บั๊กหน้าเดิมบน production)
    logic อยู่ใน syncOverview.js (มีเทส) · ไฟล์นี้ประกอบหน้าและสั่งงานเท่านั้น */
+import { fmtNum } from "../dash/charts/theme.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -24,7 +25,7 @@ import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
 import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
 import { SALES_BRAND_IDS, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
-import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
+import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import "./adsWorkspace.css";
 import "./syncStatus.css";
 
@@ -83,7 +84,7 @@ function AccountRow({ row }) {
   return <div className="sy-acct" role="row">
     <div role="cell" className="sy-acct-name"><b>{row.brand}</b><small>{row.provider} · {row.accountId}</small></div>
     <div role="cell"><StateChip state={state} label={row.label} /></div>
-    <div role="cell" data-label="ดึงล่าสุด"><b>{row.lastSuccessAt ? when(row.lastSuccessAt) : "ยังไม่เคยสำเร็จ"}</b><small>{row.ageHours == null ? "—" : `${row.ageHours.toFixed(1)} ชม.ก่อน`}</small></div>
+    <div role="cell" data-label="ดึงล่าสุด"><b>{row.lastSuccessAt ? when(row.lastSuccessAt) : "ยังไม่เคยสำเร็จ"}</b><small>{row.ageHours == null ? "—" : `${fmtNum(row.ageHours, 2)} ชม.ก่อน`}</small></div>
     <div role="cell" data-label="วันที่ขาด"><b>{row.missingDays ? `${row.missingDays} วัน` : row.connected ? "ไม่มี" : "—"}</b><small>{row.errorCode ? adsErrorText(row.errorCode, row.errorCode) : row.creativeEnabled ? "รวม Creative" : "สถิติเท่านั้น"}</small></div>
     <div role="cell" data-label="ตรวจยอดกับ Meta"><b>{row.reconciliation?.ready ? "ผ่าน 7 และ 30 วัน" : "ยังไม่ผ่าน"}</b></div>
   </div>;
@@ -101,6 +102,8 @@ const KIND_ICON = { meta: Database, sales: ShoppingBag, inventory: Radar, creati
 export function HistoryList({ items, filter, onFilter }) {
   const top = useRef(null);
   const pager = usePagination(items, { storageKey: "ssb.sync.historyPageSize", sizes: HISTORY_SIZES, defaultSize: 20, resetKey: filter });
+  // โหลดมาจำนวนจำกัด (ไม่ใช่ทั้ง 90 วัน) — บอกให้รู้ว่าเริ่มตั้งแต่เมื่อไร ไม่งั้นดูเหมือนมีแค่นั้น
+  const oldest = items.length ? items[items.length - 1].at : null;
   const groups = [];
   for (const item of pager.pageItems) {
     const key = item.at ? dayKey(item.at) : "unknown";
@@ -109,7 +112,7 @@ export function HistoryList({ items, filter, onFilter }) {
   }
   return <div className="sy-history" ref={top}>
     <div className="sy-filter" role="group" aria-label="กรองประวัติ">{HISTORY_FILTERS.map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => onFilter(key)}>{label}</button>)}</div>
-    <p className="sy-note">ตัวตั้งเวลาเรียกทุกชั่วโมงนาทีที่ 7 · ตรวจยอดและดึงยอดขายวันละครั้งหลัง 9 โมง · เก็บประวัติ 90 วัน · รอบที่ไม่มีงานไม่แสดง</p>
+    <p className="sy-note">ตัวตั้งเวลาเรียกทุกชั่วโมงนาทีที่ 7 · ตรวจยอดและดึงยอดขายวันละครั้งหลัง 9 โมง · รอบที่ไม่มีงานไม่แสดง{oldest ? ` · แสดงตั้งแต่ ${new Intl.DateTimeFormat("th-TH", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" }).format(new Date(oldest))} (ระบบเก็บไว้ 90 วัน)` : ""}</p>
     {items.length ? <>
       {groups.map((group) => <section className="sy-day" key={group.key}>
         <h4>{group.at ? dayHead(group.at) : "ไม่ทราบวัน"}</h4>
@@ -143,13 +146,13 @@ export function SyncStatusView() {
   const brands = useMemo(() => (data.brands ?? []).filter((brand) => brand.active !== false), [data.brands]);
 
   const [res, reload] = useResources({
-    syncRuns: () => apiClient.ads.recentSyncs(30),
+    syncRuns: () => apiClient.ads.recentSyncs(300),
     // สถานะบัญชีจริงอ่านได้ทุกคนที่ล็อกอิน (RLS read authenticated) — ถ้ากั้นเฉพาะหัวหน้าทีม คนอื่นจะเห็นค่าเก่าในหน้าตั้งค่า
     connections: !demo ? () => apiClient.ads.connections() : null,
     recons: () => apiClient.ads.reconciliations(),
     coverage: !demo ? () => apiClient.ads.syncCoverage() : null,
-    ticks: () => apiClient.ads.cronTicks(),
-    pipes: () => apiClient.ads.pipelineRuns({ limit: 120 }),
+    ticks: () => apiClient.ads.cronTicks(300),
+    pipes: () => apiClient.ads.pipelineRuns({ limit: 200 }),
     facts: () => apiClient.ads.businessFacts({ from: salesSince, to: today }),
     goals: () => apiClient.ads.salesGoals(`${today.slice(0, 7)}-01`),
     oauth: () => apiClient.ads.oauthStatus(),
@@ -199,9 +202,11 @@ export function SyncStatusView() {
   });
   const verdict = syncVerdict({ loading: anyLoading, issues });
   const lastData = [rows.meta.state !== "loading" ? metaAccounts.map((row) => row.lastSuccessAt).filter(Boolean).sort().at(-1) : null, pipes.filter((run) => run.pipeline === "sales" && run.status !== "failed").map((run) => run.started_at).sort().at(-1)].filter(Boolean).sort().at(-1);
+  // บัญชีที่ดึงนานสุดถึงคิวก่อน — ใช้บอกเวลาดึงค่าแอดรอบถัดไปจริง (tick ที่ไม่มีงานไม่นับ)
+  const oldestMetaSync = metaAccounts.filter((row) => row.connected).map((row) => row.lastSuccessAt).filter(Boolean).sort()[0] ?? null;
   const unusedProviders = ADS_PROVIDERS.filter((provider) => provider.id !== "meta" && !accounts.some((row) => row.providerId === provider.id)).map((provider) => provider.name);
   const waitingBrands = brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id));
-  const timeline = useMemo(() => historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts: metaAccounts, kind: historyFilter, limit: 500 }), [ticks, syncRuns, pipes, metaAccounts, historyFilter]);
+  const timeline = useMemo(() => historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts: metaAccounts, kind: historyFilter, limit: 1000 }), [ticks, syncRuns, pipes, metaAccounts, historyFilter]);
 
   /* ── งานที่สั่งได้ (หัวหน้าทีม) ── */
   const [syncing, setSyncing] = useState(null);
@@ -336,7 +341,7 @@ export function SyncStatusView() {
         <VerdictIcon size={22} aria-hidden="true" className={verdict.state === "loading" ? "spin" : undefined} />
         <div>
           <strong>{verdict.title}</strong>
-          <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${clock(lastData)} (${ago(lastData, now)})` : "—"} · รอบอัตโนมัติถัดไป {clock(nextCronAt(now))}</>}</span>
+          <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${clock(lastData)} (${ago(lastData, now)})` : "—"} · ดึงค่าแอดรอบถัดไปราว {clock(nextSyncAt(oldestMetaSync, config.sources?.meta?.syncEveryHours ?? 6, now))}</>}</span>
         </div>
       </div>
       {issues.length > 0 && <ul className="sy-issues" aria-label="เรื่องที่ควรดู">{issues.map((issue) => <li key={issue.key} className={issue.level}>

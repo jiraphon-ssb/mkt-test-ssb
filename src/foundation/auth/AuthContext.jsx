@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { supabase, isSupabaseConfigured } from "../data/supabaseClient.js";
 import { permsOf } from "../rbac/can.js";
 import { buildUser, isMissingTable } from "./buildUser.js";
+import { queryUnlessMissing } from "./missingTables.js";
 
 
 /* Real auth (Supabase) — replaces the Phase-1 stub. On sign-in we load the
@@ -62,8 +63,8 @@ function SupabaseAuthProvider({ children }) {
       return;
     }
     const [roleRes, saleRes, mktRes] = await Promise.all([
-      supabase.from("user_role").select("entity, role, approve_limit").eq("user_id", session.user.id),
-      supabase.from("sale_user_role").select("role, default_brand").eq("user_id", session.user.id),
+      queryUnlessMissing("user_role", () => supabase.from("user_role").select("entity, role, approve_limit").eq("user_id", session.user.id)),
+      queryUnlessMissing("sale_user_role", () => supabase.from("sale_user_role").select("role, default_brand").eq("user_id", session.user.id)),
       supabase.from("mkt_profile").select("id, display_name, role, active").eq("auth_user_id", session.user.id).maybeSingle(),
     ]);
     // ตารางที่โปรเจกต์นี้ไม่มี (เช่นเซิร์ฟเทส mkt_* ไม่มี user_role/sale_user_role) = ไม่มีแถว ไม่ใช่ error

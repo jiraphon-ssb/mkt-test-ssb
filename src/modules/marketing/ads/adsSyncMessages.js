@@ -37,6 +37,8 @@ const TEXT = {
   ACCOUNT_ID_INVALID: "Account ID ต้องเป็น act_ ตามด้วยตัวเลข",
   MAPPINGS_INVALID: "ข้อมูล mapping ไม่ถูกต้อง",
   // ── ระบบขาย (sales-sync) ──
+  SUPERSEDED_PURCHASE_FIX: "ยกเลิกรอบนี้ — ดึงใหม่แล้วหลังแก้การนับยอด purchase (15–16 ก.ย.)",
+  STALE_RUN: "รอบค้างเกินเวลา ระบบปิดให้แล้ว รอบถัดไปดึงช่วงนี้ใหม่",
   SALES_API_NOT_CONFIGURED: "ยังไม่ได้ตั้ง SALES_API_URL / SALES_API_KEY ใน Edge Function Secrets",
   SALES_READ_FAILED: "อ่านข้อมูลจากระบบขายไม่สำเร็จ — กด “ตรวจการเชื่อมต่อ” เพื่อดูว่าคีย์หรือ URL มีปัญหาไหม",
   SALES_RESPONSE_INVALID: "ระบบขายตอบกลับผิดรูป ยังไม่ได้บันทึกอะไร",

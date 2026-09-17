@@ -2191,7 +2191,10 @@ const notifications = {
       .select("id", { count: "exact", head: true })
       .is("read_at", null);
     if (error) throw error;
-    return count ?? 0;
+    // head request: ตารางไม่มี supabase-js คืน 204 · count null · error null (ไม่ใช่ 404) — ถือว่าไม่มีตาราง
+    // ให้กระดิ่งซ่อนตัวแทนการโชว์ 0 ตลอดไป (โปรเจกต์ ads ไม่มี app_notification)
+    if (count == null) throw Object.assign(new Error("Could not find the table 'public.app_notification'"), { code: "PGRST205" });
+    return count;
   },
   // รายการล่าสุด (ใหม่→เก่า) + paging
   async list(limit = 20, offset = 0) {

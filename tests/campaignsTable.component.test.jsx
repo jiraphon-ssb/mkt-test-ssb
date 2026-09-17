@@ -55,17 +55,24 @@ describe("CampaignsTable — ข้อมูลจริง: การ์ดย�
     const { container } = show({ salesSummary: { revenue: 80000, revenueNew: 60000, orders: 4, spend: 4000, roas: 20, pctAds: 4000 / 60000, excludedWaiting: ["JUNTAKARN"], excludedNoData: [] } });
     const summary = container.querySelector(".cp-summary");
     expect(within(summary).getByText("ยอดขายจริง · ระบบขาย")).toBeTruthy();
-    expect(within(summary).getByText("฿80,000")).toBeTruthy();
-    expect(within(summary).getByText(/ROAS จริง 20\.0x · %Ads ยอดใหม่ 6\.7%/)).toBeTruthy();
-    expect(within(summary).getByText(/Meta เห็น ฿9,000 · ROAS Meta 2\.3x/)).toBeTruthy();
+    expect(within(summary).getByText("฿80,000.00")).toBeTruthy();
+    expect(within(summary).getByText(/ROAS จริง 20\.00x · %Ads ยอดใหม่ 6\.66%/)).toBeTruthy();
+    expect(within(summary).getByText(/Meta เห็น ฿9,000\.00 · ROAS Meta 2\.25x/)).toBeTruthy();
     expect(within(summary).getByText("ไม่รวม JUNTAKARN (รอเชื่อมแหล่งข้อมูล)")).toBeTruthy();
+  });
+
+  it("ข้อมูลจริง: การ์ดผลลัพธ์ไม่ขึ้นเป้าคนทัก (คนทักจาก Meta ไม่เทียบกับเป้าคนทักของระบบขาย) · เพดาน CPL ยังขึ้น", () => {
+    const { container } = show({ goalTargets: { inquiries: 1000, cpl: 400 }, targetPeriod: { mode: "month", elapsed: 0.5 }, salesSummary: { revenue: 80000, revenueNew: 60000, spend: 4000, roas: 20, pctAds: 0.06, excludedWaiting: [], excludedNoData: [] } });
+    const results = [...container.querySelectorAll(".cp-summary article")].find((a) => a.textContent.startsWith("ผลลัพธ์"));
+    expect(results.querySelectorAll(".ads-goal")).toHaveLength(1);   // เหลือแค่ CPL
+    expect(results.textContent).not.toMatch(/เป้าคนทัก|1,000/);
   });
 
   it("basis ยอดใหม่ = หัวการ์ดบอกว่าเป็นยอดลูกค้าใหม่ · ROAS ยอดใหม่", () => {
     const { container } = show({ salesSummary: { basis: "new", revenue: 60000, revenueTotal: 80000, revenueNew: 60000, spend: 4000, roas: 15, pctAds: 4000 / 60000, excludedWaiting: [], excludedNoData: [] } });
     const summary = container.querySelector(".cp-summary");
     expect(within(summary).getByText("ยอดลูกค้าใหม่ · ระบบขาย")).toBeTruthy();
-    expect(within(summary).getByText(/ROAS ยอดใหม่ 15\.0x · %Ads ยอดใหม่ 6\.7% · ยอดรวม ฿80,000/)).toBeTruthy();
+    expect(within(summary).getByText(/ROAS ยอดใหม่ 15\.00x · %Ads ยอดใหม่ 6\.66% · ยอดรวม ฿80,000\.00/)).toBeTruthy();
   });
 
   it("แบรนด์ที่เลือกยังไม่มีแหล่ง = บอกเหตุผล ไม่ขึ้น ฿0", () => {
@@ -88,8 +95,8 @@ describe("CampaignsTable — สิ่งที่เห็นบนหน้า
   it("ยอดรวมด้านบนตรงกับผลรวมของแถวที่แสดง", () => {
     const { container } = show();
     const summary = container.querySelector(".cp-summary");
-    expect(within(summary).getByText("฿4,000")).toBeTruthy();      // 1000 + 1000 + 2000
-    expect(within(summary).getByText("2 แคมเปญ · งบที่ตั้ง ฿10,000")).toBeTruthy();
+    expect(within(summary).getByText("฿4,000.00")).toBeTruthy();      // 1000 + 1000 + 2000
+    expect(within(summary).getByText("2 แคมเปญ · งบที่ตั้ง ฿10,000.00")).toBeTruthy();
     expect(within(summary).getByText("8")).toBeTruthy();            // ผลลัพธ์รวม 4 + 4 + 0
   });
 

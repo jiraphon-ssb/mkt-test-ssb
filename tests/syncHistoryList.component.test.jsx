@@ -36,4 +36,8 @@ describe("HistoryList", () => {
     rerender(<HistoryList items={sales} filter="sales" onFilter={() => {}} />);
     expect(document.querySelector(".pg-count").textContent).toContain("1–20");
   });
+  it("บอกว่าประวัติที่แสดงเริ่มตั้งแต่เมื่อไร (โหลดมาจำนวนจำกัด ไม่ใช่ทั้ง 90 วัน)", () => {
+    render(<HistoryList items={items} filter="all" onFilter={() => {}} />);
+    expect(document.querySelector(".sy-note").textContent).toMatch(/แสดงตั้งแต่ 15 ก\.ย\./);
+  });
 });

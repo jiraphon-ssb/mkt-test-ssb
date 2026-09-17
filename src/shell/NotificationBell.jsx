@@ -5,6 +5,7 @@ import { Bell, CheckCheck } from "lucide-react";
 import { apiClient } from "../foundation/data/apiClient.js";
 import { useAuth } from "../foundation/auth/AuthContext.jsx";
 import { NotifRow } from "./notifMeta.jsx";
+import { isMissingTable } from "../foundation/auth/buildUser.js";
 
 /* กระดิ่งแจ้งเตือนบน Topbar — badge ยังไม่อ่าน + dropdown 15 รายการล่าสุด.
    สด: Supabase Realtime (INSERT ของฉัน) + refetch ตอนแท็บกลับมา focus.
@@ -18,28 +19,39 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(null); // null = ยังไม่โหลด
   const [unread, setUnread] = useState(0);
+  /* null = ยังไม่รู้ · false = โปรเจกต์นี้ไม่มีตาราง app_notification (เช่นโปรเจกต์ ads) → ไม่แสดงกระดิ่ง ไม่ยิง/ไม่ subscribe ซ้ำ */
+  const [available, setAvailable] = useState(null);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
   const panelRef = useRef(null);
   const navigate = useNavigate();
 
   const refreshCount = useCallback(() => {
-    apiClient.notifications.unreadCount().then(setUnread).catch(() => {});
+    apiClient.notifications.unreadCount()
+      .then((count) => { setUnread(count); setAvailable(true); })
+      .catch((error) => { if (isMissingTable(error)) setAvailable(false); });   // error อื่น (เน็ตสะดุด) = ลองใหม่รอบหน้า ไม่ซ่อนกระดิ่ง
   }, []);
 
-  // นับตอน mount + realtime เข้าใหม่ + กลับมาที่แท็บ
+  // นับตอน mount + กลับมาที่แท็บ (หยุดถ้ารู้แล้วว่าไม่มีตาราง)
   useEffect(() => {
-    refreshCount();
+    if (available === false) return undefined;
+    if (available === null) refreshCount();
     const onFocus = () => refreshCount();
     window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [available, refreshCount]);
+
+  // realtime เฉพาะเมื่อยืนยันแล้วว่ามีตาราง
+  useEffect(() => {
+    if (available !== true) return undefined;
     const unsub = apiClient.notifications.subscribe(userId, (row) => {
       setUnread((c) => c + 1);
       // ถ้าเคยโหลดลิสต์แล้ว (dropdown เปิดอยู่/เคยเปิด) เติมอันใหม่ไว้บนสุด —
       // อย่า null ทิ้ง ไม่งั้นถ้าเปิดค้างจะค้าง "กำลังโหลด…"
       setItems((xs) => (xs == null ? xs : [row, ...xs].slice(0, 15)));
     });
-    return () => { window.removeEventListener("focus", onFocus); unsub?.(); };
-  }, [userId, refreshCount]);
+    return () => { unsub?.(); };
+  }, [userId, available]);
 
   const place = () => {
     const r = btnRef.current?.getBoundingClientRect();
@@ -91,6 +103,7 @@ export default function NotificationBell() {
     setUnread(0);
   };
 
+  if (available === false) return null;
   return (
     <>
       <button

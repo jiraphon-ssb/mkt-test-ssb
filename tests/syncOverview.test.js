@@ -2,7 +2,7 @@
    กติกาหลัก: ระหว่างโหลดห้ามบอกว่า "ยังไม่มี/ยังไม่เชื่อม" (บั๊กบน production 17 ก.ย.) */
 import { describe, expect, it } from "vitest";
 import {
-  creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, salesSourceRow, syncIssues, syncVerdict,
+  creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, nextSyncAt, salesSourceRow, syncIssues, syncVerdict,
 } from "../src/modules/marketing/ads/syncOverview.js";
 
 const NOW = Date.parse("2026-09-17T03:00:00Z");   // 10:00 เวลาไทย
@@ -17,7 +17,7 @@ describe("metaSourceRow", () => {
   it("ครบ 4 บัญชี ปกติ = ok · บอกความสดจากบัญชีที่ดึงล่าสุด · ตรวจยอดผ่าน x/y", () => {
     const row = metaSourceRow({ accounts: [acc(), acc({ key: "b", reconciliation: { ready: false } })], ready: true, everyHours: 6, now: NOW });
     expect(row).toMatchObject({ state: "ok", stateLabel: "ปกติ", sub: "2 บัญชี" });
-    expect(row.fresh.text).toBe("4.9 ชม.ก่อน");
+    expect(row.fresh.text).toBe("4.90 ชม.ก่อน");
     expect(row.fresh.sub).toBe("ดึงทุก 6 ชม.");
     expect(row.complete).toEqual({ text: "ไม่มีวันขาด", sub: "ตรวจยอดผ่าน 1/2" });
   });
@@ -116,6 +116,17 @@ describe("nextCronAt", () => {
   });
 });
 
+describe("nextSyncAt — ดึงค่าแอดรอบถัดไปจริง (ไม่ใช่ tick ที่ไม่มีงาน)", () => {
+  it("ดึงล่าสุด 11:21 (04:21 UTC) ทุก 6 ชม. = ถึงรอบตั้งแต่ 10:11 UTC → tick 11:07 UTC (18:07 ไทย) · ผ่อนผัน 10 นาทีเหมือน cron", () => {
+    expect(nextSyncAt("2026-09-17T04:21:34Z", 6, Date.parse("2026-09-17T05:00:00Z"))).toBe("2026-09-17T11:07:00.000Z");
+    expect(nextSyncAt("2026-09-16T22:07:30Z", 6, Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-17T04:07:00.000Z");
+  });
+  it("เลยกำหนดแล้ว = tick ถัดไป · ไม่เคยดึง = tick ถัดไป", () => {
+    expect(nextSyncAt("2026-09-16T00:00:00Z", 6, Date.parse("2026-09-17T03:20:00Z"))).toBe("2026-09-17T04:07:00.000Z");
+    expect(nextSyncAt(null, 6, Date.parse("2026-09-17T03:20:00Z"))).toBe("2026-09-17T04:07:00.000Z");
+  });
+});
+
 describe("historyTimeline", () => {
   const accounts = [acc()];
   const ticks = [{ id: "t1", startedAt: "2026-09-17T02:07:00Z", status: "success", auto: true, planned: 0, synced: 0, reconciled: 0, rowsWritten: 0, durationMs: 2000 },
@@ -129,6 +140,17 @@ describe("historyTimeline", () => {
     expect(items[0]).toMatchObject({ title: "ดึงยอดขาย", detail: "เขียน 42 แถว", statusLabel: "สำเร็จ", tone: "ok", auto: true });
     expect(items[2]).toMatchObject({ title: "ดึงค่าแอด Meta · TEAMDEE", detail: "ล่าสุด · เขียน 174 แถว" });
     expect(items[3]).toMatchObject({ title: "รอบอัตโนมัติ", detail: "ดึง 4 ก้อน · เขียน 392 แถว" });
+  });
+  it("รอบที่ถูกยกเลิกโดยตั้งใจ (SUPERSEDED_*) = ยกเลิกแล้ว สีเทา พร้อมเหตุผล ไม่ใช่ ไม่สำเร็จ สีแดง · รหัสอื่นแปลเป็นภาษาคน", () => {
+    const runs = [
+      { id: "x1", connectionId: "c1", status: "failed", mode: "incremental", startedAt: "2026-09-16T03:54:00Z", rowsWritten: 0, errorCode: "SUPERSEDED_PURCHASE_FIX", auto: false },
+      { id: "x2", connectionId: "c1", status: "failed", mode: "backfill", startedAt: "2026-09-15T16:07:00Z", rowsWritten: 0, errorCode: "STALE_RUN", auto: true },
+    ];
+    const [superseded, stale] = historyTimeline({ syncRuns: runs, accounts });
+    expect(superseded).toMatchObject({ statusLabel: "ยกเลิกแล้ว", tone: "muted" });
+    expect(superseded.detail).not.toContain("SUPERSEDED");
+    expect(stale).toMatchObject({ statusLabel: "ไม่สำเร็จ", tone: "bad" });
+    expect(stale.detail).not.toContain("STALE_RUN");
   });
   it("กรองตามชนิด · ตัวกรองยอดขายรวมรอบสำรวจแหล่งของระบบขายด้วย", () => {
     expect(historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts, kind: "sales" }).map((i) => i.kind)).toEqual(["sales", "inventory"]);

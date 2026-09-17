@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SAVED_VIEWS, applyView, campaignTotals, sortCampaigns } from "../adsCampaigns.js";
 import { PlatformIcon, platformMeta } from "../ads/PlatformIcon.jsx";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
-import { baseOpts, chartColor, dayLabel, fmtCompact, fmtInt, fmtMoney, fmtPct, lineSeries, SERIES } from "../dash/charts/theme.js";
+import { baseOpts, chartColor, dayLabel, fmtCompact, fmtInt, fmtMoney, fmtPct, lineSeries, SERIES, fmtNum } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
 import { X } from "lucide-react";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { GoalLine } from "../ui/GoalLine.jsx";
 import { goalsFor } from "../adsTargets.js";
 
-const fmtRoas = (x) => (x == null ? "—" : `${x.toFixed(1)}x`);
+const fmtRoas = (x) => (x == null ? "—" : `${fmtNum(x, 2)}x`);
 const STATUS = { active: "กำลังรัน", paused: "พักอยู่", unknown: "ไม่ระบุสถานะ" };
 const SORTS = [
   ["spend", "desc", "ค่าแอดมากสุด"], ["spend", "asc", "ค่าแอดน้อยสุด"],
@@ -25,7 +25,7 @@ function DecisionBadge({ d }) {
 function Delta({ row, compareLabel }) {
   const value = row.delta.spend;
   if (value == null) return <small className="cp-delta ads-muted">เทียบไม่ได้</small>;
-  return <small className={`cp-delta ${value > 0 ? "up" : value < 0 ? "down" : ""}`}>ค่าแอด {value > 0 ? "▲" : value < 0 ? "▼" : "•"}{Math.abs(value).toFixed(0)}% <span>เทียบ{compareLabel}</span></small>;
+  return <small className={`cp-delta ${value > 0 ? "up" : value < 0 ? "down" : ""}`}>ค่าแอด {value > 0 ? "▲" : value < 0 ? "▼" : "•"}{fmtNum(Math.abs(value), 2)}% <span>เทียบ{compareLabel}</span></small>;
 }
 
 function BudgetPace({ row }) {
@@ -127,7 +127,7 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
     </div>
     <div className="cp-summary" aria-label="สรุปแคมเปญตามตัวกรอง">
       <article className="cp-summary-main"><span>ค่าแอด</span><strong className="mono">{fmtMoney(totals.spend)}</strong><small>{totals.count} แคมเปญ · งบที่ตั้ง {totals.budget != null ? fmtMoney(totals.budget) : "—"}</small>{totals.budget != null && totals.budgetRows < totals.count && <em>{totals.budgetRows}/{totals.count} แคมเปญมีงบ</em>}</article>
-      <article><span>ผลลัพธ์</span><strong className="mono">{fmtInt(totals.leads)}</strong><small>CPL {totals.cpl != null ? fmtMoney(totals.cpl) : "—"}</small>{goals && <><GoalLine metric="inquiries" goal={goals.inquiries} /><GoalLine metric="cpl" goal={goals.cpl} compact /></>}</article>
+      <article><span>ผลลัพธ์</span><strong className="mono">{fmtInt(totals.leads)}</strong><small>CPL {totals.cpl != null ? fmtMoney(totals.cpl) : "—"}</small>{goals && <>{!salesSummary && <GoalLine metric="inquiries" goal={goals.inquiries} />}<GoalLine metric="cpl" goal={goals.cpl} compact /></>}</article>
       {salesSummary
         ? <article><span>{salesSummary.basis === "new" ? "ยอดลูกค้าใหม่ · ระบบขาย" : "ยอดขายจริง · ระบบขาย"}</span>{salesMissing ? <strong className="cp-summary-missing">{salesMissing}</strong> : <strong className="mono">{fmtMoney(salesSummary.revenue)}</strong>}{!salesMissing && <small>{salesSummary.basis === "new" ? "ROAS ยอดใหม่" : "ROAS จริง"} {fmtRoas(salesSummary.roas)} · %Ads ยอดใหม่ {salesSummary.pctAds != null ? fmtPct(salesSummary.pctAds, 1) : "—"}{salesSummary.basis === "new" && salesSummary.revenueTotal != null ? ` · ยอดรวม ${fmtMoney(salesSummary.revenueTotal)}` : ""}</small>}<small>Meta เห็น {fmtMoney(totals.revenue)} · ROAS Meta {fmtRoas(totals.roas)}</small>{salesExcluded.map((text) => <small key={text}>{text}</small>)}{goals && !salesMissing && <><GoalLine metric="roas" goal={goals.roas} compact /><GoalLine metric="pctAds" goal={goals.pctAds} compact /></>}</article>
         : <article><span>{revenueLabel}</span><strong className="mono">{fmtMoney(totals.revenue)}</strong><small>ROAS แพลตฟอร์ม {fmtRoas(totals.roas)} · %Ads {totals.pctAds != null ? fmtPct(totals.pctAds, 1) : "—"}</small>{goals && <><GoalLine metric="roas" goal={goals.roas} compact /><GoalLine metric="pctAds" goal={goals.pctAds} compact /></>}</article>}
@@ -141,7 +141,7 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
       {SAVED_VIEWS.map((s) => <button key={s.key} type="button" role="tab" aria-selected={view === s.key} className={view === s.key ? "active" : ""} onClick={() => setView(s.key)}><span>{s.label}</span><b className="mono">{counts[s.key]}</b></button>)}
     </div>
 
-    {shown.length > 0 && <details className="cp-overview-trend"><summary>ดูแนวโน้มรวมของ {shown.length} แคมเปญ</summary><div><header><div className="cp-metric-tabs" role="tablist" aria-label="ตัวชี้วัดกราฟรวม">{TREND_METRICS.map(([key, label]) => <button type="button" role="tab" aria-selected={trendMetric === key} className={trendMetric === key ? "active" : ""} key={key} onClick={() => setTrendMetric(key)}>{label}</button>)}</div><span>รายวัน · ตามช่วงที่เลือก</span></header><ChartBox type="line" height={190} ariaLabel={`แนวโน้ม${TREND_METRICS.find(([key]) => key === trendMetric)?.[1]}รวม`} data={{ labels: trend.days.map(dayLabel), datasets: [{ label: TREND_METRICS.find(([key]) => key === trendMetric)?.[1], data: trend.values, borderColor: SERIES.blue, backgroundColor: "rgba(111,140,245,.10)", fill: true, ...lineSeries(trend.days.length) }] }} options={baseOpts({ scales: { x: { grid: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } }, y: { beginAtZero: true, grid: { color: chartColor.line(), drawTicks: false }, border: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 11 }, callback: (v) => trendMetric === "roas" ? `${Number(v).toFixed(1)}x` : fmtCompact(v) } } }, plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y == null ? "—" : trendMetric === "roas" ? `${c.parsed.y.toFixed(1)}x` : trendMetric === "leads" ? fmtInt(c.parsed.y) : fmtMoney(c.parsed.y)}` } } } })} /></div></details>}
+    {shown.length > 0 && <details className="cp-overview-trend"><summary>ดูแนวโน้มรวมของ {shown.length} แคมเปญ</summary><div><header><div className="cp-metric-tabs" role="tablist" aria-label="ตัวชี้วัดกราฟรวม">{TREND_METRICS.map(([key, label]) => <button type="button" role="tab" aria-selected={trendMetric === key} className={trendMetric === key ? "active" : ""} key={key} onClick={() => setTrendMetric(key)}>{label}</button>)}</div><span>รายวัน · ตามช่วงที่เลือก</span></header><ChartBox type="line" height={190} ariaLabel={`แนวโน้ม${TREND_METRICS.find(([key]) => key === trendMetric)?.[1]}รวม`} data={{ labels: trend.days.map(dayLabel), datasets: [{ label: TREND_METRICS.find(([key]) => key === trendMetric)?.[1], data: trend.values, borderColor: SERIES.blue, backgroundColor: "rgba(111,140,245,.10)", fill: true, ...lineSeries(trend.days.length) }] }} options={baseOpts({ scales: { x: { grid: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } }, y: { beginAtZero: true, grid: { color: chartColor.line(), drawTicks: false }, border: { display: false }, ticks: { color: chartColor.inkFaint(), font: { size: 11 }, callback: (v) => trendMetric === "roas" ? `${Number(v).toFixed(1)}x` : fmtCompact(v) } } }, plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y == null ? "—" : trendMetric === "roas" ? `${fmtNum(c.parsed.y, 2)}x` : trendMetric === "leads" ? fmtInt(c.parsed.y) : fmtMoney(c.parsed.y)}` } } } })} /></div></details>}
 
     <div ref={listTop} />
     {shown.length === 0 ? <div className="cp-empty"><b>{emptyText}</b><span>ลองเปลี่ยนช่วงเวลา แบรนด์ ช่องทาง หรือกลุ่มการตัดสินใจ</span></div> : <div className="cp-campaign-list">
@@ -154,7 +154,7 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
             <div className="cp-campaign-name"><PlatformIcon channel={row.platform} size={18} /><div><h3>{row.name}</h3><p>{row.brand} · {row.platform} · {row.objective ?? "ไม่ระบุเป้าหมาย"} · {STATUS[row.status]}</p></div></div>
             <div className="cp-metric" data-label="ค่าแอด"><b className="mono">{fmtMoney(row.spend)}</b><small>{row.spendShare != null ? `${fmtPct(row.spendShare, 0)} ของรายการ` : "—"}</small><Delta row={row} compareLabel={compareLabel} /></div>
             <div className="cp-metric" data-label="ผลลัพธ์"><b className="mono">{fmtInt(row.leads)}</b><small>CPL {row.cpl != null ? fmtMoney(row.cpl) : "—"}</small></div>
-            <div className="cp-metric cp-efficiency" data-label="ประสิทธิภาพ"><b className="mono">{fmtRoas(row.roas)}</b><small>CTR {row.ctr != null ? fmtPct(row.ctr, 2) : "—"} · ความถี่ {row.frequency != null ? `${row.frequency.toFixed(1)}x` : "—"}</small></div>
+            <div className="cp-metric cp-efficiency" data-label="ประสิทธิภาพ"><b className="mono">{fmtRoas(row.roas)}</b><small>CTR {row.ctr != null ? fmtPct(row.ctr, 2) : "—"} · ความถี่ {row.frequency != null ? `${fmtNum(row.frequency, 2)}x` : "—"}</small></div>
             <div className="cp-metric cp-budget" data-label="งบเดือน / จังหวะ"><BudgetPace row={row} /></div>
             <div className="cp-decision" data-label="ควรทำต่อ"><DecisionBadge d={row.decision} /><small>{row.decision.why}</small></div>
             <button type="button" className="cp-expand" aria-expanded={open} aria-label={`${open ? "ซ่อน" : "ดู"}รายละเอียด ${row.name}`} onClick={() => setOpenKey((key) => key === row.key ? null : row.key)}><Icon name="chevron" size={14} /></button>

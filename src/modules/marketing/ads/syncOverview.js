@@ -2,6 +2,7 @@
    หน้าตอบคำถามเดียว: ข้อมูลแต่ละแหล่งมาครบ สด เชื่อถือได้ไหม และต้องแก้อะไร
    กติกา: ข้อมูลส่วนไหนยังโหลดไม่เสร็จ = state "loading" ห้ามสรุปว่า "ยังไม่มี/ยังไม่เชื่อม" จากค่าเก่า
    (บน production หน้าเดิมโชว์ "ยังไม่เคยดึง" ระหว่างรอ API ทั้งที่ดึงสำเร็จแล้ว) */
+import { fmtNum } from "../dash/charts/theme.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { tokenDaysLeft } from "./syncSources.js";
 
@@ -16,8 +17,8 @@ export function ago(value, now = Date.now()) {
   const t = time(value);
   if (t === null) return "—";
   const ms = Math.max(0, now - t);
-  if (ms < HOUR) return `${Math.max(1, Math.round(ms / 60_000))} นาทีก่อน`;
-  if (ms < 48 * HOUR) return `${(ms / HOUR).toFixed(1)} ชม.ก่อน`;
+  if (ms < HOUR) return `${Math.max(1, Math.floor(ms / 60_000))} นาทีก่อน`;
+  if (ms < 48 * HOUR) return `${fmtNum((ms / HOUR), 2)} ชม.ก่อน`;
   return `${Math.floor(ms / (24 * HOUR))} วันก่อน`;
 }
 
@@ -42,7 +43,7 @@ export function metaSourceRow({ accounts = [], ready = true, everyHours = null, 
   return {
     ...base, sub: `${connected.length} บัญชี`, state, stateLabel,
     hint: errors ? "ดูรหัสปัญหาในแท็บบัญชี Meta" : missing || stale ? "กดดึงข้อมูลตอนนี้เพื่อเติมช่วงที่ขาด" : null,
-    fresh: { text: newest ? `${newest.ageHours.toFixed(1)} ชม.ก่อน` : latest ? ago(latest, now) : "ยังไม่เคยดึง", sub: everyHours ? `ดึงทุก ${everyHours} ชม.` : null },
+    fresh: { text: newest ? `${fmtNum(newest.ageHours, 2)} ชม.ก่อน` : latest ? ago(latest, now) : "ยังไม่เคยดึง", sub: everyHours ? `ดึงทุก ${everyHours} ชม.` : null },
     complete: { text: gap ? `ขาด ${gap} วัน` : "ไม่มีวันขาด", sub: `ตรวจยอดผ่าน ${reconciled}/${connected.length}` },
   };
 }
@@ -142,6 +143,14 @@ export function nextCronAt(now = Date.now()) {
   return d.toISOString();
 }
 
+/** ดึงค่าแอดรอบถัดไปจริง — tick นาทีที่ 7 ตัวแรกที่ครบรอบ (ผ่อนผัน 10 นาทีเท่ากับ cronDue ใน _shared/adsCron.js) */
+export function nextSyncAt(lastSuccessAt, everyHours = 6, now = Date.now()) {
+  const last = time(lastSuccessAt);
+  const hours = Number(everyHours) > 0 ? Math.min(24, Number(everyHours)) : 6;
+  const dueAt = last === null ? now : last + hours * HOUR - 10 * 60_000;
+  return nextCronAt(Math.max(now, dueAt) - 1);
+}
+
 const MODE = { incremental: "ล่าสุด", backfill: "ย้อนหลัง" };
 const PIPELINE = { sales: "ดึงยอดขาย", inventory: "สำรวจแหล่งข้อมูลระบบขาย", creatives: "รีเฟรช Creative" };
 
@@ -158,7 +167,8 @@ export function historyTimeline({ ticks = [], syncRuns = [], pipelineRuns = [], 
       title: `${PIPELINE[run.pipeline] ?? run.pipeline}${brand ? ` · ${brand}` : ""}`, detail: detail || null, statusLabel, tone, auto: run.trigger_kind !== "manual" });
   }
   for (const run of syncRuns) {
-    const [statusLabel, tone] = statusOf(run.status);
+    // รอบที่ถูกยกเลิกโดยตั้งใจ (เช่นแก้การนับ purchase แล้วดึงใหม่) ไม่ใช่ความผิดพลาด — อย่าขึ้นแดง
+    const [statusLabel, tone] = String(run.errorCode ?? "").startsWith("SUPERSEDED_") ? ["ยกเลิกแล้ว", "muted"] : statusOf(run.status);
     const brand = names.get(run.connectionId) ?? "ไม่ทราบบัญชี";
     const reconcile = run.mode === "reconcile";
     const detail = reconcile ? null : [MODE[run.mode] ?? run.mode, `เขียน ${num(run.rowsWritten)} แถว`, run.errorCode ? adsErrorText(run.errorCode, run.errorCode) : null].filter(Boolean).join(" · ");
