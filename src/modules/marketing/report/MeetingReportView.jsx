@@ -14,6 +14,7 @@ import { isoDay } from "../adsScope.js";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
+import { CompareControl } from "../ui/CompareControl.jsx";
 import { useReportFilters } from "../ui/useReportFilters.js";
 import { fmtInt, fmtMoney, fmtNum, fmtPct } from "../dash/charts/theme.js";
 import { CREATIVE_MIN_SPEND, reportCampaigns, reportCreatives, reportDrivers, reportEfficiency, reportFunnel, reportHeadline, reportSales } from "./meetingReport.js";
@@ -43,10 +44,8 @@ export function MeetingReportView() {
   const { data, inBrandScope, brandFilter } = useApp();
   const ads = useAdsData();
   const { search } = useLocation();
-  const [rawFilters, setFilters] = useReportFilters();
-  /* เดือนนี้: Overview คิดยอดกับวันเดียวกันของเดือนก่อน แต่ funnel/ROAS/แคมเปญใช้ช่วงก่อนหน้า (ยาวเท่ากัน) — คนละฐาน
-     รายงานประชุมบังคับฐานเดียวทั้งหน้า = วันเดียวกันเดือนก่อน ไม่ให้เอาตัวเลขต่างฐานมาวางคู่กัน */
-  const filters = useMemo(() => rawFilters.period === "mtd" ? { ...rawFilters, compare: "lastMonth" } : rawFilters, [rawFilters]);
+  // ฐานเทียบของเดือนนี้ล็อกใน model (effectiveCompare) — ทุกหน้าใช้ฐานเดียวกัน
+  const [filters, setFilters] = useReportFilters();
   const [copied, setCopied] = useState(false);
   const todayLocal = isoDay(new Date());
   const scopeBrand = filters.brand !== "all" ? filters.brand : brandFilter;
@@ -89,7 +88,7 @@ export function MeetingReportView() {
         <div className="aw-presets" role="group" aria-label="รอบรายงาน">{QUICK.map(([key, label]) => <button key={key} type="button" aria-pressed={filters.period === key} className={filters.period === key ? "active" : ""} onClick={() => setFilters({ period: key })}>{label}</button>)}</div>
         <DateRangePicker period={filters.period} from={shownFrom} to={shownTo} max={todayLocal} onChange={({ period, from, to }) => setFilters({ period, from, to })} />
         <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...brandOptions.map((b) => [b.id, b.name])]} value={brandOptions.some((b) => b.id === filters.brand) ? filters.brand : "all"} onChange={(brand) => setFilters({ brand })} />
-        {filters.period === "mtd" ? <span className="mr-fixed-compare">เทียบ · วันเดียวกันเดือนก่อน</span> : <Dropdown label="เทียบ" options={[["previous", filters.period === "wtd" ? "สัปดาห์ก่อน" : "ช่วงก่อน"], ["lastMonth", "เดือนก่อน"]]} value={filters.compare} onChange={(compare) => setFilters({ compare })} />}
+        <CompareControl period={filters.period} value={filters.compare} onChange={(compare) => setFilters({ compare })} />
         <RevenueBasisToggle value={filters.basis} onChange={(basis) => setFilters({ basis })} />
       </div>
     </section>

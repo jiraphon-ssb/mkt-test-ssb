@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Search, Settings2 } from "lucide-react";
 import { Dropdown } from "../ui/Dropdown.jsx";
+import { CompareControl } from "../ui/CompareControl.jsx";
 import { useApp } from "../useMkt.jsx";
 import { isoDay } from "../adsScope.js";
 import { buildCampaignsModel } from "./campaignsModel.js";
@@ -56,7 +57,7 @@ export function CampaignsView() {
         <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
         <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((b) => [b.id, `${b.name} · ${v.byBrand[b.id]?.count ?? 0}`])]} value={v.selectedBrand} onChange={setBrandSel} />
         <Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.channelList.map((c) => [c, c])]} value={channel} onChange={setChannel} />
-        <Dropdown label="เทียบ" options={[["previous", "ช่วงก่อน"], ["lastMonth", "เดือนก่อน"]]} value={compare} onChange={setCompare} />
+        <CompareControl period={period} value={compare} onChange={setCompare} />
         <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
         <details className="cp-more-filters"><summary>ตัวกรอง{advancedCount ? ` · ${advancedCount}` : ""}</summary><div>
           <label><span>สถานะ</span><Dropdown className="dd--block" ariaLabel="สถานะ" options={[["all", "ทั้งหมด"], ...v.statuses.map((x) => [x, x === "active" ? "กำลังรัน" : x === "paused" ? "พักอยู่" : "ไม่ระบุ"])]} value={status} onChange={setStatus} /></label>

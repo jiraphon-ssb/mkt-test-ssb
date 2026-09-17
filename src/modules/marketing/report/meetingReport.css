@@ -79,7 +79,6 @@
   .mr-q-n { width:28px; height:28px; }
   .mr-headline li { font-size:14px; }
 }
-.mr-fixed-compare { display:inline-flex; align-items:center; min-height:34px; padding:0 11px; border:1px dashed var(--line); border-radius:8px; color:var(--ink-soft); font-size:12px; white-space:nowrap; }
 /* สีบอกโทนอยู่ที่จุดหน้าบรรทัดเท่านั้น — ตัวอักษรคงสีปกติให้อ่านง่ายบนจอประชุม */
 .mr .mr-headline li { color:var(--ink); }
 .mr-change em { font-style:normal; font-weight:600; }

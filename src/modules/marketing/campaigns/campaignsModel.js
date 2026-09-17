@@ -2,7 +2,7 @@
 import { analyticsCards } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
 import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
-import { compareRange, isoDay, periodRange } from "../adsScope.js";
+import { compareRange, effectiveCompare, isoDay, periodRange } from "../adsScope.js";
 import { combineTargets, normalizeTargets, periodForTargets, plansFromTargets } from "../adsTargets.js";
 import { adsDataHealth } from "../ads/adsDataHealth.js";
 import { campaignSalesSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals } from "../ads/salesOverview.js";
@@ -20,7 +20,8 @@ function realGoalTargets(brands, selectedBrand, salesTargets, salesGoals, goalMo
 
 /** filters = ตัวกรองรายงาน (useReportFilters) รวมตัวกรองเฉพาะหน้า status · objective · budget · q (ไม่ส่ง = ทั้งหมด) */
 export function buildCampaignsModel({ data, ads, inBrandScope, brandFilter, filters, todayLocal = isoDay(new Date()) }) {
-  const { period, from: customFrom, to: customTo, compare, channel, brand: brandSel = "all", status = "all", objective = "all", budget: budgetState = "all", basis: revenueBasis, q: query = "" } = filters;
+  const { period, from: customFrom, to: customTo, compare: chosenCompare, channel, brand: brandSel = "all", status = "all", objective = "all", budget: budgetState = "all", basis: revenueBasis, q: query = "" } = filters;
+  const compare = effectiveCompare(period, chosenCompare);
     const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
     const range = periodRange(period, customFrom, customTo);

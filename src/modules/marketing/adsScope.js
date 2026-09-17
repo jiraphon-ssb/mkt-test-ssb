@@ -39,6 +39,8 @@ export function compareRange(period, range, compare) {
   if (period === "wtd") return { start: addDaysLocal(start, -7).toISOString(), end: addDaysLocal(end, -7).toISOString() };
   return { start: new Date(start.getTime() - (end - start)).toISOString(), end: range.start };
 }
+/** ฐานเทียบที่ใช้จริง: "เดือนนี้" เทียบวันเดียวกันของเดือนก่อนเสมอ (ยอด/เป้า/จังหวะคิดแบบเดือน · ทุกตัวบนหน้าต้องฐานเดียวกัน) */
+export const effectiveCompare = (period, compare) => (period === "mtd" ? "lastMonth" : compare);
 export const PERIOD_PRESETS = [
   ["today", "วันนี้"], ["yesterday", "เมื่อวาน"], ["wtd", "สัปดาห์นี้"], ["lastWeek", "สัปดาห์ก่อน"], ["7d", "7 วันล่าสุด"], ["14d", "14 วันล่าสุด"],
   ["30d", "30 วันล่าสุด"], ["mtd", "เดือนนี้"], ["lastMonth", "เดือนก่อน"],

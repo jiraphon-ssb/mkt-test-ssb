@@ -191,3 +191,5 @@
 .acc-crule-grid .acc-input-unit:has(input[aria-invalid=true]) { border-color:var(--warn-text); }
 .acc-crule-grid .acc-input-unit input::placeholder { color:var(--ink-faint,var(--ink-soft)); }
 .acc-crule-grid .acc-crule-remove { align-self:end; }
+/* ฐานเทียบที่ล็อกไว้ (ช่วงเดือนนี้) — ขอบประ บอกว่าไม่ใช่ปุ่ม */
+.aw-fixed-compare { display:inline-flex; align-items:center; min-height:34px; padding:0 11px; border:1px dashed var(--line); border-radius:8px; color:var(--ink-soft); font-size:12px; white-space:nowrap; }

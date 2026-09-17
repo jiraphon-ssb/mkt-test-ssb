@@ -6,6 +6,7 @@ import { Icon } from "../mktIcon.jsx";
 import { PlatformIcon, platformMeta } from "./PlatformIcon.jsx";
 import { AdsWorkspace } from "./AdsWorkspace.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
+import { CompareControl } from "../ui/CompareControl.jsx";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
 import { isoDay } from "../adsScope.js";
@@ -261,6 +262,6 @@ export function AdsView() {
     <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
     <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
     <Dropdown label="ช่องทาง" options={[["all", "ทั้งหมด"], ...v.channelList.map((item) => [item, item])]} value={channel} onChange={setChannel} />
-    <Dropdown label="เทียบ" options={[["previous", "ช่วงก่อน"], ["lastMonth", "เดือนก่อน"]]} value={compare} onChange={setCompare} />
+    <CompareControl period={period} value={compare} onChange={setCompare} />
   </>} />;
 }

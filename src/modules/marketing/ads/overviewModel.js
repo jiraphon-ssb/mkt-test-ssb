@@ -1,14 +1,15 @@
 /* ตัวเลขทั้งหน้า Overview จากข้อมูล + ตัวกรอง — logic ล้วน ใช้ร่วมกับหน้ารายงานประชุม (ตัวเลขชุดเดียวกันทุกหน้า) */
 import { analyticsCards } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, filterByChannel, revenueBasisCards, share } from "../adsOverview.js";
-import { compareRange, isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
+import { compareRange, effectiveCompare, isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
 import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues, plansFromTargets } from "../adsTargets.js";
 import { applySalesToBrands, applySalesToSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals, salesFactsByBrand, salesPipeline } from "./salesOverview.js";
 import { metricCoverage } from "./salesFacts.js";
 import { SALES_BRAND_IDS } from "./syncSources.js";
 
 export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filters }) {
-  const { period, from: customFrom, to: customTo, compare, channel, basis: revenueBasis } = filters;
+  const { period, from: customFrom, to: customTo, compare: chosenCompare, channel, basis: revenueBasis } = filters;
+  const compare = effectiveCompare(period, chosenCompare);
     const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
     const range = periodRange(period, customFrom, customTo);
