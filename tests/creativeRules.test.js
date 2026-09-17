@@ -1,6 +1,6 @@
 /* กฎคัดครีเอทีฟ: ค่าแอดที่ใช้ไป เทียบกับผลที่ได้ (การซื้อ/คนทัก/คลิก ฯลฯ) ตามเกณฑ์ที่ทีมตั้ง */
 import { describe, expect, it } from "vitest";
-import { CREATIVE_RULE_METRICS, normalizeCreativeRules, evaluateCreativeRule, evaluateCreativeRules, creativeRuleSummary, filterByRuleOutcome, describeRule } from "../src/modules/marketing/creatives/creativeRules.js";
+import { CREATIVE_RULE_METRICS, parseRuleNumber, incompleteRules, normalizeCreativeRules, evaluateCreativeRule, evaluateCreativeRules, creativeRuleSummary, filterByRuleOutcome, describeRule } from "../src/modules/marketing/creatives/creativeRules.js";
 
 const row = (patch = {}) => ({ key: "a", brandId: "b_td", spend: 3000, purchases: 2, leads: 10, clicks: 300, impressions: 60000, roas: 4, ctr: 0.005, frequency: 1.8, cpa: 1500, cpl: 300, cpc: 10, ...patch });
 const rule = (patch = {}) => ({ id: "r1", name: "CPA ไม่เกิน 1,000", brandId: "all", metric: "cpa", op: "lte", value: 1000, minSpend: 0, ...patch });
@@ -15,6 +15,26 @@ describe("normalizeCreativeRules", () => {
   });
   it("ตัวชี้วัดที่เลือกได้ครอบคลุมต้นทุนต่อผล อัตราส่วน และจำนวน", () => {
     expect(CREATIVE_RULE_METRICS.map((m) => m.key)).toEqual(["cpa", "cpl", "cpc", "cpm", "roas", "ctr", "frequency", "purchases", "leads", "spend"]);
+  });
+});
+
+describe("parseRuleNumber — พิมพ์แบบคนพิมพ์จริงได้", () => {
+  it("รับคอมมา สกุลเงิน หน่วย และช่องว่าง · ว่าง = null · อ่านไม่ออก = NaN (ให้หน้าจอเตือน)", () => {
+    expect(parseRuleNumber("1,000")).toBe(1000);
+    expect(parseRuleNumber(" ฿1,500.50 ")).toBe(1500.5);
+    expect(parseRuleNumber("3x")).toBe(3);
+    expect(parseRuleNumber("3 เท่า")).toBe(3);
+    expect(parseRuleNumber("1.5%")).toBe(1.5);
+    expect(parseRuleNumber(2)).toBe(2);
+    expect(parseRuleNumber("")).toBeNull();
+    expect(parseRuleNumber(null)).toBeNull();
+    expect(Number.isNaN(parseRuleNumber("abc"))).toBe(true);
+    expect(Number.isNaN(parseRuleNumber("-5"))).toBe(true);
+  });
+  it("normalize ใช้ตัวเดียวกัน (ค่าที่พิมพ์ว่า 1,000 ไม่หาย) · incompleteRules บอกกฎที่ยังไม่มีค่าเกณฑ์", () => {
+    const [r] = normalizeCreativeRules([rule({ value: "1,000", minSpend: "฿500" })]);
+    expect(r).toMatchObject({ value: 1000, minSpend: 500 });
+    expect(incompleteRules([rule({ value: "" }), rule({ id: "r2", value: "3" }), rule({ id: "r3", value: "abc" })]).map((x) => x.id)).toEqual(["r1", "r3"]);
   });
 });
 

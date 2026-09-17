@@ -12,7 +12,7 @@ import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
 import { applyConnectionResult, applyReconciliation, enabledMetaMappings, latestReconcileByConnection, needsPostScopeReconnect } from "./adsConnectionSync.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { CreativeRulesEditor } from "../creatives/CreativeRulesEditor.jsx";
-import { normalizeCreativeRules } from "../creatives/creativeRules.js";
+import { incompleteRules, normalizeCreativeRules, ruleTitle } from "../creatives/creativeRules.js";
 
 const SOURCE_DETAILS = {
   meta: "Spend · Delivery · Messaging",
@@ -206,9 +206,15 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
     /* targets: แท็บเป้าถอดแล้ว (ข้อมูลจริงใช้เป้าระบบขาย) — เก็บค่าเดิมไว้ให้โหมดข้อมูลจำลองอ่านต่อ ไม่ลบทิ้ง */
     const next = { mappings: config.mappings, sources: config.sources, targets: initial.targets ?? {}, rules, creativeRules: normalizeCreativeRules(creativeRules), updatedAt: new Date().toISOString() };
     onSave(next);
+    // กฎคัดครีเอทีฟที่ยังไม่มีค่าเกณฑ์ บันทึกไว้ได้แต่ไม่ถูกใช้ — บอกชื่อให้รู้ ไม่ปล่อยให้เข้าใจว่าใช้ได้แล้ว
+    const pending = incompleteRules(creativeRules);
+    if (pending.length) {
+      const names = pending.map((rule) => `"${rule.name?.trim() || ruleTitle({ ...rule, value: null })}"`).join(" · ");
+      toast?.(`บันทึกแล้ว · กฎคัดครีเอทีฟ ${names} ยังไม่ใส่ค่าเกณฑ์ จึงยังไม่ถูกใช้กรอง`, "bad");
+    }
     const meta = next.mappings?.meta ?? {};
     const touchesMeta = Object.keys(enabledMetaMappings(next)).length > 0 || Object.values(meta).some((row) => row?.connectionId);
-    if (demo || !touchesMeta) { toast?.("บันทึกการตั้งค่าค่าแอดแล้ว", "ok"); return; }
+    if (demo || !touchesMeta) { if (!pending.length) toast?.("บันทึกการตั้งค่าค่าแอดแล้ว", "ok"); return; }
     setLinking(true);
     try {
       const result = await apiClient.ads.saveConnections(meta, next.sources?.meta ?? {});

@@ -45,8 +45,8 @@ describe("AdsControlCenter", () => {
     expect(screen.getByText(/ยังไม่มีกฎ/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "เพิ่มกฎ" }));
     fireEvent.change(screen.getByRole("textbox", { name: "ชื่อกฎ 1" }), { target: { value: "ซื้อคุ้ม" } });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "ค่าเกณฑ์ กฎ 1" }), { target: { value: "1000" } });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "ใช้เงินขั้นต่ำ กฎ 1" }), { target: { value: "500" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "ค่าเกณฑ์ กฎ 1" }), { target: { value: "1,000" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "ใช้เงินขั้นต่ำ กฎ 1" }), { target: { value: "500" } });
     expect(screen.getByText("ต้นทุนต่อการซื้อ ไม่เกิน ฿1,000.00 · เมื่อใช้เงินแล้วอย่างน้อย ฿500.00")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^บันทึก/ }));
     expect(onSave.mock.calls[0][0].creativeRules).toEqual([
@@ -63,5 +63,25 @@ describe("AdsControlCenter", () => {
     expect(screen.getByRole("button", { name: "เงื่อนไข กฎ 1" }).textContent).toMatch(/อย่างน้อย/);
     fireEvent.click(screen.getByRole("button", { name: "ลบกฎ 1" }));
     expect(screen.getByText(/ยังไม่มีกฎ/)).toBeTruthy();
+  });
+
+  it("กฎที่ยังไม่ใส่ค่าเกณฑ์: ช่องขึ้นเตือน · กดบันทึกแล้วแจ้งว่ากฎไหนยังไม่ถูกใช้ (ไม่เงียบ)", () => {
+    const toast = vi.fn();
+    const saved = { creativeRules: [{ id: "r1", name: "คัด roas", brandId: "all", metric: "roas", op: "gte", value: null, minSpend: 500 }] };
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={saved} onSave={() => {}} toast={toast} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    const input = screen.getByRole("textbox", { name: "ค่าเกณฑ์ กฎ 1" });
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("placeholder")).toBe("เช่น 3");
+    fireEvent.click(screen.getByRole("button", { name: /^บันทึก/ }));
+    expect(toast).toHaveBeenCalledWith("บันทึกแล้ว · กฎคัดครีเอทีฟ \"คัด roas\" ยังไม่ใส่ค่าเกณฑ์ จึงยังไม่ถูกใช้กรอง", "bad");
+  });
+
+  it("พิมพ์ค่าที่อ่านไม่ออก: บอกทันทีใต้กฎ", () => {
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} toast={() => {}} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    fireEvent.click(screen.getByRole("button", { name: "เพิ่มกฎ" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "ค่าเกณฑ์ กฎ 1" }), { target: { value: "สามพัน" } });
+    expect(screen.getByText("ค่าเกณฑ์ต้องเป็นตัวเลข เช่น 1,000")).toBeTruthy();
   });
 });

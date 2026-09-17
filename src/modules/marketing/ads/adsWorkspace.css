@@ -184,3 +184,10 @@
 @media(max-width:960px){.acc-crule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.acc-crule-remove { justify-self:end; }}
 .acc-crule-grid .acc-input-unit input { padding-inline:0; border:0; outline:0; background:transparent; }
 .acc-crule-grid .acc-input-unit:focus-within,.acc-crule-grid input[type=text]:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:1px; }
+/* ป้ายหัวช่องทุกช่องสูงเท่ากัน (เดิมช่องที่เป็น dropdown ป้ายต่ำกว่าช่องพิมพ์) · ช่องที่ยังใช้ไม่ได้ขอบสีเตือน */
+.acc-crule-grid>label { display:grid; grid-template-rows:auto 36px; gap:5px; align-self:stretch; }
+.acc-crule-grid>label>span { margin:0; line-height:1.4; }
+.acc-crule-grid>label>.dd,.acc-crule-grid>label>.acc-input-unit { align-self:stretch; min-height:36px; }
+.acc-crule-grid .acc-input-unit:has(input[aria-invalid=true]) { border-color:var(--warn-text); }
+.acc-crule-grid .acc-input-unit input::placeholder { color:var(--ink-faint,var(--ink-soft)); }
+.acc-crule-grid .acc-crule-remove { align-self:end; }

@@ -19,13 +19,23 @@ export const CREATIVE_RULE_METRICS = [
 ];
 const METRIC = Object.fromEntries(CREATIVE_RULE_METRICS.map((m) => [m.key, m]));
 export const RULE_OPS = [["lte", "ไม่เกิน"], ["gte", "อย่างน้อย"]];
-export const RULE_UNIT_TEXT = { money: "฿", times: "×", pct: "%", count: "" };
+/* หน่วยข้างช่องกรอก: เป็นคำ ไม่ใช้ "×" เพราะข้างช่องว่างดูเหมือนปุ่มล้างค่า */
+export const RULE_UNIT_TEXT = { money: "บาท", times: "เท่า", pct: "%", count: "" };
+export const RULE_PLACEHOLDER = { money: "เช่น 500", times: "เช่น 3", pct: "เช่น 1.5", count: "เช่น 5" };
 export const MAX_CREATIVE_RULES = 12;
 
+/** ตัวเลขที่คนพิมพ์: รับคอมมา ฿ % x × "เท่า" "บาท" และช่องว่าง · ว่าง = null · อ่านไม่ออก/ติดลบ = NaN (หน้าจอเตือน) */
+export function parseRuleNumber(value) {
+  if (value == null) return null;
+  if (typeof value === "number") return Number.isFinite(value) && value >= 0 ? value : NaN;
+  const text = String(value).replace(/[,\s฿%×xX]|บาท|เท่า|ครั้ง|คน/g, "");
+  if (text === "") return null;
+  if (!/^\d*\.?\d+$|^\d+\.$/.test(text)) return NaN;
+  return Number(text);
+}
 const nonNegative = (value) => {
-  if (value === "" || value == null) return null;
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? n : null;
+  const n = parseRuleNumber(value);
+  return Number.isNaN(n) ? null : n;
 };
 let seq = 0;
 export const newRuleId = () => `cr_${Date.now().toString(36)}_${(seq++).toString(36)}`;
@@ -42,6 +52,9 @@ export function normalizeCreativeRules(raw) {
     minSpend: nonNegative(r.minSpend) ?? 0,
   }));
 }
+
+/** กฎที่ยังไม่มีค่าเกณฑ์ที่ใช้ได้ (ว่าง หรืออ่านไม่ออก) — กฎพวกนี้ไม่ถูกใช้กรอง */
+export const incompleteRules = (rules = []) => (rules ?? []).filter((rule) => rule && METRIC[rule.metric] && nonNegative(rule.value) == null);
 
 export function formatRuleValue(metricKey, value) {
   const m = METRIC[metricKey];
