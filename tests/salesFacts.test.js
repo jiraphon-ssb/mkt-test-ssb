@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SALE_BRAND_BY_CODE, SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, goalRowsToSalesGoals, metricCoverage } from "../src/modules/marketing/ads/salesFacts.js";
+import { SALE_BRAND_BY_CODE, SALES_SOURCE_BRANDS, LEADS_TRACKED_SINCE, factWindows, factsToDailyRows, goalRowsToSalesGoals, metricCoverage } from "../src/modules/marketing/ads/salesFacts.js";
 
 /* แถวจาก sale_dashboard_facts ของระบบพี่ทัช (ขอแค่ 7 คอลัมน์) — ดู supabase/functions/_shared/salesBridge.js */
 const fact = (kind, patch = {}) => ({ kind, day: "2026-09-10", brand: "TD", channel: "FB", n: 1, amount: 0, is_new: null, ...patch });
@@ -175,7 +175,9 @@ describe("metricCoverage — วันแรกที่แต่ละตัว
       day("b_td", "2026-08-15", { inquiry_filled: true, inquiries: 0 }),
       day("b_ta", "2026-09-02", { orders: 1, gross_revenue: 100 }),
     ]);
-    expect(out.get("b_td")).toEqual({ inquiries: "2026-08-15", qualified_leads: "2026-08-30", deposits: "2026-09-01", orders: "2026-08-30", gross_revenue: "2026-08-30" });
+    // Lead ก่อน 1 ก.ย. กรอกใน sheet แล้วย้ายเข้าระบบทีหลัง (อาร์ตยืนยัน 17 ก.ย.) → นับว่ามีข้อมูลตั้งแต่ 1 ก.ย.
+    expect(LEADS_TRACKED_SINCE).toBe("2026-09-01");
+    expect(out.get("b_td")).toEqual({ inquiries: "2026-08-15", qualified_leads: "2026-09-01", deposits: "2026-09-01", orders: "2026-08-30", gross_revenue: "2026-08-30" });
     expect(out.get("b_ta")).toEqual({ inquiries: null, qualified_leads: null, deposits: null, orders: "2026-09-02", gross_revenue: "2026-09-02" });
   });
   it("ไม่มีแถวของแบรนด์นั้น = ไม่มีคีย์", () => {

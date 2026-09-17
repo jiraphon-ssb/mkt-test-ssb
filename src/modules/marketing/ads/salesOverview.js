@@ -4,7 +4,7 @@
    ยอดขาย · ROAS · %Ads · CPL · CAC ต้องมาจากระบบขาย · ไม่มีข้อมูล = null พร้อมเหตุผล ห้ามโชว์ 0 แทน */
 import { fmtInt } from "../dash/charts/theme.js";
 import { budgetPace, change, revenuePace, roasOf, share } from "../adsOverview.js";
-import { metricCoverage } from "./salesFacts.js";
+import { LEADS_TRACKED_SINCE, metricCoverage } from "./salesFacts.js";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const num = (value) => {
@@ -89,6 +89,7 @@ export function salesFactsByBrand(facts = [], { from, to, today = null } = {}) {
     s.leadsNew += num(fact.leads_new) ?? 0;
     s.inquiries += num(fact.inquiries) ?? 0;
     if (fact.inquiry_filled === true) s.inquiryFilledDays += 1;
+    if (day < LEADS_TRACKED_SINCE) s.leadsBeforeTracked = true;
     // วันนี้ยังไม่จบ ทีมยังไม่กรอก = ไม่นับเป็นวัน (ตัวหาร "ทีมกรอก x/y วัน")
     if (fact.inquiry_filled === true || day !== today) s.days += 1;
     s.deposits += num(fact.deposits) ?? 0;
@@ -97,6 +98,8 @@ export function salesFactsByBrand(facts = [], { from, to, today = null } = {}) {
     s.cancelled += num(fact.cancelled) ?? 0;
     out.set(fact.brand_id, s);
   }
+  // Lead ช่วงที่มีวันก่อนระบบขายเก็บจริง = ไม่รู้ (ยอดจาก sheet ที่ย้ายเข้ามาไม่ตรงวัน)
+  for (const s of out.values()) if (s.leadsBeforeTracked) { s.leads = null; s.leadsNew = null; }
   return out;
 }
 
@@ -189,7 +192,7 @@ export function salesPipeline({ sales = null, prevSales = null, metaInquiries = 
 
   const stages = [
     { key: "inquiries", label: "คนทัก (ทีมกรอก)", value: inquiries, before: inquiriesOf(prevSales), sub: inquirySub || null },
-    { key: "qualified", label: "Lead", value: leads, before: prevSales ? prevSales.leads : null, conv: share(leads, inquiries), sub: sales ? null : none },
+    { key: "qualified", label: "Lead", value: leads, before: prevSales ? prevSales.leads : null, conv: share(leads, inquiries), sub: !sales ? none : leads == null ? `มีข้อมูลตั้งแต่ ${dateLabel(LEADS_TRACKED_SINCE)} (ก่อนหน้านั้นกรอกใน sheet)` : null },
     { key: "deposits", label: "ได้ออเดอร์", value: deposits, before: depositsOf(prevSales), conv: share(deposits, leads), sub: depositSub },
     { key: "closed", label: "ยืนยันออเดอร์", value: orders, before: prevSales ? prevSales.orders : null, conv: share(orders, deposits), sub: sales ? null : none },
   ].map((stage) => ({ sense: "higher", fmt: "int", conv: null, ...stage }));
@@ -252,9 +255,9 @@ export function salesTrendValue({ sales = [], key, brandIds = [], spend = null, 
   switch (key) {
     case "revenue": return revenue;
     case "roas": return roasOf(revenue, spend);
-    case "leads": return sum((row) => row.leads);
+    case "leads": return rows.some((row) => row.leads == null) ? null : sum((row) => row.leads);
     case "orders": return sum((row) => row.orders);
-    case "cpl": return share(spend, sum((row) => row.leads));
+    case "cpl": return rows.some((row) => row.leads == null) ? null : share(spend, sum((row) => row.leads));
     case "cac": return share(spend, sum((row) => row.ordersNew));
     case "pctAds": return share(spend, sum((row) => row.revenueNew));
     case "deposits": {

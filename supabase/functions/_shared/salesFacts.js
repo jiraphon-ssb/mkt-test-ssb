@@ -191,6 +191,11 @@ export function goalRowsToSalesGoals({ goals = [], targets = [], brands = SALES_
 
 const COVERAGE_METRICS = ["inquiries", "qualified_leads", "deposits", "orders", "gross_revenue"];
 
+/** Lead ก่อนวันนี้กรอกใน sheet แล้วย้ายเข้าระบบขายทีหลัง (ยอดพุ่ง 180 วันที่ 31 ส.ค. · อาร์ตยืนยัน 17 ก.ย. 2569)
+    → ถือว่ามีข้อมูล Lead จริงตั้งแต่วันนี้ ก่อนหน้านั้น = ไม่รู้ เทียบไม่ได้ */
+export const LEADS_TRACKED_SINCE = "2026-09-01";
+const TRACKED_SINCE = { qualified_leads: LEADS_TRACKED_SINCE };
+
 /** วันแรกที่แต่ละตัวชี้วัดมีข้อมูลจริง ต่อแบรนด์ — ก่อนวันนั้นหน้าจอต้องบอก "ยังไม่มีข้อมูล" ไม่ใช่ 0
     เหตุ: ระบบขายไม่มีประวัติสเตจก่อน 1 ก.ย. ("ได้ออเดอร์" เป็น 0 ทุกวัน) และบางเดือนทีมไม่ได้กรอกคนทักเลย
     คนทักนับจากวันที่ทีมกรอก (inquiry_filled) ไม่ใช่วันที่ค่ามากกว่า 0 */
@@ -206,6 +211,9 @@ export function metricCoverage(facts = []) {
       if (has && (entry[metric] === null || day < entry[metric])) entry[metric] = day;
     }
     out.set(brandId, entry);
+  }
+  for (const entry of out.values()) {
+    for (const [metric, since] of Object.entries(TRACKED_SINCE)) if (entry[metric] !== null && entry[metric] < since) entry[metric] = since;
   }
   return out;
 }

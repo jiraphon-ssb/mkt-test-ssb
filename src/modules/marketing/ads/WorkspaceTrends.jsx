@@ -5,7 +5,7 @@ import { baseOpts, fmtMoney, fmtPct, fmtCompact, lineSeries, barSeries, dayLabel
 import { Dropdown } from '../ui/Dropdown.jsx';
 import { isoDay } from '../adsScope.js';
 import { SALES_TREND_KEYS, SPEND_TREND_KEYS, salesTrendValue } from './salesOverview.js';
-import { metricCoverage } from './salesFacts.js';
+import { LEADS_TRACKED_SINCE, metricCoverage } from './salesFacts.js';
 import { SALES_BRAND_IDS } from './syncSources.js';
 import { ADDITIVE_TREND_KEYS, TREND_MODES, canCumulate, cumulativeSeries, targetPaceSeries } from './trendSeries.js';
 /* 8 ตัวแรกเป็นแท็บ (เส้นทางขาย: ค่าแอด → ยอดขาย → คนทัก → Lead → ได้ออเดอร์ → ยืนยันออเดอร์) · ที่เหลืออยู่ในเมนู */
@@ -96,7 +96,9 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
   },[v,brandId,key,split,sales,fromSales,canSplit,mode,coverage,waiting]);
   const depositsSince=key==='deposits'&&coverage?(()=>{const ids=(brandId?[brandId]:v.brands.map(b=>b.id)).filter(id=>SALES_BRAND_IDS.includes(id));const starts=ids.map(id=>coverage.get(id)?.deposits).filter(Boolean).sort();return starts.length?starts[starts.length-1]:null;})():null;
   const sourceNote=!sales?null:fromSales?SALES_NOTE[key]+(depositsSince?` · มีข้อมูลตั้งแต่ ${dateLabel(depositsSince)}`:'')+(brandId?'':' · รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย'):'จาก Meta';
-  const emptyNote=waiting?'รอเชื่อมแหล่งข้อมูลยอดขาย':fromSales?(key==='inquiry'?'ทีมยังไม่กรอกคนทักในช่วงนี้':key==='deposits'?'ระบบขายยังไม่มีข้อมูลได้ออเดอร์ในช่วงนี้':'ช่วงนี้ยังไม่มีข้อมูลจากระบบขาย'):'ข้อมูลยังไม่ครบหรือรวมข้ามแพลตฟอร์มไม่ได้ ลองเลือกแพลตฟอร์มเดียว';
+  // Lead ก่อนระบบขายเก็บจริงย้ายมาจาก sheet — ช่วงที่คร่อมวันนั้นบอกเหตุผลจริง ไม่ใช่ "ยังไม่มีข้อมูล"
+  const leadsCut=['leads','cpl'].includes(key)&&isoDay(new Date(v.range.start))<LEADS_TRACKED_SINCE;
+  const emptyNote=waiting?'รอเชื่อมแหล่งข้อมูลยอดขาย':fromSales?(key==='inquiry'?'ทีมยังไม่กรอกคนทักในช่วงนี้':key==='deposits'?'ระบบขายยังไม่มีข้อมูลได้ออเดอร์ในช่วงนี้':leadsCut?`Lead มีข้อมูลตั้งแต่ ${dateLabel(LEADS_TRACKED_SINCE)} (ก่อนหน้านั้นกรอกใน sheet) · เลือกช่วงตั้งแต่ ${dateLabel(LEADS_TRACKED_SINCE)} เพื่อดูยอดรวม`:'ช่วงนี้ยังไม่มีข้อมูลจากระบบขาย'):'ข้อมูลยังไม่ครบหรือรวมข้ามแพลตฟอร์มไม่ได้ ลองเลือกแพลตฟอร์มเดียว';
   const label=metrics.find(m=>m[0]===key)[1];
   const additive=ADDITIVE_TREND_KEYS.includes(key);
   const chartType=mode==='bar'?'bar':'line';

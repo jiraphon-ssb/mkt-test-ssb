@@ -135,4 +135,11 @@ describe("WorkspaceTrends — รูปแบบกราฟ เส้น / แ�
     mode("เส้น");
     expect(chart.last.data.datasets.some((d) => d.label === "เป้าตามจังหวะ")).toBe(false);
   });
+  it("Lead ช่วงที่มีวันก่อน 1 ก.ย.: บอกเหตุผลจริง (กรอกใน sheet) ไม่ใช่ 'ยังไม่มีข้อมูล'", () => {
+    const aug = { ...v, range: { start: local(2026, 8, 31), end: local(2026, 9, 2) }, before: { start: local(2026, 8, 29), end: local(2026, 8, 31) } };
+    render(<WorkspaceTrends v={aug} sales={[{ brand_id: "b_td", fact_date: "2026-08-31", qualified_leads: 180 }, ...sales]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Lead" }));
+    expect(total()).toBe("—");
+    expect(screen.getByText("Lead มีข้อมูลตั้งแต่ 1 ก.ย. (ก่อนหน้านั้นกรอกใน sheet) · เลือกช่วงตั้งแต่ 1 ก.ย. เพื่อดูยอดรวม")).toBeTruthy();
+  });
 });

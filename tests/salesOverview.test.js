@@ -248,3 +248,30 @@ describe("salesTrendValue — กราฟแนวโน้มใช้ตั�
     expect(salesTrendValue({ sales, key: "ctr", brandIds: both, ...day1 })).toBeUndefined();
   });
 });
+
+describe("Lead ก่อน 1 ก.ย. — ย้ายจาก sheet เข้าระบบขายทีหลัง เทียบกับหลังจากนั้นไม่ได้", () => {
+  const rows = [
+    { brand_id: "b_td", fact_date: "2026-08-31", qualified_leads: 180, orders: 5, gross_revenue: 1000 },
+    { brand_id: "b_td", fact_date: "2026-09-01", qualified_leads: 20, orders: 3, gross_revenue: 900 },
+  ];
+  it("ช่วงที่มีวันก่อน 1 ก.ย. = Lead ไม่รู้ (null) · ตัวอื่นยังรวมปกติ · ช่วงหลัง 1 ก.ย. ปกติ", () => {
+    const aug = salesFactsByBrand(rows, { from: "2026-08-31", to: "2026-09-01" }).get("b_td");
+    expect(aug).toMatchObject({ leads: null, orders: 8, revenue: 1900 });
+    expect(salesFactsByBrand(rows, { from: "2026-09-01", to: "2026-09-01" }).get("b_td").leads).toBe(20);
+  });
+  it("funnel: Lead และ CPL ช่วงก่อนหน้า = เทียบไม่ได้ · ช่วงที่เลือกเป็นเดือนก่อน บอกว่ามีข้อมูลตั้งแต่ 1 ก.ย.", () => {
+    const sep = salesFactsByBrand(rows, { from: "2026-09-01", to: "2026-09-01" }).get("b_td");
+    const aug = salesFactsByBrand(rows, { from: "2026-08-31", to: "2026-08-31" }).get("b_td");
+    const items = salesPipeline({ sales: sep, prevSales: aug, spend: 1000, prevSpend: 900 }).items;
+    expect(items.find((i) => i.key === "qualified")).toMatchObject({ value: 20, before: null });
+    expect(items.find((i) => i.key === "cpl")).toMatchObject({ value: 50, before: null });
+    const past = salesPipeline({ sales: aug, spend: 900 }).items.find((i) => i.key === "qualified");
+    expect(past).toMatchObject({ value: null, sub: "มีข้อมูลตั้งแต่ 1 ก.ย. (ก่อนหน้านั้นกรอกใน sheet)" });
+  });
+  it("กราฟแนวโน้ม: วันก่อน 1 ก.ย. Lead/CPL = null (ไม่ขึ้นยอดพุ่ง 180 ของวันที่ย้ายข้อมูล)", () => {
+    const day = { from: "2026-08-31", to: "2026-08-31" };
+    expect(salesTrendValue({ sales: rows, key: "leads", brandIds: ["b_td"], ...day })).toBeNull();
+    expect(salesTrendValue({ sales: rows, key: "cpl", brandIds: ["b_td"], spend: 500, ...day })).toBeNull();
+    expect(salesTrendValue({ sales: rows, key: "orders", brandIds: ["b_td"], ...day })).toBe(5);
+  });
+});

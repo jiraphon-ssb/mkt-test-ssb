@@ -69,7 +69,8 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       const merge = (map) => {
         const rows = SALES_BRAND_IDS.map((id) => map.get(id)).filter(Boolean);
         if (!rows.length) return null;
-        return rows.reduce((acc, row) => Object.fromEntries(Object.keys(row).map((key) => [key, (acc[key] ?? 0) + row[key]])), {});
+        // ตัวไหนมีแบรนด์ที่ไม่รู้ (null เช่น Lead ก่อนระบบขายเก็บจริง) ภาพรวมตัวนั้น = ไม่รู้ ไม่ใช่นับเป็น 0
+        return rows.reduce((acc, row) => Object.fromEntries(Object.keys(row).map((key) => [key, acc[key] === null || row[key] == null ? null : (acc[key] ?? 0) + row[key]])), {});
       };
       const sourceCards = scoped.filter((card) => SALES_BRAND_IDS.includes(card.brand_id));
       const starts = SALES_BRAND_IDS.map((id) => coverage.get(id)?.deposits).filter(Boolean).sort();
