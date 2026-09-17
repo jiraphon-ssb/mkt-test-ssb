@@ -56,6 +56,12 @@ describe("salesFactsByBrand", () => {
     expect(out.get("b_td")).toMatchObject({ revenue: 1500, revenueNew: 600, orders: 3, ordersNew: 1, leads: 15, inquiries: 50, inquiryFilledDays: 1, days: 2, deposits: 3 });
     expect(out.has("b_ta")).toBe(false);
   });
+  it("วันนี้ที่ทีมยังไม่กรอก ไม่นับเป็นวันในตัวหาร (ทีมกรอก 45/48 ไม่ใช่ 45/51) · กรอกแล้วนับตามปกติ", () => {
+    const rows = [fact("b_td", "2026-09-16", { inquiry_filled: true }), fact("b_td", "2026-09-17", { inquiry_filled: false })];
+    expect(salesFactsByBrand(rows, { from: "2026-09-16", to: "2026-09-17", today: "2026-09-17" }).get("b_td")).toMatchObject({ inquiryFilledDays: 1, days: 1 });
+    const filledToday = [fact("b_td", "2026-09-17", { inquiry_filled: true })];
+    expect(salesFactsByBrand(filledToday, { from: "2026-09-17", to: "2026-09-17", today: "2026-09-17" }).get("b_td")).toMatchObject({ inquiryFilledDays: 1, days: 1 });
+  });
 });
 
 describe("applySalesToBrands — ทับตัวเลขระดับแบรนด์ด้วยยอดจริง", () => {

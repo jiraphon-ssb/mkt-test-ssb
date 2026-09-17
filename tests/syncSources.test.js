@@ -46,6 +46,18 @@ describe("coverageMatrix — ความครบรายเดือน × �
   it("แบรนด์ที่ยังไม่มีแหล่ง (JK) = waiting_source ทุกช่อง ไม่ใช่ no_data", () => {
     expect(out.rows.filter((r) => r.brandId === "b_jt").every((r) => r.cells.every((c) => c.state === "waiting_source"))).toBe(true);
   });
+  it("วันนี้ยังไม่ปิดและทีมยังไม่กรอก = ไม่นับเป็นวันที่ขาด (16/16 ไม่ใช่ 16/17) · บอกว่าเดือนนั้นยังเปิดอยู่", () => {
+    const sep = days("b_td", "2026-09-01", "2026-09-17", (iso) => ({ inquiry_filled: iso < "2026-09-17" }));
+    const out2 = coverageMatrix(sep, { brandIds: ["b_td"], from: "2026-09-01", to: "2026-09-17", today: "2026-09-17" });
+    expect(out2.rows.find((r) => r.metric === "inquiries").cells[0]).toMatchObject({ state: "full", filled: 16, days: 16 });
+    expect(out2.ranges).toEqual([{ month: "2026-09", start: "2026-09-01", end: "2026-09-17", partialStart: false, open: true }]);
+  });
+  it("ช่วงของแต่ละเดือน: เริ่มกลางเดือน = partialStart · ตัวชี้วัดที่เริ่มเก็บทีหลังบอกวันเริ่ม (since)", () => {
+    const f = [...days("b_td", "2026-06-18", "2026-06-30"), ...days("b_td", "2026-09-01", "2026-09-02", () => ({ deposits: 1 }))];
+    const m = coverageMatrix(f, { brandIds: ["b_td"], from: "2026-06-18", to: "2026-09-02" });
+    expect(m.ranges[0]).toMatchObject({ month: "2026-06", start: "2026-06-18", end: "2026-06-30", partialStart: true, open: false });
+    expect(m.rows.find((r) => r.metric === "deposits").cells[0]).toMatchObject({ state: "no_data", since: "2026-09-01" });
+  });
   it("เดือนที่ข้อมูลเริ่มกลางเดือน (18 มิ.ย.) นับวันจากต้นช่วง ไม่ใช่ต้นเดือน", () => {
     const june = coverageMatrix(days("b_td", "2026-06-18", "2026-06-30", () => ({ inquiry_filled: true })), { brandIds: ["b_td"], from: "2026-06-18", to: "2026-06-30" });
     expect(june.rows.find((r) => r.metric === "inquiries").cells[0]).toMatchObject({ state: "full", filled: 13, days: 13 });

@@ -31,10 +31,14 @@ const monthsBetween = (from, to) => {
 const lastDayOf = (month) => { const [y, m] = month.split("-").map(Number); return `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`; };
 const dayCount = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) + 1;
 
-/** ตารางความครบ: แบรนด์ × ตัวชี้วัด × เดือน · state = full | partial | not_filled | no_data | waiting_source */
-export function coverageMatrix(facts = [], { brandIds = [], from, to } = {}) {
-  if (!ISO.test(String(from ?? "")) || !ISO.test(String(to ?? "")) || from > to) return { months: [], rows: [] };
+/** ตารางความครบ: แบรนด์ × ตัวชี้วัด × เดือน · state = full | partial | not_filled | no_data | open | waiting_source
+    today = วันที่ยังไม่ปิด: ทีมยังไม่กรอกคนทักของวันนี้ไม่นับเป็นวันที่ขาด (เคยขึ้น "กรอก 16/17" ทั้งที่วันยังไม่จบ)
+    ranges = ช่วงวันจริงของแต่ละเดือน (เริ่มกลางเดือน · ยังเปิดอยู่) ให้หัวตารางบอกได้ */
+export function coverageMatrix(facts = [], { brandIds = [], from, to, today = null } = {}) {
+  if (!ISO.test(String(from ?? "")) || !ISO.test(String(to ?? "")) || from > to) return { months: [], rows: [], ranges: [] };
   const months = monthsBetween(from, to);
+  const rangeOf = (month) => ({ start: month === from.slice(0, 7) ? from : `${month}-01`, end: month === to.slice(0, 7) ? to : lastDayOf(month) });
+  const ranges = months.map((month) => { const { start, end } = rangeOf(month); return { month, start, end, partialStart: start !== `${month}-01`, open: Boolean(today) && end >= today }; });
   const coverage = metricCoverage(facts);
   const byBrandMonth = new Map();
   for (const fact of facts ?? []) {
@@ -51,26 +55,27 @@ export function coverageMatrix(facts = [], { brandIds = [], from, to } = {}) {
     for (const metric of COVERAGE_METRICS) {
       const cells = months.map((month) => {
         if (!isSource) return { month, state: "waiting_source" };
-        const start = month === from.slice(0, 7) ? from : `${month}-01`;
-        const end = month === to.slice(0, 7) ? to : lastDayOf(month);
-        const days = dayCount(start, end);
+        const { start, end } = rangeOf(month);
         const list = byBrandMonth.get(`${brandId}|${month}`) ?? [];
+        const openToday = Boolean(today) && start <= today && today <= end && !list.some((fact) => fact.fact_date === today && fact.inquiry_filled === true);
+        const days = dayCount(start, end) - (metric.key === "inquiries" && openToday ? 1 : 0);
         if (!list.length) return { month, state: "no_data", days };
         if (metric.key === "inquiries") {
           const filled = list.filter((fact) => fact.inquiry_filled === true).length;
+          if (days <= 0) return { month, days: 0, filled, state: "open" };
           return { month, days, filled, state: filled === 0 ? "not_filled" : filled < days ? "partial" : "full" };
         }
         const since = coverage.get(brandId)?.[metric.key] ?? null;
-        if (!since || since > end) return { month, days, state: "no_data" };
+        if (!since || since > end) return { month, days, state: "no_data", ...(since ? { since } : {}) };
         return since > start ? { month, days, since, state: "partial" } : { month, days, state: "full" };
       });
       rows.push({ brandId, metric: metric.key, label: metric.label, cells });
     }
   }
-  return { months, rows };
+  return { months, rows, ranges };
 }
 
-const GOAL_FIELDS = [
+export const GOAL_FIELDS = [
   ["sales_target", "เป้ายอดขาย"], ["orders_target", "ออเดอร์"], ["deposits_target", "มัดจำ"], ["leads_target", "ลีด"], ["inquiry_target", "คนทัก"],
   ["ad_budget", "งบแอด"], ["cpl", "CPL"], ["roas", "ROAS"], ["pct_ads_new", "%Ads"], ["cac", "CAC"], ["cpi", "ต้นทุนต่อทัก"],
 ];

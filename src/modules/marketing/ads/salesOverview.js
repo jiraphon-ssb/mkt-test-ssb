@@ -73,7 +73,7 @@ export function plansFromSalesGoals({ goals = [], month, basis = "total" } = {})
 }
 
 /** ยอดจริงรายแบรนด์ในช่วงวัน (from–to รวมหัวท้าย) — แบรนด์ที่ไม่มีแถวเลย = ไม่มีคีย์ */
-export function salesFactsByBrand(facts = [], { from, to } = {}) {
+export function salesFactsByBrand(facts = [], { from, to, today = null } = {}) {
   const out = new Map();
   for (const fact of facts ?? []) {
     const day = fact?.fact_date;
@@ -87,7 +87,8 @@ export function salesFactsByBrand(facts = [], { from, to } = {}) {
     s.leadsNew += num(fact.leads_new) ?? 0;
     s.inquiries += num(fact.inquiries) ?? 0;
     if (fact.inquiry_filled === true) s.inquiryFilledDays += 1;
-    s.days += 1;
+    // วันนี้ยังไม่จบ ทีมยังไม่กรอก = ไม่นับเป็นวัน (ตัวหาร "ทีมกรอก x/y วัน")
+    if (fact.inquiry_filled === true || day !== today) s.days += 1;
     s.deposits += num(fact.deposits) ?? 0;
     s.depositValue += num(fact.deposit_value) ?? 0;
     s.cash += num(fact.cash_received) ?? 0;

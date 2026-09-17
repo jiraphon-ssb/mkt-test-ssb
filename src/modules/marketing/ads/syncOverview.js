@@ -53,7 +53,8 @@ export function salesSourceRow({ runs = [], facts = [], ready = true, today, now
   if (!ready) return loadingRow(base);
   const last = runs.filter((run) => run.pipeline === "sales").sort((a, b) => (time(b.started_at) ?? 0) - (time(a.started_at) ?? 0))[0];
   const month = String(today ?? "").slice(0, 7);
-  const monthFacts = facts.filter((fact) => String(fact.fact_date ?? "").startsWith(month));
+  // วันนี้ที่ทีมยังไม่กรอก ไม่นับเป็นวันที่ขาด (วันยังไม่จบ)
+  const monthFacts = facts.filter((fact) => String(fact.fact_date ?? "").startsWith(month) && (fact.fact_date !== today || fact.inquiry_filled === true));
   const filled = monthFacts.filter((fact) => fact.inquiry_filled === true).length;
   const complete = monthFacts.length ? { text: `คนทักทีมกรอก ${filled}/${monthFacts.length} วัน`, sub: "ยอด · ลีด · ออเดอร์ มาครบ" } : null;
   if (!last) return { ...base, state: "bad", stateLabel: "ยังไม่เคยดึง", hint: "กดดึงยอดขายตอนนี้ในเมนู หรือตรวจคีย์ระบบขาย", fresh: { text: "—", sub: "วันละครั้ง หลัง 9 โมง" }, complete };

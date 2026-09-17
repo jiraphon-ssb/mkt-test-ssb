@@ -279,7 +279,7 @@ export function AdsView() {
         month: today.slice(0, 7), channelsByBrand: adChannelsByBrand(scopedAll, monthRange),
       });
     const metaTotals = adsByBrandChannel(scopedAll, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
-    const dayRange = (r) => ({ from: isoDay(new Date(r.start)), to: isoDay(new Date(new Date(r.end).getTime() - 1)) });
+    const dayRange = (r) => ({ from: isoDay(new Date(r.start)), to: isoDay(new Date(new Date(r.end).getTime() - 1)), today });
     const sales = real ? salesFactsByBrand(ads.sales, dayRange(sumRange)) : null;
     const prevSales = real ? salesFactsByBrand(ads.sales, dayRange(prevRange)) : null;
     const brandTotals = real ? applySalesToBrands(metaTotals, { sales, prevSales, basis: revenueBasis, sourceBrandIds: SALES_BRAND_IDS }) : metaTotals;
@@ -293,7 +293,7 @@ export function AdsView() {
     let goals;
     if (real) {
       const coverage = metricCoverage(ads.sales);
-      const pipeSales = salesFactsByBrand(ads.sales, { from: shownFrom, to: shownTo });
+      const pipeSales = salesFactsByBrand(ads.sales, { from: shownFrom, to: shownTo, today });
       const pipePrev = salesFactsByBrand(ads.sales, dayRange(before));
       const metaInquiriesOf = (pipeline) => pipeline?.items?.find((item) => item.key === "inquiries")?.value ?? null;
       const byId = new Map(brandTotals.map((brand) => [brand.id, brand]));

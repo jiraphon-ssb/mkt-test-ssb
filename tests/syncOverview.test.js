@@ -45,6 +45,8 @@ describe("salesSourceRow", () => {
     expect(row).toMatchObject({ state: "ok", stateLabel: "ปกติ" });
     expect(row.fresh.text).toBe("53 นาทีก่อน");
     expect(row.complete.text).toBe("คนทักทีมกรอก 2/3 วัน");
+    const withToday = [...facts, { brand_id: "b_td", fact_date: "2026-09-17", inquiry_filled: false }];
+    expect(salesSourceRow({ runs: [run("sales")], facts: withToday, ready: true, today: "2026-09-17", now: NOW }).complete.text).toBe("คนทักทีมกรอก 2/3 วัน");
   });
   it("ไม่เคยดึง = bad · รอบล่าสุดล้ม = bad พร้อมเหตุผล · เก่าเกิน 36 ชม. = warn", () => {
     expect(salesSourceRow({ runs: [], facts: [], ready: true, today: "2026-09-17", now: NOW })).toMatchObject({ state: "bad", stateLabel: "ยังไม่เคยดึง" });
