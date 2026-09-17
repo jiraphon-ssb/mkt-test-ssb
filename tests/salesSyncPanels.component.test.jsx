@@ -3,22 +3,40 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalGapList, InventoryList } from "../src/modules/marketing/ads/SalesSyncPanels.jsx";
+import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList } from "../src/modules/marketing/ads/SalesSyncPanels.jsx";
 
 afterEach(cleanup);
 const brands = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jt", name: "JUNTAKARN" }];
 const day = (fact_date, patch = {}) => ({ brand_id: "b_td", fact_date, inquiries: 0, inquiry_filled: false, qualified_leads: 1, deposits: 0, orders: 1, gross_revenue: 100, ...patch });
 
 describe("CoverageTable", () => {
-  it("บอกทีละช่องว่า ครบ / ทีมยังไม่กรอก / ยังไม่มีข้อมูล / รอเชื่อมแหล่งข้อมูล", () => {
-    const facts = [day("2026-08-01"), day("2026-08-02"), day("2026-09-01", { inquiry_filled: true, deposits: 2 }), day("2026-09-02", { deposits: 1 })];
+  const facts = [day("2026-08-01"), day("2026-08-02"), day("2026-09-01", { inquiry_filled: true, deposits: 2 }), day("2026-09-02", { deposits: 1 })];
+  const groupRows = (label) => {
+    const rows = screen.getAllByRole("row");
+    const start = rows.findIndex((row) => row.textContent === label);
+    const end = rows.findIndex((row, i) => i > start && row.classList.contains("sy-cov-group"));
+    return rows.slice(start + 1, end === -1 ? undefined : end);
+  };
+  it("จัดกลุ่มตามตัวชี้วัด · ทีมยังไม่กรอก / กรอกบางวัน บอกรายแบรนด์ · ยังไม่เริ่มเก็บบอกวันเริ่ม (ไม่ใช่สีแดง)", () => {
     render(<CoverageTable facts={facts} brands={brands} from="2026-08-01" to="2026-09-02" />);
-    const td = screen.getAllByRole("row").filter((row) => within(row).queryByText("คนทัก (ทีมกรอก)") && row.textContent.includes("TEAMDEE"))[0];
-    expect(within(td).getByText("ทีมยังไม่กรอก")).toBeTruthy();       // ส.ค.
-    expect(within(td).getByText("กรอก 1/2")).toBeTruthy();           // ก.ย.
-    expect(screen.getAllByText("ยังไม่มีข้อมูล").length).toBeGreaterThan(0);   // ได้ออเดอร์ ส.ค.
-    expect(screen.getAllByText("รอเชื่อมแหล่งข้อมูล")).toHaveLength(1);      // JK ยุบเป็นแถวเดียว ไม่ย้ำทุกช่อง
-    expect(screen.getByText("ทุกตัวชี้วัด")).toBeTruthy();
+    const inquiry = groupRows("คนทัก (ทีมกรอก)");
+    expect(inquiry.map((row) => row.querySelector("th").textContent)).toEqual(["TEAMDEE"]);
+    expect(within(inquiry[0]).getByText("ทีมยังไม่กรอก")).toBeTruthy();
+    expect(within(inquiry[0]).getByText("กรอก 1/2")).toBeTruthy();
+    const deposits = groupRows("ได้ออเดอร์");
+    expect(within(deposits[0]).getByText("เริ่มเก็บ 1 ก.ย.").className).toContain("since");
+  });
+  it("ทุกแบรนด์สถานะเหมือนกัน = ยุบเป็นแถวเดียว 'ทุกแบรนด์' · แบรนด์ที่ยังไม่มีแหล่งบอกครั้งเดียวใต้ตาราง", () => {
+    const two = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_ta", name: "t around" }, { id: "b_jt", name: "JUNTAKARN" }];
+    const both = [...facts, ...facts.map((f) => ({ ...f, brand_id: "b_ta" }))];
+    render(<CoverageTable facts={both} brands={two} from="2026-08-01" to="2026-09-02" />);
+    expect(groupRows("ยอดขาย").map((row) => row.querySelector("th").textContent)).toEqual(["ทุกแบรนด์"]);
+    expect(screen.getAllByText(/รอเชื่อมแหล่งข้อมูล/)).toHaveLength(1);
+  });
+  it("หัวคอลัมน์บอกช่วงวันจริง: เริ่มกลางเดือน · เดือนที่ยังไม่จบ", () => {
+    render(<CoverageTable facts={[day("2026-06-18"), day("2026-09-17")]} brands={[brands[0]]} from="2026-06-18" to="2026-09-17" today="2026-09-17" />);
+    expect(screen.getByRole("columnheader", { name: /มิ\.ย\. 69.*18–30/ })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: /ก\.ย\. 69.*ถึงวันนี้/ })).toBeTruthy();
   });
   it("ไม่มีข้อมูลเลย = บอกว่าจะขึ้นเมื่อไร", () => {
     render(<CoverageTable facts={[]} brands={[]} from="2026-09-01" to="2026-09-17" />);
@@ -26,16 +44,27 @@ describe("CoverageTable", () => {
   });
 });
 
-describe("GoalGapList", () => {
-  it("เป้าแบบเก่า = บอกช่องที่ยังไม่ตั้ง · JK = รอเชื่อมแหล่งข้อมูล", () => {
-    render(<GoalGapList brands={brands} goals={[{ brand_id: "b_td", goal_source: "sale_target", version: 0, sales_target: 3300000, orders_target: 193, deposits_target: 206, leads_target: 344, inquiry_target: 1173 }]} />);
-    expect(screen.getByText("เป้าแบบเก่า")).toBeTruthy();
+describe("GoalMatrix", () => {
+  it("ตารางแบรนด์ × ช่องเป้า โชว์ตัวเลขจริง · ช่องที่ยังไม่ตั้ง = — · สรุปช่องที่ขาดด้านบน · JK รอเชื่อม", () => {
+    render(<GoalMatrix brands={brands} goals={[{ brand_id: "b_td", goal_source: "sale_target", version: 0, sales_target: 3300000, orders_target: 193, deposits_target: 206, leads_target: 344, inquiry_target: 1173 }]} />);
+    const td = screen.getByRole("row", { name: /TEAMDEE/ });
+    expect(within(td).getByText("เป้าแบบเก่า")).toBeTruthy();
+    expect(within(td).getByText("฿3,300,000")).toBeTruthy();
+    expect(within(td).getByText("1,173")).toBeTruthy();
+    expect(within(td).getAllByText("—")).toHaveLength(6);
     expect(screen.getByText(/ยังไม่ตั้ง: งบแอด · CPL · ROAS · %Ads · CAC · ต้นทุนต่อทัก/)).toBeTruthy();
-    expect(screen.getByText("รอเชื่อมแหล่งข้อมูล")).toBeTruthy();
+    expect(within(screen.getByRole("row", { name: /JUNTAKARN/ })).getByText("รอเชื่อมแหล่งข้อมูล")).toBeTruthy();
   });
-  it("ไม่มีเป้าเลย = ยังไม่ตั้งเป้า", () => {
-    render(<GoalGapList brands={[brands[0]]} goals={[]} />);
+  it("ไม่มีเป้าเลย = ยังไม่ตั้งเป้า · ตั้งครบ = ไม่มีบรรทัดสรุปช่องที่ขาด", () => {
+    render(<GoalMatrix brands={[brands[0]]} goals={[]} />);
     expect(screen.getByText("ยังไม่ตั้งเป้า")).toBeTruthy();
+    cleanup();
+    const full = { brand_id: "b_td", goal_source: "sale_goal", version: 3, sales_target: 1, orders_target: 1, deposits_target: 1, leads_target: 1, inquiry_target: 1, ad_budget: 1000, cpl: 400, roas: 6, pct_ads_new: 0.16, cac: 5000, cpi: 90 };
+    render(<GoalMatrix brands={[brands[0]]} goals={[full]} />);
+    expect(screen.getByText("หน้าเป้าหมาย v3")).toBeTruthy();
+    expect(screen.getByText("6.0×")).toBeTruthy();
+    expect(screen.getByText("16%")).toBeTruthy();
+    expect(screen.queryByText(/ยังไม่ตั้ง:/)).toBeNull();
   });
 });
 

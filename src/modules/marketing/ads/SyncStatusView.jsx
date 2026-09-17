@@ -11,6 +11,9 @@ import {
 import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { useApp } from "../useMkt.jsx";
+import { Pagination } from "../ui/Pagination.jsx";
+import { scrollToList } from "../ui/pagination.js";
+import { usePagination } from "../ui/usePagination.js";
 import { cronHealth, normalizeCronTicks, normalizeSyncRuns, syncAccountRows } from "./adsDataHealth.js";
 import { ADS_PROVIDERS } from "./adsConnectorContract.js";
 import { applyConnectionResult, applyCoverage, applyReconciliation, latestReconcileByConnection, runSyncJobs, syncCreativesFor } from "./adsConnectionSync.js";
@@ -19,7 +22,7 @@ import { todayInTimeZone } from "../../../../supabase/functions/_shared/metaInsi
 import { monthsBackStart } from "../../../../supabase/functions/_shared/salesInventory.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
-import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalGapList, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
+import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
 import { SALES_BRAND_IDS, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
 import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import "./adsWorkspace.css";
@@ -86,16 +89,44 @@ function AccountRow({ row }) {
   </div>;
 }
 
-function HistoryList({ items, filter, onFilter }) {
-  return <div className="sy-history">
+const HISTORY_SIZES = [20, 50];
+const TZ = "Asia/Bangkok";
+const dayKey = (value) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+const dayHead = (value) => new Intl.DateTimeFormat("th-TH", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+const hhmm = (value) => new Intl.DateTimeFormat("th-TH", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
+const TONE_ICON = { ok: CheckCircle2, warn: AlertTriangle, bad: AlertTriangle, muted: Clock3 };
+const KIND_ICON = { meta: Database, sales: ShoppingBag, inventory: Radar, creatives: ImageIcon, cron: Clock3 };
+
+/** ประวัติรอบ: จัดกลุ่มตามวัน (เวลาไทย) · หน้าละ 20 · เปลี่ยนตัวกรองกลับหน้า 1 */
+export function HistoryList({ items, filter, onFilter }) {
+  const top = useRef(null);
+  const pager = usePagination(items, { storageKey: "ssb.sync.historyPageSize", sizes: HISTORY_SIZES, defaultSize: 20, resetKey: filter });
+  const groups = [];
+  for (const item of pager.pageItems) {
+    const key = item.at ? dayKey(item.at) : "unknown";
+    if (groups.at(-1)?.key !== key) groups.push({ key, at: item.at, items: [] });
+    groups.at(-1).items.push(item);
+  }
+  return <div className="sy-history" ref={top}>
     <div className="sy-filter" role="group" aria-label="กรองประวัติ">{HISTORY_FILTERS.map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => onFilter(key)}>{label}</button>)}</div>
-    <p className="sy-note">ตัวตั้งเวลาเรียกทุกชั่วโมงนาทีที่ 7 · ดึงค่าแอดซ้ำตามรอบที่ตั้ง · ตรวจยอดและดึงยอดขายวันละครั้งหลัง 9 โมง · เก็บประวัติ 90 วัน · รอบที่ไม่มีงานไม่แสดง</p>
-    {items.length ? <ol className="sy-timeline">{items.map((item) => <li key={item.id}>
-      <time dateTime={item.at}>{when(item.at)}</time>
-      <span className="sy-tl-main"><b>{item.title}</b>{item.detail && <small>{item.detail}</small>}</span>
-      <span className="sy-tl-who">{item.auto ? "อัตโนมัติ" : "กดเอง"}</span>
-      <span className={`sy-tl-status ${item.tone}`}>{item.statusLabel}</span>
-    </li>)}</ol> : <div className="sy-empty"><Clock3 size={22} aria-hidden="true" /><strong>ยังไม่มีประวัติในหมวดนี้</strong></div>}
+    <p className="sy-note">ตัวตั้งเวลาเรียกทุกชั่วโมงนาทีที่ 7 · ตรวจยอดและดึงยอดขายวันละครั้งหลัง 9 โมง · เก็บประวัติ 90 วัน · รอบที่ไม่มีงานไม่แสดง</p>
+    {items.length ? <>
+      {groups.map((group) => <section className="sy-day" key={group.key}>
+        <h4>{group.at ? dayHead(group.at) : "ไม่ทราบวัน"}</h4>
+        <ol className="sy-timeline">{group.items.map((item) => {
+          const KindIcon = KIND_ICON[item.kind] ?? Clock3;
+          const ToneIcon = TONE_ICON[item.tone] ?? Clock3;
+          return <li key={item.id}>
+            <time dateTime={item.at}>{item.at ? hhmm(item.at) : "—"}</time>
+            <KindIcon size={15} aria-hidden="true" className="sy-tl-kind" />
+            <span className="sy-tl-main"><b>{item.title}</b>{item.detail && <small>{item.detail}</small>}</span>
+            <span className="sy-tl-who">{item.auto ? "อัตโนมัติ" : "กดเอง"}</span>
+            <span className={`sy-chip ${item.tone}`}><ToneIcon size={12} aria-hidden="true" />{item.statusLabel}</span>
+          </li>;
+        })}</ol>
+      </section>)}
+      <Pagination pager={pager} sizes={HISTORY_SIZES} unit="รายการ" label="แบ่งหน้าประวัติ" onChange={() => scrollToList(top)} />
+    </> : <div className="sy-empty"><Clock3 size={22} aria-hidden="true" /><strong>ยังไม่มีประวัติในหมวดนี้</strong></div>}
   </div>;
 }
 
@@ -169,7 +200,7 @@ export function SyncStatusView() {
   const lastData = [rows.meta.state !== "loading" ? metaAccounts.map((row) => row.lastSuccessAt).filter(Boolean).sort().at(-1) : null, pipes.filter((run) => run.pipeline === "sales" && run.status !== "failed").map((run) => run.started_at).sort().at(-1)].filter(Boolean).sort().at(-1);
   const unusedProviders = ADS_PROVIDERS.filter((provider) => provider.id !== "meta" && !accounts.some((row) => row.providerId === provider.id)).map((provider) => provider.name);
   const waitingBrands = brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id));
-  const timeline = useMemo(() => historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts: metaAccounts, kind: historyFilter }), [ticks, syncRuns, pipes, metaAccounts, historyFilter]);
+  const timeline = useMemo(() => historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts: metaAccounts, kind: historyFilter, limit: 500 }), [ticks, syncRuns, pipes, metaAccounts, historyFilter]);
 
   /* ── งานที่สั่งได้ (หัวหน้าทีม) ── */
   const [syncing, setSyncing] = useState(null);
@@ -344,9 +375,9 @@ export function SyncStatusView() {
         {tab === "sales" && (!ready("facts", "goals", "pipes") ? <Skeleton lines={5} wide /> : <div className="sy-sales-tab">
           <SalesCheckResult result={checkResult} />
           <h3 className="sy-sub">เป้าเดือนนี้</h3>
-          <GoalGapList brands={brands} goals={goals} />
+          <GoalMatrix brands={brands} goals={goals} />
           <h3 className="sy-sub">ความครบของข้อมูล</h3>
-          <CoverageTable facts={facts} brands={brands} from={facts.reduce((min, fact) => (!min || fact.fact_date < min ? fact.fact_date : min), null) ?? salesSince} to={today} />
+          <CoverageTable facts={facts} brands={brands} today={today} from={facts.reduce((min, fact) => (!min || fact.fact_date < min ? fact.fact_date : min), null) ?? salesSince} to={today} />
           <h3 className="sy-sub">แหล่งอื่นในระบบขาย</h3>
           <InventoryList run={pipes.find((run) => run.pipeline === "inventory") ?? null} />
         </div>)}

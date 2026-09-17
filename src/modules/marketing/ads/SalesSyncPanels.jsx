@@ -4,7 +4,7 @@
 import { Link } from "react-router-dom";
 import { Database, Image as ImageIcon, Radar } from "lucide-react";
 import {
-  checkVerdictView, coverageMatrix, creativeRunView, goalGaps, inventorySources, pipelineRunView, tokenDaysLeft, SALES_BRAND_IDS,
+  checkVerdictView, coverageMatrix, creativeRunView, goalGaps, inventorySources, pipelineRunView, tokenDaysLeft, GOAL_FIELDS, SALES_BRAND_IDS,
 } from "./syncSources.js";
 
 const when = (value) => value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
@@ -14,11 +14,14 @@ const num = (value) => Number(value ?? 0).toLocaleString("th-TH");
 
 const CELL_TEXT = {
   full: () => "ครบ",
-  partial: (cell) => cell.filled != null ? `กรอก ${cell.filled}/${cell.days}` : `มีตั้งแต่ ${dayLabel(cell.since)}`,
+  partial: (cell) => cell.filled != null ? `กรอก ${cell.filled}/${cell.days}` : `เริ่ม ${dayLabel(cell.since)}`,
   not_filled: () => "ทีมยังไม่กรอก",
-  no_data: () => "ยังไม่มีข้อมูล",
+  no_data: (cell) => cell.since ? `เริ่มเก็บ ${dayLabel(cell.since)}` : "ยังไม่มีข้อมูล",
+  open: () => "วันนี้ยังไม่ปิด",
   waiting_source: () => "รอเชื่อมแหล่งข้อมูล",
 };
+// สีของช่อง: ต้องมีคนทำอะไร = แดง/เหลือง · ข้อจำกัดของแหล่ง (ยังไม่เริ่มเก็บ) = เทา ไม่ใช่ปัญหา
+const cellTone = (cell) => cell.state === "no_data" && cell.since ? "since" : cell.state;
 const SOURCE_STATE = { has_data: "มีข้อมูล", empty: "ยังไม่มีข้อมูล", callable: "เรียกได้", unreadable: "อ่านไม่ได้" };
 
 /** ตรวจการเชื่อมต่อ — ผลล่าสุดที่กดในหน้านี้ */
@@ -32,50 +35,93 @@ export function SalesCheckResult({ result }) {
   </div>;
 }
 
-/** เป้าเดือนนี้ต่อแบรนด์: มาจากไหน ขาดช่องไหน */
-export function GoalGapList({ brands = [], goals = [] }) {
+const GOAL_FORMAT = {
+  sales_target: "money", ad_budget: "money", cpl: "money", cac: "money", cpi: "money", roas: "roas", pct_ads_new: "pct",
+};
+const GOAL_SHORT = { sales_target: "ยอดขาย", cpi: "ต่อทัก" };
+const goalValue = (key, value) => {
+  const n = Number(value);
+  if (value === null || value === undefined || value === "" || !Number.isFinite(n) || (key === "ad_budget" && n <= 0)) return null;
+  const kind = GOAL_FORMAT[key];
+  if (kind === "money") return `฿${Math.round(n).toLocaleString("th-TH")}`;
+  if (kind === "roas") return `${n.toFixed(1)}×`;
+  if (kind === "pct") return `${Math.round(n <= 1 ? n * 100 : n)}%`;
+  return Math.round(n).toLocaleString("th-TH");
+};
+
+/** เป้าเดือนนี้: แบรนด์ × ช่องเป้า โชว์ตัวเลขจริง · ช่องที่ยังไม่ตั้ง = — · สรุปช่องที่ขาดไว้บรรทัดเดียว */
+export function GoalMatrix({ brands = [], goals = [] }) {
   const byBrand = new Map(goals.map((goal) => [goal.brand_id, goal]));
-  return <div className="sy-goals">
-    {brands.map((brand) => {
-      if (!SALES_BRAND_IDS.includes(brand.id)) return <div key={brand.id} className="sy-goal"><b>{brand.name}</b><span className="sy-chip muted">รอเชื่อมแหล่งข้อมูล</span></div>;
-      const gap = goalGaps(byBrand.get(brand.id) ?? null);
-      const source = gap.source === "sale_goal" ? `หน้าเป้าหมาย v${gap.version}` : gap.source === "sale_target" ? "เป้าแบบเก่า" : "ยังไม่ตั้งเป้า";
-      return <div key={brand.id} className="sy-goal">
-        <b>{brand.name}</b>
-        <span className={`sy-chip ${gap.source === "sale_goal" ? "ok" : gap.source === "sale_target" ? "warn" : "bad"}`}>{source}</span>
-        <span className="sy-goal-missing">{gap.missing.length ? <>ยังไม่ตั้ง: {gap.missing.join(" · ")}</> : "ครบทุกช่อง"}</span>
-      </div>;
-    })}
+  const sourceBrands = brands.filter((brand) => SALES_BRAND_IDS.includes(brand.id));
+  const gaps = sourceBrands.map((brand) => goalGaps(byBrand.get(brand.id) ?? null));
+  const lacking = gaps.filter((gap) => gap.missing.length);
+  const missing = GOAL_FIELDS.map(([, label]) => label).filter((label) => lacking.some((gap) => gap.missing.includes(label)));
+  return <div className="sy-goal-block">
+    {lacking.length > 0 && <p className="sy-goal-summary">{lacking.length === sourceBrands.length ? "ทุกแบรนด์" : `${lacking.length} แบรนด์`}ยังไม่ตั้ง: {missing.join(" · ")} <span>· ทีมขายตั้งที่หน้าเป้าหมายของระบบขาย</span></p>}
+    <div className="sy-table-scroll" role="region" aria-label="เป้าเดือนนี้" tabIndex={0}>
+      <table className="sy-goal-table">
+        <thead>
+          <tr className="sy-goal-groups"><th colSpan={2} /><th colSpan={5} scope="colgroup">ยอดและ funnel</th><th colSpan={6} scope="colgroup">งบและประสิทธิภาพโฆษณา</th></tr>
+          <tr><th scope="col">แบรนด์</th><th scope="col">ที่มา</th>{GOAL_FIELDS.map(([key, label]) => <th scope="col" key={key}>{GOAL_SHORT[key] ?? label}</th>)}</tr>
+        </thead>
+        <tbody>
+          {brands.map((brand) => {
+            if (!SALES_BRAND_IDS.includes(brand.id)) return <tr key={brand.id}><th scope="row">{brand.name}</th><td colSpan={GOAL_FIELDS.length + 1}><span className="sy-chip muted">รอเชื่อมแหล่งข้อมูล</span></td></tr>;
+            const goal = byBrand.get(brand.id) ?? null;
+            const gap = goalGaps(goal);
+            const source = gap.source === "sale_goal" ? `หน้าเป้าหมาย v${gap.version}` : gap.source === "sale_target" ? "เป้าแบบเก่า" : "ยังไม่ตั้งเป้า";
+            return <tr key={brand.id}>
+              <th scope="row">{brand.name}</th>
+              <td><span className={`sy-chip ${gap.source === "sale_goal" ? "ok" : gap.source === "sale_target" ? "warn" : "bad"}`}>{source}</span></td>
+              {GOAL_FIELDS.map(([key]) => { const text = goal ? goalValue(key, goal[key]) : null; return <td key={key} className={text ? "num" : "num unset"}>{text ?? <>—<span className="sr-only">ยังไม่ตั้ง</span></>}</td>; })}
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
   </div>;
 }
 
-/** ตารางความครบรายเดือน × ตัวชี้วัด × แบรนด์ */
-export function CoverageTable({ facts = [], brands = [], from, to }) {
-  const matrix = coverageMatrix(facts, { brandIds: brands.map((brand) => brand.id), from, to });
+const shortDay = (iso) => Number(iso.slice(8, 10));
+
+/** ความครบของข้อมูล: จัดกลุ่มตามตัวชี้วัด · ทุกแบรนด์สถานะเดียวกัน = ยุบแถวเดียว · หัวคอลัมน์บอกช่วงวันจริง */
+export function CoverageTable({ facts = [], brands = [], from, to, today = null }) {
+  const sourceBrands = brands.filter((brand) => SALES_BRAND_IDS.includes(brand.id));
+  const waiting = brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id));
+  const matrix = coverageMatrix(facts, { brandIds: sourceBrands.map((brand) => brand.id), from, to, today });
   if (!matrix.rows.length) return <div className="sy-empty"><Database size={22} aria-hidden="true" /><strong>ยังไม่มีข้อมูลความครบ</strong><span>จะขึ้นหลังดึงยอดขายรอบแรก</span></div>;
   const names = new Map(brands.map((brand) => [brand.id, brand.name]));
-  return <div className="sy-coverage" role="region" aria-label="ความครบของข้อมูลระบบขาย" tabIndex={0}>
-    <table>
-      <thead><tr><th scope="col">แบรนด์</th><th scope="col">ตัวชี้วัด</th>{matrix.months.map((month) => <th scope="col" key={month}>{monthLabel(month)}</th>)}</tr></thead>
-      <tbody>
-        {brands.map((brand) => {
-          const rows = matrix.rows.filter((row) => row.brandId === brand.id);
-          // แบรนด์ที่ยังไม่มีแหล่งยอดขาย: แถวเดียวพอ ไม่ต้องย้ำทุกตัวชี้วัดทุกเดือน
-          if (rows.every((row) => row.cells.every((cell) => cell.state === "waiting_source"))) {
-            return <tr key={brand.id} className="sy-coverage-brand">
-              <th scope="row">{names.get(brand.id) ?? brand.id}</th>
-              <td className="sy-coverage-metric">ทุกตัวชี้วัด</td>
-              <td colSpan={matrix.months.length}><span className="sy-cell waiting_source">รอเชื่อมแหล่งข้อมูล</span></td>
-            </tr>;
-          }
-          return rows.map((row, index) => <tr key={`${row.brandId}-${row.metric}`} className={index === 0 ? "sy-coverage-brand" : undefined}>
-            {index === 0 ? <th scope="row" rowSpan={rows.length}>{names.get(row.brandId) ?? row.brandId}</th> : null}
-            <td className="sy-coverage-metric">{row.label}</td>
-            {row.cells.map((cell) => <td key={cell.month}><span className={`sy-cell ${cell.state}`}>{CELL_TEXT[cell.state](cell)}</span></td>)}
-          </tr>);
-        })}
-      </tbody>
-    </table>
+  const metrics = [...new Map(matrix.rows.map((row) => [row.metric, row.label])).entries()];
+  const sig = (row) => row.cells.map((cell) => `${cell.state}:${CELL_TEXT[cell.state](cell)}`).join("|");
+  return <div className="sy-cov">
+    <ul className="sy-legend" aria-label="ความหมายของสี">
+      <li><span className="sy-cell full">ครบ</span></li><li><span className="sy-cell partial">กรอกบางวัน / เริ่มกลางเดือน</span></li>
+      <li><span className="sy-cell not_filled">ทีมยังไม่กรอก</span></li><li><span className="sy-cell since">ระบบขายยังไม่เริ่มเก็บ</span></li>
+    </ul>
+    <div className="sy-table-scroll" role="region" aria-label="ความครบของข้อมูลระบบขาย" tabIndex={0}>
+      <table className="sy-cov-table">
+        <thead><tr>
+          <th scope="col">ตัวชี้วัด / แบรนด์</th>
+          {matrix.ranges.map((range) => <th scope="col" key={range.month}>{monthLabel(range.month)}{range.partialStart || range.open ? <small>{range.open ? (range.partialStart ? `${shortDay(range.start)}–วันนี้` : "ถึงวันนี้") : `${shortDay(range.start)}–${shortDay(range.end)}`}</small> : null}</th>)}
+        </tr></thead>
+        <tbody>
+          {metrics.map(([metric, label]) => {
+            const rows = matrix.rows.filter((row) => row.metric === metric);
+            const same = rows.length > 1 && rows.every((row) => sig(row) === sig(rows[0]));
+            const shown = same ? [{ ...rows[0], brandId: null }] : rows;
+            return [
+              <tr key={metric} className="sy-cov-group"><th scope="rowgroup" colSpan={matrix.months.length + 1}>{label}</th></tr>,
+              ...shown.map((row) => <tr key={`${metric}-${row.brandId ?? "all"}`}>
+                <th scope="row">{row.brandId ? names.get(row.brandId) ?? row.brandId : "ทุกแบรนด์"}</th>
+                {row.cells.map((cell) => <td key={cell.month}><span className={`sy-cell ${cellTone(cell)}`}>{CELL_TEXT[cell.state](cell)}</span></td>)}
+              </tr>),
+            ];
+          })}
+        </tbody>
+      </table>
+    </div>
+    {waiting.length > 0 && <p className="sy-note">{waiting.map((brand) => brand.name).join(" · ")}: รอเชื่อมแหล่งข้อมูลยอดขาย · วันนี้ยังไม่ปิดไม่นับเป็นวันที่ทีมไม่กรอก</p>}
+    {waiting.length === 0 && <p className="sy-note">วันนี้ยังไม่ปิดไม่นับเป็นวันที่ทีมไม่กรอก</p>}
   </div>;
 }
 

@@ -89,14 +89,17 @@
 .mkt-root .sy-filter button { min-height:32px; padding:0 12px; border:1px solid var(--line); border-radius:99px; background:none; color:var(--ink-soft); font:inherit; font-size:12px; cursor:pointer; }
 .mkt-root .sy-filter button[aria-pressed="true"] { border-color:transparent; background:var(--accent-solid,var(--accent)); color:var(--on-accent); font-weight:650; }
 .sy-timeline { display:grid; margin:12px 0 0; padding:0; list-style:none; border:1px solid var(--line); border-radius:10px; }
-.sy-timeline li { display:grid; grid-template-columns:150px minmax(0,1fr) 72px 110px; align-items:center; gap:12px; padding:9px 14px; border-top:1px solid var(--line); font-size:12px; }
+.sy-day { margin-top:14px; }
+.sy-day h4 { margin:0 0 6px; color:var(--ink-soft); font-size:11px; font-weight:700; }
+.sy-timeline li { display:grid; grid-template-columns:48px 18px minmax(0,1fr) 64px auto; align-items:center; gap:10px; padding:9px 14px; border-top:1px solid var(--line); font-size:12px; }
+.sy-tl-kind { color:var(--ink-soft); }
 .sy-timeline li:first-child { border-top:0; }
 .sy-timeline time, .sy-tl-who { color:var(--ink-soft); font-size:11px; font-variant-numeric:tabular-nums; }
 .sy-tl-main { display:grid; gap:2px; min-width:0; }
 .sy-tl-main b { font-weight:650; overflow-wrap:anywhere; }
 .sy-tl-main small { color:var(--ink-soft); font-size:11px; }
-.sy-tl-status { justify-self:end; font-size:11px; font-weight:700; }
-.sy-tl-status.ok { color:var(--ok-text); } .sy-tl-status.warn { color:var(--warn-text); } .sy-tl-status.bad { color:var(--bad-text); } .sy-tl-status.muted { color:var(--ink-soft); }
+.sy-timeline .sy-chip { justify-self:end; }
+.sy-history .pg { margin-top:12px; }
 
 .sy-empty { display:grid; place-content:center; justify-items:center; min-height:120px; gap:6px; color:var(--ink-soft); text-align:center; }
 .sy-empty strong { color:var(--ink); font-size:13px; }
@@ -124,9 +127,8 @@
   .sy-acct.head { display:none; }
   .sy-acct > [role="cell"]:nth-child(n+3) { grid-column:1 / -1; grid-template-columns:110px minmax(0,1fr); column-gap:10px; }
   .sy-acct > [role="cell"]:nth-child(n+3)::before { content:attr(data-label); grid-row:1 / span 2; color:var(--ink-soft); font-size:11px; }
-  .sy-timeline li { grid-template-columns:minmax(0,1fr) auto; row-gap:4px; }
-  .sy-timeline time { grid-column:1 / -1; }
-  .sy-tl-who { display:none; }
+  .sy-timeline li { grid-template-columns:44px minmax(0,1fr) auto; column-gap:8px; }
+  .sy-tl-kind, .sy-tl-who { display:none; }
 }
 @media (max-width:560px) {
   .sy-top, .sy-card { padding:14px; }
@@ -147,26 +149,6 @@
 .sy-chip.ok { background:var(--ok-soft); color:var(--ok-text); }
 .sy-chip.warn { background:var(--warn-soft); color:var(--warn-text); }
 .sy-chip.bad { background:var(--bad-soft); color:var(--bad-text); }
-.sy-goals { display:grid; gap:6px; }
-.sy-goal { display:grid; grid-template-columns:minmax(110px,.6fr) auto 1fr; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:11px; }
-.sy-goal b { font-size:12px; }
-.sy-goal-missing { color:var(--ink-soft); }
-.sy-coverage { overflow:auto; border:1px solid var(--line); border-radius:8px; }
-.sy-coverage:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
-.sy-coverage table { width:100%; min-width:720px; border-collapse:collapse; font-size:11px; }
-.sy-coverage th, .sy-coverage td { padding:7px 10px; border-top:1px solid var(--line); text-align:left; vertical-align:middle; }
-.sy-coverage thead th { border-top:0; background:var(--surface-2); color:var(--ink-soft); font-weight:700; white-space:nowrap; }
-.sy-coverage tbody th { color:var(--ink); font-size:12px; font-weight:700; white-space:nowrap; }
-.sy-coverage-metric { color:var(--ink-soft); white-space:nowrap; }
-.sy-cell { display:inline-flex; min-height:20px; align-items:center; padding:0 7px; border-radius:6px; white-space:nowrap; font-weight:650; }
-.sy-cell.full { background:var(--ok-soft); color:var(--ok-text); }
-.sy-cell.partial { background:var(--warn-soft); color:var(--warn-text); }
-.sy-cell.not_filled, .sy-cell.no_data { background:var(--bad-soft); color:var(--bad-text); }
-.sy-cell.waiting_source { background:var(--surface-2); color:var(--ink-soft); }
-.sy-inventory ul { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
-.sy-inventory li { display:grid; grid-template-columns:auto minmax(180px,.9fr) 1fr; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:11px; }
-.sy-inventory li b { font-size:12px; }
-.sy-inventory li small { color:var(--ink-soft); font-size:11px; }
 .sy-inventory-meta { margin:0 0 8px; color:var(--ink-soft); font-size:11px; }
 .sy-creative-row { grid-template-columns:minmax(180px,1.3fr) 1fr .5fr .7fr .6fr 1.3fr; min-width:860px; }
 .sy-access { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
@@ -174,5 +156,41 @@
 .sy-access li b { font-size:12px; }
 .sy-access li small { color:var(--ink-soft); font-size:11px; }
 @media (max-width:700px) {
-  .sy-goal, .sy-inventory li, .sy-access li { grid-template-columns:1fr; gap:4px; }
+  .sy-access li { grid-template-columns:1fr; gap:4px; }
 }
+
+/* ── แท็บยอดขาย: เป้าเดือนนี้ · ความครบ · แหล่งอื่น (รื้อใหม่ 17 ก.ย.) ── */
+.sy-table-scroll { position:relative; overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+.sy-table-scroll:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
+.sy-table-scroll table { width:100%; border-collapse:collapse; font-size:12px; }
+.sy-table-scroll th, .sy-table-scroll td { padding:8px 12px; border-top:1px solid var(--line); text-align:left; vertical-align:middle; white-space:nowrap; }
+.sy-table-scroll thead th { border-top:0; background:var(--surface-2); color:var(--ink-soft); font-size:11px; font-weight:700; }
+.sy-table-scroll tbody th { color:var(--ink); font-weight:700; }
+.sy-goal-summary { margin:0 0 10px; color:var(--ink); font-size:12px; font-weight:650; line-height:1.6; }
+.sy-goal-summary span { color:var(--ink-soft); font-weight:400; }
+.sy-goal-table { min-width:980px; }
+.sy-goal-table .sy-goal-groups th { padding-block:6px 0; background:var(--surface-2); font-size:11px; font-weight:650; }
+.sy-goal-table .sy-goal-groups th + th { border-left:1px solid var(--line); }
+.sy-goal-table td.num { text-align:right; font-variant-numeric:tabular-nums; font-weight:650; }
+.sy-goal-table td.unset { color:var(--ink-soft); font-weight:400; }
+.sy-goal-table thead tr:last-child th:nth-child(n+3) { text-align:right; }
+.sy-legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin:0 0 10px; padding:0; list-style:none; font-size:11px; }
+.sy-cov-table { min-width:640px; table-layout:fixed; }
+.sy-cov-table col:first-child, .sy-cov-table thead th:first-child { width:170px; }
+.sy-cov-table thead th small { display:block; margin-top:2px; font-weight:400; }
+.sy-cov-table .sy-cov-group th { padding-block:9px 5px; background:none; color:var(--ink); font-size:12px; font-weight:700; }
+.sy-cov-table tbody tr:not(.sy-cov-group) th { padding-left:24px; color:var(--ink-soft); font-weight:600; }
+.sy-cov-table tbody tr:not(.sy-cov-group) th, .sy-cov-table tbody tr:not(.sy-cov-group) td { border-top-color:color-mix(in srgb,var(--line) 55%,transparent); }
+.sy-cell { display:inline-flex; align-items:center; gap:6px; color:var(--ink); font-size:12px; font-weight:600; white-space:nowrap; }
+.sy-cell::before { content:""; flex:none; width:8px; height:8px; border-radius:50%; background:var(--ink-soft); }
+.sy-cell.full::before { background:var(--ok-text); }
+.sy-cell.partial { color:var(--warn-text); } .sy-cell.partial::before { background:var(--warn-text); }
+.sy-cell.not_filled, .sy-cell.no_data { color:var(--bad-text); } .sy-cell.not_filled::before, .sy-cell.no_data::before { background:var(--bad-text); }
+.sy-cell.since, .sy-cell.open, .sy-cell.waiting_source { color:var(--ink-soft); font-weight:500; }
+.sy-cell.since::before, .sy-cell.open::before, .sy-cell.waiting_source::before { background:transparent; border:1.5px solid var(--ink-soft); }
+.sy-inventory ul { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:8px; margin:0; padding:0; list-style:none; }
+.sy-inventory li { display:grid; align-content:start; gap:4px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; }
+.sy-inventory li b { font-size:12px; }
+.sy-inventory li small { color:var(--ink-soft); font-size:11px; line-height:1.5; }
+.sy-sales-tab .sy-sub { margin:22px 0 10px; font-size:13px; }
+.sy-sales-tab .sy-sub:first-of-type { margin-top:0; }
