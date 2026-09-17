@@ -8,11 +8,16 @@ const atMidnight = (s) => new Date(`${s}T00:00:00`).toISOString();
 const addDaysLocal = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const dayOf = (iso) => new Date(`${iso}T00:00:00`);
 
-/** ช่วงเวลา [start, end) เป็น ISO string · key: today · yesterday · 7d · 14d · 30d · mtd · lastMonth · custom(from,to รวมหัวท้าย) */
+const mondayOf = (d) => addDaysLocal(d, -((d.getDay() + 6) % 7));
+
+/** ช่วงเวลา [start, end) เป็น ISO string · key: today · yesterday · wtd · lastWeek · 7d · 14d · 30d · mtd · lastMonth · custom(from,to รวมหัวท้าย)
+    สัปดาห์เริ่มวันจันทร์ (ตรงกับปฏิทินในแอพ) */
 export function periodRange(key, from, to, now = new Date()) {
   const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let start = day, end = addDaysLocal(day, 1);
   if (key === "yesterday") { start = addDaysLocal(day, -1); end = day; }
+  if (key === "wtd") start = mondayOf(day);
+  if (key === "lastWeek") { end = mondayOf(day); start = addDaysLocal(end, -7); }
   if (key === "7d") start = addDaysLocal(day, -6);
   if (key === "14d") start = addDaysLocal(day, -13);
   if (key === "30d") start = addDaysLocal(day, -29);
@@ -26,8 +31,16 @@ export function sameDatesLastMonth(range) {
   start.setMonth(start.getMonth() - 1); end.setMonth(end.getMonth() - 1);
   return { start: start.toISOString(), end: end.toISOString() };
 }
+/** ช่วงเทียบ: เดือนก่อน = วันเดียวกันของเดือนก่อน · ช่วงก่อน = ช่วงยาวเท่ากันก่อนหน้า
+    ยกเว้นสัปดาห์นี้ (จ.–วันนี้) เทียบวันเดียวกันของสัปดาห์ก่อน ไม่ใช่ "ปลายสัปดาห์ก่อน" ที่ยาวเท่ากัน */
+export function compareRange(period, range, compare) {
+  if (compare === "lastMonth") return sameDatesLastMonth(range);
+  const start = new Date(range.start), end = new Date(range.end);
+  if (period === "wtd") return { start: addDaysLocal(start, -7).toISOString(), end: addDaysLocal(end, -7).toISOString() };
+  return { start: new Date(start.getTime() - (end - start)).toISOString(), end: range.start };
+}
 export const PERIOD_PRESETS = [
-  ["today", "วันนี้"], ["yesterday", "เมื่อวาน"], ["7d", "7 วันล่าสุด"], ["14d", "14 วันล่าสุด"],
+  ["today", "วันนี้"], ["yesterday", "เมื่อวาน"], ["wtd", "สัปดาห์นี้"], ["lastWeek", "สัปดาห์ก่อน"], ["7d", "7 วันล่าสุด"], ["14d", "14 วันล่าสุด"],
   ["30d", "30 วันล่าสุด"], ["mtd", "เดือนนี้"], ["lastMonth", "เดือนก่อน"],
 ];
 

@@ -7,6 +7,7 @@ import { AdsSourceControl, AdsSourceNotice } from "../ads/AdsSourceControl.jsx";
 import { analyticsCards } from "../mktAnalytics.js";
 import { adsCreativeRows } from "../adsOverview.js";
 import { isoDay, periodRange } from "../adsScope.js";
+import { useReportFilters } from "../ui/useReportFilters.js";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { fmtMoney, fmtPct, fmtNum, fmtInt } from "../dash/charts/theme.js";
 import { PlatformIcon } from "../ads/PlatformIcon.jsx";
@@ -46,20 +47,25 @@ function CompareTray({ rows, onRemove, onClear }) {
   return <section className="cl-compare" aria-label="เปรียบเทียบครีเอทีฟ"><header><div><strong>เทียบ {rows.length} ชิ้น</strong><span>ดูบนฐานช่วงเวลาเดียวกัน</span></div><button type="button" onClick={onClear}>ล้างทั้งหมด</button></header><div className="cl-compare-grid">{rows.map((row) => <article key={row.key}><button type="button" aria-label={`เอา ${row.creative} ออกจากการเปรียบเทียบ`} onClick={() => onRemove(row.key)}><X size={14} /></button><strong>{row.creative}</strong><small>{row.brand} · {row.platform}</small><dl><div><dt>ค่าแอด</dt><dd>{metric(row.spend, "money")}</dd></div><div><dt>การซื้อ</dt><dd>{metric(row.purchases, "count")}</dd></div><div><dt>ต่อการซื้อ</dt><dd>{metric(row.cpa, "money")}</dd></div><div><dt>ROAS</dt><dd>{metric(row.roas, "roas")}</dd></div><div><dt>CPL</dt><dd>{metric(row.cpl, "money")}</dd></div><div><dt>CTR</dt><dd>{metric(row.ctr, "pct")}</dd></div></dl></article>)}</div></section>;
 }
 
+/* ตัวกรองเฉพาะหน้า Creative (อยู่ในลิงก์ ไม่ข้ามหน้า) · ช่วงวันและแบรนด์ใช้ร่วมกับ Overview/แคมเปญ */
+const CREATIVE_FILTERS = {
+  platform: { default: "all" }, state: { default: "all", allowed: ["all", "fatigue", "ready", "waiting"] },
+  sort: { default: "spend", allowed: ["spend", "purchases", "cpa", "roas", "cpl", "ctr", "frequency"] }, q: { default: "" },
+  rule: { default: "none" }, outcome: { default: "all", allowed: ["all", "fail", "pass", "pending"] },
+};
+
 export function CreativeLibraryView() {
   const { data, inBrandScope, brandFilter, toast } = useApp();
   const ads = useAdsData();
   const today = isoDay(new Date());
-  const [period, setPeriod] = useState("mtd");
-  const [from, setFrom] = useState(today.slice(0, 8) + "01");
-  const [to, setTo] = useState(today);
-  const [brand, setBrand] = useState("all");
-  const [platform, setPlatform] = useState("all");
-  const [state, setState] = useState("all");
-  const [sort, setSort] = useState("spend");
-  const [query, setQuery] = useState("");
-  const [ruleId, setRuleId] = useState("none");
-  const [outcome, setOutcome] = useState("all");
+  const [filters, setFilters] = useReportFilters(CREATIVE_FILTERS);
+  const { period, from, to, brand, platform, state, sort, q: query, rule: ruleId, outcome } = filters;
+  const setBrand = (next) => setFilters({ brand: next });
+  const setPlatform = (next) => setFilters({ platform: next });
+  const setState = (next) => setFilters({ state: next });
+  const setSort = (next) => setFilters({ sort: next });
+  const setQuery = (next) => setFilters({ q: next });
+  const setOutcome = (next) => setFilters({ outcome: next });
   const rules = useMemo(() => normalizeCreativeRules(data.settings?.ads_control?.creativeRules).filter((rule) => rule.value != null), [data.settings]);
   // กฎที่เลือกไว้ถูกลบไปแล้ว → กลับเป็นไม่ใช้กฎ
   const activeRule = ruleId === "all" ? (rules.length ? "all" : "none") : rules.some((rule) => rule.id === ruleId) ? ruleId : "none";
@@ -70,11 +76,13 @@ export function CreativeLibraryView() {
     const brands = (data.brands ?? []).filter((item) => item.active !== false && (brandFilter === "all" || item.id === brandFilter));
     const all = adsCreativeRows(cards, range, brands);
     const platforms = [...new Set(all.map((row) => row.platform))].sort();
-    const filtered = filterCreativeLibrary(all, { brand, platform, state, sort, query });
+    // แบรนด์ที่จำมาจากหน้าอื่น/ลิงก์ แต่ไม่อยู่ในขอบเขตตอนนี้ = ทุกแบรนด์ (ไม่ให้หน้าว่างโดยไม่รู้สาเหตุ)
+    const brandSel = brands.some((item) => item.id === brand) ? brand : "all";
+    const filtered = filterCreativeLibrary(all, { brand: brandSel, platform, state, sort, query });
     // สรุปผลกฎนับจากชิ้นที่ผ่านตัวกรองอื่นแล้ว (ก่อนกรองผลกฎ) — เห็นภาพรวมผ่าน/ไม่ผ่านของชุดที่กำลังดู
     const ruleSummary = activeRule === "none" ? null : creativeRuleSummary(filtered, rules, activeRule);
     const rows = filterByRuleOutcome(filtered, rules, activeRule, outcome);
-    return { rows, all, brands, platforms, summary: creativeLibrarySummary(rows), range, ruleSummary };
+    return { rows, all, brands, brandSel, platforms, summary: creativeLibrarySummary(rows), range, ruleSummary };
   }, [data, ads.cards, inBrandScope, brandFilter, period, from, to, brand, platform, state, sort, query, rules, activeRule, outcome]);
   const chosen = selected.map((key) => v.all.find((row) => row.key === key)).filter(Boolean);
   const [previewRow, setPreviewRow] = useState(null);
@@ -86,8 +94,8 @@ export function CreativeLibraryView() {
   const toShown = isoDay(new Date(new Date(v.range.end).getTime() - 1));
   return <main className="aw cl">
     <section className="cl-command"><header><div><h1>Creative Library</h1><p>ดูชิ้นงานที่ทำเงิน ชิ้นที่เริ่มล้า และเลือกมาเทียบกัน</p></div><div className="cl-head-actions"><AdsSourceControl ads={ads} /><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div></header><AdsSourceNotice ads={ads} />
-      <div className="cl-filters"><DateRangePicker period={period} from={fromShown} to={toShown} max={today} onChange={({ period: nextPeriod, from: nextFrom, to: nextTo }) => { setPeriod(nextPeriod); setFrom(nextFrom); setTo(nextTo); }} />
-        <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((item) => [item.id, item.name])]} value={brand} onChange={setBrand} /><Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.platforms.map((item) => [item, item])]} value={platform} onChange={setPlatform} /><Dropdown label="สถานะ" options={[["all", "ทั้งหมด"], ["fatigue", "เริ่มล้า"], ["ready", "มีสื่อแล้ว"], ["waiting", "รอสื่อ"]]} value={state} onChange={setState} /><Dropdown label="กฎ" options={[["none", "ไม่ใช้กฎ"], ...(rules.length > 1 ? [["all", "ทุกกฎ"]] : []), ...rules.map((rule) => [rule.id, ruleTitle(rule)])]} value={activeRule} onChange={(next) => { setRuleId(next); if (next === "none") setOutcome("all"); }} />{activeRule !== "none" && <Dropdown label="ผล" options={[["all", "ทั้งหมด"], ["fail", "ไม่ผ่าน"], ["pass", "ผ่าน"], ["pending", "ยังตัดสินไม่ได้"]]} value={outcome} onChange={setOutcome} />}<Dropdown label="เรียง" options={[["spend", "ค่าแอดสูงสุด"], ["purchases", "การซื้อสูงสุด"], ["cpa", "ต้นทุนต่อการซื้อต่ำสุด"], ["roas", "ROAS สูงสุด"], ["cpl", "CPL ต่ำสุด"], ["ctr", "CTR สูงสุด"], ["frequency", "เห็นซ้ำสูงสุด"]]} value={sort} onChange={setSort} /><label className="cl-search ads-search"><Search size={14} aria-hidden="true" /><input type="search" aria-label="ค้นหาครีเอทีฟ" placeholder="ค้นหาชิ้นงานหรือแคมเปญ" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <div className="cl-filters"><DateRangePicker period={period} from={fromShown} to={toShown} max={today} onChange={({ period: nextPeriod, from: nextFrom, to: nextTo }) => setFilters({ period: nextPeriod, from: nextFrom, to: nextTo })} />
+        <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((item) => [item.id, item.name])]} value={v.brandSel} onChange={setBrand} /><Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.platforms.map((item) => [item, item])]} value={platform} onChange={setPlatform} /><Dropdown label="สถานะ" options={[["all", "ทั้งหมด"], ["fatigue", "เริ่มล้า"], ["ready", "มีสื่อแล้ว"], ["waiting", "รอสื่อ"]]} value={state} onChange={setState} /><Dropdown label="กฎ" options={[["none", "ไม่ใช้กฎ"], ...(rules.length > 1 ? [["all", "ทุกกฎ"]] : []), ...rules.map((rule) => [rule.id, ruleTitle(rule)])]} value={activeRule} onChange={(next) => setFilters(next === "none" ? { rule: next, outcome: "all" } : { rule: next })} />{activeRule !== "none" && <Dropdown label="ผล" options={[["all", "ทั้งหมด"], ["fail", "ไม่ผ่าน"], ["pass", "ผ่าน"], ["pending", "ยังตัดสินไม่ได้"]]} value={outcome} onChange={setOutcome} />}<Dropdown label="เรียง" options={[["spend", "ค่าแอดสูงสุด"], ["purchases", "การซื้อสูงสุด"], ["cpa", "ต้นทุนต่อการซื้อต่ำสุด"], ["roas", "ROAS สูงสุด"], ["cpl", "CPL ต่ำสุด"], ["ctr", "CTR สูงสุด"], ["frequency", "เห็นซ้ำสูงสุด"]]} value={sort} onChange={setSort} /><label className="cl-search ads-search"><Search size={14} aria-hidden="true" /><input type="search" aria-label="ค้นหาครีเอทีฟ" placeholder="ค้นหาชิ้นงานหรือแคมเปญ" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       </div>
     </section>
     {!rules.length && <p className="cl-rule-hint">ยังไม่มีกฎคัดครีเอทีฟ · <Link to="/mkt/ads?panel=settings&tab=rules">ตั้งกฎ</Link> เช่น ต้นทุนต่อการซื้อไม่เกินเท่าไร แล้วกรองชิ้นที่ไม่คุ้มได้จากตัวกรอง "กฎ"</p>}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../useMkt.jsx";
-import { analyticsCards, previousRange } from "../mktAnalytics.js";
+import { analyticsCards } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, change, filterByChannel, paceStatus, revenueBasisCards, share } from "../adsOverview.js";
 import { fmtCompact, fmtInt, fmtMoney, fmtPct, fmtNum } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
@@ -9,7 +9,8 @@ import { AdsWorkspace } from "./AdsWorkspace.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
-import { isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
+import { compareRange, isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
+import { useReportFilters } from "../ui/useReportFilters.js";
 import { useAdsData } from "./useAdsData.js";
 import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues, plansFromTargets } from "../adsTargets.js";
 import { GoalLine } from "../ui/GoalLine.jsx";
@@ -245,18 +246,18 @@ export function AdsView() {
   const { data, inBrandScope, brandFilter, updateAdsControl, toast } = useApp();
   const ads = useAdsData();
   const todayLocal = isoDay(new Date());
-  const [period, setPeriod] = useState("mtd");
-  const [customFrom, setCustomFrom] = useState(todayLocal.slice(0, 8) + "01");
-  const [customTo, setCustomTo] = useState(todayLocal);
-  const [compare, setCompare] = useState("previous");
-  const [channel, setChannel] = useState("all");
-  const [revenueBasis, setRevenueBasis] = useState("total");
+  /* ตัวกรองอยู่ในลิงก์และใช้ร่วมกับหน้าแคมเปญ/Creative (useReportFilters) */
+  const [filters, setFilters] = useReportFilters();
+  const { period, from: customFrom, to: customTo, compare, channel, basis: revenueBasis } = filters;
+  const setCompare = (next) => setFilters({ compare: next });
+  const setChannel = (next) => setFilters({ channel: next });
+  const setRevenueBasis = (next) => setFilters({ basis: next });
 
   const v = useMemo(() => {
     const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
     const range = periodRange(period, customFrom, customTo);
-    const before = compare === "lastMonth" ? sameDatesLastMonth(range) : previousRange(range);
+    const before = compareRange(period, range, compare);
     const brands = (data.brands ?? []).filter((brand) => brand.active !== false && (brandFilter === "all" || brand.id === brandFilter));
     const today = isoDay(new Date());
     const monthRange = periodRange("mtd", null, null);
@@ -360,9 +361,9 @@ export function AdsView() {
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
-  const changeRange = ({ period: nextPeriod, from, to }) => { setPeriod(nextPeriod); setCustomFrom(from); setCustomTo(to); };
+  const changeRange = ({ period: nextPeriod, from, to }) => setFilters({ period: nextPeriod, from, to });
 
-  return <AdsWorkspace v={v} ads={ads} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
+  return <AdsWorkspace v={v} ads={ads} selected={filters.brand === "all" ? null : filters.brand} onSelect={(id) => setFilters({ brand: id ?? "all" })} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
     <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
     <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
     <Dropdown label="ช่องทาง" options={[["all", "ทั้งหมด"], ...v.channelList.map((item) => [item, item])]} value={channel} onChange={setChannel} />

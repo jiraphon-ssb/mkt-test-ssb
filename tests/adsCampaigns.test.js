@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { campaignRows, NO_CAMPAIGN } from "../src/modules/marketing/adsCampaigns.js";
 import { campaignDecision, SAVED_VIEWS, applyView, campaignTotals, sortCampaigns, campaignsByBrand, withSpendShare } from "../src/modules/marketing/adsCampaigns.js";
-import { periodRange, sameDatesLastMonth, isoDay, PERIOD_PRESETS, monthGrid, rangeLabel, daysInclusive } from "../src/modules/marketing/adsScope.js";
+import { periodRange, sameDatesLastMonth, compareRange, isoDay, PERIOD_PRESETS, monthGrid, rangeLabel, daysInclusive } from "../src/modules/marketing/adsScope.js";
 
 const RANGE = { start: "2026-07-01T00:00:00.000Z", end: "2026-07-16T00:00:00.000Z" };
 const PREV = { start: "2026-06-16T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z" };
@@ -283,13 +283,26 @@ describe("adsScope", () => {
     expect(isoDay(new Date(r.start))).toBe("2026-08-01");
   });
   it("preset ครบชุดแบบ Ads Manager และ periodRange รองรับทุก key", () => {
-    expect(PERIOD_PRESETS.map((p) => p[0])).toEqual(["today", "yesterday", "7d", "14d", "30d", "mtd", "lastMonth"]);
+    expect(PERIOD_PRESETS.map((p) => p[0])).toEqual(["today", "yesterday", "wtd", "lastWeek", "7d", "14d", "30d", "mtd", "lastMonth"]);
     expect(isoDay(new Date(periodRange("14d", null, null, NOW).start))).toBe("2026-08-30");
     expect(isoDay(new Date(periodRange("30d", null, null, NOW).start))).toBe("2026-08-14");
     const y = periodRange("yesterday", null, null, NOW);
     expect([isoDay(new Date(y.start)), isoDay(new Date(y.end))]).toEqual(["2026-09-11", "2026-09-12"]);
     const lm = periodRange("lastMonth", null, null, NOW);
     expect([isoDay(new Date(lm.start)), isoDay(new Date(lm.end))]).toEqual(["2026-08-01", "2026-09-01"]);
+  });
+  it("สัปดาห์นี้ = จันทร์ถึงวันนี้ · สัปดาห์ก่อน = จันทร์–อาทิตย์เต็มสัปดาห์ (ประชุมรายสัปดาห์)", () => {
+    const days = (r) => [isoDay(new Date(r.start)), isoDay(new Date(r.end))];
+    expect(days(periodRange("wtd", null, null, NOW))).toEqual(["2026-09-07", "2026-09-13"]);          // 12 ก.ย. = วันเสาร์
+    expect(days(periodRange("lastWeek", null, null, NOW))).toEqual(["2026-08-31", "2026-09-07"]);
+    const sunday = new Date(2026, 8, 13, 10);
+    expect(days(periodRange("wtd", null, null, sunday))).toEqual(["2026-09-07", "2026-09-14"]);
+  });
+  it("compareRange: สัปดาห์นี้เทียบวันเดียวกันของสัปดาห์ก่อน · เดือนก่อนเลื่อน 1 เดือน · อื่นๆ ช่วงยาวเท่ากันก่อนหน้า", () => {
+    const days = (r) => [isoDay(new Date(r.start)), isoDay(new Date(r.end))];
+    expect(days(compareRange("wtd", periodRange("wtd", null, null, NOW), "previous"))).toEqual(["2026-08-31", "2026-09-06"]);
+    expect(days(compareRange("7d", periodRange("7d", null, null, NOW), "previous"))).toEqual(["2026-08-30", "2026-09-06"]);
+    expect(days(compareRange("mtd", periodRange("mtd", null, null, NOW), "lastMonth"))).toEqual(["2026-08-01", "2026-08-13"]);
   });
   it("monthGrid: ก.ย. 2026 เริ่มวันอังคาร · 7 คอลัมน์ · เติม null หัว/ท้าย", () => {
     const g = monthGrid(2026, 8);

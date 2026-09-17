@@ -1,13 +1,14 @@
 /* CampaignsView — หน้าตัดสินใจระดับแคมเปญ · ตัวเลขทั้งหมดมาจาก adsCampaigns.js */
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Search, Settings2 } from "lucide-react";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { useApp } from "../useMkt.jsx";
-import { analyticsCards, previousRange } from "../mktAnalytics.js";
+import { analyticsCards } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
 import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
-import { isoDay, periodRange, sameDatesLastMonth } from "../adsScope.js";
+import { compareRange, isoDay, periodRange } from "../adsScope.js";
+import { useReportFilters } from "../ui/useReportFilters.js";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { combineTargets, normalizeTargets, periodForTargets, plansFromTargets } from "../adsTargets.js";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
@@ -31,27 +32,29 @@ function realGoalTargets(brands, selectedBrand, salesTargets, salesGoals, goalMo
   })));
 }
 
+/* ตัวกรองเฉพาะหน้าแคมเปญ (อยู่ในลิงก์ ไม่ข้ามหน้า) */
+const CAMPAIGN_FILTERS = { status: { default: "all" }, objective: { default: "all" }, budget: { default: "all", allowed: ["all", "set", "unset"] }, q: { default: "" } };
+
 export function CampaignsView() {
   const { data, inBrandScope, brandFilter } = useApp();
   const ads = useAdsData();
   const todayLocal = isoDay(new Date());
-  const [period, setPeriod] = useState("mtd");
-  const [customFrom, setCustomFrom] = useState(todayLocal.slice(0, 8) + "01");
-  const [customTo, setCustomTo] = useState(todayLocal);
-  const [compare, setCompare] = useState("previous");
-  const [channel, setChannel] = useState("all");
-  const [brandSel, setBrandSel] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [objective, setObjective] = useState("all");
-  const [budgetState, setBudgetState] = useState("all");
-  const [revenueBasis, setRevenueBasis] = useState("total");
-  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useReportFilters(CAMPAIGN_FILTERS);
+  const { period, from: customFrom, to: customTo, compare, channel, brand: brandSel, status, objective, budget: budgetState, basis: revenueBasis, q: query } = filters;
+  const setCompare = (next) => setFilters({ compare: next });
+  const setChannel = (next) => setFilters({ channel: next });
+  const setBrandSel = (next) => setFilters({ brand: next });
+  const setStatus = (next) => setFilters({ status: next });
+  const setObjective = (next) => setFilters({ objective: next });
+  const setBudgetState = (next) => setFilters({ budget: next });
+  const setRevenueBasis = (next) => setFilters({ basis: next });
+  const setQuery = (next) => setFilters({ q: next });
 
   const v = useMemo(() => {
     const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
     const range = periodRange(period, customFrom, customTo);
-    const before = compare === "lastMonth" ? sameDatesLastMonth(range) : previousRange(range);
+    const before = compareRange(period, range, compare);
     const brands = (data.brands ?? []).filter((b) => b.active !== false && (brandFilter === "all" || b.id === brandFilter));
     const selectedBrand = brandSel === "all" || brands.some((b) => b.id === brandSel) ? brandSel : "all";
     const month = isoDay(new Date()).slice(0, 7);
@@ -103,9 +106,9 @@ export function CampaignsView() {
 
   const shownFrom = isoDay(new Date(v.range.start));
   const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
-  const changeRange = ({ period: nextPeriod, from, to }) => { setPeriod(nextPeriod); setCustomFrom(from); setCustomTo(to); };
+  const changeRange = ({ period: nextPeriod, from, to }) => setFilters({ period: nextPeriod, from, to });
   const advancedCount = [status, objective, budgetState].filter((x) => x !== "all").length;
-  const clearAdvanced = () => { setStatus("all"); setObjective("all"); setBudgetState("all"); };
+  const clearAdvanced = () => setFilters({ status: "all", objective: "all", budget: "all" });
 
   return <main className="aw cp">
     <section className="cp-command" aria-label="ตัวกรองแคมเปญ">

@@ -15,9 +15,12 @@ const pct = n => n == null ? '—' : fmtPct(n, 1);
 function Track({ value, expected, label, tone }) {
   return <div className="aw-track" role="img" aria-label={`${label}: ${pct(value)} · จังหวะวันนี้ ${pct(expected)}`}><i className={tone} style={{width:`${Math.max(0,Math.min(100,(value ?? 0)*100))}%`}} />{expected != null && <em style={{left:`${Math.min(100,expected*100)}%`}} />}</div>;
 }
-export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, settings, updateAdsControl, toast }) {
+export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, settings, updateAdsControl, toast, selected: selectedProp, onSelect }) {
   const { search } = useLocation();
-  const [selected, setSelected] = useState(null);
+  /* แบรนด์ที่เลือกอยู่ในลิงก์ (AdsView ส่งมา) · ไม่ส่ง = จำในหน้าเอง */
+  const [localSelected, setLocalSelected] = useState(null);
+  const selected = onSelect ? selectedProp : localSelected;
+  const setSelected = onSelect ?? setLocalSelected;
   const [tab, setTab] = useState('platform');
   const picked = v.brands.find(x=>x.id===selected);
   const overview = !picked;

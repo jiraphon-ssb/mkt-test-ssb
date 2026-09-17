@@ -20,8 +20,8 @@ vi.mock("../src/modules/marketing/ads/AdsSourceControl.jsx", () => ({ AdsSourceC
 vi.mock("../src/modules/marketing/creatives/CreativeMedia.jsx", () => ({ CreativeMedia: () => null }));
 const { CreativeLibraryView } = await import("../src/modules/marketing/creatives/CreativeLibraryView.jsx");
 
-afterEach(() => { cleanup(); state.settings = {}; });
-const view = () => render(<MemoryRouter><CreativeLibraryView /></MemoryRouter>);
+afterEach(() => { cleanup(); state.settings = {}; sessionStorage.clear(); });
+const view = (url = "/mkt/creatives") => render(<MemoryRouter initialEntries={[url]}><CreativeLibraryView /></MemoryRouter>);
 const card = (name) => screen.getByText(name).closest("article");
 const shown = () => [...document.querySelectorAll(".cl-card strong")].map((el) => el.textContent);
 
@@ -64,5 +64,17 @@ describe("CreativeLibraryView", () => {
     fireEvent.click(screen.getByRole("button", { name: "เรียง" }));
     fireEvent.click(screen.getByRole("option", { name: "ต้นทุนต่อการซื้อต่ำสุด" }));
     expect(shown().slice(0, 2)).toEqual(["ชิ้นคุ้ม", "ชิ้นแพง"]);
+  });
+  it("ตัวกรองมาจากลิงก์: ช่วงวัน การเรียง และคำค้นตามลิงก์ที่ส่งมา", () => {
+    view("/mkt/creatives?period=lastWeek&sort=cpa&q=%E0%B8%84%E0%B8%B8%E0%B9%89%E0%B8%A1");
+    expect(screen.getByRole("button", { name: "เรียง" }).textContent).toContain("ต้นทุนต่อการซื้อต่ำสุด");
+    expect(screen.getByRole("searchbox", { name: "ค้นหาครีเอทีฟ" }).value).toBe("คุ้ม");
+    expect(document.querySelector(".drp-trigger").textContent).toContain("สัปดาห์ก่อน");
+  });
+
+  it("ช่วงวันที่เลือกในหน้าอื่น (จำในแท็บ) ถูกใช้ต่อเมื่อเปิดหน้านี้โดยไม่มีตัวกรองในลิงก์ · ตัวกรองเฉพาะหน้าไม่ติดมา", () => {
+    sessionStorage.setItem("ssb.report.filters", JSON.stringify({ period: "7d", brand: "all", status: "paused" }));
+    view();
+    expect(document.querySelector(".drp-trigger").textContent).toContain("7 วันล่าสุด");
   });
 });
