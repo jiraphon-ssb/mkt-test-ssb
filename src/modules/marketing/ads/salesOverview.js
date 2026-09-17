@@ -2,6 +2,7 @@
    pure · เทสใน tests/salesOverview.test.js
    กติกา: ค่าแอดยังเป็นของ Meta (ระดับแพลตฟอร์ม/แคมเปญยังเป็น Meta attribute ได้) แต่ระดับแบรนด์และภาพรวม
    ยอดขาย · ROAS · %Ads · CPL · CAC ต้องมาจากระบบขาย · ไม่มีข้อมูล = null พร้อมเหตุผล ห้ามโชว์ 0 แทน */
+import { fmtInt } from "../dash/charts/theme.js";
 import { budgetPace, change, revenuePace, roasOf, share } from "../adsOverview.js";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -64,7 +65,7 @@ export function plansFromSalesGoals({ goals = [], month, basis = "total" } = {})
     if (!goal?.brand_id || String(goal.month ?? "").slice(0, 7) !== month) continue;
     const pct = num(goal.platform_pct?.meta);
     const metaBudget = positive(goal.platform_budgets?.meta)
-      ?? (positive(goal.ad_budget) != null && pct != null ? Math.round(goal.ad_budget * pct / 100) : null);
+      ?? (positive(goal.ad_budget) != null && pct != null ? goal.ad_budget * pct / 100 : null);   // ไม่ปัด
     if (metaBudget != null) adBudgets.push({ brand_id: goal.brand_id, channel: "Meta Ads", month, amount: metaBudget });
     const target = basis === "new" ? positive(goal.sales_new_target) : positive(goal.sales_target);
     if (target != null) salesTargets.push({ brand_id: goal.brand_id, month, amount: target });
@@ -176,7 +177,7 @@ export function salesPipeline({ sales = null, prevSales = null, metaInquiries = 
   const orders = sales ? sales.orders : null;
 
   const inquirySub = [
-    metaInquiries != null ? `จากแอด Meta ${Math.round(metaInquiries).toLocaleString("th-TH")}` : null,
+    metaInquiries != null ? `จากแอด Meta ${fmtInt(metaInquiries)}` : null,
     !sales ? none : sales.inquiryFilledDays === 0 ? "ทีมยังไม่กรอก" : sales.inquiryFilledDays < sales.days ? `ทีมกรอก ${sales.inquiryFilledDays}/${sales.days} วัน` : null,
   ].filter(Boolean).join(" · ");
   const depositSub = !sales ? none

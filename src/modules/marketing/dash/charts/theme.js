@@ -83,15 +83,32 @@ export function baseOpts(extra = {}) {
    null ≠ 0 — ค่าที่ "ไม่รู้" ต้องขึ้น "—" ทุกตัว (เดิม fmtInt/fmtMoney ปัด null เป็น 0
    ทำให้ยอดที่ยังไม่รู้ขึ้น ฿0 ข้างๆ ROAS ที่ขึ้น "—" บนบรรทัดเดียวกัน) */
 const unknown = (n) => n == null || (typeof n === "number" && !Number.isFinite(n));
-export const fmtInt = (n) => (unknown(n) ? "—" : Math.round(n).toLocaleString("th-TH"));
+/* กติกาอาร์ต 17 ก.ย. 2569: ค่าที่มีทศนิยมต้องแสดงทศนิยม "ห้ามปัด" — ตัดทิ้งที่ 2 ตำแหน่ง
+   ล้างเศษ float ที่ตำแหน่งที่ 6 ก่อน (toFixed(6)) แล้วตัดสตริงเหลือ 2 ตำแหน่ง — ไม่ใช้ Math.trunc(n*100)
+   เพราะ float เก็บ 57035.04 เป็น 57035.0399999… และยอดที่บวกหลายพันแถวได้ 326972.3299999999 (จริง = .33)
+   ถ้าตัดตรงๆ จะหายไป 1 สตางค์ และคนละหน้าที่บวกคนละลำดับจะขึ้นไม่เท่ากัน (เห็นจริง 17 ก.ย.) */
+export function fmtNum(n, digits = 2) {
+  if (unknown(n)) return "—";
+  const negative = n < 0;
+  const [whole, frac = ""] = Math.abs(n).toFixed(6).split(".");
+  const cut = frac.slice(0, digits).padEnd(digits, "0");
+  const grouped = Number(whole).toLocaleString("th-TH");
+  const text = digits > 0 ? `${grouped}.${cut}` : grouped;
+  return negative && /[1-9]/.test(text) ? `-${text}` : text;
+}
+/** จำนวนนับ: จำนวนเต็มไม่มีทศนิยม · มีเศษต้องแสดงเศษ (ไม่ปัด) */
+export const fmtInt = (n) => (unknown(n) ? "—" : Number.isInteger(n) ? n.toLocaleString("th-TH") : fmtNum(n, 2));
+/** ตัวย่อ (1.2k) — ใช้กับป้ายแกนกราฟเท่านั้น ห้ามใช้แสดงค่า */
 export const fmtCompact = (n) =>
   unknown(n) ? "—"
   : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M`
   : n >= 1_000 ? `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`
   : String(Math.round(n));
-export const fmtPct = (x, digits = 1) => (unknown(x) ? "—" : `${(x * 100).toFixed(digits)}%`);
-export const fmtMoney = (n) => (unknown(n) ? "—" : `฿${Math.round(n).toLocaleString("th-TH")}`);
-export const fmtDays = (x) => (x == null ? "—" : `${x.toFixed(1)} วัน`);
+/** เปอร์เซ็นต์ 2 ตำแหน่งแบบตัดทิ้ง (อาร์กิวเมนต์ที่สองคงไว้ให้โค้ดเดิมเรียกได้ แต่ไม่ลดตำแหน่งแล้ว) */
+export const fmtPct = (x) => (unknown(x) ? "—" : `${fmtNum(x * 100, 2)}%`);
+export const fmtMoney = (n) => (unknown(n) ? "—" : `฿${fmtNum(n, 2)}`);
+export const fmtRoas = (x, suffix = "×") => (unknown(x) ? "—" : `${fmtNum(x, 2)}${suffix}`);
+export const fmtDays = (x) => (x == null ? "—" : `${fmtNum(x, 2)} วัน`);
 
 /* ---------- กราฟเส้นรายวัน: ค่าตั้งต้นเดียวกันทุกกราฟ ----------
    monotone = โค้งไม่ทะลุค่าจริง (tension ธรรมดาทำให้เส้นแกว่งเกินจุด) · จุดซ่อนเมื่อวันเยอะ · ช่องว่าง = ไม่มีข้อมูล (ไม่ลากข้าม) */

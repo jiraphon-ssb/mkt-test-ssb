@@ -8,7 +8,7 @@ import { analyticsCards } from "../mktAnalytics.js";
 import { adsCreativeRows } from "../adsOverview.js";
 import { isoDay, periodRange } from "../adsScope.js";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
-import { fmtMoney, fmtPct } from "../dash/charts/theme.js";
+import { fmtMoney, fmtPct, fmtNum } from "../dash/charts/theme.js";
 import { PlatformIcon } from "../ads/PlatformIcon.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { filterCreativeLibrary, creativeLibrarySummary } from "./creativeLibrary.js";
@@ -21,7 +21,7 @@ import { usePagination } from "../ui/usePagination.js";
 import "../ads/adsWorkspace.css";
 import "./creativeLibrary.css";
 
-const metric = (value, format = "number") => value == null ? "—" : format === "money" ? fmtMoney(value) : format === "pct" ? fmtPct(value, 2) : format === "roas" ? `${value.toFixed(1)}x` : `${value.toFixed(1)}x`;
+const metric = (value, format = "number") => value == null ? "—" : format === "money" ? fmtMoney(value) : format === "pct" ? fmtPct(value, 2) : format === "roas" ? `${fmtNum(value, 2)}x` : `${fmtNum(value, 2)}x`;
 const actionText = { Scale: "น่าขยาย", Fix: "ควรแก้", Stop: "ควรหยุด", "ติดตาม": "ติดตาม" };
 
 const PAGE_SIZES = [12, 24, 48];   // หารลงตัวกับกริด 4 / 3 / 2 คอลัมน์ · หน้าละไม่เกิน 48 ภาพ

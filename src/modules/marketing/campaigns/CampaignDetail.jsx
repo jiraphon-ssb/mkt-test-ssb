@@ -4,10 +4,10 @@ import { CreativeMedia } from "../creatives/CreativeMedia.jsx";
 import { CreativePreview } from "../creatives/CreativePreview.jsx";
 import { postLinksOf } from "../ads/metaCreativeContract.js";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
-import { baseOpts, chartColor, dayLabel, fmtCompact, fmtMoney, fmtPct, lineSeries, SERIES } from "../dash/charts/theme.js";
+import { baseOpts, chartColor, dayLabel, fmtCompact, fmtMoney, fmtPct, lineSeries, SERIES, fmtNum, fmtInt } from "../dash/charts/theme.js";
 
 const METRICS = [["spend", "ค่าแอด", "money"], ["leads", "ผลลัพธ์", "int"], ["cpl", "CPL", "money"], ["roas", "ROAS", "roas"]];
-const fmt = (kind, v) => (v == null ? "—" : kind === "money" ? fmtMoney(v) : kind === "roas" ? `${v.toFixed(1)}x` : String(Math.round(v)));
+const fmt = (kind, v) => (v == null ? "—" : kind === "money" ? fmtMoney(v) : kind === "roas" ? `${fmtNum(v, 2)}x` : fmtInt(v));
 
 function CreativeCard({ creative, onPreview }) {
   const asset = creative.asset;
@@ -17,7 +17,7 @@ function CreativeCard({ creative, onPreview }) {
     {asset && <CreativeMedia row={creative} onPreview={onPreview} />}
     <div className="cp-creative-copy">
       <div className="cp-creative-title"><b title={creative.creative}>{creative.creative}</b><span className={`ads-badge ads-badge--${creative.tone}`}>{creative.action}</span></div>
-      <dl><div><dt>ค่าแอด</dt><dd>{fmtMoney(creative.spend)}</dd></div><div><dt>CTR</dt><dd>{creative.ctr != null ? fmtPct(creative.ctr, 2) : "—"}</dd></div><div><dt>ความถี่</dt><dd>{creative.frequency != null ? `${creative.frequency.toFixed(1)}x` : "—"}</dd></div></dl>
+      <dl><div><dt>ค่าแอด</dt><dd>{fmtMoney(creative.spend)}</dd></div><div><dt>CTR</dt><dd>{creative.ctr != null ? fmtPct(creative.ctr, 2) : "—"}</dd></div><div><dt>ความถี่</dt><dd>{creative.frequency != null ? `${fmtNum(creative.frequency, 2)}x` : "—"}</dd></div></dl>
       {asset?.copy?.headline && <strong className="cp-creative-headline">{asset.copy.headline}</strong>}
       {asset?.copy?.primaryText && <p className="cp-creative-text">{asset.copy.primaryText}</p>}
       <p>{creative.why}</p>
@@ -52,7 +52,7 @@ export function CampaignDetail({ row, compareLabel, canPreview = false }) {
       <aside className={`cp-next cp-next--${row.decision.tone}`} aria-label="ข้อเสนอแนะ">
         <span>ข้อเสนอแนะ</span><h4>{row.decision.label}</h4><p>{row.decision.why}</p><div><b>ทำต่อ</b><p>{row.decision.next}</p></div>
         <small>เทียบ{compareLabel}</small>
-        <dl><div><dt>ค่าแอด</dt><dd>{row.delta.spend == null ? "—" : `${row.delta.spend >= 0 ? "+" : ""}${row.delta.spend.toFixed(0)}%`}</dd></div><div><dt>ผลลัพธ์</dt><dd>{row.delta.leads == null ? "—" : `${row.delta.leads >= 0 ? "+" : ""}${row.delta.leads.toFixed(0)}%`}</dd></div><div><dt>CPL</dt><dd>{row.delta.cpl == null ? "—" : `${row.delta.cpl >= 0 ? "+" : ""}${row.delta.cpl.toFixed(0)}%`}</dd></div></dl>
+        <dl><div><dt>ค่าแอด</dt><dd>{row.delta.spend == null ? "—" : `${row.delta.spend >= 0 ? "+" : ""}${fmtNum(row.delta.spend, 2)}%`}</dd></div><div><dt>ผลลัพธ์</dt><dd>{row.delta.leads == null ? "—" : `${row.delta.leads >= 0 ? "+" : ""}${fmtNum(row.delta.leads, 2)}%`}</dd></div><div><dt>CPL</dt><dd>{row.delta.cpl == null ? "—" : `${row.delta.cpl >= 0 ? "+" : ""}${fmtNum(row.delta.cpl, 2)}%`}</dd></div></dl>
       </aside>
     </div>
 

@@ -3,6 +3,7 @@
    ต่อยอด adsOverview.js: การ์ดรายวัน (campaign/creative) → แถวแคมเปญต่อ แบรนด์×แพลตฟอร์ม
    งบแคมเปญ = งบแพลตฟอร์ม × สัดส่วน (mock) · ROAS ที่นี่คือ attribution (revenue ของแคมเปญ ÷ spend)
    ============================================================ */
+import { fmtNum, fmtMoney, fmtPct } from "./dash/charts/theme.js";
 import {
   ACTION_RULES, adFactRows, adPlatformOf, adsCreativeRows, adsDailySeries, fillDailySeries, budgetOf, budgetPace,
   change, decideAction, deliveryOf, normalizeAdPlatform, roasOf, share,
@@ -49,7 +50,7 @@ export function campaignRows(cards, range, { brands = [], adBudgets = [], campai
     const m = rollup(g.cards);
     const meta = campaignBudgets.find((r) => r.brand_id === g.brandId && normalizeAdPlatform(r.channel) === g.platform && r.campaign === g.name && r.month === month) ?? null;
     const platformBudget = budgetOf(g.brandId, g.platform, month, adBudgets);
-    const rawBudget = meta && platformBudget != null ? Math.round(platformBudget * meta.share) : null;
+    const rawBudget = meta && platformBudget != null ? platformBudget * meta.share : null;   // ไม่ปัด — เงินแสดงทศนิยมตามจริง
     // งบ ≤ 0 (หรือไม่ใช่ตัวเลข) ถือว่าไม่มีงบ — เหมือนไม่มี meta เลย (F9)
     const budget = rawBudget != null && Number.isFinite(rawBudget) && rawBudget > 0 ? rawBudget : null;
     const monthCards = monthByKey.get(g.key) ?? [];
@@ -103,12 +104,12 @@ export function campaignDecision(row, targets = null, rules = ACTION_RULES, { ro
   const roas = roasFromMeta ? row.roas : null;
   const base = decideAction({ spend: row.spend, leads: row.leads, roas, cpl: row.cpl, fatigue, complete: true }, rules);
   if (base.action === "Stop") return tagOf("stop", base.why, base.next);
-  if (base.action === "Fix") return tagOf("fix", fatigue && base.why.includes("เห็นซ้ำ") ? `ครีเอทีฟที่เริ่มล้า (ความถี่สูง/CTR ตก) กินค่าแอด ${Math.round(fatigueShare * 100)}% ของแคมเปญ` : base.why, base.next);
+  if (base.action === "Fix") return tagOf("fix", fatigue && base.why.includes("เห็นซ้ำ") ? `ครีเอทีฟที่เริ่มล้า (ความถี่สูง/CTR ตก) กินค่าแอด ${fmtPct(fatigueShare)} ของแคมเปญ` : base.why, base.next);
   /* เป้าแบรนด์จากหน้าตั้งค่า (0 = ยังไม่ตั้ง) — ชนะกฎกลางเมื่อตั้งไว้ */
   if (targets?.cpl > 0 && row.cpl != null && row.cpl > targets.cpl)
-    return tagOf("fix", `CPL ${Math.round(row.cpl).toLocaleString("th-TH")} เกินเป้าแบรนด์ ${targets.cpl.toLocaleString("th-TH")}`, "ลดต้นทุนก่อนเติมงบ: กลุ่มเป้าหมาย/ชิ้นงาน/ข้อเสนอ");
+    return tagOf("fix", `CPL ${fmtMoney(row.cpl)} เกินเป้าแบรนด์ ${fmtMoney(targets.cpl)}`, "ลดต้นทุนก่อนเติมงบ: กลุ่มเป้าหมาย/ชิ้นงาน/ข้อเสนอ");
   if (roasFromMeta && targets?.roas > 0 && row.roas != null && row.roas < targets.roas)
-    return tagOf("fix", `ROAS ${row.roas.toFixed(1)}x ต่ำกว่าเป้าแบรนด์ ${targets.roas}x`, "แก้ข้อเสนอหรือหน้าปลายทางก่อน");
+    return tagOf("fix", `ROAS ${fmtNum(row.roas, 2)}x ต่ำกว่าเป้าแบรนด์ ${fmtNum(targets.roas, 2)}x`, "แก้ข้อเสนอหรือหน้าปลายทางก่อน");
   if (base.action === "Scale") {
     const p = row.pace ?? {};
     if (p.used != null && (p.remaining <= 0 || p.used > p.expected + 0.1))

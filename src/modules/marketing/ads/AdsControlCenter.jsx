@@ -1,3 +1,4 @@
+import { fmtMoney, fmtNum, fmtPct } from "../dash/charts/theme.js";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, LoaderCircle, LogOut, Save, Scale, ShieldAlert } from "lucide-react";
@@ -137,10 +138,10 @@ function Rules({ rules, setRules }) {
   </div>;
 }
 
-const money = (value) => value == null ? "—" : `฿${Math.round(value).toLocaleString("th-TH")}`;
+const money = (value) => fmtMoney(value);
 function CheckCell({ check }) {
   if (check.status === "pending") return <div className="acc-check pending"><strong>ยังตรวจไม่ได้</strong><small>รอข้อมูลจาก API</small></div>;
-  return <div className={`acc-check ${check.status}`}><strong>{check.status === "passed" ? "ตรงกัน" : "ยอดไม่ตรง"}</strong><small>{money(check.local)} / {money(check.remote)} · {check.diffPct == null ? "เทียบ % ไม่ได้" : `ต่าง ${check.diffPct.toFixed(2)}%`}</small></div>;
+  return <div className={`acc-check ${check.status}`}><strong>{check.status === "passed" ? "ตรงกัน" : "ยอดไม่ตรง"}</strong><small>{money(check.local)} / {money(check.remote)} · {check.diffPct == null ? "เทียบ % ไม่ได้" : `ต่าง ${check.remote ? fmtPct(Math.abs(check.local - check.remote) / Math.abs(check.remote)) : `${fmtNum(check.diffPct, 2)}%`}`}</small></div>;
 }
 
 function Reconciliation({ config, brands, toast, isLead }) {

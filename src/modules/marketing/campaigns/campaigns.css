@@ -169,6 +169,7 @@
 }
 @media (max-width: 960px) {
   .cp-summary { grid-template-columns: repeat(3,1fr); }
+  .cp-summary strong { font-size: 19px; overflow-wrap: anywhere; }   /* เงินมีทศนิยมแล้วยาวขึ้น (฿2,355,998.00) — 24px ล้นกล่อง 3 คอลัมน์ */
   .cp-list-labels { display: none; }
   .cp-campaign-list { border: 0; display: grid; gap: 10px; overflow: visible; }
   .cp-campaign { border: 1px solid var(--line)!important; border-radius: 10px; overflow: hidden; }
@@ -182,8 +183,10 @@
   .cp-filters .drp,.cp-filters .drp .drp-trigger,.cp-search { width: 100%; }.cp-select { border-left: 0; padding-left: 0; }
   .cp-focus { grid-template-columns: 1fr 1fr; }.cp-focus-intro { grid-column: 1/-1; }.cp-focus-card { min-height: 68px; }
   .cp-summary { grid-template-columns: 1fr; }.cp-summary article { min-height: 76px; padding: 12px; border-left: 0; border-top: 1px solid var(--line); }.cp-summary article:first-child { border-top: 0; }.cp-summary strong { font-size: 19px; }.cp-summary em { display: none; }
-  .cp-workspace { padding: 12px; }.cp-list-head { align-items: flex-start; }.cp-list-tools { align-items: flex-end!important; flex-direction: column; }.cp-campaign-row { grid-template-columns: repeat(2,1fr) 32px; }
-  .cp-campaign-name { grid-column: 1/-2; }.cp-expand { grid-column: 3; }.cp-decision { grid-column: 1/-1; }
+  .cp-workspace { padding: 12px; }.cp-list-head { align-items: flex-start; }.cp-list-tools { align-items: flex-end!important; flex-direction: column; }
+  /* ตัวเลขเคยถูกจัดลงคอลัมน์ปุ่ม 32px แล้วโดนตัด (ROAS "2.45x") — ปุ่มขยายลอยมุมขวาบน ตัวเลขใช้ 2 คอลัมน์เต็ม */
+  .cp-campaign-row { position: relative; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .cp-campaign-name { grid-column: 1/-1; padding-right: 40px; }.cp-expand { position: absolute; top: 10px; right: 10px; }.cp-decision { grid-column: 1/-1; }
   .cp-metric::before,.cp-decision::before { content: attr(data-label); color: var(--ink-faint); font-size: 11px; }
   .cp-health { align-items:flex-start; flex-wrap:wrap; }.cp-health-sources { order:3; width:100%; }.cp-health>a { margin-left:auto; }
   .cp-trend header { flex-direction: column; }.cp-creatives { grid-template-columns: 1fr; }

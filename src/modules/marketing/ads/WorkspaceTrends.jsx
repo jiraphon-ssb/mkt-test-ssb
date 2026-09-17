@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { adsMetricBoard, adsRevenue, adsSalePipeline, adsChannelList, filterByChannel, change } from '../adsOverview.js';
 import { ChartBox } from '../dash/charts/ChartBox.jsx';
-import { baseOpts, fmtMoney, fmtPct, fmtCompact, lineSeries, dayLabel } from '../dash/charts/theme.js';
+import { baseOpts, fmtMoney, fmtPct, fmtCompact, lineSeries, dayLabel, fmtNum } from '../dash/charts/theme.js';
 import { Dropdown } from '../ui/Dropdown.jsx';
 import { isoDay } from '../adsScope.js';
 import { SALES_TREND_KEYS, salesTrendValue } from './salesOverview.js';
@@ -28,7 +28,7 @@ function metricValue(cards, range, key, src) {
 function series(cards, days, key, src) {
   return days.map(start=>{const end=new Date(start);end.setDate(end.getDate()+1);return metricValue(cards,{start,end:end.toISOString()},key,src);});
 }
-const format=(key,n)=>n==null?'—':key==='ctr'?fmtPct(n,2):['roas','frequency'].includes(key)?`${n.toFixed(1)}×`:['inquiry','impressions'].includes(key)?n.toLocaleString('th-TH'):fmtMoney(n);
+const format=(key,n)=>n==null?'—':key==='ctr'?fmtPct(n,2):['roas','frequency'].includes(key)?`${fmtNum(n, 2)}×`:['inquiry','impressions'].includes(key)?n.toLocaleString('th-TH'):fmtMoney(n);
 export function WorkspaceTrends({v,brandId,sales=null}) {
   const [key,setKey]=useState('spend');
   const [split,setSplit]=useState(false);
@@ -54,7 +54,7 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
   const label=metrics.find(m=>m[0]===key)[1];
   return <section className="aw-panel aw-trends"><div className="aw-section-label">ตัวชี้วัดและแนวโน้ม <span>{new Date(v.range.start).toLocaleDateString('th-TH')} – {new Date(new Date(v.range.end)-1).toLocaleDateString('th-TH')}</span></div>
     <div className="aw-trend-controls"><div className="aw-tabs">{metrics.slice(0,5).map(([k,l])=><button key={k} aria-pressed={key===k} aria-selected={key===k} onClick={()=>setKey(k)}>{l}</button>)}<Dropdown className="aw-tabs-more" ariaLabel="ตัวชี้วัดอื่น" placeholder="ตัวชี้วัดอื่น" options={metrics.slice(5)} value={metrics.slice(5).some(m=>m[0]===key)?key:null} onChange={setKey} /></div><label title={canSplit?undefined:'ยอดขายจากระบบขายไม่แยกตามแพลตฟอร์มโฆษณา'}><input type="checkbox" checked={split&&canSplit} disabled={!canSplit} onChange={e=>setSplit(e.target.checked)}/>แยก{brandId?'แพลตฟอร์ม':'แบรนด์'}</label></div>
-    <div className="aw-trend-total"><b>{format(key,result.current)}</b><span>{result.delta==null?'เทียบไม่ได้':`${result.delta>=0?'+':''}${result.delta.toFixed(1)}%`} · {v.compareLabel}</span></div>
+    <div className="aw-trend-total"><b>{format(key,result.current)}</b><span>{result.delta==null?'เทียบไม่ได้':`${result.delta>=0?'+':''}${fmtNum(result.delta, 2)}%`} · {v.compareLabel}</span></div>
     {sourceNote&&<p className="aw-key">{sourceNote}</p>}
     {result.current==null&&<p className="aw-key">{emptyNote}</p>}
     <ChartBox type="line" height={260} ariaLabel={`${label}รายวัน`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(d=>({...d,...lineSeries(result.days.length,{openFrom:d.borderDash?null:result.openFrom})}))}} options={baseOpts({plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}${c.dataset.borderDash&&result.priorDays[c.dataIndex]?` (${dayLabel(result.priorDays[c.dataIndex])})`:''}: ${format(key,c.parsed.y)}`}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{callback:n=>key==='ctr'?fmtPct(n,1):['roas','frequency'].includes(key)?`${n}×`:fmtCompact(n)}}}})}/>

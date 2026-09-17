@@ -33,3 +33,10 @@
 .mkt-root .cl-card footer { font-size:11px; }
 .mkt-root .cl-action { font-size:11px; }
 .mkt-root .cl-links a { font-size:11px; }
+
+/* เงินมีทศนิยมแล้วยาวขึ้น (฿17,063.01) — การ์ดแคบ 4 ช่องเรียงแถวเดียวจะโดนตัดด้วย … → การ์ดแคบกว่า 360px เรียง 2×2 */
+.cl-card { container-type:inline-size; }
+@container (max-width:360px) {
+  .cl-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:10px; }
+  .cl-metrics>div:nth-child(odd) { padding-left:0; border-left:0; }
+}

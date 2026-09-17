@@ -1,6 +1,7 @@
 /* หน้า Sync — ส่วนรายละเอียดในแท็บ: ยอดขาย · creative · สิทธิ์และคีย์
    ตัวแสดงผลล้วน รับข้อมูลที่ SyncStatusView โหลดมาแล้ว · ตรรกะอยู่ใน syncSources.js (มีเทส)
    ทุกสถานะบอกเป็นตัวหนังสือ ไม่ใช้สีอย่างเดียว · ไม่มีข้อมูลต้องบอกว่าเพราะอะไร */
+import { fmtNum, fmtMoney, fmtPct, fmtInt } from "../dash/charts/theme.js";
 import { Link } from "react-router-dom";
 import { Database, Image as ImageIcon, Radar } from "lucide-react";
 import {
@@ -43,10 +44,10 @@ const goalValue = (key, value) => {
   const n = Number(value);
   if (value === null || value === undefined || value === "" || !Number.isFinite(n) || (key === "ad_budget" && n <= 0)) return null;
   const kind = GOAL_FORMAT[key];
-  if (kind === "money") return `฿${Math.round(n).toLocaleString("th-TH")}`;
-  if (kind === "roas") return `${n.toFixed(1)}×`;
-  if (kind === "pct") return `${Math.round(n <= 1 ? n * 100 : n)}%`;
-  return Math.round(n).toLocaleString("th-TH");
+  if (kind === "money") return fmtMoney(n);
+  if (kind === "roas") return `${fmtNum(n, 2)}×`;
+  if (kind === "pct") return fmtPct(n <= 1 ? n : n / 100);
+  return fmtInt(n);
 };
 
 /** เป้าเดือนนี้: แบรนด์ × ช่องเป้า โชว์ตัวเลขจริง · ช่องที่ยังไม่ตั้ง = — · สรุปช่องที่ขาดไว้บรรทัดเดียว */
@@ -154,7 +155,7 @@ export function CreativeRunsPanel({ latestByConnection = new Map(), accounts = [
           <span>{account.brand} · {account.accountId}</span>
           <span>{run ? when(run.started_at) : "ยังไม่มีรอบที่บันทึก"}</span>
           <span>{view ? num(view.total) : "—"}</span>
-          <span>{view?.postMediaPct == null ? "—" : `${Math.round(view.postMediaPct * 100)}%`}</span>
+          <span>{view?.postMediaPct == null ? "—" : fmtPct(view.postMediaPct)}</span>
           <span>{view?.hash ?? "—"}</span>
           <span className={run ? `sy-run-${run.status}` : ""}>{!run ? "—" : view.needsReconnect ? "ต้องเชื่อม Meta ใหม่" : view.missingPages ? `${status.statusLabel} · เข้าไม่ถึง ${view.missingPages} เพจ` : status.errorText ? `${status.statusLabel} · ${status.errorText}` : status.statusLabel}</span>
         </div>;

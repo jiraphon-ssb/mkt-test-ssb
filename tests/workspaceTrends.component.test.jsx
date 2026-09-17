@@ -25,19 +25,19 @@ const sales = [
 const total = () => document.querySelector(".aw-trend-total b").textContent;
 
 describe("WorkspaceTrends — ข้อมูลจริง", () => {
-  it("ยอดขาย = ระบบขาย (ไม่ใช่ ฿1,400 ที่ Meta เห็น) พร้อมป้ายที่มา", () => {
+  it("ยอดขาย = ระบบขาย (ไม่ใช่ ฿1,400.00 ที่ Meta เห็น) พร้อมป้ายที่มา", () => {
     render(<WorkspaceTrends v={v} sales={sales} />);
     fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
-    expect(total()).toBe("฿30,000");
+    expect(total()).toBe("฿30,000.00");
     expect(screen.getByText("จากระบบขาย · รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย")).toBeTruthy();
   });
 
   it("ROAS หารด้วยค่าแอดของแบรนด์ที่มียอดเท่านั้น (30,000 ÷ 1,000) · CPL = ค่าแอด ÷ Lead ระบบขาย", () => {
     render(<WorkspaceTrends v={v} sales={sales} />);
     fireEvent.click(screen.getByRole("button", { name: "ROAS" }));
-    expect(total()).toBe("30.0×");
+    expect(total()).toBe("30.00×");
     fireEvent.click(screen.getByRole("button", { name: "CPL" }));
-    expect(total()).toBe("฿200");
+    expect(total()).toBe("฿200.00");
   });
 
   it("หน้าแบรนด์ที่ยังไม่มีแหล่ง: บอกว่ารอเชื่อม · แยกแพลตฟอร์มกดไม่ได้ในแท็บของระบบขาย", () => {
@@ -54,7 +54,7 @@ describe("WorkspaceTrends — ข้อมูลจริง", () => {
   it("ข้อมูลจำลอง (ไม่ส่ง sales) = ของ Meta ตามเดิม ไม่มีป้ายที่มา", () => {
     render(<WorkspaceTrends v={v} />);
     fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
-    expect(total()).toBe("฿1,400");
+    expect(total()).toBe("฿1,400.00");
     expect(screen.queryByText("จาก Meta")).toBeNull();
   });
 });

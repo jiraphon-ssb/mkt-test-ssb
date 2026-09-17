@@ -49,7 +49,7 @@ describe("GoalMatrix", () => {
     render(<GoalMatrix brands={brands} goals={[{ brand_id: "b_td", goal_source: "sale_target", version: 0, sales_target: 3300000, orders_target: 193, deposits_target: 206, leads_target: 344, inquiry_target: 1173 }]} />);
     const td = screen.getByRole("row", { name: /TEAMDEE/ });
     expect(within(td).getByText("เป้าแบบเก่า")).toBeTruthy();
-    expect(within(td).getByText("฿3,300,000")).toBeTruthy();
+    expect(within(td).getByText("฿3,300,000.00")).toBeTruthy();
     expect(within(td).getByText("1,173")).toBeTruthy();
     expect(within(td).getAllByText("—")).toHaveLength(6);
     expect(screen.getByText(/ยังไม่ตั้ง: งบแอด · CPL · ROAS · %Ads · CAC · ต้นทุนต่อทัก/)).toBeTruthy();
@@ -62,8 +62,8 @@ describe("GoalMatrix", () => {
     const full = { brand_id: "b_td", goal_source: "sale_goal", version: 3, sales_target: 1, orders_target: 1, deposits_target: 1, leads_target: 1, inquiry_target: 1, ad_budget: 1000, cpl: 400, roas: 6, pct_ads_new: 0.16, cac: 5000, cpi: 90 };
     render(<GoalMatrix brands={[brands[0]]} goals={[full]} />);
     expect(screen.getByText("หน้าเป้าหมาย v3")).toBeTruthy();
-    expect(screen.getByText("6.0×")).toBeTruthy();
-    expect(screen.getByText("16%")).toBeTruthy();
+    expect(screen.getByText("6.00×")).toBeTruthy();
+    expect(screen.getByText("16.00%")).toBeTruthy();
     expect(screen.queryByText(/ยังไม่ตั้ง:/)).toBeNull();
   });
 });
@@ -91,7 +91,7 @@ describe("CreativeRunsPanel / AccessPanel", () => {
     const latest = new Map([["c1", { status: "success", started_at: "2026-09-17T01:00:00Z", summary: { total: 10, withPostMedia: 5, missingScopes: ["business_management"] } }]]);
     render(<CreativeRunsPanel latestByConnection={latest} accounts={accounts} />);
     expect(screen.getByText("ต้องเชื่อม Meta ใหม่")).toBeTruthy();
-    expect(screen.getByText("50%")).toBeTruthy();
+    expect(screen.getByText("50.00%")).toBeTruthy();
     expect(screen.getByText("ยังไม่มีรอบที่บันทึก")).toBeTruthy();
   });
   it("token เหลือกี่วัน · คีย์ระบบขายยืนยันจากรอบดึงล่าสุด", () => {

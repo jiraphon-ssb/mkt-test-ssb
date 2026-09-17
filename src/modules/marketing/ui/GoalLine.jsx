@@ -1,10 +1,10 @@
 /* GoalLine — แสดงผลของ targetProgress (adsTargets.js) ใต้ตัวเลข: เป้า · ทำได้กี่ % · สถานะ + แถบความคืบหน้า
    คอมโพเนนต์นี้จัดรูปแบบอย่างเดียว ตัวเลขทั้งหมดคำนวณในโมเดลแล้ว */
 import { TARGET_METRICS } from "../adsTargets.js";
-import { fmtInt, fmtMoney, fmtPct } from "../dash/charts/theme.js";
+import { fmtInt, fmtMoney, fmtPct, fmtNum } from "../dash/charts/theme.js";
 
 const METRIC = Object.fromEntries(TARGET_METRICS.map((m) => [m.key, m]));
-const fmtTarget = (key, v) => v == null ? "—" : key === "roas" ? `${v.toFixed(1)}×` : key === "pctAds" ? fmtPct(v, 1) : key === "cpl" ? fmtMoney(v) : fmtInt(v);
+const fmtTarget = (key, v) => v == null ? "—" : key === "roas" ? `${fmtNum(v, 2)}×` : key === "pctAds" ? fmtPct(v, 1) : key === "cpl" ? fmtMoney(v) : fmtInt(v);
 const clamp01 = (x) => Math.max(0, Math.min(1, x ?? 0));
 
 export function GoalLine({ metric, goal, compact = false }) {

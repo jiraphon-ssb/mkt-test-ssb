@@ -5,6 +5,7 @@
    งบ = data.ad_budgets (mock ราย แบรนด์×ช่องทาง×เดือน) — ยังไม่มี = แสดง "ยังไม่ตั้งงบ" ไม่เดา
    ============================================================ */
 
+import { fmtNum, fmtMoney } from "./dash/charts/theme.js";
 import { adsRollup, analyticsCards, cardAnchorISO, inRange } from "./mktAnalytics.js";
 import { creativeAssetOf } from "./ads/metaCreativeContract.js";
 
@@ -680,12 +681,12 @@ export function decideAction(row, rules = ACTION_RULES) {
   }
   if (spend > rules.wasteSpend && leads === 0) {
     return { action: "Stop", tone: "rose", rank: 4,
-      why: `ใช้เงินไปแล้ว ${Math.round(spend).toLocaleString("th-TH")} บาท ยังไม่ได้ผลลัพธ์เลย`,
+      why: `ใช้เงินไปแล้ว ${fmtMoney(spend)} ยังไม่ได้ผลลัพธ์เลย`,
       next: "ปิดตัวนี้ แล้วย้ายงบไปตัวที่ยังได้ผล" };
   }
   if (roas != null && roas < rules.stopRoas) {
     return { action: "Stop", tone: "rose", rank: 4,
-      why: `ROAS ${roas.toFixed(1)}x — ได้กลับน้อยกว่าที่จ่าย`, next: "ปิดก่อน แล้วตรวจว่ากลุ่มเป้าหมายหรือข้อเสนอผิดตรงไหน" };
+      why: `ROAS ${fmtNum(roas, 2)}x — ได้กลับน้อยกว่าที่จ่าย`, next: "ปิดก่อน แล้วตรวจว่ากลุ่มเป้าหมายหรือข้อเสนอผิดตรงไหน" };
   }
   if (fatigue) {
     return { action: "Fix", tone: "amber", rank: 3,
@@ -693,16 +694,16 @@ export function decideAction(row, rules = ACTION_RULES) {
   }
   if (roas != null && roas < rules.fixRoas) {
     return { action: "Fix", tone: "amber", rank: 3,
-      why: `ROAS ${roas.toFixed(1)}x — ยังไม่ถึงจุดคุ้ม`, next: "ลองแก้ข้อเสนอหรือหน้าปลายทางก่อนเติมงบ" };
+      why: `ROAS ${fmtNum(roas, 2)}x — ยังไม่ถึงจุดคุ้ม`, next: "ลองแก้ข้อเสนอหรือหน้าปลายทางก่อนเติมงบ" };
   }
   if (cpl != null && cpl > rules.highCpl) {
     return { action: "Fix", tone: "amber", rank: 3,
-      why: `ต้นทุนต่อผลลัพธ์ ${Math.round(cpl).toLocaleString("th-TH")} บาท สูงกว่าเกณฑ์`,
+      why: `ต้นทุนต่อผลลัพธ์ ${fmtMoney(cpl)} สูงกว่าเกณฑ์`,
       next: "แคบกลุ่มเป้าหมาย หรือเปลี่ยนชิ้นงานให้ตรงคนมากขึ้น" };
   }
   if (roas != null && roas >= rules.scaleRoas) {
     return { action: "Scale", tone: "emerald", rank: 1,
-      why: `ROAS ${roas.toFixed(1)}x — คุ้มกว่าเกณฑ์`, next: "เติมงบทีละน้อย แล้วดูว่า CPL ยังนิ่งไหม" };
+      why: `ROAS ${fmtNum(roas, 2)}x — คุ้มกว่าเกณฑ์`, next: "เติมงบทีละน้อย แล้วดูว่า CPL ยังนิ่งไหม" };
   }
   return { action: "ติดตาม", tone: "zinc", rank: 0, why: "ผลอยู่ในช่วงปกติ", next: "ดูต่ออีก 2–3 วัน ยังไม่ต้องแตะ" };
 }

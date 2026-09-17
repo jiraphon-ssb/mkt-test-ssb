@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "../useMkt.jsx";
 import { analyticsCards, previousRange } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, change, filterByChannel, paceStatus, revenueBasisCards, share } from "../adsOverview.js";
-import { fmtCompact, fmtInt, fmtMoney, fmtPct } from "../dash/charts/theme.js";
+import { fmtCompact, fmtInt, fmtMoney, fmtPct, fmtNum } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
 import { PlatformIcon, platformMeta } from "./PlatformIcon.jsx";
 import { AdsWorkspace } from "./AdsWorkspace.jsx";
@@ -17,7 +17,7 @@ import { applySalesToBrands, applySalesToSummary, combineGoalTargets, goalTarget
 import { metricCoverage } from "./salesFacts.js";
 import { SALES_BRAND_IDS } from "./syncSources.js";
 
-const fmtRoas = (value) => value == null ? "—" : `${value.toFixed(1)}x`;
+const fmtRoas = (value) => value == null ? "—" : `${fmtNum(value, 2)}x`;
 const GAUGE_TONE = { emerald: "var(--ok)", amber: "var(--warn)", rose: "var(--bad)", zinc: "var(--ink-soft)" };
 
 const fmtMetric = (fmt, v) => {
@@ -27,8 +27,8 @@ const fmtMetric = (fmt, v) => {
   if (fmt === "compact") return fmtCompact(v);
   if (fmt === "pct2") return fmtPct(v, 2);
   if (fmt === "pct1") return fmtPct(v, 1);
-  if (fmt === "roas") return `${v.toFixed(1)}x`;
-  if (fmt === "freq") return `${v.toFixed(1)}x`;
+  if (fmt === "roas") return `${fmtNum(v, 2)}x`;
+  if (fmt === "freq") return `${fmtNum(v, 2)}x`;
   return String(v);
 };
 
@@ -52,7 +52,7 @@ function SalePipeline({ items, worstKey = null, row = false, title = true, goals
                 <span className="ads-muted">เทียบไม่ได้</span>
               ) : (
                 <span className={tiny || good == null ? "ads-muted" : good ? "ads-good" : "ads-over"}>
-                  {d >= 0 ? "▲" : "▼"} {Math.abs(d).toFixed(0)}%{good == null ? "" : good ? " ดีขึ้น" : " แย่ลง"}{tiny ? " · ฐานเล็ก" : ""}
+                  {d >= 0 ? "▲" : "▼"} {fmtNum(Math.abs(d), 2)}%{good == null ? "" : good ? " ดีขึ้น" : " แย่ลง"}{tiny ? " · ฐานเล็ก" : ""}
                 </span>
               )}
             </span>
@@ -122,7 +122,7 @@ function ChannelCardRange({ c }) {
           <div><dt>ลีด</dt><dd className="mono">{fmtInt(c.leads)}</dd></div>
           <div><dt>CPL</dt><dd className="mono">{c.cpl != null ? fmtMoney(c.cpl) : "—"}</dd></div>
           <div><dt>CTR</dt><dd className="mono">{d.ctr != null ? fmtPct(d.ctr, 2) : "—"}</dd></div>
-          <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${d.frequency.toFixed(1)}x` : "—"}</dd></div>
+          <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${fmtNum(d.frequency, 2)}x` : "—"}</dd></div>
         </dl>
         <p className="ads-chan-support ads-muted">งบ/จังหวะรายเดือนดูได้เมื่อเลือกช่วง "เดือนนี้"</p>
       </div>
@@ -156,7 +156,7 @@ function ChannelCard({ c, monthView = true }) {
           </span>
           <span className="ads-chan-pct mono">
             <span className="ads-chan-pctads">%Ads <b>{c.pctAds != null ? fmtPct(c.pctAds, 1) : "—"}</b></span>
-            {c.pace.used != null && <> · {Math.round(c.pace.used * 100)}% ของงบ</>}
+            {c.pace.used != null && <> · {fmtPct(c.pace.used)} ของงบ</>}
           </span>
         </div>
 
@@ -208,7 +208,7 @@ function ChannelCard({ c, monthView = true }) {
               <div><dt>CTR</dt><dd className="mono">{d.ctr != null ? fmtPct(d.ctr, 2) : "—"}</dd></div>
               <div><dt>CPC</dt><dd className="mono">{d.cpc != null ? fmtMoney(d.cpc) : "—"}</dd></div>
               <div><dt>CPM</dt><dd className="mono">{d.cpm != null ? fmtMoney(d.cpm) : "—"}</dd></div>
-              <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${d.frequency.toFixed(1)}x` : "—"}</dd></div>
+              <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${fmtNum(d.frequency, 2)}x` : "—"}</dd></div>
             </dl>
 
             <div className="ads-chan-spark">

@@ -148,7 +148,7 @@ describe("campaignDecision", () => {
     const big = [{ fatigue: true, spend: 2000 }, { fatigue: false, spend: 1000 }];
     const d = campaignDecision({ ...base, creatives: big });
     expect(d.tag).toBe("fix");
-    expect(d.why).toContain("67%");
+    expect(d.why).toContain("66.66%");   // 2/3 ตัดทิ้ง ไม่ปัดเป็น 67
   });
   it("ผลดีแต่งบเหลือ 0 หรือใช้เร็วกว่าจังหวะ → ติด Gate ไม่ใช่สเกล", () => {
     expect(campaignDecision({ ...base, pace: { remaining: 0, used: 1, expected: 0.5 } }).tag).toBe("gate");
