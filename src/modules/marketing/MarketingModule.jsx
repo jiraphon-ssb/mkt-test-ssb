@@ -8,6 +8,7 @@ import "./mktStyles.css";
 const AdsView = lazy(() => import("./ads/AdsView.jsx").then((m) => ({ default: m.AdsView })));
 const CampaignsView = lazy(() => import("./campaigns/CampaignsView.jsx").then((m) => ({ default: m.CampaignsView })));
 const CreativeLibraryView = lazy(() => import("./creatives/CreativeLibraryView.jsx").then((m) => ({ default: m.CreativeLibraryView })));
+const MeetingReportView = lazy(() => import("./report/MeetingReportView.jsx").then((m) => ({ default: m.MeetingReportView })));
 const SyncStatusView = lazy(() => import("./ads/SyncStatusView.jsx").then((m) => ({ default: m.SyncStatusView })));
 
 export default function MarketingModule({ view = "ads" }) {
@@ -20,7 +21,7 @@ export default function MarketingModule({ view = "ads" }) {
       <div className={settingsOpen ? "" : "ads-suite"}>
         {!settingsOpen && <AdsSectionTabs />}
         <Suspense fallback={<div className="empty">กำลังโหลด…</div>}>
-          {view === "campaigns" ? <CampaignsView /> : view === "creatives" ? <CreativeLibraryView /> : view === "sync" ? <SyncStatusView /> : <AdsView />}
+          {view === "report" ? <MeetingReportView /> : view === "campaigns" ? <CampaignsView /> : view === "creatives" ? <CreativeLibraryView /> : view === "sync" ? <SyncStatusView /> : <AdsView />}
         </Suspense>
       </div>
       <Toaster />

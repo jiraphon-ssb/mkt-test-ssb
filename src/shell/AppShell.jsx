@@ -25,6 +25,7 @@ const NotificationsPage = lazy(() => import("./NotificationsPage.jsx"));
 // cost master / ผังบัญชี — are built inside the component where `user` is known).
 const MODULE_ELEMENTS = {
   mkt_ads: <MarketingModule view="ads" />,
+  mkt_report: <MarketingModule view="report" />,
   mkt_campaigns: <MarketingModule view="campaigns" />,
   mkt_creatives: <MarketingModule view="creatives" />,
   mkt_sync: <MarketingModule view="sync" />,
