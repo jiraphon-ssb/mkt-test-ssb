@@ -44,7 +44,10 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
     const groups=brandId?adsChannelList(cards).map(name=>({name,cards:filterByChannel(cards,name),src:null})):v.brands.map(b=>({name:fromSales&&!SALES_BRAND_IDS.includes(b.id)?`${b.name} (รอเชื่อม)`:b.name,cards:cards.filter(c=>c.brand_id===b.id),src:srcFor([b.id])}));
     const current=metricValue(cards,v.range,key,main),before=metricValue(cards,v.before,key,main);
     const datasets=split&&canSplit?groups.map((g,i)=>({label:g.name,data:series(g.cards,days,key,g.src),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]})):[{label:'ช่วงนี้',data:series(cards,days,key,main),borderColor:colors[0],backgroundColor:colors[0]},{label:'ช่วงเทียบ',data:series(cards,priorDays,key,main).slice(0,days.length),borderColor:'#8f9693',backgroundColor:'#8f9693',borderDash:[5,5]}];
-    return {days,priorDays,datasets,current,before,delta:change(current,before)};
+    // วันนี้ยังไม่จบ — เส้นช่วงท้ายเป็นประจาง (เส้นช่วงเทียบเป็นวันที่จบแล้ว ไม่ต้อง)
+    const todayIso=isoDay(new Date());
+    const openAt=days.findIndex(d=>isoDay(new Date(d))===todayIso);
+    return {days,priorDays,datasets,current,before,delta:change(current,before),openFrom:openAt>0?openAt:null};
   },[v,brandId,key,split,sales,fromSales,canSplit]);
   const sourceNote=!sales?null:fromSales?(key==='inquiry'?'จากระบบขาย · คนทักที่ทีมขายกรอก':key==='revenue'?'จากระบบขาย':key==='cpl'?'ค่าแอด Meta ÷ Lead ในระบบขาย':'ยอดขายจริง ÷ ค่าแอด Meta')+(brandId?'':' · รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย'):'จาก Meta';
   const emptyNote=waiting?'รอเชื่อมแหล่งข้อมูลยอดขาย':fromSales?(key==='inquiry'?'ทีมยังไม่กรอกคนทักในช่วงนี้':'ช่วงนี้ยังไม่มีข้อมูลจากระบบขาย'):'ข้อมูลยังไม่ครบหรือรวมข้ามแพลตฟอร์มไม่ได้ ลองเลือกแพลตฟอร์มเดียว';
@@ -54,8 +57,8 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
     <div className="aw-trend-total"><b>{format(key,result.current)}</b><span>{result.delta==null?'เทียบไม่ได้':`${result.delta>=0?'+':''}${result.delta.toFixed(1)}%`} · {v.compareLabel}</span></div>
     {sourceNote&&<p className="aw-key">{sourceNote}</p>}
     {result.current==null&&<p className="aw-key">{emptyNote}</p>}
-    <ChartBox type="line" height={260} ariaLabel={`${label}รายวัน`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(d=>({...d,...lineSeries(result.days.length)}))}} options={baseOpts({plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}${c.dataset.borderDash&&result.priorDays[c.dataIndex]?` (${dayLabel(result.priorDays[c.dataIndex])})`:''}: ${format(key,c.parsed.y)}`}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{callback:n=>key==='ctr'?fmtPct(n,1):['roas','frequency'].includes(key)?`${n}×`:fmtCompact(n)}}}})}/>
-    <p className="aw-key">{split?'สีแต่ละเส้นแทนกลุ่มข้อมูล':'เส้นเขียว = ช่วงนี้ · เส้นเทาประ = ช่วงเทียบ จับคู่วันตามลำดับในช่วง (ชี้ที่จุดเพื่อดูวันจริงของช่วงเทียบ)'} · จุด = วันที่มีค่า ช่วงประจางระหว่างจุด = วันที่ไม่มีค่าที่คำนวณได้</p>
+    <ChartBox type="line" height={260} ariaLabel={`${label}รายวัน`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(d=>({...d,...lineSeries(result.days.length,{openFrom:d.borderDash?null:result.openFrom})}))}} options={baseOpts({plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}${c.dataset.borderDash&&result.priorDays[c.dataIndex]?` (${dayLabel(result.priorDays[c.dataIndex])})`:''}: ${format(key,c.parsed.y)}`}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{callback:n=>key==='ctr'?fmtPct(n,1):['roas','frequency'].includes(key)?`${n}×`:fmtCompact(n)}}}})}/>
+    <p className="aw-key">{result.openFrom!=null&&'เส้นประจางช่วงท้าย = วันนี้ยังไม่จบ ตัวเลขยังเพิ่มได้ · '}{split?'สีแต่ละเส้นแทนกลุ่มข้อมูล':'เส้นเขียว = ช่วงนี้ · เส้นเทาประ = ช่วงเทียบ จับคู่วันตามลำดับในช่วง (ชี้ที่จุดเพื่อดูวันจริงของช่วงเทียบ)'} · จุด = วันที่มีค่า ช่วงประจางระหว่างจุด = วันที่ไม่มีค่าที่คำนวณได้</p>
     <details><summary>ดูข้อมูลเป็นตาราง</summary><div className="aw-table-scroll"><table><thead><tr><th>วันที่</th>{result.datasets.map(d=><th key={d.label}>{d.label}</th>)}</tr></thead><tbody>{result.days.map((d,i)=><tr key={d}><th>{new Date(d).toLocaleDateString('th-TH')}</th>{result.datasets.map(s=><td key={s.label}>{format(key,s.data[i])}</td>)}</tr>)}</tbody></table></div></details>
   </section>;
 }

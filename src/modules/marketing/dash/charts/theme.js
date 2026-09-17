@@ -97,13 +97,22 @@ export const fmtDays = (x) => (x == null ? "—" : `${x.toFixed(1)} วัน`);
    monotone = โค้งไม่ทะลุค่าจริง (tension ธรรมดาทำให้เส้นแกว่งเกินจุด) · จุดซ่อนเมื่อวันเยอะ · ช่องว่าง = ไม่มีข้อมูล (ไม่ลากข้าม) */
 const faded = (color) => (typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? `${color}80` : color);
 const skipped = (ctx, value) => (ctx.p0.skip || ctx.p1.skip ? value : undefined);
-export const lineSeries = (pointCount, over = {}) => ({
-  borderWidth: 2, tension: 0, cubicInterpolationMode: "monotone",
-  pointRadius: pointCount > 31 ? 0 : 2, pointHoverRadius: 4, pointHitRadius: 10,
-  // วันไม่มีข้อมูล: ลากเชื่อมด้วยเส้นประจางๆ (ไม่ทิ้งจุดโดดๆ และไม่หลอกว่ามีค่า) — pattern "skipped segment" ของ Chart.js
-  spanGaps: true,
-  segment: { borderDash: (ctx) => skipped(ctx, [3, 4]), borderColor: (ctx) => skipped(ctx, faded(ctx.chart.data.datasets[ctx.datasetIndex]?.borderColor)) },
-  ...over,
-});
+/* openFrom = index ของจุดแรกที่ยังไม่จบวัน (วันนี้) — ช่วงที่ลากเข้าจุดนั้นเป็นเส้นประจาง
+   กันกราฟดูเหมือนยอด "ดิ่ง" ทั้งที่แค่ยังเก็บข้อมูลของวันนี้ไม่ครบ */
+export const lineSeries = (pointCount, { openFrom = null, ...over } = {}) => {
+  const open = (ctx) => openFrom != null && ctx.p1DataIndex >= openFrom;
+  const color = (ctx) => faded(ctx.chart.data.datasets[ctx.datasetIndex]?.borderColor);
+  return {
+    borderWidth: 2, tension: 0, cubicInterpolationMode: "monotone",
+    pointRadius: pointCount > 31 ? 0 : 2, pointHoverRadius: 4, pointHitRadius: 10,
+    // วันไม่มีข้อมูล: ลากเชื่อมด้วยเส้นประจางๆ (ไม่ทิ้งจุดโดดๆ และไม่หลอกว่ามีค่า) — pattern "skipped segment" ของ Chart.js
+    spanGaps: true,
+    segment: {
+      borderDash: (ctx) => (open(ctx) ? [2, 4] : skipped(ctx, [3, 4])),
+      borderColor: (ctx) => (open(ctx) ? color(ctx) : skipped(ctx, color(ctx))),
+    },
+    ...over,
+  };
+};
 /** ป้ายวันบนแกน X / tooltip: "14 ก.ย." (ไม่ใส่ปีให้รก) */
 export const dayLabel = (iso) => new Date(iso.length === 10 ? `${iso}T00:00:00` : iso).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
