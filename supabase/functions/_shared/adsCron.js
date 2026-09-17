@@ -12,6 +12,10 @@ const time = (value) => {
   return Number.isFinite(t) ? t : NaN;
 };
 
+/* ช่วงผ่อนผัน: tick มาตรงนาทีที่ 7 แต่รอบก่อน "จบ" ช้ากว่านั้นหลายวินาที–นาที
+   ไม่ผ่อนผัน = ขาดไปไม่กี่วินาทีแล้วต้องรอ tick ถัดไป → รอบ 6 ชม. กลายเป็น 7 ชม. (เห็นจริง 16–17 ก.ย.) */
+const DUE_GRACE_MS = 10 * 60_000;
+
 /** ถึงรอบดึงหรือยัง — ไม่เคยสำเร็จ/เวลาเสีย = ถึงรอบ (ปล่อยค้างไว้แย่กว่าดึงเกิน) */
 export function cronDue(lastSuccessAt, now, everyHours = DEFAULT_SYNC_EVERY_HOURS) {
   const current = time(now);
@@ -20,7 +24,7 @@ export function cronDue(lastSuccessAt, now, everyHours = DEFAULT_SYNC_EVERY_HOUR
   if (!Number.isFinite(last)) return true;
   const hours = Number(everyHours);
   const gap = Number.isFinite(hours) && hours > 0 ? Math.min(24, hours) : DEFAULT_SYNC_EVERY_HOURS;
-  return current - last >= gap * HOUR;
+  return current - last >= gap * HOUR - DUE_GRACE_MS;
 }
 
 const entryRuns = (runs) => runs.map((r) => ({ ...r, connection_id: r.connection_id ?? r.connectionId }));
@@ -41,7 +45,8 @@ export function planCronJobs({
     const own = runs.filter((r) => (r.connection_id ?? r.connectionId) === connection.id);
     // run ที่ยังวิ่งอยู่จริง (ยังไม่ค้างเกินเพดาน) → รอบนี้ข้ามไปก่อน ไม่งั้นชน unique index
     if (own.some((r) => ["queued", "running"].includes(r.status) && time(r.started_at) >= staleBefore)) continue;
-    const lastSuccess = own.filter((r) => r.status === "success")
+    // นับเฉพาะรอบที่ดึงข้อมูลจริง — รอบตรวจยอด (reconcile) ไม่เขียนยอด ถ้านับด้วย กดตรวจยอดแล้วรอบดึงถัดไปจะถูกเลื่อนออกไป 6 ชม.
+    const lastSuccess = own.filter((r) => r.status === "success" && (r.mode === "incremental" || r.mode === "backfill"))
       .reduce((latest, r) => Math.max(latest, time(r.finished_at) || 0), 0) || null;
     // ยังไม่ครบรอบก็ยอมทำ ถ้าบัญชีนั้นมีวันที่ขาดอยู่ — ช่องว่างค้างไว้เสียหายกว่าดึงถี่ไปหน่อย
     const today = todayOf(connection.timezone);

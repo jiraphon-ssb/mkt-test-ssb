@@ -20,6 +20,26 @@ describe("cronDue — ถึงรอบดึงหรือยัง", () => {
   });
 });
 
+describe("cronDue — tick ตรงนาทีที่ 7 ต้องไม่พลาดรอบเพราะรอบก่อนจบช้าไปไม่กี่วินาที", () => {
+  it("รอบก่อนจบ 22:07:30 · tick 04:07:00 (ขาด 30 วิ) = ถึงรอบแล้ว (เคยเลื่อนไป 05:07 ทำให้รอบ 6 ชม. กลายเป็น 7)", () => {
+    expect(cronDue("2026-09-16T22:07:30.000Z", "2026-09-17T04:07:00.000Z", 6)).toBe(true);
+  });
+  it("ยังห่างเกินช่วงผ่อนผัน (ขาด 20 นาที) = ยังไม่ถึง", () => {
+    expect(cronDue("2026-09-16T22:27:00.000Z", "2026-09-17T04:07:00.000Z", 6)).toBe(false);
+  });
+});
+
+describe("planCronJobs — รอบตรวจยอดไม่นับเป็นรอบดึงข้อมูล", () => {
+  it("ดึงล่าสุด 22:07 · ตรวจยอด 03:54 · tick 04:07 = ถึงรอบดึงแล้ว (เคยถูกเลื่อนไป 10:07 เพราะนับรอบตรวจยอด)", () => {
+    const runs = [
+      run("c1", { mode: "incremental", range_from: "2026-08-17", range_to: "2026-09-17", started_at: "2026-09-16T22:07:04.000Z", finished_at: "2026-09-16T22:07:30.000Z" }),
+      run("c1", { mode: "reconcile", range_from: "2026-08-18", range_to: "2026-09-16", started_at: "2026-09-17T03:54:27.000Z", finished_at: "2026-09-17T03:54:29.000Z" }),
+    ];
+    const jobs = planCronJobs({ connections: [conn("c1", { config: { backfillDays: 30 } })], runs, now: "2026-09-17T04:07:00.000Z", todayOf: () => "2026-09-17", syncEveryHours: 6 });
+    expect(jobs.map((j) => j.connectionId)).toEqual(["c1"]);
+  });
+});
+
 describe("planCronJobs — งานที่รอบนี้จะดึง", () => {
   it("ถึงรอบ: ดึง 3 วันล่าสุดก่อน (Meta ยังแก้ยอดย้อนหลัง)", () => {
     const jobs = plan({ connections: [conn("c1")], runs: [run("c1", { finished_at: "2026-09-16T01:00:00.000Z" })], syncEveryHours: 6 });
