@@ -142,6 +142,14 @@ describe("campaignDecision", () => {
   it("ครีเอทีฟล้า → ตรวจแก้", () => {
     expect(campaignDecision({ ...base, creatives: [{ fatigue: true }] }).tag).toBe("fix");
   });
+  it("ล้าทั้งแคมเปญเมื่อครีเอทีฟที่ล้ากินค่าแอดเกินครึ่ง · ชิ้นเล็กล้าชิ้นเดียวไม่ลากทั้งแคมเปญ", () => {
+    const small = [{ fatigue: true, spend: 100 }, { fatigue: false, spend: 2900 }];
+    expect(campaignDecision({ ...base, creatives: small }).tag).not.toBe("fix");
+    const big = [{ fatigue: true, spend: 2000 }, { fatigue: false, spend: 1000 }];
+    const d = campaignDecision({ ...base, creatives: big });
+    expect(d.tag).toBe("fix");
+    expect(d.why).toContain("67%");
+  });
   it("ผลดีแต่งบเหลือ 0 หรือใช้เร็วกว่าจังหวะ → ติด Gate ไม่ใช่สเกล", () => {
     expect(campaignDecision({ ...base, pace: { remaining: 0, used: 1, expected: 0.5 } }).tag).toBe("gate");
     expect(campaignDecision({ ...base, pace: { remaining: 500, used: 0.9, expected: 0.5 } }).tag).toBe("gate");
@@ -149,6 +157,34 @@ describe("campaignDecision", () => {
   });
   it("ไม่มีงบ (pace.used null) → สเกลได้ตามกฎเดิม (ไม่มี Gate ให้ติด)", () => {
     expect(campaignDecision({ ...base, pace: { remaining: null, used: null, expected: 0.5 } }).tag).toBe("scale");
+  });
+});
+
+describe("campaignDecision — ข้อมูลจริง: ไม่ตัดสินด้วย ROAS ที่ Meta เห็น", () => {
+  const real = { roasFromMeta: false };
+  // แคมเปญทักแชทจริง: CPL ถูกมาก แต่ Meta เห็นยอดซื้อแทบศูนย์ → ROAS 0.1x
+  const inbox = { ...base, roas: 0.1, cpl: 60 };
+
+  it("ROAS ต่ำจาก Meta ไม่ทำให้ขึ้น พิจารณาหยุด/ตรวจแก้ · CPL ดี = ติดตาม พร้อมบอกว่าทำไมไม่แนะนำสเกล", () => {
+    expect(campaignDecision(inbox).tag).toBe("stop");            // โหมดเดิม (ข้อมูลจำลอง) ยังเหมือนเดิม
+    const d = campaignDecision(inbox, null, undefined, real);
+    expect(d.tag).toBe("watch");
+    expect(d.why).toContain("ยอดขายรายแคมเปญ");
+  });
+
+  it("ROAS สูงจาก Meta ก็ไม่ทำให้ขึ้น สเกล", () => {
+    expect(campaignDecision({ ...base, roas: 5, cpl: 60 }, null, undefined, real).tag).toBe("watch");
+  });
+
+  it("กฎที่ไม่ใช้ ROAS ยังทำงาน: ใช้เงินไม่มีผล → หยุด · ล้า → ตรวจแก้ · CPL เกินเพดานระบบขาย / เกณฑ์กลาง → ตรวจแก้", () => {
+    expect(campaignDecision({ ...base, leads: 0, spend: 800, days: 4 }, null, undefined, real).tag).toBe("stop");
+    expect(campaignDecision({ ...inbox, creatives: [{ fatigue: true }] }, null, undefined, real).tag).toBe("fix");
+    expect(campaignDecision({ ...inbox, cpl: 450 }, { cpl: 400 }, undefined, real).tag).toBe("fix");
+    expect(campaignDecision({ ...inbox, cpl: 650 }, null, undefined, real).tag).toBe("fix");
+  });
+
+  it("ข้อมูลไม่พอ → รอข้อมูล เหมือนเดิม", () => {
+    expect(campaignDecision({ ...inbox, days: 2 }, null, undefined, real).tag).toBe("wait");
   });
 });
 

@@ -85,19 +85,29 @@ const TAG = {
 };
 const tagOf = (tag, why, next) => ({ tag, ...TAG[tag], why, next });
 
-export function campaignDecision(row, targets = null, rules = ACTION_RULES) {
+/* roasFromMeta = false (ข้อมูลจริง): ROAS รายแคมเปญเป็นยอดที่ Meta เห็น ซึ่งแคมเปญทักแชทแทบเป็นศูนย์ (CPL ฿40–90 แต่ ROAS 0.1x)
+   ใช้ตัดสินจะขึ้น "พิจารณาหยุด" กับแคมเปญที่ได้คนทักถูกที่สุด → ไม่ใช้ ROAS เลยทั้งทางหยุด/แก้/สเกล
+   ยอดขายจริงมาถึงแค่ระดับแบรนด์ จึงยังไม่แนะนำสเกลจากแคมเปญ (คนทักถูก ≠ ขายได้) */
+export function campaignDecision(row, targets = null, rules = ACTION_RULES, { roasFromMeta = true } = {}) {
   if (!row.complete) return tagOf("wait", "ข้อมูลผลลัพธ์ยังไม่ครบทุกวัน", "รอ sync/กรอกผลให้ครบก่อนตัดสิน");
   if (row.days < MIN_DAYS) return tagOf("wait", `รันมา ${row.days} วัน (ต้องครบ ${MIN_DAYS} วัน)`, "รอให้ครบวันขั้นต่ำ");
   const wasted = row.spend > rules.wasteSpend && row.leads === 0;
   if (row.leads < MIN_LEADS && !wasted) return tagOf("wait", `ผลลัพธ์ ${row.leads} ยังน้อยกว่า ${MIN_LEADS}`, "รอผลเพิ่มก่อนสรุป");
-  const fatigue = (row.creatives ?? []).some((c) => c.fatigue);
-  const base = decideAction({ spend: row.spend, leads: row.leads, roas: row.roas, cpl: row.cpl, fatigue, complete: true }, rules);
+  /* ล้าทั้งแคมเปญ = ครีเอทีฟที่ล้ากินค่าแอดเกินครึ่ง (ไม่มีค่าแอดรายชิ้น = นับตามจำนวนชิ้น) */
+  const creatives = row.creatives ?? [];
+  const creativeSpend = creatives.reduce((n, c) => n + (c.spend ?? 0), 0);
+  const fatigueShare = creatives.length === 0 ? 0 : creativeSpend > 0
+    ? creatives.filter((c) => c.fatigue).reduce((n, c) => n + (c.spend ?? 0), 0) / creativeSpend
+    : creatives.filter((c) => c.fatigue).length / creatives.length;
+  const fatigue = fatigueShare > (rules.fatigueSpendShare ?? 0.5);
+  const roas = roasFromMeta ? row.roas : null;
+  const base = decideAction({ spend: row.spend, leads: row.leads, roas, cpl: row.cpl, fatigue, complete: true }, rules);
   if (base.action === "Stop") return tagOf("stop", base.why, base.next);
-  if (base.action === "Fix") return tagOf("fix", base.why, base.next);
+  if (base.action === "Fix") return tagOf("fix", fatigue && base.why.includes("เห็นซ้ำ") ? `ครีเอทีฟที่เริ่มล้า (ความถี่สูง/CTR ตก) กินค่าแอด ${Math.round(fatigueShare * 100)}% ของแคมเปญ` : base.why, base.next);
   /* เป้าแบรนด์จากหน้าตั้งค่า (0 = ยังไม่ตั้ง) — ชนะกฎกลางเมื่อตั้งไว้ */
   if (targets?.cpl > 0 && row.cpl != null && row.cpl > targets.cpl)
     return tagOf("fix", `CPL ${Math.round(row.cpl).toLocaleString("th-TH")} เกินเป้าแบรนด์ ${targets.cpl.toLocaleString("th-TH")}`, "ลดต้นทุนก่อนเติมงบ: กลุ่มเป้าหมาย/ชิ้นงาน/ข้อเสนอ");
-  if (targets?.roas > 0 && row.roas != null && row.roas < targets.roas)
+  if (roasFromMeta && targets?.roas > 0 && row.roas != null && row.roas < targets.roas)
     return tagOf("fix", `ROAS ${row.roas.toFixed(1)}x ต่ำกว่าเป้าแบรนด์ ${targets.roas}x`, "แก้ข้อเสนอหรือหน้าปลายทางก่อน");
   if (base.action === "Scale") {
     const p = row.pace ?? {};
@@ -105,6 +115,7 @@ export function campaignDecision(row, targets = null, rules = ACTION_RULES) {
       return tagOf("gate", p.remaining <= 0 ? "ผลดีแต่งบแคมเปญหมดแล้ว" : "ผลดีแต่ใช้งบเร็วกว่าจังหวะเดือน", "ขอเพิ่มงบ/โยกงบจากตัวที่ควรหยุดก่อน แล้วค่อยสเกล");
     return tagOf("scale", base.why, base.next);
   }
+  if (!roasFromMeta) return tagOf("watch", "CPL อยู่ในเกณฑ์ · ยังไม่มียอดขายรายแคมเปญ จึงยังไม่แนะนำสเกล", "ดูยอดขายของแบรนด์ในหน้า Overview ประกอบก่อนเติมงบ");
   return tagOf("watch", base.why, base.next);
 }
 

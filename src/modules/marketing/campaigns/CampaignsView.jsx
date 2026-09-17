@@ -79,7 +79,7 @@ export function CampaignsView() {
     /* ข้อมูลจริง: ตัดสินรายแคมเปญด้วยเพดาน CPL จากระบบขายเท่านั้น — ROAS เป้าเป็นยอดจริงระดับแบรนด์ ส่วน ROAS แคมเปญเป็นยอดที่ Meta เห็น
        เทียบกันตรงๆ จะติด "ตรวจแก้" ทุกแคมเปญ · ไม่มีเพดาน = กฎกลาง */
     const decisionTargets = (brandId) => real ? (targets[brandId]?.cpl != null ? { cpl: targets[brandId].cpl } : null) : targets[brandId] ?? null;
-    const rows = withSpendShare(filtered).map((r) => ({ ...r, decision: campaignDecision(r, decisionTargets(r.brandId)) }));
+    const rows = withSpendShare(filtered).map((r) => ({ ...r, decision: campaignDecision(r, decisionTargets(r.brandId), undefined, { roasFromMeta: !real }) }));
     const brandSums = campaignsByBrand(all);
     const dataHealth = adsDataHealth(data.settings?.ads_control ?? {});
     return {

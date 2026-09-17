@@ -573,6 +573,14 @@ describe("ครีเอทีฟ — ตัวไหนเวิร์ค / �
     expect(rows[0].ctrDrop).toBeGreaterThan(0.25);
     expect(rows[0].action).toBe("Fix");
   });
+  it("CTR ตกแต่การเห็นโฆษณาครึ่งใดครึ่งหนึ่งน้อยกว่า 1,000 ครั้ง = ยังไม่นับว่าล้า (ตัวเลขน้อยแกว่งง่าย)", () => {
+    const rows = adsCreativeRows([
+      shot("early", "ชิ้นเล็ก", 5, { impressions: 800, clicks: 40, reach: 700 }),     // CTR 5% · 800 ครั้ง
+      shot("late", "ชิ้นเล็ก", 25, { impressions: 5000, clicks: 50, reach: 4000 }),   // CTR 1%
+    ], RANGE_M, brands);
+    expect(rows[0].ctrDrop).toBeGreaterThan(0.25);
+    expect(rows[0].fatigue).toBe(false);
+  });
   it("เรียงเรื่องด่วนก่อน (Stop > Fix > Scale > ติดตาม)", () => {
     const rows = adsCreativeRows([
       shot("good", "ตัวแรง", 5, { revenue: 20_000 }),                 // ROAS 10 → Scale

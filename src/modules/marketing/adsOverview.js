@@ -667,6 +667,8 @@ export const ACTION_RULES = {
   highCpl: 500,          // ต้นทุนต่อผลลัพธ์สูงกว่านี้ = ต้องแก้
   fatigueFreq: 2.5,      // คนกลุ่มเดิมเห็นซ้ำเกินนี้ = เริ่มล้า
   fatigueCtrDrop: 0.25,  // CTR ครึ่งหลังตกจากครึ่งแรกเกินนี้ = เริ่มล้า
+  fatigueMinImpressions: 1000, // แต่ละครึ่งต้องเห็นอย่างน้อยเท่านี้ CTR ตกถึงนับ — ตัวเลขน้อยแกว่งเกิน 25% ได้เอง (เคยติดธงล้า 24 แคมเปญ)
+  fatigueSpendShare: 0.5,      // แคมเปญล้าเมื่อครีเอทีฟที่ล้ากินค่าแอดเกินสัดส่วนนี้ ไม่ใช่ชิ้นเล็กชิ้นเดียว
 };
 
 /** ตัดสินว่าควรทำอะไรต่อ — คืนทั้งคำสั่ง เหตุผล และสิ่งที่ควรลงมือ */
@@ -744,9 +746,10 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     const ctr = share(row.clicks, row.impressions);
     const ctrEarly = share(early.clk, early.imp), ctrLate = share(late.clk, late.imp);
     const ctrDrop = ctrEarly == null || ctrLate == null || ctrEarly === 0 ? null : (ctrEarly - ctrLate) / ctrEarly;
+    const enoughVolume = early.imp >= (rules.fatigueMinImpressions ?? 0) && late.imp >= (rules.fatigueMinImpressions ?? 0);
     const frequency = share(row.impressions, row.reach);
     const fatigue = (frequency != null && frequency > rules.fatigueFreq)
-      || (ctrDrop != null && ctrDrop > rules.fatigueCtrDrop);
+      || (enoughVolume && ctrDrop != null && ctrDrop > rules.fatigueCtrDrop);
     const base = {
       ...row,
       campaigns: [...campaigns],
