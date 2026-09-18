@@ -9,8 +9,14 @@ export const JK_SOURCE = "tmk";
 export const JK_FACT_COLUMNS = [
   "day", "inquiries", "inq_by_channel", "inquiry_filled",
   "orders", "orders_new", "sales", "sales_new", "ord_by_channel",
-  "cancelled", "cancelled_value", "avg_reply_minutes",
+  "cancelled", "cancelled_value",
 ];
+
+/* ชื่อช่องทางที่ยอมรับ — ฝั่ง TMK ช่อง channel เป็นข้อความอิสระที่ทีมแก้เองได้ (มี override ด้วย)
+   ถ้าเอา key มาตรงๆ ชื่อ/เบอร์ลูกค้าที่พิมพ์ลงช่องนั้นจะข้ามระบบมาขึ้นบนจอเรา — นอกรายการนี้รวมเป็น "other" (ไม่ทิ้งยอด) */
+export const JK_CHANNEL_KEYS = ["Facebook", "LINE", "Instagram", "TikTok", "Messenger", "Phone", "Direct", "other"];
+const OTHER = "other";
+const safeKey = (key) => (JK_CHANNEL_KEYS.includes(key) ? key : OTHER);
 
 const num = (value) => {
   const n = Number(value);
@@ -23,14 +29,25 @@ const addDays = (iso, days) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 
 /** {Facebook: 20} + {Facebook: 3} → {Facebook: {inquiries:20, leads:0, deposits:0, orders:3}} */
 function channelFunnelOf(inq, ord) {
   const out = {};
-  const keys = new Set([...Object.keys(inq ?? {}), ...Object.keys(ord ?? {})]);
-  for (const key of keys) {
-    out[key] = { inquiries: count(inq?.[key]), leads: 0, deposits: 0, orders: count(ord?.[key]) };
-  }
+  const add = (key, field, value) => {
+    const safe = safeKey(key);
+    const lane = out[safe] ?? (out[safe] = { inquiries: 0, leads: 0, deposits: 0, orders: 0 });
+    lane[field] += count(value);
+  };
+  for (const [key, value] of Object.entries(inq ?? {})) add(key, "inquiries", value);
+  for (const [key, value] of Object.entries(ord ?? {})) add(key, "orders", value);
   return out;
 }
 
-const byChannel = (source) => Object.fromEntries(Object.entries(source ?? {}).map(([key, value]) => [key, count(value)]));
+/** {ช่องทาง: จำนวน} — ชื่อช่องทางนอกรายการรวมเป็น other (รวมยอด ไม่ทิ้ง) */
+function byChannel(source) {
+  const out = {};
+  for (const [key, value] of Object.entries(source ?? {})) {
+    const safe = safeKey(key);
+    out[safe] = (out[safe] ?? 0) + count(value);
+  }
+  return out;
+}
 
 export function jkRowsToDailyFacts(rows = [], { from, to } = {}) {
   if (!ISO.test(String(from ?? "")) || !ISO.test(String(to ?? "")) || from > to) return [];
@@ -67,4 +84,15 @@ export function jkExtraColumns(rows = []) {
     for (const column of Object.keys(row ?? {})) if (!JK_FACT_COLUMNS.includes(column)) extra.add(column);
   }
   return [...extra].sort();
+}
+
+/** จำนวน "วันในช่วง" ที่ปลายทางคืนมาจริง — ใช้กันเขียนศูนย์ทับของจริงเมื่อบางก้อนคืนชุดว่าง
+    (RPC การันตี 1 แถวต่อวันจาก generate_series ถ้าได้ไม่ครบแปลว่าบางก้อนหลุด) */
+export function jkCoveredDays(rows = [], { from, to } = {}) {
+  const days = new Set();
+  for (const row of rows ?? []) {
+    const day = String(row?.day ?? "").slice(0, 10);
+    if (ISO.test(day) && day >= from && day <= to) days.add(day);
+  }
+  return days.size;
 }

@@ -6,7 +6,7 @@ describe("jkFactsUrl", () => {
   it("ชี้ไป RPC พร้อมขอเฉพาะคอลัมน์ที่อนุญาต (กันข้อมูลลูกค้าข้ามระบบ)", () => {
     const url = new URL(jkFactsUrl("https://asimudifasqvtjegbvdp.supabase.co", "2026-09-01", "2026-09-17"));
     expect(url.pathname).toBe("/rest/v1/rpc/jk_ads_daily_facts");
-    expect(url.searchParams.get("select")).toBe("day,inquiries,inq_by_channel,inquiry_filled,orders,orders_new,sales,sales_new,ord_by_channel,cancelled,cancelled_value,avg_reply_minutes");
+    expect(url.searchParams.get("select")).toBe("day,inquiries,inq_by_channel,inquiry_filled,orders,orders_new,sales,sales_new,ord_by_channel,cancelled,cancelled_value");
   });
   it("URL ที่มี / ต่อท้าย ใช้ได้ · วันที่ผิดรูป = โยน DATE_INVALID", () => {
     expect(jkFactsUrl("https://x.supabase.co/", "2026-09-01", "2026-09-02")).toContain("https://x.supabase.co/rest/v1/rpc/");

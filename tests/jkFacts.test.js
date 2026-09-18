@@ -1,12 +1,12 @@
 /* JK (JUNTAKARN) — แถวสรุปรายวันจากระบบ TMK → business_daily_facts
    นับเฉพาะออเดอร์ช่องแชท · วันของยอด = วันออเดอร์ · funnel 2 ขั้น (คนทัก → ยืนยันออเดอร์) */
 import { describe, it, expect } from "vitest";
-import { JK_BRAND_ID, JK_SOURCE, jkRowsToDailyFacts, jkExtraColumns } from "../supabase/functions/_shared/jkFacts.js";
+import { JK_BRAND_ID, JK_SOURCE, JK_CHANNEL_KEYS, jkRowsToDailyFacts, jkExtraColumns, jkCoveredDays } from "../supabase/functions/_shared/jkFacts.js";
 
 const row = (patch = {}) => ({
   day: "2026-09-02", inquiries: 30, inq_by_channel: { Facebook: 20, LINE: 10 }, inquiry_filled: true,
   orders: 4, orders_new: 3, sales: 52000, sales_new: 40000, ord_by_channel: { Facebook: 3, LINE: 1 },
-  cancelled: 1, cancelled_value: 1500, avg_reply_minutes: 12, ...patch,
+  cancelled: 1, cancelled_value: 1500, ...patch,
 });
 
 describe("jkRowsToDailyFacts", () => {
@@ -48,6 +48,37 @@ describe("jkRowsToDailyFacts", () => {
 describe("jkExtraColumns — ข้อมูลลูกค้าห้ามข้ามระบบ", () => {
   it("คอลัมน์นอกรายการที่อนุญาต ต้องถูกรายงานกลับ (เรียงชื่อ)", () => {
     expect(jkExtraColumns([row({ customer_name: "คุณเอ", order_no: "SO-1" })])).toEqual(["customer_name", "order_no"]);
+    // เวลาตอบแชทเฉลี่ยยังไม่ได้ใช้ จึงไม่ได้ขอ — ถ้าปลายทางส่งมาต้องนับเป็นคอลัมน์เกิน (ขอเท่าที่ใช้จริง)
+    expect(jkExtraColumns([row({ avg_reply_minutes: 12 })])).toEqual(["avg_reply_minutes"]);
     expect(jkExtraColumns([row()])).toEqual([]);
+  });
+});
+
+describe("ชื่อช่องทาง — กันข้อความอิสระจากฝั่ง TMK (ช่อง channel แก้มือได้ อาจมีชื่อ/เบอร์ลูกค้า)", () => {
+  it("ช่องทางนอกรายการรวมเข้า 'อื่นๆ' ไม่เอาข้อความดิบมาเป็น key", () => {
+    const [out] = jkRowsToDailyFacts([row({
+      inq_by_channel: { Facebook: 5, "คุณสมชาย 081-234-5678": 7 },
+      ord_by_channel: { "LINE @somchai (SO-1042)": 2, LINE: 1 },
+    })], { from: "2026-09-02", to: "2026-09-02" });
+    expect(out.inquiries_by_channel).toEqual({ Facebook: 5, other: 7 });
+    expect(out.channel_funnel).toEqual({
+      Facebook: { inquiries: 5, leads: 0, deposits: 0, orders: 0 },
+      other: { inquiries: 7, leads: 0, deposits: 0, orders: 2 },
+      LINE: { inquiries: 0, leads: 0, deposits: 0, orders: 1 },
+    });
+    expect(JK_CHANNEL_KEYS).toContain("Facebook");
+    expect(JK_CHANNEL_KEYS).toContain("LINE");
+  });
+  it("ช่องทางที่ไม่รู้จักหลายชื่อรวมยอดกัน ไม่ทิ้ง", () => {
+    const [out] = jkRowsToDailyFacts([row({ inq_by_channel: { xxx: 3, yyy: 4 }, ord_by_channel: {} })], { from: "2026-09-02", to: "2026-09-02" });
+    expect(out.inquiries_by_channel).toEqual({ other: 7 });
+  });
+});
+
+describe("jkCoveredDays — กันเขียนศูนย์ทับของจริงเมื่อบางก้อนคืนค่าว่าง", () => {
+  it("นับเฉพาะวันในช่วงที่ปลายทางคืนมาจริง", () => {
+    expect(jkCoveredDays([row({ day: "2026-09-02" }), row({ day: "2026-09-02" }), row({ day: "2026-09-03" })], { from: "2026-09-01", to: "2026-09-03" })).toBe(2);
+    expect(jkCoveredDays([row({ day: "2026-08-31" })], { from: "2026-09-01", to: "2026-09-03" })).toBe(0);
+    expect(jkCoveredDays([], { from: "2026-09-01", to: "2026-09-03" })).toBe(0);
   });
 });

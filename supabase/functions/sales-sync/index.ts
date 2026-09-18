@@ -9,7 +9,7 @@ import { adminClient, corsHeaders, isServiceRole, json, requireTeamLead } from "
 import { finishRun, runCode, startRun } from "../_shared/pipelineRuns.ts";
 import { runTriggerOf } from "../_shared/serviceAuth.js";
 import { SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, goalRowsToSalesGoals } from "../_shared/salesFacts.js";
-import { jkExtraColumns, jkRowsToDailyFacts } from "../_shared/jkFacts.js";
+import { jkCoveredDays, jkExtraColumns, jkRowsToDailyFacts } from "../_shared/jkFacts.js";
 import { jkFactsUrl, jkWindows } from "../_shared/jkBridge.js";
 import {
   PAGE_LIMIT, describeSalesKey, describeSalesUrl, doorState, factsProbeUrl, goalProbeUrl,
@@ -248,14 +248,18 @@ Deno.serve(async (request) => {
             method: "POST",
             headers: { apikey: jkKey, Authorization: `Bearer ${jkKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({ p_from: window.from, p_to: window.to }),
+            signal: AbortSignal.timeout(30_000),
           });
           const payload = await response.json().catch(() => null);
           if (!response.ok) throw fail(`JK_${doorState(response.status, (payload as { code?: string } | null)?.code).toUpperCase()}`);
           if (Array.isArray(payload)) jkRows.push(...payload);
         }
         if (jkExtraColumns(jkRows).length) throw fail("JK_COLUMN_LEAK");
+        /* RPC การันตี 1 แถวต่อวัน (generate_series) — ได้วันไม่ครบแปลว่าบางก้อนหลุด
+           ถ้าเขียนต่อจะทับวันที่หายเป็นศูนย์ทับยอดจริง (ยอดขายคือตัวตั้งของ ROAS) */
+        const expectedDays = jkWindows(from, to).reduce((n, window) => n + Math.round((Date.parse(`${window.to}T00:00:00Z`) - Date.parse(`${window.from}T00:00:00Z`)) / 86_400_000) + 1, 0);
+        if (jkCoveredDays(jkRows, { from, to }) < expectedDays) throw fail("JK_EMPTY_RESULT");
         const jkOut = jkRowsToDailyFacts(jkRows, { from, to }).map((row) => ({ ...row, source_updated_at: new Date().toISOString() }));
-        if (!jkRows.length) throw fail("JK_EMPTY_RESULT");
         const { error } = await db.from("business_daily_facts").upsert(jkOut, { onConflict: "source,external_record_id" });
         if (error) throw fail("JK_WRITE_FAILED", { detail: error.message });
         jk = { read: jkRows.length, written: jkOut.length, error: null };
