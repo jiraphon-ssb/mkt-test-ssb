@@ -91,4 +91,14 @@ describe("SyncStatusView — สมาชิกที่ไม่ใช่หั
     expect(screen.queryByRole("button", { name: /ดึงข้อมูลตอนนี้/ })).toBeNull();
     expect(screen.queryByText("งานอื่น")).toBeNull();
   });
+
+  it("แถวยอดขาย JUNTAKARN: ยังไม่มีข้อมูล = รอเชื่อม · มีข้อมูลแล้ว = ปกติ พร้อมบอกนิยามที่ต่าง", async () => {
+    show();
+    await settle("pipes", [{ id: "s1", pipeline: "sales", status: "success", trigger_kind: "cron", started_at: "2026-09-17T02:07:00Z" }]);
+    await settle("facts", [{ brand_id: "b_jt", fact_date: "2026-09-17", source: "tmk", inquiry_filled: true, orders: 2 }]);
+    const jk = screen.getByText("ยอดขาย JUNTAKARN").closest('[role="row"]');
+    expect(within(jk).getByText("ปกติ")).toBeTruthy();
+    expect(within(jk).getByText(/นับเฉพาะออเดอร์จากแชท/)).toBeTruthy();
+    expect(within(jk).getByText(/วันที่ออเดอร์/)).toBeTruthy();
+  });
 });

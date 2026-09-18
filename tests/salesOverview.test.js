@@ -307,3 +307,21 @@ describe("channelFunnel — คนทัก → Lead → ได้ออเด�
     expect(channelFunnel([], { brandIds: ["b_td"], ...range })).toEqual([]);
   });
 });
+
+describe("salesPipeline — แบรนด์ที่ระบบขายไม่มีบางขั้น (JUNTAKARN)", () => {
+  const sales = { revenue: 90000, revenueNew: 60000, orders: 6, ordersNew: 4, leads: 0, leadsNew: 0, inquiries: 120, inquiryFilledDays: 3, days: 3, deposits: 0, depositValue: 0, cash: 0, cancelled: 1 };
+  it("ขั้นที่ไม่มี = null พร้อมเหตุผล · ขั้นที่มียังคิดปกติ · อัตราผ่านข้ามขั้นที่ไม่มี", () => {
+    const items = salesPipeline({ sales, spend: 30000, stages: ["inquiries", "closed"], from: "2026-09-01", to: "2026-09-03" }).items;
+    const at = (key) => items.find((item) => item.key === key);
+    expect(at("qualified")).toMatchObject({ value: null, before: null, conv: null, sub: "ระบบขายของแบรนด์นี้ไม่มีขั้นนี้" });
+    expect(at("deposits")).toMatchObject({ value: null, sub: "ระบบขายของแบรนด์นี้ไม่มีขั้นนี้" });
+    expect(at("inquiries")).toMatchObject({ value: 120 });
+    expect(at("closed")).toMatchObject({ value: 6 });
+    expect(at("closed").conv).toBeCloseTo(6 / 120);
+    expect(at("cpl").value).toBeNull();
+  });
+  it("ไม่ส่ง stages = ครบ 4 ขั้นเหมือนเดิม", () => {
+    const items = salesPipeline({ sales, spend: 30000 }).items;
+    expect(items.find((item) => item.key === "qualified").value).toBe(0);
+  });
+});

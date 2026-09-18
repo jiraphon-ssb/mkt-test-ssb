@@ -4,7 +4,7 @@
    ยอดขาย · ROAS · %Ads · CPL · CAC ต้องมาจากระบบขาย · ไม่มีข้อมูล = null พร้อมเหตุผล ห้ามโชว์ 0 แทน */
 import { fmtInt } from "../dash/charts/theme.js";
 import { budgetPace, change, revenuePace, roasOf, share } from "../adsOverview.js";
-import { LEADS_TRACKED_SINCE, metricCoverage } from "./salesFacts.js";
+import { FUNNEL_STAGE_KEYS, LEADS_TRACKED_SINCE, metricCoverage } from "./salesFacts.js";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const num = (value) => {
@@ -167,8 +167,13 @@ export function applySalesToSummary(summary = {}, rows = [], asOf) {
 }
 
 /** funnel จริงจากระบบขาย ในรูปเดียวกับ adsSalePipeline (SalePipeline ใช้ต่อได้) · คนทักบอกทั้งทีมกรอกและจากแอด Meta */
-export function salesPipeline({ sales = null, prevSales = null, metaInquiries = null, spend = null, prevSpend = null, basis = "total", depositsSince = null, from = null, to = null, waiting = false } = {}) {
+export function salesPipeline({ sales = null, prevSales = null, metaInquiries = null, spend = null, prevSpend = null, basis = "total", depositsSince = null, from = null, to = null, waiting = false, stages = FUNNEL_STAGE_KEYS } = {}) {
   const none = waiting ? "รอเชื่อมแหล่งข้อมูล" : "ยังไม่มีข้อมูล";
+  /* แบรนด์ที่ระบบขายต้นทางไม่มีบางขั้น (JUNTAKARN: ไม่มี Lead และมัดจำ) — ขั้นนั้นต้องเป็น "—" พร้อมเหตุผล ไม่ใช่ 0
+     และอัตราผ่านของขั้นถัดไปต้องข้ามขั้นที่ไม่มี ไม่งั้นหารด้วยศูนย์แล้วได้ "—" ทั้งเส้น */
+  const MISSING_STAGE = "ระบบขายของแบรนด์นี้ไม่มีขั้นนี้";
+  const has = (key) => stages.includes(key);
+  const only = (key, value) => (has(key) ? value : null);
   const inquiriesOf = (s) => (s && s.inquiryFilledDays > 0 ? s.inquiries : null);
   const depositsOf = (s) => {
     if (!s || !depositsSince) return null;
@@ -176,10 +181,17 @@ export function salesPipeline({ sales = null, prevSales = null, metaInquiries = 
   };
   const revenueOf = (s) => (s ? (basis === "new" ? s.revenueNew : s.revenue) : null);
 
-  const inquiries = inquiriesOf(sales);
-  const leads = sales ? sales.leads : null;
-  const deposits = depositsOf(sales);
-  const orders = sales ? sales.orders : null;
+  const inquiries = only("inquiries", inquiriesOf(sales));
+  const leads = only("qualified", sales ? sales.leads : null);
+  const deposits = only("deposits", depositsOf(sales));
+  const orders = only("closed", sales ? sales.orders : null);
+  /* ค่าของขั้นก่อนหน้าที่ "มีอยู่จริง" ใช้เป็นตัวหารของอัตราผ่าน */
+  const valueOf = { inquiries, qualified: leads, deposits, closed: orders };
+  const previousStage = (key) => {
+    const order = FUNNEL_STAGE_KEYS.filter((item) => has(item));
+    const at = order.indexOf(key);
+    return at > 0 ? valueOf[order[at - 1]] : null;
+  };
 
   const inquirySub = [
     metaInquiries != null ? `จากแอด Meta ${fmtInt(metaInquiries)}` : null,
@@ -190,13 +202,15 @@ export function salesPipeline({ sales = null, prevSales = null, metaInquiries = 
       : deposits == null ? `ยังไม่มีข้อมูล (มีตั้งแต่ ${dateLabel(depositsSince)})`
         : from && from < depositsSince ? `มีข้อมูลตั้งแต่ ${dateLabel(depositsSince)}` : null;
 
-  const stages = [
+  const stageItems = [
     { key: "inquiries", label: "คนทัก (ทีมกรอก)", value: inquiries, before: inquiriesOf(prevSales), sub: inquirySub || null },
-    { key: "qualified", label: "Lead", value: leads, before: prevSales ? prevSales.leads : null, conv: share(leads, inquiries), sub: !sales ? none : leads == null ? `มีข้อมูลตั้งแต่ ${dateLabel(LEADS_TRACKED_SINCE)} (ก่อนหน้านั้นกรอกใน sheet)` : null },
-    { key: "deposits", label: "ได้ออเดอร์", value: deposits, before: depositsOf(prevSales), conv: share(deposits, leads), sub: depositSub },
-    { key: "closed", label: "ยืนยันออเดอร์", value: orders, before: prevSales ? prevSales.orders : null, conv: share(orders, deposits), sub: sales ? null : none },
+    { key: "qualified", label: "Lead", value: leads, before: only("qualified", prevSales ? prevSales.leads : null), conv: share(leads, previousStage("qualified")),
+      sub: !has("qualified") ? MISSING_STAGE : !sales ? none : leads == null ? `มีข้อมูลตั้งแต่ ${dateLabel(LEADS_TRACKED_SINCE)} (ก่อนหน้านั้นกรอกใน sheet)` : null },
+    { key: "deposits", label: "ได้ออเดอร์", value: deposits, before: only("deposits", depositsOf(prevSales)), conv: share(deposits, previousStage("deposits")),
+      sub: has("deposits") ? depositSub : MISSING_STAGE },
+    { key: "closed", label: "ยืนยันออเดอร์", value: orders, before: only("closed", prevSales ? prevSales.orders : null), conv: share(orders, previousStage("closed")), sub: sales ? null : none },
   ].map((stage) => ({ sense: "higher", fmt: "int", conv: null, ...stage }));
-  const rated = stages.filter((stage) => stage.conv != null);
+  const rated = stageItems.filter((stage) => stage.conv != null);
   const worstKey = rated.length ? rated.reduce((a, b) => (b.conv < a.conv ? b : a)).key : null;
   const metaNote = "คิดจากค่าแอด Meta";
 
@@ -204,10 +218,11 @@ export function salesPipeline({ sales = null, prevSales = null, metaInquiries = 
     estimated: false,
     worstKey,
     items: [
-      ...stages,
+      ...stageItems,
       { key: "roas", label: "ROAS", value: roasOf(revenueOf(sales), spend), before: roasOf(revenueOf(prevSales), prevSpend), sense: "higher", fmt: "roas", sub: sales ? metaNote : none },
       { key: "pctAds", label: "%Ads", value: share(spend, sales?.revenueNew ?? null), before: share(prevSpend, prevSales?.revenueNew ?? null), sense: "lower", fmt: "pct1", sub: sales ? `ต่อยอดลูกค้าใหม่ · ${metaNote}` : none },
-      { key: "cpl", label: "CPL", value: share(spend, leads), before: share(prevSpend, prevSales?.leads ?? null), sense: "lower", fmt: "money", sub: sales ? `ต่อ Lead ในระบบขาย · ${metaNote}` : none },
+      { key: "cpl", label: "CPL", value: share(spend, leads), before: has("qualified") ? share(prevSpend, prevSales?.leads ?? null) : null, sense: "lower", fmt: "money",
+        sub: !has("qualified") ? MISSING_STAGE : sales ? `ต่อ Lead ในระบบขาย · ${metaNote}` : none },
       { key: "cac", label: "CAC", value: share(spend, sales?.ordersNew ?? null), before: share(prevSpend, prevSales?.ordersNew ?? null), sense: "lower", fmt: "money", sub: sales ? `ต่อลูกค้าใหม่ · ${metaNote}` : none },
     ],
   };

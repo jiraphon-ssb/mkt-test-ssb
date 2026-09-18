@@ -4,7 +4,7 @@ import { adChannelsByBrand, adsByBrandChannel, adsChannelList, adsCompanySummary
 import { compareRange, effectiveCompare, isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
 import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues, plansFromTargets } from "../adsTargets.js";
 import { applySalesToBrands, applySalesToSummary, channelFunnel, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals, salesFactsByBrand, salesPipeline } from "./salesOverview.js";
-import { metricCoverage } from "./salesFacts.js";
+import { FUNNEL_STAGE_KEYS, funnelStagesOf, metricCoverage } from "./salesFacts.js";
 import { SALES_BRAND_IDS } from "./syncSources.js";
 
 export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filters }) {
@@ -64,6 +64,8 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
           spend: row?.spend ?? null, prevSpend: row?.prevSpend ?? null,
           basis: revenueBasis, depositsSince: coverage.get(brand.id)?.deposits ?? null, from: shownFrom, to: shownTo,
           waiting: !SALES_BRAND_IDS.includes(brand.id),
+          // ระบบขายของบางแบรนด์ไม่มีครบทุกขั้น (JUNTAKARN ไม่มี Lead/มัดจำ) — ขั้นที่ไม่มีต้องขึ้น "—" ไม่ใช่ 0
+          stages: funnelStagesOf(brand.id),
         })];
       }));
       /* ภาพรวม: รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย — ค่าแอดของแบรนด์ที่รอเชื่อมไม่นับ ไม่งั้น ROAS ภาพรวมต่ำเกินจริง */
@@ -82,6 +84,7 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
         metaInquiries: metaInquiriesOf(adsSalePipeline(sourceCards, range, before)),
         spend: sumOf((row) => row.spend), prevSpend: sumOf((row) => row.prevSpend),
         basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: shownTo,
+        stages: FUNNEL_STAGE_KEYS,   // ภาพรวมรวมหลายแบรนด์ จึงยังมีครบ 4 ขั้น
       });
       /* funnel แยกช่องทางที่ลูกค้าทัก (FB / LINE) — ภาพรวมรวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย */
       const sourceIds = SALES_BRAND_IDS.filter((id) => brands.some((brand) => brand.id === id));

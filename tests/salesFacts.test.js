@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SALE_BRAND_BY_CODE, SALES_SOURCE_BRANDS, LEADS_TRACKED_SINCE, factWindows, factsToDailyRows, goalRowsToSalesGoals, metricCoverage } from "../src/modules/marketing/ads/salesFacts.js";
+import { SALE_BRAND_BY_CODE, SALES_SOURCE_BRANDS, LEADS_TRACKED_SINCE, BRAND_FUNNEL_STAGES, FUNNEL_STAGE_KEYS, funnelStagesOf, factWindows, factsToDailyRows, goalRowsToSalesGoals, metricCoverage } from "../src/modules/marketing/ads/salesFacts.js";
 
 /* แถวจาก sale_dashboard_facts ของระบบพี่ทัช (ขอแค่ 7 คอลัมน์) — ดู supabase/functions/_shared/salesBridge.js */
 const fact = (kind, patch = {}) => ({ kind, day: "2026-09-10", brand: "TD", channel: "FB", n: 1, amount: 0, is_new: null, ...patch });
@@ -182,5 +182,14 @@ describe("metricCoverage — วันแรกที่แต่ละตัว
   });
   it("ไม่มีแถวของแบรนด์นั้น = ไม่มีคีย์", () => {
     expect(metricCoverage([]).has("b_td")).toBe(false);
+  });
+});
+
+describe("ขั้น funnel ต่อแบรนด์ — JUNTAKARN มี 2 ขั้น (ระบบ TMK ไม่มีสเตจ Lead/มัดจำ)", () => {
+  it("แบรนด์ทั่วไปครบ 4 ขั้น · b_jt เหลือคนทัก → ยืนยันออเดอร์", () => {
+    expect(FUNNEL_STAGE_KEYS).toEqual(["inquiries", "qualified", "deposits", "closed"]);
+    expect(funnelStagesOf("b_td")).toEqual(FUNNEL_STAGE_KEYS);
+    expect(funnelStagesOf("b_jt")).toEqual(["inquiries", "closed"]);
+    expect(BRAND_FUNNEL_STAGES.b_jt).toEqual(["inquiries", "closed"]);
   });
 });

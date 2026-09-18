@@ -217,3 +217,17 @@ export function metricCoverage(facts = []) {
   }
   return out;
 }
+
+/** ขั้นของเส้นทางขายมาตรฐาน (ตรงกับ key ใน salesPipeline) */
+export const FUNNEL_STAGE_KEYS = ["inquiries", "qualified", "deposits", "closed"];
+
+/* แบรนด์ที่ระบบขายต้นทางไม่ได้บันทึกครบทุกขั้น — ขั้นที่ไม่มีต้องขึ้น "—" พร้อมเหตุผล ห้ามขึ้น 0
+   b_jt (JUNTAKARN) ใช้ระบบ TMK Operation ซึ่งมีแค่ "คนทัก" (tmk_sales_funnel) กับ "ยืนยันออเดอร์" (tmk_mp_orders)
+   ไม่มีสเตจ Lead และไม่มีประเภทจ่ายแบบมัดจำ (ข้อตกลงอาร์ต 18 ก.ย. 2569) */
+export const BRAND_FUNNEL_STAGES = { b_jt: ["inquiries", "closed"] };
+
+export const funnelStagesOf = (brandId) => BRAND_FUNNEL_STAGES[brandId] ?? FUNNEL_STAGE_KEYS;
+
+/* แบรนด์ที่มีแหล่งยอดขายบนหน้าจอ = 3 แบรนด์ของพี่ทัช + JUNTAKARN (ระบบ TMK Operation)
+   ต่างจาก SALES_SOURCE_BRANDS ซึ่งเป็น "รหัสที่ขอจาก RPC ของพี่ทัช" — ห้ามใส่ JK ลงตัวนั้น (ระบบพี่ทัชมีแถว JK ไม่ครบ จะนับซ้ำ) */
+export const SALES_SOURCE_BRAND_IDS = [...SALES_SOURCE_BRANDS.map((code) => SALE_BRAND_BY_CODE[code]), "b_jt"];

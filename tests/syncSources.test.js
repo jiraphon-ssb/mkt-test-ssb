@@ -1,7 +1,7 @@
 /* หน้า Sync — แปลงข้อมูลท่อยอดขาย / creative / สิทธิ์ เป็นสิ่งที่หน้าจอบอกได้ (pure) */
 import { describe, it, expect } from "vitest";
 import {
-  coverageMatrix, goalGaps, inventorySources, creativeRunView, tokenDaysLeft, checkVerdictView, pipelineRunView, SALES_BRAND_IDS, backfillRanges, latestBy,
+  coverageMatrix, goalGaps, inventorySources, creativeRunView, tokenDaysLeft, checkVerdictView, pipelineRunView, SALES_BRAND_IDS, backfillRanges, latestBy, jkSourceRow,
 } from "../src/modules/marketing/ads/syncSources.js";
 
 const fact = (brand_id, fact_date, patch = {}) => ({ brand_id, fact_date, inquiries: 0, inquiry_filled: false, qualified_leads: 0, deposits: 0, orders: 0, gross_revenue: 0, ...patch });
@@ -157,5 +157,21 @@ describe("latestBy — รอบล่าสุดต่อกลุ่ม", () 
     const out = latestBy(rows, (row) => row.connection_id);
     expect(out.get("a").n).toBe(2);
     expect(out.get("b").n).toBe(3);
+  });
+});
+
+describe("แหล่งข้อมูลยอดขาย JUNTAKARN (ระบบ TMK)", () => {
+  const jkFact = (fact_date, patch = {}) => ({ brand_id: "b_jt", fact_date, source: "tmk", orders: 2, gross_revenue: 5000, inquiries: 30, inquiry_filled: true, ...patch });
+  it("มีข้อมูลล่าสุดเมื่อวาน = ปกติ · บอกนิยามที่ต่างจากแบรนด์อื่น", () => {
+    const row = jkSourceRow([jkFact("2026-09-16"), jkFact("2026-09-17")], { today: "2026-09-18" });
+    expect(row.state).toBe("ok");
+    expect(row.fresh).toBe("2026-09-17");
+    expect(row.detail).toContain("นับเฉพาะออเดอร์จากแชท");
+    expect(row.detail).toContain("วันที่ออเดอร์");
+  });
+  it("ข้อมูลล่าสุดค้างหลายวัน = ล่าช้า · ไม่มีแถวเลย = รอเชื่อม", () => {
+    expect(jkSourceRow([jkFact("2026-09-10")], { today: "2026-09-18" }).state).toBe("stale");
+    expect(jkSourceRow([], { today: "2026-09-18" }).state).toBe("waiting");
+    expect(jkSourceRow([jkFact("2026-09-17", { brand_id: "b_td", source: "crm" })], { today: "2026-09-18" }).state).toBe("waiting");
   });
 });

@@ -24,7 +24,7 @@ import { monthsBackStart } from "../../../../supabase/functions/_shared/salesInv
 import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
 import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
-import { SALES_BRAND_IDS, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
+import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
 import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import "./adsWorkspace.css";
 import "./syncStatus.css";
@@ -205,7 +205,10 @@ export function SyncStatusView() {
   // บัญชีที่ดึงนานสุดถึงคิวก่อน — ใช้บอกเวลาดึงค่าแอดรอบถัดไปจริง (tick ที่ไม่มีงานไม่นับ)
   const oldestMetaSync = metaAccounts.filter((row) => row.connected).map((row) => row.lastSuccessAt).filter(Boolean).sort()[0] ?? null;
   const unusedProviders = ADS_PROVIDERS.filter((provider) => provider.id !== "meta" && !accounts.some((row) => row.providerId === provider.id)).map((provider) => provider.name);
-  const waitingBrands = brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id));
+  /* JUNTAKARN อ่านจากระบบ TMK Operation — มีแถวของตัวเองที่บอกนิยามที่ต่าง (ไม่ปนกับแบรนด์ที่ยังไม่มีแหล่ง) */
+  const jk = jkSourceRow(facts, { today });
+  const jkBrand = brands.find((brand) => brand.id === JK_BRAND_ID) ?? null;
+  const waitingBrands = brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id) && brand.id !== JK_BRAND_ID);
   const timeline = useMemo(() => historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts: metaAccounts, kind: historyFilter, limit: 1000 }), [ticks, syncRuns, pipes, metaAccounts, historyFilter]);
 
   /* ── งานที่สั่งได้ (หัวหน้าทีม) ── */
@@ -358,6 +361,13 @@ export function SyncStatusView() {
         <SourceRow row={rows.meta} onOpen={() => setTab("meta")} />
         <SourceRow row={rows.creatives} onOpen={() => setTab("meta")} />
         <SourceRow row={rows.sales} onOpen={() => setTab("sales")} />
+        {jkBrand && <SourceRow row={{
+          key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, sub: "ระบบ TMK", icon: "sales",
+          state: jk.state === "ok" ? "ok" : jk.state === "stale" ? "warn" : "waiting",
+          stateLabel: jk.state === "ok" ? "ปกติ" : jk.state === "stale" ? "ล่าช้า" : "รอเชื่อมแหล่งข้อมูล",
+          fresh: jk.fresh ? { text: `ล่าสุด ${jk.fresh}`, sub: "วันละครั้ง" } : { text: "—", sub: "ค่าแอด Meta ยังดึงตามปกติ" },
+          complete: { text: "นิยามต่างจากแบรนด์อื่น", sub: jk.detail },
+        }} />}
         {waitingBrands.map((brand) => <SourceRow key={brand.id} row={{ key: brand.id, name: `ยอดขาย ${brand.name}`, icon: "sales", state: "waiting", stateLabel: "รอเชื่อมแหล่งข้อมูล", fresh: null, complete: null, hint: "ค่าแอด Meta ยังดึงตามปกติ" }} />)}
       </div>
       {unusedProviders.length > 0 && <p className="sy-note">ยังไม่ใช้: {unusedProviders.join(" · ")}</p>}
