@@ -21,8 +21,10 @@ function ChannelFunnel({ rows }) {
   const count = (n) => n == null ? '—' : n.toLocaleString('th-TH');
   const best = Math.max(...rows.filter((r) => r.closeRate != null && (r.leads ?? 0) >= 10).map((r) => r.closeRate));
   return <div className="aw-channel-funnel"><h3>แยกตามช่องทางที่ลูกค้าทัก</h3><div className="aw-table-scroll"><table><thead><tr><th>ช่องทาง</th><th>คนทัก (ทีมกรอก)</th><th>Lead</th><th>ได้ออเดอร์</th><th>ยืนยันออเดอร์</th><th>สัดส่วนออเดอร์</th><th>ปิดได้จาก Lead</th></tr></thead>
-    <tbody>{rows.map((r) => <tr key={r.channel}><th>{r.label}</th><td>{count(r.inquiries)}</td><td>{count(r.leads)}{r.leadRate != null && <small> · {pct(r.leadRate)} ของคนทัก</small>}</td><td>{count(r.deposits)}</td><td>{count(r.orders)}</td><td>{pct(r.orderShare)}</td><td>{pct(r.closeRate)}{r.closeRate != null && r.closeRate === best && <small className="emerald"> สูงสุด</small>}</td></tr>)}</tbody></table></div>
-    <p className="aw-key">ช่องทาง = ที่ลูกค้าทักเข้ามาตามที่ทีมขายบันทึก · "สูงสุด" เทียบเฉพาะช่องที่มี Lead ตั้งแต่ 10 ราย · Lead ก่อน 1 ก.ย. และได้ออเดอร์ก่อนวันเริ่มเก็บขึ้น "—"</p></div>;
+    <tbody>{rows.map((r) => <tr key={r.channel}><th>{r.label}</th><td>{count(r.inquiries)}{r.inquiries == null && (r.leads || r.orders) ? <small> ทีมไม่ได้กรอก</small> : null}</td><td>{count(r.leads)}{r.leadRate != null && <small> · {pct(r.leadRate)} ของคนทัก</small>}</td><td>{count(r.deposits)}</td><td>{count(r.orders)}{r.carryOver && <small> · ทักไว้ก่อนช่วงนี้</small>}</td><td>{pct(r.orderShare)}</td><td>{pct(r.closeRate)}{r.closeRate != null && r.closeRate === best && <small className="emerald"> สูงสุด</small>}</td></tr>)}</tbody></table></div>
+    <p className="aw-key">ช่องทาง = ที่ลูกค้าทักเข้ามาตามที่ทีมขายบันทึก · "สูงสุด" เทียบเฉพาะช่องที่มี Lead ตั้งแต่ 10 ราย · Lead ก่อน 1 ก.ย. และได้ออเดอร์ก่อนวันเริ่มเก็บขึ้น "—"</p>
+    {rows.some((r) => r.inquiries == null && (r.leads || r.orders)) && <p className="aw-key">ช่องที่คนทักขึ้น "—" คือทีมกรอกคนทักไว้แค่บางช่องทาง (ปกติ Facebook กับ LINE) แต่ดีลจริงมีช่องทางอื่นด้วย — Lead และออเดอร์ของช่องนั้นนับครบ ส่วนอัตราผ่านคนทักคิดไม่ได้</p>}
+    {rows.some((r) => r.carryOver) && <p className="aw-key">บางช่องมีได้ออเดอร์หรือยืนยันออเดอร์มากกว่า Lead ของช่วงนี้ — เป็นลูกค้าที่ทักไว้ก่อนช่วงที่เลือกแล้วมาปิดในช่วงนี้ ไม่ใช่ตัวเลขผิด (เลือกช่วงยาวขึ้นจะเห็นครบทั้งเส้นทาง)</p>}</div>;
 }
 
 export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, settings, updateAdsControl, toast, selected: selectedProp, onSelect }) {

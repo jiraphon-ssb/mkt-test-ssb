@@ -320,8 +320,15 @@ export function channelFunnel(facts = [], { brandIds = [], from, to, depositsSin
     if (day < LEADS_TRACKED_SINCE) leadsBefore = true;
     for (const [rawChannel, lane] of Object.entries(fact.channel_funnel ?? {})) {
       const channel = canonChannel(rawChannel);
-      const c = lanes.get(channel) ?? { channel, inquiries: null, leads: 0, deposits: 0, orders: 0 };
-      if (fact.inquiry_filled === true) c.inquiries = (c.inquiries ?? 0) + (num(lane?.inquiries) ?? 0);
+      const c = lanes.get(channel) ?? { channel, inquiries: null, inqLogged: false, leads: 0, deposits: 0, orders: 0 };
+      /* ช่องทางในระบบขายถูกบันทึกแยกกันต่อขั้น: คนทักมาจากที่ทีมกรอกในหน้าคนทัก (ปกติกรอกแค่ FB/LINE)
+         ส่วน Lead/ได้ออเดอร์/ยืนยันออเดอร์ มาจากดีลจริงซึ่งมีช่องทางอื่นด้วย (IG · โทร · Direct → รวมเป็น "อื่นๆ")
+         → ช่องที่ไม่มีใครกรอกคนทักเลย ต้องขึ้น "—" ไม่ใช่ 0 (0 อ่านว่า "ไม่มีคนทักจริง" ซึ่งขัดกับ Lead ที่มีอยู่) */
+      if (fact.inquiry_filled === true) {
+        const inq = num(lane?.inquiries) ?? 0;
+        if (inq > 0) { c.inquiries = (c.inquiries ?? 0) + inq; c.inqLogged = true; }
+        else if (!c.inqLogged) c.inquiries = c.inquiries ?? 0;
+      }
       c.leads += num(lane?.leads) ?? 0;
       c.deposits += num(lane?.deposits) ?? 0;
       c.orders += num(lane?.orders) ?? 0;
@@ -334,12 +341,17 @@ export function channelFunnel(facts = [], { brandIds = [], from, to, depositsSin
     // ระบบขายที่ไม่มีขั้นนั้น (JUNTAKARN ไม่มี Lead/มัดจำ) = null → หน้าจอขึ้น "—" ไม่ใช่ 0
     const leads = !hasLead ? null : leadsBefore ? null : c.leads;
     const deposits = !hasDeposit ? null : depositsKnown ? c.deposits : null;
+    // ช่องที่ไม่มีใครกรอกคนทักแต่มีขั้นถัดไป = ไม่รู้ ไม่ใช่ศูนย์
+    const inquiries = !c.inqLogged && (c.leads > 0 || c.deposits > 0 || c.orders > 0) ? null : c.inquiries;
+    /* ขั้นหลังมากกว่าขั้นก่อนได้จริง: ดีลที่ปิดในช่วงนี้อาจเป็นลูกค้าที่ทัก/เป็น Lead ไว้ก่อนช่วงนี้
+       (ไม่ใช่ตัวเลขผิด แต่ต้องบอกบนจอ ไม่งั้นคนอ่านคิดว่าระบบพัง) */
+    const carryOver = (leads != null && deposits != null && deposits > leads) || (leads != null && c.orders > leads);
     return {
       channel: c.channel, label: CHANNEL_LABELS[c.channel] ?? c.channel,
-      inquiries: c.inquiries, leads, deposits, orders: c.orders,
-      leadRate: share(leads, c.inquiries), depositRate: share(deposits, leads),
+      inquiries, leads, deposits, orders: c.orders, carryOver,
+      leadRate: share(leads, inquiries), depositRate: share(deposits, leads),
       // funnel 2 ขั้น: ปิดการขายเทียบจากคนทัก (ไม่มี Lead ให้เทียบ)
-      closeRate: hasLead ? share(c.orders, leads) : share(c.orders, c.inquiries),
+      closeRate: hasLead ? share(c.orders, leads) : share(c.orders, inquiries),
       closeBasis: hasLead ? "leads" : "inquiries",
       orderShare: share(c.orders, totalOrders),
     };

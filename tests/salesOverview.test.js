@@ -341,6 +341,32 @@ describe("channelFunnel — คนทัก → Lead → ได้ออเด�
     expect(row.leadRate).toBe(null);
   });
 
+  /* เจอบนของจริง 18 ก.ย. 69: แถว "อื่นๆ" ขึ้นคนทัก 0 แต่ Lead 22 — อ่านแล้วขัดกันเอง
+     ที่มา: คนทักมาจากที่ทีมกรอกในหน้าคนทัก (กรอกแค่ FB/LINE) แต่ Lead/ออเดอร์มาจากดีลจริงที่มีช่องทางอื่น
+     → ช่องที่ไม่มีใครกรอกคนทักต้องเป็น null ให้ขึ้น "—" และอัตราผ่านคนทักคิดไม่ได้ */
+  it("ช่องที่ทีมไม่ได้กรอกคนทักแต่มี Lead/ออเดอร์: คนทัก = null ไม่ใช่ 0 · leadRate คิดไม่ได้", () => {
+    const rows2 = [
+      f("b_td", "2026-09-01", { FB: { inquiries: 40, leads: 8, deposits: 6, orders: 3 }, other: { inquiries: 0, leads: 22, deposits: 22, orders: 9 } }),
+    ];
+    const out = channelFunnel(rows2, { brandIds: ["b_td"], ...range });
+    const other = out.find((c) => c.channel === "other");
+    expect(other).toMatchObject({ inquiries: null, leads: 22, orders: 9, leadRate: null });
+    expect(other.closeRate).toBeCloseTo(9 / 22);
+    // ช่องที่กรอกจริงและเป็นศูนย์ ยังเป็น 0 ตามที่กรอก
+    const zero = channelFunnel([f("b_td", "2026-09-01", { Line: { inquiries: 0, leads: 0, deposits: 0, orders: 0 } })], { brandIds: ["b_td"], ...range });
+    expect(zero[0].inquiries).toBe(0);
+  });
+
+  /* LINE บนของจริง: ได้ออเดอร์ 150 > Lead 139 — ดีลที่ปิดในช่วงนี้มาจากคนที่ทักไว้ก่อนช่วงนี้
+     ไม่ใช่ตัวเลขผิด แต่ต้องมีธงให้หน้าจอบอก ไม่งั้นคนอ่านคิดว่าระบบพัง */
+  it("ขั้นหลังมากกว่าขั้นก่อน = ติดธง carryOver", () => {
+    const rows2 = [f("b_td", "2026-09-01", { Line: { inquiries: 230, leads: 139, deposits: 150, orders: 76 } })];
+    const [line] = channelFunnel(rows2, { brandIds: ["b_td"], ...range });
+    expect(line).toMatchObject({ leads: 139, deposits: 150, carryOver: true });
+    const normal = channelFunnel([f("b_td", "2026-09-01", { FB: { inquiries: 100, leads: 50, deposits: 20, orders: 10 } })], { brandIds: ["b_td"], ...range });
+    expect(normal[0].carryOver).toBe(false);
+  });
+
   /* ระบบขายพี่ทัชเก็บ FB/Line · ระบบ TMK เก็บ Facebook/LINE — ถ้าไม่ยุบเป็นคีย์เดียวจะได้สองแถวชื่อ "Facebook" และยอดถูกผ่าครึ่ง */
   it("ชื่อช่องทางคนละชุดจากสองระบบ = ยุบเป็นแถวเดียว", () => {
     const mixed = [
