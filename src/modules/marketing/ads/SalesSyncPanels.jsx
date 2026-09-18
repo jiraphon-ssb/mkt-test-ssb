@@ -20,9 +20,10 @@ const CELL_TEXT = {
   no_data: (cell) => cell.since ? `เริ่มเก็บ ${dayLabel(cell.since)}` : "ยังไม่มีข้อมูล",
   open: () => "วันนี้ยังไม่ปิด",
   waiting_source: () => "รอเชื่อมแหล่งข้อมูล",
+  no_stage: () => "ระบบขายไม่มีขั้นนี้",
 };
 // สีของช่อง: ต้องมีคนทำอะไร = แดง/เหลือง · ข้อจำกัดของแหล่ง (ยังไม่เริ่มเก็บ) = เทา ไม่ใช่ปัญหา
-const cellTone = (cell) => cell.state === "no_data" && cell.since ? "since" : cell.state;
+const cellTone = (cell) => cell.state === "no_data" && cell.since ? "since" : cell.state === "no_stage" ? "since" : cell.state;
 const SOURCE_STATE = { has_data: "มีข้อมูล", empty: "ยังไม่มีข้อมูล", callable: "เรียกได้", unreadable: "อ่านไม่ได้" };
 
 /** ตรวจการเชื่อมต่อ — ผลล่าสุดที่กดในหน้านี้ */
@@ -97,7 +98,7 @@ export function CoverageTable({ facts = [], brands = [], from, to, today = null 
   return <div className="sy-cov">
     <ul className="sy-legend" aria-label="ความหมายของสี">
       <li><span className="sy-cell full">ครบ</span></li><li><span className="sy-cell partial">กรอกบางวัน / เริ่มกลางเดือน</span></li>
-      <li><span className="sy-cell not_filled">ทีมยังไม่กรอก</span></li><li><span className="sy-cell since">ระบบขายยังไม่เริ่มเก็บ</span></li>
+      <li><span className="sy-cell not_filled">ทีมยังไม่กรอก</span></li><li><span className="sy-cell since">ระบบขายยังไม่เริ่มเก็บ / ไม่มีขั้นนี้</span></li>
     </ul>
     <div className="sy-table-scroll" role="region" aria-label="ความครบของข้อมูลระบบขาย" tabIndex={0}>
       <table className="sy-cov-table">

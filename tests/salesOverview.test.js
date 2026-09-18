@@ -29,6 +29,16 @@ describe("combineGoalTargets — เป้าภาพรวม", () => {
     expect(combineGoalTargets([{ targets: a, weights: {} }, { targets: { ...b, roas: null }, weights: {} }]).roas).toBe(null);
     expect(combineGoalTargets([])).toMatchObject({ roas: null, inquiries: null });
   });
+  /* JUNTAKARN ยังไม่มีแถวใน ad_sales_goals — ถ้านับเป็นตัวถ่วง เป้ารวมทั้งกระดานจะกลายเป็น "ยังไม่ตั้งเป้า"
+     (เจอ 18 ก.ย. 69 ตอนเปิด JK เป็นแหล่งจริง) */
+  it("แบรนด์ที่ยังไม่ตั้งเป้าเลย ไม่ทำให้เป้ารวมหาย · แบรนด์ที่ตั้งแล้วแต่ขาดบางตัว ตัวนั้นยัง null", () => {
+    const set = { inquiries: 1000, qualified: 300, deposits: 100, closed: 50, roas: 6, pctAds: 0.12, cpl: 400 };
+    const out = combineGoalTargets([{ targets: set, weights: { budget: 100, revenue: 100, inquiries: 1000 } }, { targets: {}, weights: {} }]);
+    expect(out).toMatchObject({ inquiries: 1000, qualified: 300, closed: 50, roas: 6 });
+    const partial = combineGoalTargets([{ targets: set, weights: {} }, { targets: { ...set, roas: null }, weights: {} }]);
+    expect(partial.roas).toBe(null);
+    expect(partial.inquiries).toBe(2000);
+  });
 });
 
 describe("plansFromSalesGoals — งบ Meta จริงจากเป้า (ไม่หารเฉลี่ย) · เป้ายอดตามฐานที่เลือก", () => {
@@ -106,6 +116,20 @@ describe("applySalesToSummary — ภาพรวมรวมเฉพาะแ�
       { id: "b_jt", name: "JUNTAKARN", salesSource: "waiting", revenue: null, revenueNew: null, spend: 5000 },
     ];
     expect(applySalesToSummary({ spend: 15000 }, rows, "2026-09-15").pctAds).toBeCloseTo(0.1);
+  });
+
+  /* JUNTAKARN มียอดจริงแล้วแต่ยังไม่มีใครตั้งเป้า — เป้ารวมต้องเป็นของ 3 แบรนด์ที่ตั้งไว้ พร้อมบอกว่าไม่รวมใคร
+     (ถ้าใช้ all-or-null เป้ารวม/งบรวมจะหายทั้งแถวเพราะแบรนด์เดียว) */
+  it("แบรนด์ที่มียอดแต่ยังไม่ตั้งเป้า: เป้า/งบรวมของแบรนด์ที่ตั้งไว้ + targetExcluded บอกชื่อ · เทียบเดือนก่อนยังต้องเป็น null", () => {
+    const rows = [
+      { id: "b_td", name: "TEAMDEE", salesSource: "sales", revenue: 400000, prevRevenue: 300000, revTarget: 1000000, spend: 10000, budget: 80000 },
+      { id: "b_jt", name: "JUNTAKARN", salesSource: "sales", revenue: 120000, prevRevenue: null, revTarget: null, spend: 5000, budget: null },
+    ];
+    const out = applySalesToSummary({ spend: 15000 }, rows, "2026-09-15");
+    expect(out).toMatchObject({ revenue: 520000, revTarget: 1000000, budget: 80000, targetExcluded: ["JUNTAKARN"], budgetExcluded: ["JUNTAKARN"] });
+    expect(out.prevRevenue).toBe(null);
+    expect(out.revChangePct).toBe(null);
+    expect(out.excluded).toEqual([]);
   });
 
   it("แยกเหตุผลที่ไม่รวม: รอเชื่อมแหล่ง กับ ช่วงนี้ไม่มีข้อมูล (กันข้อความ 'รอเชื่อม' ผิดตอนข้อมูลยังโหลดไม่เสร็จ)", () => {
@@ -305,6 +329,28 @@ describe("channelFunnel — คนทัก → Lead → ได้ออเด�
 
   it("ไม่มีข้อมูลช่องทาง = []", () => {
     expect(channelFunnel([], { brandIds: ["b_td"], ...range })).toEqual([]);
+  });
+
+  /* ระบบขายของ JUNTAKARN มี 2 ขั้น (คนทัก → ยืนยันออเดอร์) — Lead/ได้ออเดอร์ ต้องเป็น null ให้หน้าจอขึ้น "—"
+     ไม่ใช่ 0 (ซึ่งอ่านว่า "ทำไม่ได้เลย") และ %ปิดต้องเทียบจากคนทัก ไม่ใช่จาก Lead ที่ไม่มี */
+  it("ระบบขายที่ไม่มีขั้น Lead/มัดจำ: สองขั้นนั้น = null · %ปิดเทียบจากคนทัก", () => {
+    const jk = [f("b_jt", "2026-09-01", { Facebook: { inquiries: 50, leads: 0, deposits: 0, orders: 5 } })];
+    const [row] = channelFunnel(jk, { brandIds: ["b_jt"], ...range, stages: ["inquiries", "closed"] });
+    expect(row).toMatchObject({ label: "Facebook", inquiries: 50, leads: null, deposits: null, orders: 5, closeBasis: "inquiries" });
+    expect(row.closeRate).toBeCloseTo(0.1);
+    expect(row.leadRate).toBe(null);
+  });
+
+  /* ระบบขายพี่ทัชเก็บ FB/Line · ระบบ TMK เก็บ Facebook/LINE — ถ้าไม่ยุบเป็นคีย์เดียวจะได้สองแถวชื่อ "Facebook" และยอดถูกผ่าครึ่ง */
+  it("ชื่อช่องทางคนละชุดจากสองระบบ = ยุบเป็นแถวเดียว", () => {
+    const mixed = [
+      f("b_td", "2026-09-01", { FB: { inquiries: 10, leads: 2, deposits: 1, orders: 1 }, Line: { inquiries: 5, leads: 1, deposits: 1, orders: 1 } }),
+      f("b_jt", "2026-09-01", { Facebook: { inquiries: 20, leads: 0, deposits: 0, orders: 3 }, LINE: { inquiries: 4, leads: 0, deposits: 0, orders: 1 } }),
+    ];
+    const out = channelFunnel(mixed, { brandIds: ["b_td", "b_jt"], ...range });
+    expect(out.map((c) => c.label)).toEqual(["Facebook", "LINE"]);
+    expect(out[0]).toMatchObject({ inquiries: 30, orders: 4 });
+    expect(out[1]).toMatchObject({ inquiries: 9, orders: 2 });
   });
 });
 

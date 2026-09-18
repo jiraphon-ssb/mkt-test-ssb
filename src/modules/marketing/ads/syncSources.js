@@ -1,13 +1,15 @@
 /* หน้า Sync — แปลงข้อมูลท่อยอดขาย / creative / สิทธิ์ เป็นสิ่งที่หน้าจอบอกได้ (pure · เทสใน tests/syncSources.test.js)
    กติกาเมื่อไม่มีข้อมูล (docs/superpowers/plans/2026-09-17-sales-data-rollout.md): ยังไม่มีข้อมูล · ทีมยังไม่กรอก ·
    ยังไม่ตั้งเป้า · รอเชื่อมแหล่งข้อมูล — ห้ามโชว์ 0 แทนสิ่งที่ไม่รู้ */
-import { SALE_BRAND_BY_CODE, SALES_SOURCE_BRANDS, metricCoverage } from "./salesFacts.js";
+import { SALES_SOURCE_BRAND_IDS, funnelStagesOf, metricCoverage } from "./salesFacts.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 
-export const SALES_BRAND_IDS = SALES_SOURCE_BRANDS.map((code) => SALE_BRAND_BY_CODE[code]);
+/* แบรนด์ที่มีแหล่งยอดขายจริงบนหน้าจอ — เปิด JUNTAKARN 18 ก.ย. 69 หลังท่อข้อมูลจากระบบ TMK ทำงานจริง
+   ยอดขาย · ROAS · %Ads · CAC ภาพรวมรวม JUNTAKARN แล้ว
+   ส่วน funnel ภาพรวม (Lead/มัดจำ) ยังนับ 3 แบรนด์ที่เก็บครบทุกขั้น และบอกบนจอว่าไม่รวมใคร — ดู FULL_FUNNEL_BRAND_IDS ใน overviewModel */
+export const SALES_BRAND_IDS = SALES_SOURCE_BRAND_IDS;
 
-/* แถวแหล่งข้อมูลของ JUNTAKARN (ระบบ TMK Operation) — นิยามต่างจากแบรนด์อื่น ต้องเขียนไว้บนจอ ไม่ให้อ่านผิด
-   ยังไม่ใส่ b_jt ใน SALES_BRAND_IDS จนกว่าท่อข้อมูลจะทำงานจริง (ไม่งั้น Overview จะบอกว่า "ยังไม่มีข้อมูลยอดขาย" ทั้งที่ยังไม่ได้เชื่อม) */
+/* แถวแหล่งข้อมูลของ JUNTAKARN (ระบบ TMK Operation) — นิยามต่างจากแบรนด์อื่น ต้องเขียนไว้บนจอ ไม่ให้อ่านผิด */
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const time = (value) => { const t = Date.parse(String(value ?? "")); return Number.isFinite(t) ? t : null; };
 export const JK_BRAND_ID = "b_jt";
@@ -30,8 +32,8 @@ export function jkSourceRow(facts = [], { today, runs = [] } = {}) {
 
 export const COVERAGE_METRICS = [
   { key: "inquiries", label: "คนทัก (ทีมกรอก)" },
-  { key: "qualified_leads", label: "ลีด" },
-  { key: "deposits", label: "ได้ออเดอร์" },
+  { key: "qualified_leads", label: "ลีด", stage: "qualified" },
+  { key: "deposits", label: "ได้ออเดอร์", stage: "deposits" },
   { key: "orders", label: "ยืนยันออเดอร์" },
   { key: "gross_revenue", label: "ยอดขาย" },
 ];
@@ -71,9 +73,13 @@ export function coverageMatrix(facts = [], { brandIds = [], from, to, today = nu
   const rows = [];
   for (const brandId of brandIds) {
     const isSource = SALES_BRAND_IDS.includes(brandId);
+    const stages = funnelStagesOf(brandId);
     for (const metric of COVERAGE_METRICS) {
+      // ระบบขายของบางแบรนด์ไม่มีขั้นนี้เลย (JUNTAKARN ไม่มี Lead/มัดจำ) — ช่องต้องบอกว่า "ไม่มีขั้นนี้" ไม่ใช่ "ทีมยังไม่กรอก"
+      const missingStage = metric.stage && !stages.includes(metric.stage);
       const cells = months.map((month) => {
         if (!isSource) return { month, state: "waiting_source" };
+        if (missingStage) return { month, state: "no_stage" };
         const { start, end } = rangeOf(month);
         const list = byBrandMonth.get(`${brandId}|${month}`) ?? [];
         const openToday = Boolean(today) && start <= today && today <= end && !list.some((fact) => fact.fact_date === today && fact.inquiry_filled === true);

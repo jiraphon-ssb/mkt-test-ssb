@@ -15,8 +15,9 @@ const days = (brand, from, to, patch = () => ({})) => {
 };
 
 describe("แบรนด์ที่ระบบขายเป็นแหล่ง", () => {
-  it("TD · JD · TA → brand id ของเรา (JK ยังไม่ใช่)", () => {
-    expect(SALES_BRAND_IDS).toEqual(["b_td", "b_jk", "b_ta"]);
+  // 18 ก.ย. 69: เปิด JUNTAKARN (b_jt) หลังท่อข้อมูลจากระบบ TMK ทำงานจริง — ยอดขาย/ROAS ภาพรวมรวมแบรนด์นี้แล้ว
+  it("TD · JD · TA · JUNTAKARN → brand id ของเรา", () => {
+    expect(SALES_BRAND_IDS).toEqual(["b_td", "b_jk", "b_ta", "b_jt"]);
   });
 });
 
@@ -26,7 +27,7 @@ describe("coverageMatrix — ความครบรายเดือน × �
     ...days("b_td", "2026-08-01", "2026-08-31", () => ({ qualified_leads: 3, orders: 1, gross_revenue: 1000 })),
     ...days("b_td", "2026-09-01", "2026-09-17", (iso) => ({ qualified_leads: 2, deposits: 1, orders: 1, gross_revenue: 900, inquiry_filled: iso <= "2026-09-15" })),
   ];
-  const out = coverageMatrix(facts, { brandIds: ["b_td", "b_jt"], from: "2026-08-01", to: "2026-09-17" });
+  const out = coverageMatrix(facts, { brandIds: ["b_td", "b_jt", "b_none"], from: "2026-08-01", to: "2026-09-17" });
   const cell = (brandId, metric, month) => out.rows.find((r) => r.brandId === brandId && r.metric === metric).cells.find((c) => c.month === month);
 
   it("คอลัมน์เป็นเดือนในช่วง", () => {
@@ -43,8 +44,16 @@ describe("coverageMatrix — ความครบรายเดือน × �
   it("ยอดขาย/ออเดอร์มีตั้งแต่ต้นช่วง = full", () => {
     expect(cell("b_td", "gross_revenue", "2026-08")).toMatchObject({ state: "full" });
   });
-  it("แบรนด์ที่ยังไม่มีแหล่ง (JK) = waiting_source ทุกช่อง ไม่ใช่ no_data", () => {
-    expect(out.rows.filter((r) => r.brandId === "b_jt").every((r) => r.cells.every((c) => c.state === "waiting_source"))).toBe(true);
+  it("แบรนด์ที่ยังไม่มีแหล่งเลย = waiting_source ทุกช่อง ไม่ใช่ no_data", () => {
+    expect(out.rows.filter((r) => r.brandId === "b_none").every((r) => r.cells.every((c) => c.state === "waiting_source"))).toBe(true);
+  });
+  /* JUNTAKARN มีแหล่งแล้ว แต่ระบบขายของแบรนด์นี้ไม่มีขั้น Lead และมัดจำ
+     ช่องพวกนั้นต้องบอกว่า "ไม่มีขั้นนี้" ไม่ใช่ "ทีมยังไม่กรอก" (คนอ่านจะไปตามทีมให้กรอกของที่ไม่มีอยู่) */
+  it("JUNTAKARN: ขั้นที่ระบบขายไม่มี = no_stage · ขั้นที่มีคิดตามข้อมูลปกติ", () => {
+    expect(cell("b_jt", "qualified_leads", "2026-09").state).toBe("no_stage");
+    expect(cell("b_jt", "deposits", "2026-09").state).toBe("no_stage");
+    expect(cell("b_jt", "inquiries", "2026-09").state).not.toBe("no_stage");
+    expect(cell("b_jt", "gross_revenue", "2026-09").state).not.toBe("no_stage");
   });
   it("วันนี้ยังไม่ปิดและทีมยังไม่กรอก = ไม่นับเป็นวันที่ขาด (16/16 ไม่ใช่ 16/17) · บอกว่าเดือนนั้นยังเปิดอยู่", () => {
     const sep = days("b_td", "2026-09-01", "2026-09-17", (iso) => ({ inquiry_filled: iso < "2026-09-17" }));

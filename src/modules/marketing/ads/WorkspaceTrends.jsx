@@ -72,9 +72,12 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
   const canSplit=!(fromSales&&brandId);
   const waiting=fromSales&&(brandId?!SALES_BRAND_IDS.includes(brandId):!v.brands.some(b=>SALES_BRAND_IDS.includes(b.id)));
   const coverage=useMemo(()=>sales?metricCoverage(sales):null,[sales]);
+  /* แบรนด์ที่มีแถวยอดขายจริง — ตัวที่คิดจากยอดขาย (ROAS · %Ads · CPL · CAC) ต้องหารด้วยค่าแอดของแบรนด์พวกนี้เท่านั้น
+     แบรนด์ที่เป็นแหล่งแต่ยังไม่มีข้อมูลในช่วงนี้ ถ้าเอาค่าแอดมาหารด้วย ROAS จะต่ำกว่าความจริง */
+  const withSales=useMemo(()=>new Set((sales??[]).map(f=>f?.brand_id).filter(Boolean)),[sales]);
   const result=useMemo(()=>{
     const cards=brandId?v.scoped.filter(c=>c.brand_id===brandId):v.scoped;
-    const srcFor=(ids)=>{const brandIds=ids.filter(id=>SALES_BRAND_IDS.includes(id));return fromSales?{sales,brandIds,basis:v.revenueBasis,coverage,spendCards:(v.scopedAll??v.scoped).filter(c=>brandIds.includes(c.brand_id))}:null;};
+    const srcFor=(ids)=>{const brandIds=ids.filter(id=>SALES_BRAND_IDS.includes(id)&&withSales.has(id));return fromSales?{sales,brandIds,basis:v.revenueBasis,coverage,spendCards:(v.scopedAll??v.scoped).filter(c=>brandIds.includes(c.brand_id))}:null;};
     const main=srcFor(brandId?[brandId]:v.brands.map(b=>b.id));
     const days=dates(v.range), priorDays=dates(v.before);
     // วันนี้ยังไม่จบ — เส้น/แท่งช่วงท้ายเป็นสีจาง (ช่วงเทียบเป็นวันที่จบแล้ว ไม่ต้อง)
@@ -93,7 +96,7 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
     if(pace) datasets.push({kind:'target',label:'เป้าตามจังหวะ',color:TARGET,data:pace,daily:null});
     const paceToday=pace?pace[lastIndex ?? pace.length-1]:null;
     return {days,priorDays,datasets,current,before,delta:change(current,before),openFrom:openAt>0?openAt:null,target,paceToday,splitOn};
-  },[v,brandId,key,split,sales,fromSales,canSplit,mode,coverage,waiting]);
+  },[v,brandId,key,split,sales,fromSales,canSplit,mode,coverage,waiting,withSales]);
   const depositsSince=key==='deposits'&&coverage?(()=>{const ids=(brandId?[brandId]:v.brands.map(b=>b.id)).filter(id=>SALES_BRAND_IDS.includes(id));const starts=ids.map(id=>coverage.get(id)?.deposits).filter(Boolean).sort();return starts.length?starts[starts.length-1]:null;})():null;
   const sourceNote=!sales?null:fromSales?SALES_NOTE[key]+(depositsSince?` · มีข้อมูลตั้งแต่ ${dateLabel(depositsSince)}`:'')+(brandId?'':' · รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย'):'จาก Meta';
   // Lead ก่อนระบบขายเก็บจริงย้ายมาจาก sheet — ช่วงที่คร่อมวันนั้นบอกเหตุผลจริง ไม่ใช่ "ยังไม่มีข้อมูล"

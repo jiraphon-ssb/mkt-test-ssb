@@ -70,32 +70,40 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       }));
       /* ภาพรวม: รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย — ค่าแอดของแบรนด์ที่รอเชื่อมไม่นับ ไม่งั้น ROAS ภาพรวมต่ำเกินจริง */
       const merge = (map) => {
-        const rows = SALES_BRAND_IDS.map((id) => map.get(id)).filter(Boolean);
+        const rows = funnelIds.map((id) => map.get(id)).filter(Boolean);
         if (!rows.length) return null;
         // ตัวไหนมีแบรนด์ที่ไม่รู้ (null เช่น Lead ก่อนระบบขายเก็บจริง) ภาพรวมตัวนั้น = ไม่รู้ ไม่ใช่นับเป็น 0
         return rows.reduce((acc, row) => Object.fromEntries(Object.keys(row).map((key) => [key, acc[key] === null || row[key] == null ? null : (acc[key] ?? 0) + row[key]])), {});
       };
-      const sourceCards = scoped.filter((card) => SALES_BRAND_IDS.includes(card.brand_id));
-      const starts = SALES_BRAND_IDS.map((id) => coverage.get(id)?.deposits).filter(Boolean).sort();
-      const sourceRows = SALES_BRAND_IDS.map((id) => byId.get(id)).filter(Boolean);
+      /* funnel ภาพรวม: นับเฉพาะแบรนด์ที่ระบบขายเก็บครบทุกขั้น — JUNTAKARN มี 2 ขั้น (คนทัก → ยืนยันออเดอร์)
+         ถ้าเอามารวม คนทักของ JK จะเข้าไปอยู่ในตัวหารแต่ Lead เป็น 0 → %Lead ภาพรวมต่ำกว่าความจริง
+         (ยอดขาย · ROAS · %Ads · งบ ยังรวม JUNTAKARN ตามปกติ) */
+      const funnelIds = SALES_BRAND_IDS.filter((id) => funnelStagesOf(id).length === FUNNEL_STAGE_KEYS.length);
+      const funnelExcluded = SALES_BRAND_IDS.filter((id) => !funnelIds.includes(id)).map((id) => brands.find((brand) => brand.id === id)?.name).filter(Boolean);
+      const sourceCards = scoped.filter((card) => funnelIds.includes(card.brand_id));
+      const starts = funnelIds.map((id) => coverage.get(id)?.deposits).filter(Boolean).sort();
+      const sourceRows = funnelIds.map((id) => byId.get(id)).filter(Boolean);
       const sumOf = (pick) => sourceRows.some((row) => pick(row) != null) ? sourceRows.reduce((n, row) => n + (pick(row) ?? 0), 0) : null;
       overallPipeline = salesPipeline({
         sales: merge(pipeSales), prevSales: merge(pipePrev),
         metaInquiries: metaInquiriesOf(adsSalePipeline(sourceCards, range, before)),
         spend: sumOf((row) => row.spend), prevSpend: sumOf((row) => row.prevSpend),
         basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: shownTo,
-        stages: FUNNEL_STAGE_KEYS,   // ภาพรวมรวมหลายแบรนด์ จึงยังมีครบ 4 ขั้น
+        stages: FUNNEL_STAGE_KEYS,   // แบรนด์ที่เข้า funnel ภาพรวมเก็บครบ 4 ขั้นทุกแบรนด์
       });
+      if (funnelExcluded.length) overallPipeline = { ...overallPipeline, excluded: funnelExcluded };
       /* funnel แยกช่องทางที่ลูกค้าทัก (FB / LINE) — ภาพรวมรวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย */
       const sourceIds = SALES_BRAND_IDS.filter((id) => brands.some((brand) => brand.id === id));
       channelFunnels = {
-        overall: channelFunnel(ads.sales, { brandIds: sourceIds, from: shownFrom, to: shownTo, depositsSince: starts[starts.length - 1] ?? null }),
-        byBrand: Object.fromEntries(sourceIds.map((id) => [id, channelFunnel(ads.sales, { brandIds: [id], from: shownFrom, to: shownTo, depositsSince: coverage.get(id)?.deposits ?? null })])),
+        overall: channelFunnel(ads.sales, { brandIds: sourceIds.filter((id) => funnelIds.includes(id)), from: shownFrom, to: shownTo, depositsSince: starts[starts.length - 1] ?? null }),
+        byBrand: Object.fromEntries(sourceIds.map((id) => [id, channelFunnel(ads.sales, { brandIds: [id], from: shownFrom, to: shownTo, depositsSince: coverage.get(id)?.deposits ?? null, stages: funnelStagesOf(id) })])),
+        excluded: funnelExcluded,
       };
       const targets = goalTargetsByBrand(ads.salesGoals, goalMonth);
       const goalRows = new Map((ads.salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
       goals = {
         overall: goalsFor(pipelineValues(overallPipeline), combineGoalTargets(SALES_BRAND_IDS.filter((id) => byId.has(id)).map((id) => ({
+          brandId: id,
           targets: targets.get(id) ?? {}, weights: { budget: goalRows.get(id)?.ad_budget, revenue: goalRows.get(id)?.sales_target, inquiries: goalRows.get(id)?.inquiry_target },
         }))), targetPeriod),
         byBrand: Object.fromEntries(brandTotals.map((brand) => [brand.id, goalsFor(pipelineValues(pipelines[brand.id]), targets.get(brand.id) ?? {}, targetPeriod)])),

@@ -7,6 +7,7 @@ import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryLis
 
 afterEach(cleanup);
 const brands = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jt", name: "JUNTAKARN" }];
+const noSource = { id: "b_new", name: "แบรนด์ใหม่" };   // แบรนด์ที่ยังไม่มีแหล่งยอดขายเลย (JUNTAKARN มีแล้วตั้งแต่ 18 ก.ย. 69)
 const day = (fact_date, patch = {}) => ({ brand_id: "b_td", fact_date, inquiries: 0, inquiry_filled: false, qualified_leads: 1, deposits: 0, orders: 1, gross_revenue: 100, ...patch });
 
 describe("CoverageTable", () => {
@@ -20,14 +21,16 @@ describe("CoverageTable", () => {
   it("จัดกลุ่มตามตัวชี้วัด · ทีมยังไม่กรอก / กรอกบางวัน บอกรายแบรนด์ · ยังไม่เริ่มเก็บบอกวันเริ่ม (ไม่ใช่สีแดง)", () => {
     render(<CoverageTable facts={facts} brands={brands} from="2026-08-01" to="2026-09-02" />);
     const inquiry = groupRows("คนทัก (ทีมกรอก)");
-    expect(inquiry.map((row) => row.querySelector("th").textContent)).toEqual(["TEAMDEE"]);
+    expect(inquiry.map((row) => row.querySelector("th").textContent)).toEqual(["TEAMDEE", "JUNTAKARN"]);
     expect(within(inquiry[0]).getByText("ทีมยังไม่กรอก")).toBeTruthy();
     expect(within(inquiry[0]).getByText("กรอก 1/2")).toBeTruthy();
     const deposits = groupRows("ได้ออเดอร์");
     expect(within(deposits[0]).getByText("เริ่มเก็บ 1 ก.ย.").className).toContain("since");
+    // JUNTAKARN ไม่มีขั้นมัดจำในระบบขาย → ต้องบอกว่าไม่มีขั้นนี้ ไม่ใช่ปล่อยให้ดูเหมือนทีมไม่กรอก
+    expect(within(deposits[1]).getAllByText("ระบบขายไม่มีขั้นนี้").length).toBeGreaterThan(0);
   });
   it("ทุกแบรนด์สถานะเหมือนกัน = ยุบเป็นแถวเดียว 'ทุกแบรนด์' · แบรนด์ที่ยังไม่มีแหล่งบอกครั้งเดียวใต้ตาราง", () => {
-    const two = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_ta", name: "t around" }, { id: "b_jt", name: "JUNTAKARN" }];
+    const two = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_ta", name: "t around" }, noSource];
     const both = [...facts, ...facts.map((f) => ({ ...f, brand_id: "b_ta" }))];
     render(<CoverageTable facts={both} brands={two} from="2026-08-01" to="2026-09-02" />);
     expect(groupRows("ยอดขาย").map((row) => row.querySelector("th").textContent)).toEqual(["ทุกแบรนด์"]);
@@ -45,15 +48,19 @@ describe("CoverageTable", () => {
 });
 
 describe("GoalMatrix", () => {
-  it("ตารางแบรนด์ × ช่องเป้า โชว์ตัวเลขจริง · ช่องที่ยังไม่ตั้ง = — · สรุปช่องที่ขาดด้านบน · JK รอเชื่อม", () => {
-    render(<GoalMatrix brands={brands} goals={[{ brand_id: "b_td", goal_source: "sale_target", version: 0, sales_target: 3300000, orders_target: 193, deposits_target: 206, leads_target: 344, inquiry_target: 1173 }]} />);
+  it("ตารางแบรนด์ × ช่องเป้า โชว์ตัวเลขจริง · ช่องที่ยังไม่ตั้ง = — · สรุปช่องที่ขาดด้านบน · แบรนด์ที่ยังไม่มีแหล่ง = รอเชื่อม", () => {
+    render(<GoalMatrix brands={[...brands, noSource]} goals={[{ brand_id: "b_td", goal_source: "sale_target", version: 0, sales_target: 3300000, orders_target: 193, deposits_target: 206, leads_target: 344, inquiry_target: 1173 }]} />);
     const td = screen.getByRole("row", { name: /TEAMDEE/ });
     expect(within(td).getByText("เป้าแบบเก่า")).toBeTruthy();
     expect(within(td).getByText("฿3,300,000.00")).toBeTruthy();
     expect(within(td).getByText("1,173")).toBeTruthy();
     expect(within(td).getAllByText("—")).toHaveLength(6);
-    expect(screen.getByText(/ยังไม่ตั้ง: งบแอด · CPL · ROAS · %Ads · CAC · ต้นทุนต่อทัก/)).toBeTruthy();
-    expect(within(screen.getByRole("row", { name: /JUNTAKARN/ })).getByText("รอเชื่อมแหล่งข้อมูล")).toBeTruthy();
+    // JUNTAKARN ยังไม่มีเป้าเลย จึงเข้ามาในบรรทัดสรุปด้วย (เดิมนับแค่ TEAMDEE)
+    const summary = screen.getByText(/ยังไม่ตั้ง:/).textContent;
+    for (const label of ["งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อทัก", "เป้ายอดขาย"]) expect(summary).toContain(label);
+    expect(within(screen.getByRole("row", { name: /แบรนด์ใหม่/ })).getByText("รอเชื่อมแหล่งข้อมูล")).toBeTruthy();
+    // JUNTAKARN มีแหล่งแล้วแต่ยังไม่มีใครตั้งเป้าให้ → ต้องบอกว่า "ยังไม่ตั้งเป้า" ไม่ใช่ "รอเชื่อมแหล่งข้อมูล"
+    expect(within(screen.getByRole("row", { name: /JUNTAKARN/ })).getByText("ยังไม่ตั้งเป้า")).toBeTruthy();
   });
   it("ไม่มีเป้าเลย = ยังไม่ตั้งเป้า · ตั้งครบ = ไม่มีบรรทัดสรุปช่องที่ขาด", () => {
     render(<GoalMatrix brands={[brands[0]]} goals={[]} />);

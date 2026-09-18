@@ -44,8 +44,11 @@ describe("WorkspaceTrends — ข้อมูลจริง", () => {
     expect(total()).toBe("฿200.00");
   });
 
+  /* b_jt (JUNTAKARN) เป็นแหล่งจริงแล้วตั้งแต่ 18 ก.ย. 69 — เคสนี้ใช้แบรนด์ที่ยังไม่มีแหล่งเลย */
   it("หน้าแบรนด์ที่ยังไม่มีแหล่ง: บอกว่ารอเชื่อม · แยกแพลตฟอร์มกดไม่ได้ในแท็บของระบบขาย", () => {
-    render(<WorkspaceTrends v={v} brandId="b_jt" sales={sales} />);
+    const vNo = { ...v, brands: [...v.brands, { id: "b_new", name: "แบรนด์ใหม่" }], scoped: [...v.scoped, card("b_new", 1, { spend: 700, revenue: 100 })] };
+    vNo.scopedAll = vNo.scoped;
+    render(<WorkspaceTrends v={vNo} brandId="b_new" sales={sales} />);
     fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
     expect(total()).toBe("—");
     expect(screen.getByText("รอเชื่อมแหล่งข้อมูลยอดขาย")).toBeTruthy();

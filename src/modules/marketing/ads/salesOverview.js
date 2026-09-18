@@ -41,8 +41,11 @@ const COUNT_KEYS = ["inquiries", "qualified", "deposits", "closed"];
 const RATIO_WEIGHT = { roas: "budget", pctAds: "revenue", cpl: "inquiries" };
 
 /** เป้าภาพรวมจากเป้ารายแบรนด์ — จำนวนรวมกัน · อัตราส่วนถ่วงน้ำหนัก (ROAS ด้วยงบ · %Ads ด้วยเป้ายอด · CPL ด้วยเป้าคนทัก)
-    แบรนด์ไหนไม่มีตัวใด เป้ารวมตัวนั้น = null (รวมบางแบรนด์แล้วเรียกว่าภาพรวมจะหลอกตา) */
-export function combineGoalTargets(list = []) {
+    แบรนด์ที่ "ยังไม่ตั้งเป้าเลย" ไม่นับเป็นตัวถ่วง (JUNTAKARN ยังไม่มีแถวใน ad_sales_goals — ถ้านับด้วยเป้ารวมจะหายทั้งกระดาน)
+    แต่แบรนด์ที่ตั้งเป้าแล้วขาดบางตัว เป้ารวมตัวนั้นยังเป็น null (รวมบางแบรนด์แล้วเรียกว่าภาพรวมจะหลอกตา)
+    ผู้เรียกต้องบอกบนจอว่าเป้ารวมไม่รวมแบรนด์ไหน (summary.targetExcluded) */
+export function combineGoalTargets(all = []) {
+  const list = (all ?? []).filter((item) => item?.targets && Object.values(item.targets).some((value) => value != null));
   const out = {};
   for (const key of COUNT_KEYS) {
     out[key] = list.length && list.every((item) => item.targets?.[key] != null) ? list.reduce((n, item) => n + item.targets[key], 0) : null;
@@ -144,9 +147,14 @@ export function applySalesToBrands(rows = [], { sales = new Map(), prevSales = n
 export function applySalesToSummary(summary = {}, rows = [], asOf) {
   const included = rows.filter((row) => row.salesSource === "sales");
   const allOrNull = (pick) => included.length && included.every((row) => pick(row) != null) ? included.reduce((n, row) => n + pick(row), 0) : null;
+  /* เป้าและงบ: บวกเฉพาะแบรนด์ที่ตั้งไว้ แล้วบอกชื่อแบรนด์ที่ไม่รวมบนจอ
+     (ถ้าใช้ all-or-null แบรนด์เดียวที่ยังไม่ตั้งเป้าจะทำให้เป้ารวมหายทั้งแถว — เจอตอนต่อ JUNTAKARN 18 ก.ย.) */
+  const sumSome = (pick) => { const values = included.map(pick).filter((value) => value != null); return values.length ? values.reduce((a, b) => a + b, 0) : null; };
+  const missing = (pick) => included.filter((row) => pick(row) == null).map((row) => row.name);
   const revenue = included.length ? included.reduce((n, row) => n + row.revenue, 0) : null;
-  const revTarget = allOrNull((row) => row.revTarget);
-  const budget = allOrNull((row) => row.budget);
+  const revTarget = sumSome((row) => row.revTarget);
+  const budget = sumSome((row) => row.budget);
+  // ยอดเดือนก่อน: ห้ามบวกบางแบรนด์ — ตัวตั้งกับตัวเทียบจะคนละฐาน (%เทียบเดือนก่อนจะเพี้ยน) → ขาดแบรนด์ไหนก็เทียบไม่ได้
   const prevRevenue = allOrNull((row) => row.prevRevenue);
   const includedSpend = included.reduce((n, row) => n + (row.spend ?? 0), 0);
   const revPace = budgetPace(revenue, revTarget, asOf);
@@ -160,6 +168,9 @@ export function applySalesToSummary(summary = {}, rows = [], asOf) {
     // กล่องงบ Meta ใช้ค่าแอดทุกแบรนด์ (อาร์ตยืนยัน 17 ก.ย.) — งบคงเหลือ/เฉลี่ย/คาดใช้ ต้องคิดจากยอดเดียวกับหัวกล่อง
     pace: budgetPace(summary.spend ?? includedSpend, budget, asOf),
     pctAds: included.length ? share(includedSpend, included.reduce((n, row) => n + (row.revenueNew ?? 0), 0)) : null,
+    targetExcluded: missing((row) => row.revTarget),
+    budgetExcluded: missing((row) => row.budget),
+    prevExcluded: missing((row) => row.prevRevenue),
     excluded: rows.filter((row) => row.salesSource !== "sales").map((row) => row.name),
     excludedWaiting: rows.filter((row) => row.salesSource === "waiting").map((row) => row.name),
     excludedNoData: rows.filter((row) => row.salesSource === "none").map((row) => row.name),
@@ -292,17 +303,23 @@ export function salesTrendValue({ sales = [], key, brandIds = [], spend = null, 
 }
 
 const CHANNEL_LABELS = { FB: "Facebook", Line: "LINE", LINE: "LINE", IG: "Instagram", TT: "TikTok", other: "อื่นๆ" };
+/* ระบบขายพี่ทัชเก็บ FB/Line · ระบบ TMK เก็บ Facebook/LINE — ยุบเป็นคีย์เดียวก่อนรวม ไม่งั้นได้สองแถวชื่อเดียวกันและยอดถูกผ่าครึ่ง */
+const CHANNEL_CANON = { Facebook: "FB", FB: "FB", LINE: "Line", Line: "Line", Instagram: "IG", IG: "IG", TikTok: "TT", TT: "TT" };
+const canonChannel = (channel) => CHANNEL_CANON[channel] ?? channel;
 
 /** funnel แยกช่องทางที่ลูกค้าทัก (channel_funnel ของระบบขาย) — ตอบว่าลูกค้าจากช่องไหนปิดการขายได้ดีกว่า
     คนทักนับเฉพาะวันที่ทีมกรอก · Lead ก่อน LEADS_TRACKED_SINCE = null · ได้ออเดอร์ก่อนวันเริ่มเก็บ = null (กติกาเดียวกับ funnel รวม) */
-export function channelFunnel(facts = [], { brandIds = [], from, to, depositsSince = null } = {}) {
+export function channelFunnel(facts = [], { brandIds = [], from, to, depositsSince = null, stages = FUNNEL_STAGE_KEYS } = {}) {
+  const hasLead = stages.includes("qualified");
+  const hasDeposit = stages.includes("deposits");
   const lanes = new Map();
   let leadsBefore = false;
   for (const fact of facts ?? []) {
     const day = fact?.fact_date;
     if (!brandIds.includes(fact?.brand_id) || !ISO.test(String(day ?? "")) || (from && day < from) || (to && day > to)) continue;
     if (day < LEADS_TRACKED_SINCE) leadsBefore = true;
-    for (const [channel, lane] of Object.entries(fact.channel_funnel ?? {})) {
+    for (const [rawChannel, lane] of Object.entries(fact.channel_funnel ?? {})) {
+      const channel = canonChannel(rawChannel);
       const c = lanes.get(channel) ?? { channel, inquiries: null, leads: 0, deposits: 0, orders: 0 };
       if (fact.inquiry_filled === true) c.inquiries = (c.inquiries ?? 0) + (num(lane?.inquiries) ?? 0);
       c.leads += num(lane?.leads) ?? 0;
@@ -314,12 +331,16 @@ export function channelFunnel(facts = [], { brandIds = [], from, to, depositsSin
   const depositsKnown = Boolean(depositsSince) && (from ?? to ?? "") >= depositsSince;
   const totalOrders = [...lanes.values()].reduce((n, c) => n + c.orders, 0);
   return [...lanes.values()].map((c) => {
-    const leads = leadsBefore ? null : c.leads;
-    const deposits = depositsKnown ? c.deposits : null;
+    // ระบบขายที่ไม่มีขั้นนั้น (JUNTAKARN ไม่มี Lead/มัดจำ) = null → หน้าจอขึ้น "—" ไม่ใช่ 0
+    const leads = !hasLead ? null : leadsBefore ? null : c.leads;
+    const deposits = !hasDeposit ? null : depositsKnown ? c.deposits : null;
     return {
       channel: c.channel, label: CHANNEL_LABELS[c.channel] ?? c.channel,
       inquiries: c.inquiries, leads, deposits, orders: c.orders,
-      leadRate: share(leads, c.inquiries), depositRate: share(deposits, leads), closeRate: share(c.orders, leads),
+      leadRate: share(leads, c.inquiries), depositRate: share(deposits, leads),
+      // funnel 2 ขั้น: ปิดการขายเทียบจากคนทัก (ไม่มี Lead ให้เทียบ)
+      closeRate: hasLead ? share(c.orders, leads) : share(c.orders, c.inquiries),
+      closeBasis: hasLead ? "leads" : "inquiries",
       orderShare: share(c.orders, totalOrders),
     };
   }).sort((a, b) => b.orders - a.orders);
