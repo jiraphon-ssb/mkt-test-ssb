@@ -61,10 +61,6 @@ describe("funnel ภาพรวมกับแบรนด์ที่ระบ
     expect(v.summary.excluded).toEqual([]);
   });
 
-  it("funnel แยกช่องทางภาพรวมก็ไม่รวมแบรนด์ที่ขั้นไม่ครบ และบอกชื่อไว้", () => {
-    expect(v.channelFunnels.excluded).toEqual(["JUNTAKARN"]);
-  });
-
   it("หน้าแบรนด์ JUNTAKARN: มีข้อมูลแล้ว (ไม่ใช่รอเชื่อม) และขั้นที่ไม่มีบอกว่าระบบขายไม่มีขั้นนี้", () => {
     const jk = v.pipelines.b_jt;
     expect(jk.items.find((item) => item.key === "inquiries").value).toBe(500);

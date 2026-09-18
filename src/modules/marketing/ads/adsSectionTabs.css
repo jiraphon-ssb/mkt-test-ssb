@@ -74,31 +74,53 @@
 .mkt-root .ads-section-tabs-wrap .ads-section-tabs a { display:inline-flex; align-items:center; gap:7px; min-height:32px; padding:0 11px; border:1px solid transparent; border-radius:6px; color:var(--ink-soft); font-size:11px; font-weight:650; text-decoration:none; white-space:nowrap; }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a svg { color:var(--ink-soft); }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a:hover { color:var(--ink); background:var(--surface-2); }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a:hover svg { color:var(--ink); }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a.active { border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent-text); }.mkt-root .ads-section-tabs-wrap .ads-section-tabs a.active svg { color:var(--accent); }
 @media(max-width:760px){.mkt-root .ads-suite{padding:12px 16px 24px}.mkt-root .ads-suite>.aw{padding-top:12px}.ads-section-tabs{width:100%}.ads-section-tabs a{flex:0 0 auto;justify-content:center;padding-inline:8px}}
 /* ── แถบที่มาของตัวเลข: อยู่ในการ์ดหัวหน้า ระหว่างแถวชื่อหน้าและแถบตัวกรอง
-   บอกความสดของทั้ง 3 ระบบเป็นป้ายแยก (ค่าแอด Meta · ยอดขายพี่ทัช · JUNTAKARN · เป้าเดือนนี้) */
-.mkt-root .ads-suite .ads-source-note { display:flex; flex-wrap:wrap; align-items:flex-start; gap:6px 12px; margin:0; padding:9px 20px; border-top:1px solid var(--line); background:var(--surface); color:var(--ink-soft); font-size:11px; line-height:1.4; }
-.mkt-root .ads-suite .ads-source-note>svg { margin-top:2px; }
-.mkt-root .ads-suite .ads-source-body { display:grid; gap:6px; min-width:0; flex:1; }
-.mkt-root .ads-suite .ads-source-head { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; }
-.mkt-root .ads-suite .ads-source-head b { font-size:11.5px; font-weight:650; }
+   สามชั้น — สรุปหนึ่งบรรทัด · ป้ายความสดรายแหล่ง · ที่มาของตัวเลขพับเก็บ
+   สถานะบอกด้วยคำเสมอ สีเป็นตัวช่วยอ่านเท่านั้น (ok = สีปกติ ไม่ย้อมเขียวทั้งแถว) */
+.mkt-root .ads-suite .ads-source-note { display:grid; gap:8px; margin:0; padding:11px 20px 12px; border-top:1px solid var(--line); background:var(--surface); color:var(--ink-soft); font-size:11px; line-height:1.45; }
+.mkt-root .ads-suite .ads-source-top { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; }
+.mkt-root .ads-suite .ads-source-verdict { display:flex; align-items:center; gap:8px; margin:0; min-width:0; }
+.mkt-root .ads-suite .ads-source-verdict svg { flex:none; color:var(--ink-soft); }
+.mkt-root .ads-suite .ads-source-verdict b { color:var(--ink); font-size:12px; font-weight:650; }
+.mkt-root .ads-suite .ads-source-note.ok .ads-source-verdict svg { color:var(--ok-text); }
+.mkt-root .ads-suite .ads-source-note.warn .ads-source-verdict svg,
+.mkt-root .ads-suite .ads-source-note.warn .ads-source-verdict b { color:var(--warn-text); }
+.mkt-root .ads-suite .ads-source-flag { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border:1px solid var(--warn-line,var(--line)); border-radius:999px; background:var(--warn-soft); color:var(--warn-text); }
+.mkt-root .ads-suite .ads-source-reload { display:inline-flex; align-items:center; gap:5px; margin-left:auto; height:27px; padding:0 11px; border:1px solid var(--line); border-radius:7px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:11px; cursor:pointer; }
+.mkt-root .ads-suite .ads-source-reload:hover { border-color:color-mix(in srgb,var(--ink) 22%,var(--line)); }
+
+/* ป้ายความสดรายแหล่ง — ชื่อแหล่งตัวจาง ค่าตัวเข้ม อ่านเป็นคู่ได้ในสายตาเดียว */
 .mkt-root .ads-suite .ads-source-chips { display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:0; list-style:none; }
-.mkt-root .ads-suite .ads-source-chips li { display:flex; align-items:baseline; gap:6px; padding:3px 9px; border:1px solid var(--line); border-radius:999px; background:var(--surface-2); white-space:nowrap; }
+.mkt-root .ads-suite .ads-source-chips li { display:flex; align-items:baseline; gap:7px; padding:4px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); }
 .mkt-root .ads-suite .ads-source-chips li>span { color:var(--ink-soft); }
-.mkt-root .ads-suite .ads-source-chips li>b { font-weight:650; }
-.mkt-root .ads-suite .ads-source-chips li.ok>b { color:var(--ok-text); }
+.mkt-root .ads-suite .ads-source-chips li>b { color:var(--ink); font-weight:650; font-variant-numeric:tabular-nums; }
 .mkt-root .ads-suite .ads-source-chips li.warn { border-color:var(--warn-line,var(--line)); background:var(--warn-soft); }
-.mkt-root .ads-suite .ads-source-chips li.warn>b { color:var(--warn-text); }
+.mkt-root .ads-suite .ads-source-chips li.warn>span,.mkt-root .ads-suite .ads-source-chips li.warn>b { color:var(--warn-text); }
 .mkt-root .ads-suite .ads-source-chips li.muted>b { color:var(--ink-soft); font-weight:600; }
-.mkt-root .ads-suite .ads-source-fine { display:flex; flex-wrap:wrap; gap:3px 14px; margin:0; }
-.mkt-root .ads-suite .ads-source-fine b { color:var(--ink-soft); font-weight:600; }
-.mkt-root .ads-suite .ads-source-note>svg { flex-shrink:0; color:var(--aw-accent,var(--accent)); }
-.mkt-root .ads-suite .ads-source-note b { color:var(--ink); font-weight:600; }
-.mkt-root .ads-suite .ads-source-note.warn>svg { color:var(--warn); }
-.mkt-root .ads-suite .ads-source-note.bad>svg,.mkt-root .ads-suite .ads-source-note.bad b { color:var(--bad-text); }
-.mkt-root .ads-suite .ads-source-flag { display:inline-flex; align-items:center; gap:5px; color:var(--warn-text); }
-.mkt-root .ads-suite .ads-source-fine>span { color:var(--ink-faint); }
-.mkt-root .ads-suite .ads-source-note button,.mkt-root .ads-suite .ads-source-note a { display:inline-flex; align-items:center; gap:5px; margin-left:auto; height:26px; padding:0 10px; border:1px solid var(--line); border-radius:7px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:11px; text-decoration:none; cursor:pointer; }
-.mkt-root .ads-suite .ads-source-note button:focus-visible,.mkt-root .ads-suite .ads-source-note a:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
-@media(max-width:760px){.mkt-root .ads-suite .ads-source-note { padding:9px 14px; }.mkt-root .ads-suite .ads-source-fine { display:none; }.mkt-root .ads-suite .ads-source-chips li { white-space:normal; }}
+
+/* ที่มาของตัวเลข: อ้างอิง ไม่ต้องอ่านทุกครั้ง → พับไว้ */
+.mkt-root .ads-suite .ads-source-legend summary { display:inline-flex; align-items:center; gap:5px; width:max-content; color:var(--ink-soft); cursor:pointer; list-style:none; }
+.mkt-root .ads-suite .ads-source-legend summary::-webkit-details-marker { display:none; }
+.mkt-root .ads-suite .ads-source-legend summary::after { content:"⌄"; font-size:13px; line-height:1; }
+.mkt-root .ads-suite .ads-source-legend[open] summary::after { content:"⌃"; }
+.mkt-root .ads-suite .ads-source-legend summary:hover { color:var(--ink); }
+.mkt-root .ads-suite .ads-source-legend dl { display:grid; gap:4px 14px; margin:7px 0 0; }
+.mkt-root .ads-suite .ads-source-legend dl>div { display:grid; grid-template-columns:132px minmax(0,1fr); gap:10px; }
+.mkt-root .ads-suite .ads-source-legend dt { color:var(--ink); font-weight:650; }
+.mkt-root .ads-suite .ads-source-legend dd { margin:0; color:var(--ink-soft); }
+
+/* สถานะอื่นของแถบ (กำลังโหลด · โหลดไม่สำเร็จ · ยังไม่มีค่าแอด) ยังเป็นบรรทัดเดียว */
+.mkt-root .ads-suite div.ads-source-note { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; }
+.mkt-root .ads-suite div.ads-source-note>svg { flex-shrink:0; color:var(--aw-accent,var(--accent)); }
+.mkt-root .ads-suite div.ads-source-note b { color:var(--ink); font-weight:600; }
+.mkt-root .ads-suite div.ads-source-note.warn>svg { color:var(--warn-text); }
+.mkt-root .ads-suite div.ads-source-note.bad>svg,.mkt-root .ads-suite div.ads-source-note.bad b { color:var(--bad-text); }
+.mkt-root .ads-suite div.ads-source-note button,.mkt-root .ads-suite div.ads-source-note a { display:inline-flex; align-items:center; gap:5px; margin-left:auto; height:26px; padding:0 10px; border:1px solid var(--line); border-radius:7px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:11px; text-decoration:none; cursor:pointer; }
+.mkt-root .ads-suite .ads-source-note :is(button,summary):focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
+@media(max-width:760px){
+  .mkt-root .ads-suite .ads-source-note { padding:10px 14px; }
+  .mkt-root .ads-suite .ads-source-chips li { flex:1 1 100%; justify-content:space-between; }
+  .mkt-root .ads-suite .ads-source-legend dl>div { grid-template-columns:minmax(0,1fr); gap:0; }
+}
 .mkt-root .ads-suite .ads-source-note .spin { animation:ads-source-spin .8s linear infinite; }
 @keyframes ads-source-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .mkt-root .ads-suite .ads-source-note .spin { animation:none; } }

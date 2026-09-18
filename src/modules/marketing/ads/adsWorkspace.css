@@ -194,8 +194,43 @@
 /* ฐานเทียบที่ล็อกไว้ (ช่วงเดือนนี้) — ขอบประ บอกว่าไม่ใช่ปุ่ม */
 .aw-fixed-compare { display:inline-flex; align-items:center; min-height:34px; padding:0 11px; border:1px dashed var(--line); border-radius:8px; color:var(--ink-soft); font-size:12px; white-space:nowrap; }
 /* funnel แยกช่องทางที่ลูกค้าทัก (ใต้กล่องจากความสนใจ สู่ยอดขาย) */
-.aw-channel-funnel { margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
-.aw-channel-funnel h3 { margin:0; font-size:13px; }
-.aw-channel-funnel table { margin-top:8px; }
-.aw-channel-funnel td small { color:var(--ink-soft); font-size:11px; }
-.aw-channel-funnel td small.emerald { color:var(--ok-text); font-weight:650; }
+
+/* ── แท็บ "เป้า" ในหน้าตั้งค่า (GoalSettingsPanel)
+   การ์ดต่อแบรนด์ ไม่ใช่ตารางเดียว 4 แบรนด์ × 11 ช่อง (จอแคบอ่านไม่ได้ และตาไม่รู้ว่าแถวไหนของใคร)
+   ทุกช่องบอกที่มาใต้ช่อง — ค่าที่ตั้งเองต้องเห็นว่าทับค่าจากระบบขายอะไรไว้ */
+.gs { display:grid; gap:14px; }
+.gs-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
+.gs-head-left { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.mkt-root .gs-ghost { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:11.5px; cursor:pointer; }
+.mkt-root .gs-ghost:hover { border-color:color-mix(in srgb,var(--ink) 22%,var(--line)); }
+.gs-readonly { color:var(--ink-soft); font-size:11.5px; }
+.gs-loading, .gs-error { display:flex; align-items:center; gap:7px; margin:0; color:var(--ink-soft); font-size:12px; }
+.gs-error { color:var(--bad-text); }
+.mkt-root .gs-error button { margin-left:6px; border:0; background:none; color:var(--ink); font:inherit; font-size:12px; text-decoration:underline; cursor:pointer; }
+
+.gs-summary { display:flex; flex-wrap:wrap; gap:4px 16px; margin:0; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); color:var(--ink-soft); font-size:11.5px; line-height:1.5; }
+.gs-summary b { color:var(--ink); font-weight:650; }
+.gs-summary .gs-gap { color:var(--warn-text); }
+
+.gs-brands { display:grid; gap:12px; }
+.gs-brand { padding:13px 14px 14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.gs-brand > header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; margin-bottom:10px; }
+.gs-brand-name { display:inline-flex; align-items:center; gap:8px; font-size:13px; }
+.gs-brand-src { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.gs-brand-src small { color:var(--ink-soft); font-size:10.5px; }
+.gs-changed { margin:0 0 10px; padding:7px 10px; border:1px solid var(--warn-line,var(--line)); border-radius:8px; background:var(--warn-soft); color:var(--warn-text); font-size:11px; line-height:1.5; }
+
+.gs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px 12px; }
+.gs-field { display:grid; gap:4px; min-width:0; }
+.gs-label { display:grid; gap:1px; color:var(--ink); font-size:11.5px; font-weight:600; }
+.gs-label small { color:var(--ink-soft); font-size:10.5px; font-weight:400; line-height:1.35; }
+.mkt-root .gs-field input { width:100%; min-height:34px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; }
+.mkt-root .gs-field input:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:1px; }
+.mkt-root .gs-field input:disabled { opacity:.6; cursor:not-allowed; }
+.mkt-root .gs-field.bad input { border-color:var(--bad-text); }
+.gs-under { display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-height:15px; color:var(--ink-soft); font-size:10.5px; }
+.gs-under .gs-bad { color:var(--bad-text); font-weight:600; }
+.mkt-root .gs-restore { display:inline-flex; align-items:center; gap:3px; padding:0; border:0; background:none; color:var(--ink); font:inherit; font-size:10.5px; text-decoration:underline; cursor:pointer; }
+.gs-note { margin:0; color:var(--ink-soft); font-size:11px; line-height:1.55; }
+.gs-note a { color:var(--ink); text-decoration:underline; text-underline-offset:2px; }
+@media(max-width:680px){ .gs-grid { grid-template-columns:minmax(0,1fr); } .gs-head { align-items:stretch; flex-direction:column; } }

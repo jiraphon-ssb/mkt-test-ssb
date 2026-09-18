@@ -1,24 +1,19 @@
-/* แหล่งข้อมูลของหน้า ads: ตัวสลับ (team_lead) หรือป้าย "ข้อมูลตัวอย่าง" + แถบที่มาของตัวเลข
-   แถบนี้ตอบคำถาม "เลขที่เห็นมาจากไหน สดแค่ไหน" ของทั้ง 3 ระบบ — Meta · ระบบขายพี่ทัช · ระบบ TMK (JUNTAKARN)
-   เดิมเขียนว่า "Meta Pilot" (ชื่อภายใน ไม่บอกอะไร) และบอกความสดของ Meta อย่างเดียว */
+/* ที่มาของตัวเลขบนหน้า ads — แถบเดียวที่ตอบว่า "เลขที่เห็นมาจากไหน สดแค่ไหน" ของทั้ง 3 ระบบ
+   Meta (ค่าแอด · Creative) · ระบบขายพี่ทัช (TD · JD · TA) · ระบบ TMK (JUNTAKARN)
+   18 ก.ย. 69: ถอดตัวสลับ "ของจริง / ตัวอย่าง" ออก — หน้านี้ใช้ข้อมูลจริงเสมอ (โหมดเดโมยังเป็นข้อมูลตัวอย่าง)
+   แถบบอกอยู่แล้วว่าเป็นข้อมูลจริง ป้ายสลับจึงซ้ำและกินที่หัวหน้า */
 import { Link } from "react-router-dom";
 import { AlertTriangle, Clock3, Database, LoaderCircle, RefreshCw } from "lucide-react";
-import { Dropdown } from "../ui/Dropdown.jsx";
-import { ADS_SOURCE_OPTIONS } from "./adsFacts.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { SOURCE_LEGEND, sourceChips, stripVerdict } from "./adsSourceStrip.js";
 import { isoDay } from "../adsScope.js";
 
 const when = (iso) => iso ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso)) : "ยังไม่เคยสำเร็จ";
 
+/** โหมดเดโมเท่านั้น: บอกว่าตัวเลขทั้งหน้าเป็นของสมมติ (ข้อมูลจริงไม่ต้องมีป้าย — แถบด้านล่างบอกแล้ว) */
 export function AdsSourceControl({ ads }) {
-  // สลับได้เฉพาะหัวหน้าทีม · คนอื่นเห็นป้ายบอกแหล่งข้อมูลที่กำลังดูอยู่ ไม่ต้องเดาว่าเลขจริงหรือตัวอย่าง
-  if (!ads.canSwitch) {
-    return ads.source === "mock"
-      ? <span className="aw-demo" title="โหมดเดโม — ตัวเลขทั้งหมดเป็นข้อมูลตัวอย่าง"><i /> ข้อมูลตัวอย่าง</span>
-      : <span className="aw-live" title="ตัวเลขจริงจากระบบขายและ Meta Ads (อ่านอย่างเดียว)"><i /> ข้อมูลจริง</span>;
-  }
-  return <Dropdown label="ข้อมูล" ariaLabel="แหล่งข้อมูล" align="end" options={ADS_SOURCE_OPTIONS} value={ads.source} onChange={ads.setSource} active={ads.source !== "mock"} />;
+  if (ads.source !== "mock") return null;
+  return <span className="aw-demo" title="โหมดเดโม — ตัวเลขทั้งหมดเป็นข้อมูลตัวอย่าง"><i /> ข้อมูลตัวอย่าง</span>;
 }
 
 export function AdsSourceNotice({ ads }) {
@@ -36,24 +31,24 @@ export function AdsSourceNotice({ ads }) {
   const today = isoDay(new Date());
   const chips = sourceChips({ summary, sales: ads.sales, salesGoals: ads.salesGoals, today });
   const verdict = stripVerdict(chips);
-  return <div className={`ads-source-note${verdict.state === "warn" ? " warn" : ""}`} role="status">
-    <Database size={14} />
-    <div className="ads-source-body">
-      <div className="ads-source-head">
-        <b>{verdict.text}</b>
-        {summary.provisionalToday && <span className="ads-source-flag"><Clock3 size={13} /> วันนี้ยังไม่สิ้นสุด ยอดยังเปลี่ยนได้</span>}
-      </div>
-      {/* แหล่งละป้าย — สถานะเขียนเป็นคำ ไม่ได้บอกด้วยสีอย่างเดียว */}
-      <ul className="ads-source-chips">
-        {chips.map((chip) => <li key={chip.key} className={chip.tone}>
-          <span>{chip.label}</span><b>{chip.value}</b>
-        </li>)}
-      </ul>
-      <p className="ads-source-fine">
-        {SOURCE_LEGEND.map((item) => <span key={item.from}><b>{item.metrics}</b> มาจาก{item.from}</span>)}
-        <span>ดึงค่าแอดล่าสุด {when(summary.lastSuccessAt)}</span>
-      </p>
+  /* สามชั้น: สรุปหนึ่งบรรทัด → ป้ายความสดรายแหล่ง → ที่มาของตัวเลขพับเก็บไว้ (เป็นข้อมูลอ้างอิง ไม่ต้องอ่านทุกครั้ง) */
+  return <section className={`ads-source-note ${verdict.state}`} aria-label="ที่มาของตัวเลข">
+    <div className="ads-source-top">
+      <p className="ads-source-verdict" role="status"><Database size={14} aria-hidden="true" /><b>{verdict.text}</b></p>
+      {summary.provisionalToday && <span className="ads-source-flag"><Clock3 size={13} aria-hidden="true" /> วันนี้ยังไม่สิ้นสุด ยอดยังเปลี่ยนได้</span>}
+      <button type="button" className="ads-source-reload" onClick={ads.reload}><RefreshCw size={13} aria-hidden="true" /> โหลดใหม่</button>
     </div>
-    <button type="button" onClick={ads.reload}><RefreshCw size={13} /> โหลดใหม่</button>
-  </div>;
+    <ul className="ads-source-chips">
+      {chips.map((chip) => <li key={chip.key} className={chip.tone}>
+        <span>{chip.label}</span><b>{chip.value}</b>
+      </li>)}
+    </ul>
+    <details className="ads-source-legend">
+      <summary>ที่มาของตัวเลข</summary>
+      <dl>
+        {SOURCE_LEGEND.map((item) => <div key={item.from}><dt>{item.from}</dt><dd>{item.metrics}</dd></div>)}
+        <div><dt>ดึงค่าแอดล่าสุด</dt><dd>{when(summary.lastSuccessAt)}</dd></div>
+      </dl>
+    </details>
+  </section>;
 }
