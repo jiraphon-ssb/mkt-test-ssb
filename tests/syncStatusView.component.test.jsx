@@ -7,12 +7,15 @@ import { MemoryRouter } from "react-router-dom";
 
 const pending = {};
 const factArgs = [];
+/* ผลของ sales-sync รอบเดียวกันมีทั้งยอดขายและเป้า (ระบบขายพี่ทัช + ระบบ TMK) */
+let salesSyncResult = { written: 42, jk: { written: 14, error: null }, goals: { written: 3, error: null }, jkGoals: { written: 2, error: null } };
 const deferred = (key) => new Promise((resolve, reject) => { pending[key] = { resolve, reject }; });
 vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   recentSyncs: () => deferred("syncRuns"), connections: () => deferred("connections"), reconciliations: () => deferred("recons"),
   syncCoverage: () => deferred("coverage"), cronTicks: () => deferred("ticks"), pipelineRuns: () => deferred("pipes"),
   businessFacts: (args) => { factArgs.push(args); return deferred("facts"); }, salesGoals: () => deferred("goals"),
   goalOverrides: () => deferred("goalOverrides"), oauthStatus: () => deferred("oauth"),
+  salesSync: async () => salesSyncResult,
 } } }));
 const auth = { demo: false, user: { role: "team_lead" } };
 vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => auth }));
@@ -176,5 +179,37 @@ describe("SyncStatusView — เป้าที่ตั้งเองชนะ
     const row = within(document.querySelector(".sy-goal-block")).getByRole("row", { name: /JUNTAKARN/ });
     expect(within(row).getByText("ระบบ TMK")).toBeTruthy();
     expect(within(row).getByText("฿900,000.00")).toBeTruthy();
+  });
+});
+
+/* กด "ดึงข้อมูลทั้งหมด" แล้วต้องเห็นว่าเป้าถูกดึงด้วย — ไม่ใช่เดาเอาเองว่ารวมอยู่ในขั้นยอดขาย */
+describe("SyncStatusView — ไทม์ไลน์มีขั้นเป้า", () => {
+  const settleAll = async () => {
+    await settle("syncRuns", []); await settle("connections", []); await settle("recons", []);
+    await settle("coverage", []); await settle("ticks", []); await settle("pipes", []);
+    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] });
+  };
+
+  it("ดึงยอดขายอย่างเดียว = 2 ขั้น (ยอดขาย · เป้า) พร้อมผลของแต่ละขั้น", async () => {
+    salesSyncResult = { written: 42, jk: { written: 14, error: null }, goals: { written: 3, error: null }, jkGoals: { written: 2, error: null } };
+    show();
+    await settleAll();
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึงยอดขายเท่านั้น/ })); });
+    const steps = screen.getAllByRole("listitem").filter((node) => node.className.includes("ok") || node.className.includes("bad"));
+    const timeline = screen.getByLabelText("ความคืบหน้าการดึงข้อมูล");
+    expect(within(timeline).getByText(/ยอดขาย 42 วัน×แบรนด์ · JUNTAKARN 14 วัน/)).toBeTruthy();
+    expect(within(timeline).getByText(/ระบบขาย 3 แถว · ระบบ TMK 2 เดือน/)).toBeTruthy();
+    expect(within(timeline).getByText("เป้าเดือนนี้")).toBeTruthy();
+    expect(steps.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("เป้าล้มแต่ยอดเข้า = ขั้นยอดเสร็จ ขั้นเป้าไม่สำเร็จพร้อมเหตุผลไทย", async () => {
+    salesSyncResult = { written: 42, jk: { written: 14, error: null }, goals: { written: 0, error: null }, jkGoals: { written: 0, error: "JK_GOAL_NO_PERMISSION" } };
+    show();
+    await settleAll();
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึงยอดขายเท่านั้น/ })); });
+    const timeline = screen.getByLabelText("ความคืบหน้าการดึงข้อมูล");
+    expect(within(timeline).getByText(/ไม่สำเร็จ · .*service role key/)).toBeTruthy();
+    expect(within(timeline).getByRole("status").textContent).toContain("เป้าเดือนนี้");
   });
 });

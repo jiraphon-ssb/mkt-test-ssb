@@ -59,3 +59,23 @@ describe("runEnded / runHeadline", () => {
     expect(runHeadline(run).text).toBe("ดึงครบทั้ง 1 ขั้นแล้ว");
   });
 });
+
+/* ปุ่ม "ดึงข้อมูลทั้งหมด" ดึงเป้ามาด้วยในรอบเดียวกัน — ไทม์ไลน์ต้องมีขั้นของเป้า
+   ไม่งั้นคนกดไม่รู้ว่าเป้าถูกดึงไปแล้วหรือยัง (เจอจากหน้าจริง 18 ก.ย. 69) */
+describe("ขั้นเป้าในไทม์ไลน์", () => {
+  it("รอบเต็มมี 4 ขั้น จบด้วยเป้า · ดึงยอดขายอย่างเดียวก็มีขั้นเป้า", () => {
+    const full = stepRows(newRun(["facts", "creatives", "sales", "goals"]));
+    expect(full.map((row) => row.label)).toEqual(["ค่าแอด Meta", "Creative Meta", "ยอดขายทุกแบรนด์", "เป้าเดือนนี้"]);
+    expect(full[3].sub).toContain("ระบบ TMK");
+    const salesOnly = stepRows(newRun(["sales", "goals"], { kind: "sales" }));
+    expect(salesOnly.map((row) => row.key)).toEqual(["sales", "goals"]);
+  });
+  it("ยอดเข้าแต่เป้าล้ม = ขั้นยอดเสร็จ ขั้นเป้าไม่สำเร็จ และสรุปบอกว่าขั้นไหนล้ม", () => {
+    let run = setStep(newRun(["facts", "creatives", "sales", "goals"]), "facts", "done");
+    run = setStep(run, "creatives", "done");
+    run = setStep(run, "sales", "done", "42 วัน×แบรนด์");
+    run = setStep(run, "goals", "failed", "คีย์ที่ตั้งไว้เรียกฟังก์ชันเป้าของระบบ TMK ไม่ได้");
+    expect(runEnded(run)).toBe(true);
+    expect(runHeadline(run)).toEqual({ state: "bad", text: "ดึงเสร็จ แต่ไม่สำเร็จ 1/4 ขั้น — เป้าเดือนนี้" });
+  });
+});

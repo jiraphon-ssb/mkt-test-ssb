@@ -160,3 +160,29 @@ describe("GOAL_FIELD_GROUPS", () => {
     expect(GOAL_FIELD_GROUPS[1].fields).toEqual(["inquiry_target", "leads_target", "deposits_target", "orders_target"]);
   });
 });
+
+/* คอลัมน์ที่ไม่ได้อยู่ในช่องที่แก้ได้ ต้องไม่หายตอน merge — หน้าอื่นใช้อยู่
+   (กล่องงบใช้ platform_budgets.meta · หน้าแคมเปญใช้ caps.cpl · โหมดยอดใหม่ใช้ sales_new_target)
+   เจอจากหน้าจริง 18 ก.ย. 69: กล่องงบของ JUNTAKARN ขึ้น "ยังไม่ตั้งเป้า" ทั้งที่ฐานมีงบ 95,000 */
+describe("mergeGoals — คอลัมน์นอกช่องที่แก้ได้", () => {
+  const full = () => goal({
+    platform_budgets: { meta: 95000 }, platform_pct: { meta: 100 },
+    caps: { cpl: 800 }, assumptions: { aov_new: 12000 },
+    sales_new_target: 1200000, share_new: 0.35, synced_at: "2026-09-18T08:49:42Z",
+  });
+  it("ยกมาครบทั้งแถว แม้จะมี override ทับบางช่อง", () => {
+    const row = rowOf([full()], [ov({ ad_budget: 250000 })]);
+    expect(row.platform_budgets).toEqual({ meta: 95000 });
+    expect(row.caps).toEqual({ cpl: 800 });
+    expect(row.sales_new_target).toBe(1200000);
+    expect(row.share_new).toBe(0.35);
+    expect(row.synced_at).toBe("2026-09-18T08:49:42Z");
+    expect(row.ad_budget).toBe(250000);            // ช่องที่แก้ยังชนะเหมือนเดิม
+    expect(row.sources.ad_budget).toBe("manual");
+  });
+  it("แถวที่มีแต่ override (ไม่มีของจากระบบขาย) ไม่มีคอลัมน์พวกนี้ปลอมขึ้นมา", () => {
+    const row = rowOf([], [ov({ month: "2026-10-01", sales_target: 1 })], "b_td", "2026-10-01");
+    expect(row.platform_budgets).toBeUndefined();
+    expect(row.caps).toBeUndefined();
+  });
+});

@@ -42,8 +42,14 @@ const numOf = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
-const blankRow = (brandId, month) => ({
-  brand_id: brandId, month, goal_source: null, version: null,
+/* แถวเริ่มต้น — ถ้ามีแถวจากระบบขายให้ยกมาทั้งแถว ไม่ใช่เลือกมาเฉพาะช่องที่แก้ได้
+   (คอลัมน์อย่าง platform_budgets · caps · sales_new_target ไม่ได้อยู่ในช่องที่แก้ได้
+    แต่หน้าจออื่นใช้: งบ Meta ของกล่องงบ · เพดาน CPL ของหน้าแคมเปญ · เป้ายอดลูกค้าใหม่)
+   เคยหล่นหายตอนต่อ merge เข้าหน้าจอ → กล่องงบขึ้น "ยังไม่ตั้งเป้า" ทั้งที่ตั้งไว้แล้ว */
+const blankRow = (brandId, month, from = null) => ({
+  ...(from ?? {}),
+  brand_id: brandId, month,
+  goal_source: from?.goal_source ?? null, version: from?.version ?? null,
   note: null, updated_at: null, updated_by: null,
   sources: {},
   synced: Object.fromEntries(FIELD_KEYS.map((key) => [key, null])),
@@ -57,7 +63,7 @@ export function mergeGoals(goals = [], overrides = []) {
   for (const goal of goals ?? []) {
     const month = monthOf(goal?.month);
     if (!goal?.brand_id || !ISO_DAY.test(month)) continue;
-    const row = out.get(keyOf(goal.brand_id, month)) ?? blankRow(goal.brand_id, month);
+    const row = out.get(keyOf(goal.brand_id, month)) ?? blankRow(goal.brand_id, month, goal);
     const source = ENDED_SOURCES.includes(goal.goal_source) ? goal.goal_source : "sale_goal";
     row.goal_source = goal.goal_source ?? row.goal_source;
     row.version = goal.version ?? null;

@@ -5,11 +5,13 @@ export const STEP_LABEL = {
   facts: "ค่าแอด Meta",
   creatives: "Creative Meta",
   sales: "ยอดขายทุกแบรนด์",
+  goals: "เป้าเดือนนี้",
 };
 export const STEP_SUB = {
   facts: "เติมช่วงวันที่ขาด + 3 วันล่าสุด",
   creatives: "รูปและข้อความโฆษณาของบัญชีที่ดึงสำเร็จ",
   sales: "ระบบขายพี่ทัช (TD · JD · TA) และระบบ TMK (JUNTAKARN)",
+  goals: "เป้ายอด · งบแอด · เพดาน จากหน้าเป้าหมายของระบบขายและระบบ TMK",
 };
 const STATE_LABEL = { waiting: "รอคิว", running: "กำลังทำ", done: "เสร็จ", failed: "ไม่สำเร็จ", skipped: "ข้าม" };
 const ENDED = ["done", "failed", "skipped"];

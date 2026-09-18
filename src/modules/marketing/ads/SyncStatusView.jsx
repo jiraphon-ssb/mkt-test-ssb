@@ -292,12 +292,22 @@ export function SyncStatusView() {
     try {
       const out = await apiClient.ads.salesSync();
       const jk = out.jk?.error ? adsErrorText(out.jk.error, "ยอด JUNTAKARN ไม่เข้า") : out.jk?.written ? `JUNTAKARN ${out.jk.written.toLocaleString("th-TH")} วัน` : null;
+      /* รอบเดียวกันดึงเป้ามาด้วย (ระบบขายพี่ทัช + ระบบ TMK) — แยกผลออกมาให้ไทม์ไลน์มีขั้น "เป้า" ของตัวเอง
+         ไม่งั้นคนกดไม่รู้ว่าเป้าถูกดึงไปแล้วหรือยัง */
+      const goalParts = [
+        out.goals?.error ? adsErrorText(out.goals.error, "เป้าจากระบบขายไม่เข้า") : out.goals?.written ? `ระบบขาย ${out.goals.written.toLocaleString("th-TH")} แถว` : null,
+        out.jkGoals?.error ? adsErrorText(out.jkGoals.error, "เป้า JUNTAKARN ไม่เข้า") : out.jkGoals?.written ? `ระบบ TMK ${out.jkGoals.written.toLocaleString("th-TH")} เดือน` : null,
+      ].filter(Boolean);
       return {
-        tone: out.goals?.error || out.jk?.error ? "bad" : "ok",
-        parts: [`ยอดขาย ${out.written?.toLocaleString("th-TH") ?? 0} วัน×แบรนด์`, jk, out.goals?.error ? adsErrorText(out.goals.error, "เป้าไม่เข้า") : null].filter(Boolean),
+        tone: out.jk?.error ? "bad" : "ok",
+        parts: [`ยอดขาย ${out.written?.toLocaleString("th-TH") ?? 0} วัน×แบรนด์`, jk].filter(Boolean),
+        goals: {
+          tone: out.goals?.error || out.jkGoals?.error ? "bad" : "ok",
+          parts: goalParts.length ? goalParts : ["เดือนนี้ยังไม่มีใครตั้งเป้าในระบบต้นทาง"],
+        },
       };
     } catch (error) {
-      return { tone: "bad", parts: [adsErrorText(error, "ดึงยอดขายไม่สำเร็จ")] };
+      return { tone: "bad", parts: [adsErrorText(error, "ดึงยอดขายไม่สำเร็จ")], goals: { tone: "bad", parts: ["ไม่ได้ดึงเป้า เพราะรอบยอดขายล้มก่อน"] } };
     } finally { setSalesBusy(null); }
   };
   /* ดึงย้อนหลังทีละเดือน — function รับครั้งละ ≤93 วัน · พังเดือนไหนบอกเดือนนั้น เดือนที่สำเร็จแล้วไม่เสีย */
@@ -379,18 +389,20 @@ export function SyncStatusView() {
     if (keys.includes("facts")) results.push(await runAdsSync());
     if (keys.includes("sales")) {
       step("sales", "running", "กำลังดึงยอดขายทุกแบรนด์");
+      step("goals", "running", "ดึงพร้อมรอบยอดขาย");
       const out = await runSalesSync();
       step("sales", out.tone === "bad" ? "failed" : "done", out.parts.join(" · "));
-      results.push(out);
+      step("goals", out.goals.tone === "bad" ? "failed" : "done", out.goals.parts.join(" · "));
+      results.push(out, { tone: out.goals.tone, parts: out.goals.parts });
     }
     const tone = results.some((item) => item.tone === "bad") ? "bad" : "ok";
     toast?.(`${tone === "bad" ? "ดึงเสร็จ แต่มีขั้นที่ไม่สำเร็จ" : "ดึงข้อมูลครบแล้ว"} · ${results.flatMap((item) => item.parts).join(" · ")}`, tone);
     reload();
     loadPilotFacts({ force: true });
   };
-  const syncAll = () => startRun(["facts", "creatives", "sales"], "all");
+  const syncAll = () => startRun(["facts", "creatives", "sales", "goals"], "all");
   const syncNow = () => startRun(["facts", "creatives"], "ads");
-  const syncSales = () => startRun(["sales"], "sales");
+  const syncSales = () => startRun(["sales", "goals"], "sales");
 
   const progress = syncing ? syncing.phase === "plan" ? "กำลังวางแผนช่วงที่ต้องดึง…" : syncing.phase === "creatives" ? `กำลังดึง Creative ${syncing.done + 1}/${syncing.total} บัญชี…` : `กำลังดึงค่าแอด ${syncing.done}/${syncing.total} ช่วง…`
     : reconciling ? "กำลังตรวจยอดกับ Meta…" : salesBusy ? String(salesBusy).startsWith("backfill") ? `กำลังดึงยอดขายย้อนหลัง ${salesBusy.replace("backfill:", "")} เดือน…` : { check: "กำลังตรวจการเชื่อมต่อระบบขาย…", inventory: "กำลังสำรวจแหล่งข้อมูล…", sync: "กำลังดึงยอดขาย…" }[salesBusy] : null;
