@@ -28,7 +28,8 @@ export async function loadPilotFacts({ force = false } = {}) {
       const range = factsLoadRange(isoDay(new Date()));
       const [connections, facts, creatives, sales, salesGoals] = await Promise.all([
         apiClient.ads.connections(), apiClient.ads.facts(range), apiClient.ads.creatives().catch(() => []),   // creative ไม่มี = ยังดูยอดได้
-        apiClient.ads.businessFacts(range).catch(() => []),                                                   // ยอดขายจริงยังไม่เชื่อม = ยังดูยอดแอดได้
+        // ต้องรวม 'tmk' (ยอด JUNTAKARN) ด้วย ไม่งั้นแถบที่มาของตัวเลขบอกไม่ได้ว่าแหล่งของ JK สดแค่ไหน
+        apiClient.ads.businessFacts({ ...range, sources: ["crm", "tmk"] }).catch(() => []),                   // ยอดขายจริงยังไม่เชื่อม = ยังดูยอดแอดได้
         apiClient.ads.salesGoals().catch(() => []),                                                           // เป้าจากระบบขาย (เฟส 3) ยังไม่มีก็ใช้เป้าในหน้าตั้งค่า
       ]);
       publish({ status: "ready", facts, creatives, sales, salesGoals, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });

@@ -6,8 +6,8 @@ import { fmtNum } from "../dash/charts/theme.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ChevronDown, Clock3, Database, Download, Image as ImageIcon, Info,
-  KeyRound, LoaderCircle, Radar, ReceiptText, RefreshCw, Scale, Settings2, ShoppingBag,
+  AlertTriangle, ArrowRight, CalendarClock, Check, CheckCircle2, ChevronDown, Clock3, Database, Download, Image as ImageIcon, Info,
+  KeyRound, LoaderCircle, Radar, ReceiptText, RefreshCw, Scale, Settings2, ShoppingBag, X,
 } from "lucide-react";
 import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { apiClient } from "../../../foundation/data/apiClient.js";
@@ -26,6 +26,7 @@ import { loadPilotFacts } from "./useAdsData.js";
 import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
 import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
 import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
+import { newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
 import "./adsWorkspace.css";
 import "./syncStatus.css";
 
@@ -66,6 +67,31 @@ function Skeleton({ lines = 1, wide = false }) {
 }
 
 /** แถวแหล่งข้อมูล — แหล่งละแถว ตอบ 3 อย่างเหมือนกัน: สถานะ · สดแค่ไหน · ครบแค่ไหน */
+/* ไทม์ไลน์ของรอบที่ผู้ใช้กดเอง — ปุ่มเดียวทำหลายขั้น ต้องเห็นว่าอยู่ขั้นไหนและได้เท่าไหร่
+   จอแคบเรียงลง จอกว้างเรียงข้าง (เส้นเชื่อมทำด้วย ::after ของ li) */
+export function SyncTimeline({ rows = [], headline = null, onHide = null }) {
+  if (!rows.length) return null;
+  const MARK = { done: Check, failed: X, running: LoaderCircle };
+  return <div className="sy-run" aria-label="ความคืบหน้าการดึงข้อมูล">
+    {headline && <p className={`sy-run-head ${headline.state}`} role="status" aria-live="polite">{headline.text}</p>}
+    <ol>
+      {rows.map((row) => {
+        const Mark = MARK[row.state];
+        return <li key={row.key} className={`${row.tone}${row.last ? " last" : ""}`}>
+          <span className="sy-run-mark" aria-hidden="true">{Mark ? <Mark size={12} className={row.state === "running" ? "spin" : undefined} /> : <i />}</span>
+          <span className="sy-run-text">
+            <small className="sy-run-step">ขั้นที่ {row.step}</small>
+            <b>{row.label}</b>
+            <span className={`sy-run-state ${row.tone}`}>{row.stateLabel}{row.detail ? ` · ${row.detail}` : ""}</span>
+            <small className="sy-run-sub">{row.sub}</small>
+          </span>
+        </li>;
+      })}
+    </ol>
+    {onHide && <button type="button" className="sy-run-hide" onClick={onHide}>ซ่อนไทม์ไลน์</button>}
+  </div>;
+}
+
 function SourceRow({ row, onOpen }) {
   const Icon = SOURCE_ICON[row.icon] ?? Database;
   const loading = row.state === "loading";
@@ -214,6 +240,7 @@ export function SyncStatusView() {
 
   /* ── งานที่สั่งได้ (หัวหน้าทีม) ── */
   const [syncing, setSyncing] = useState(null);
+  const [run, setRun] = useState(null);          // ไทม์ไลน์ของรอบที่กดเอง (ดูที่ SyncTimeline)
   const [reconciling, setReconciling] = useState(false);
   const [salesBusy, setSalesBusy] = useState(null);
   const [checkResult, setCheckResult] = useState(null);
@@ -256,12 +283,20 @@ export function SyncStatusView() {
   };
   const checkSales = () => salesAction("check", async () => { setCheckResult(await apiClient.ads.salesCheck()); setTab("sales"); });
   const surveySales = () => salesAction("inventory", async () => { await apiClient.ads.salesInventory(); toast?.("สำรวจแหล่งข้อมูลของระบบขายแล้ว", "ok"); });
-  const syncSales = () => salesAction("sync", async () => {
-    const out = await apiClient.ads.salesSync();
-    const jkNote = out.jk?.error ? ` · ${adsErrorText(out.jk.error, "ยอด JUNTAKARN ไม่เข้า")}` : out.jk?.written ? ` · JUNTAKARN ${out.jk.written.toLocaleString("th-TH")} วัน` : "";
-    toast?.(`ดึงยอดขายแล้ว ${out.written?.toLocaleString("th-TH") ?? 0} วัน×แบรนด์${out.goals?.error ? ` · ${adsErrorText(out.goals.error, "เป้าไม่เข้า")}` : ""}${jkNote}`, out.goals?.error || out.jk?.error ? "bad" : "ok");
-    await loadPilotFacts({ force: true });
-  });
+  /* ดึงยอดขาย — คืนผลเป็นข้อความสั้น ไม่ toast เอง เพื่อให้ "ดึงข้อมูลทั้งหมด" รวมผลเป็นข้อความเดียว */
+  const runSalesSync = async () => {
+    setSalesBusy("sync");
+    try {
+      const out = await apiClient.ads.salesSync();
+      const jk = out.jk?.error ? adsErrorText(out.jk.error, "ยอด JUNTAKARN ไม่เข้า") : out.jk?.written ? `JUNTAKARN ${out.jk.written.toLocaleString("th-TH")} วัน` : null;
+      return {
+        tone: out.goals?.error || out.jk?.error ? "bad" : "ok",
+        parts: [`ยอดขาย ${out.written?.toLocaleString("th-TH") ?? 0} วัน×แบรนด์`, jk, out.goals?.error ? adsErrorText(out.goals.error, "เป้าไม่เข้า") : null].filter(Boolean),
+      };
+    } catch (error) {
+      return { tone: "bad", parts: [adsErrorText(error, "ดึงยอดขายไม่สำเร็จ")] };
+    } finally { setSalesBusy(null); }
+  };
   /* ดึงย้อนหลังทีละเดือน — function รับครั้งละ ≤93 วัน · พังเดือนไหนบอกเดือนนั้น เดือนที่สำเร็จแล้วไม่เสีย */
   const backfillSales = () => salesAction("backfill", async () => {
     const ranges = backfillRanges(salesSince, today);
@@ -273,48 +308,93 @@ export function SyncStatusView() {
     toast?.(failed.length ? `ดึงย้อนหลังสำเร็จ ${ranges.length - failed.length}/${ranges.length} เดือน · ไม่สำเร็จ: ${failed.join(", ")}` : `ดึงย้อนหลังครบ ${ranges.length} เดือน`, failed.length ? "bad" : "ok");
     await loadPilotFacts({ force: true });
   });
-  /* ดึงค่าแอด: หาช่องว่างวันที่จากประวัติ run → แบ่งก้อน ≤10 วัน (กันเพดาน 546) → ดึง Creative ต่อ → โหลดยอดใหม่ */
-  const syncNow = async () => {
-    closeMenu();
-    if (!syncable.length || syncing) return;
+  /* ── งานที่กดได้: ทุกอย่างรายงานผลผ่านไทม์ไลน์ (setStep) แล้วคืนข้อความสั้นให้ toast ──
+     ดึงค่าแอด: หาช่องว่างวันที่จากประวัติ run → แบ่งก้อน ≤10 วัน (กันเพดาน 546) → ดึง Creative ต่อ */
+  const step = (key, state, detail = null) => setRun((prev) => setStep(prev, key, state, detail));
+  const runAdsSync = async () => {
+    if (!syncable.length) {
+      step("facts", "failed", "ยังไม่มีบัญชี Meta ที่เชื่อม");
+      step("creatives", "skipped", "ต้องเชื่อมบัญชี Meta ก่อน");
+      return { tone: "bad", parts: ["ยังไม่มีบัญชี Meta ที่เชื่อม"] };
+    }
     setSyncing({ phase: "plan", done: 0, total: 0 });
+    step("facts", "running", "กำลังวางแผนช่วงที่ต้องดึง");
     try {
       const ids = new Set(syncable.map((row) => row.connectionId));
       const [connections, coverage] = await Promise.all([apiClient.ads.connections(), apiClient.ads.syncCoverage()]);
       const targets = connections.filter((c) => ids.has(c.id));
       const jobs = planSyncJobs({ connections: targets, runs: coverage, todayOf: (tz) => todayInTimeZone(new Date(), tz) });
-      const result = await runSyncJobs(jobs, (id, mode, range) => apiClient.ads.sync(id, mode, range), (done, total) => setSyncing({ phase: "facts", done, total }));
-      const okAccounts = Object.entries(result.byConnection).filter(([, s]) => s.ok > 0).map(([id]) => id);
+      const result = await runSyncJobs(jobs, (id, mode, range) => apiClient.ads.sync(id, mode, range), (done, total) => {
+        setSyncing({ phase: "facts", done, total });
+        step("facts", "running", `${done}/${total} ช่วง`);
+      });
+      const written = Object.values(result.byConnection).reduce((n, s2) => n + s2.rowsWritten, 0);
+      const firstError = Object.values(result.byConnection).find((s2) => s2.firstError)?.firstError;
+      const factsText = `${result.total - result.failed}/${result.total} ช่วง · ${written.toLocaleString("th-TH")} แถว`;
+      step("facts", result.failed ? "failed" : "done", result.failed ? `${factsText} · ${adsErrorText(firstError, "บางช่วงไม่สำเร็จ")}` : factsText);
+
+      const okAccounts = Object.entries(result.byConnection).filter(([, s2]) => s2.ok > 0).map(([id]) => id);
       let creatives = 0, creativeError = null, postEnriched = 0, needsReconnect = false;
+      if (!okAccounts.length) step("creatives", "skipped", "ไม่มีบัญชีที่ดึงค่าแอดสำเร็จในรอบนี้");
       for (const [index, id] of okAccounts.entries()) {
         setSyncing({ phase: "creatives", done: index, total: okAccounts.length });
+        step("creatives", "running", `${index + 1}/${okAccounts.length} บัญชี`);
         const out = await syncCreativesFor(id, (connectionId, cursor) => apiClient.ads.syncCreatives(connectionId, cursor));
         creatives += out.saved;
         postEnriched += out.postEnriched;
         needsReconnect ||= out.needsReconnect;
         creativeError ??= out.error;
       }
-      const written = Object.values(result.byConnection).reduce((n, s) => n + s.rowsWritten, 0);
-      const firstError = Object.values(result.byConnection).find((s) => s.firstError)?.firstError;
-      toast?.(result.failed
-        ? `ดึงสำเร็จ ${result.total - result.failed}/${result.total} ช่วง · ${adsErrorText(firstError, "บางช่วงดึงไม่สำเร็จ")} · กดดึงอีกครั้งจะเติมเฉพาะช่วงที่ขาด`
-        : `ดึงข้อมูลแล้ว ${result.total} ช่วง · ${written.toLocaleString("th-TH")} แถว · Creative ${creatives.toLocaleString("th-TH")} ชิ้น (ภาพจากโพสต์ ${postEnriched.toLocaleString("th-TH")})${creativeError ? ` · ${adsErrorText(creativeError, "ดึง Creative ไม่ครบ")}` : ""}${needsReconnect ? " · เชื่อม Meta ใหม่ในหน้าตั้งค่าเพื่อให้โฆษณาแบบบูสต์โพสต์แสดงภาพจริง" : ""}`,
-      result.failed ? "bad" : "ok");
+      if (okAccounts.length) {
+        const creativeText = `${creatives.toLocaleString("th-TH")} ชิ้น (ภาพจากโพสต์ ${postEnriched.toLocaleString("th-TH")})`;
+        step("creatives", creativeError ? "failed" : "done", creativeError ? `${creativeText} · ${adsErrorText(creativeError, "ดึงไม่ครบ")}` : creativeText);
+      }
+      return {
+        tone: result.failed || creativeError ? "bad" : "ok",
+        parts: [
+          result.failed ? `ค่าแอด ${result.total - result.failed}/${result.total} ช่วง · ${adsErrorText(firstError, "บางช่วงไม่สำเร็จ")} · กดดึงอีกครั้งจะเติมเฉพาะช่วงที่ขาด`
+            : `ค่าแอด ${result.total} ช่วง (${written.toLocaleString("th-TH")} แถว) · Creative ${creatives.toLocaleString("th-TH")} ชิ้น`,
+          creativeError ? adsErrorText(creativeError, "ดึง Creative ไม่ครบ") : null,
+          needsReconnect ? "เชื่อม Meta ใหม่ในหน้าตั้งค่าเพื่อให้โฆษณาแบบบูสต์โพสต์แสดงภาพจริง" : null,
+        ].filter(Boolean),
+      };
     } catch (error) {
-      toast?.(adsErrorText(error, "ดึงข้อมูลไม่สำเร็จ"), "bad");
+      const text = adsErrorText(error, "ดึงค่าแอดไม่สำเร็จ");
+      step("facts", "failed", text);
+      step("creatives", "skipped", "ขั้นก่อนหน้าไม่สำเร็จ");
+      return { tone: "bad", parts: [text] };
     } finally {
       setSyncing(null);
-      reload();
-      loadPilotFacts({ force: true });
     }
   };
+  /* ปุ่มหลัก: ค่าแอด → Creative → ยอดขาย ในคลิกเดียว · ขั้นที่ล้มไม่หยุดขั้นถัดไป */
+  const startRun = async (keys, kind) => {
+    closeMenu();
+    if (busy) return;
+    setRun(newRun(keys, { kind }));
+    const results = [];
+    if (keys.includes("facts")) results.push(await runAdsSync());
+    if (keys.includes("sales")) {
+      step("sales", "running", "กำลังดึงยอดขายทุกแบรนด์");
+      const out = await runSalesSync();
+      step("sales", out.tone === "bad" ? "failed" : "done", out.parts.join(" · "));
+      results.push(out);
+    }
+    const tone = results.some((item) => item.tone === "bad") ? "bad" : "ok";
+    toast?.(`${tone === "bad" ? "ดึงเสร็จ แต่มีขั้นที่ไม่สำเร็จ" : "ดึงข้อมูลครบแล้ว"} · ${results.flatMap((item) => item.parts).join(" · ")}`, tone);
+    reload();
+    loadPilotFacts({ force: true });
+  };
+  const syncAll = () => startRun(["facts", "creatives", "sales"], "all");
+  const syncNow = () => startRun(["facts", "creatives"], "ads");
+  const syncSales = () => startRun(["sales"], "sales");
 
   const progress = syncing ? syncing.phase === "plan" ? "กำลังวางแผนช่วงที่ต้องดึง…" : syncing.phase === "creatives" ? `กำลังดึง Creative ${syncing.done + 1}/${syncing.total} บัญชี…` : `กำลังดึงค่าแอด ${syncing.done}/${syncing.total} ช่วง…`
     : reconciling ? "กำลังตรวจยอดกับ Meta…" : salesBusy ? String(salesBusy).startsWith("backfill") ? `กำลังดึงยอดขายย้อนหลัง ${salesBusy.replace("backfill:", "")} เดือน…` : { check: "กำลังตรวจการเชื่อมต่อระบบขาย…", inventory: "กำลังสำรวจแหล่งข้อมูล…", sync: "กำลังดึงยอดขาย…" }[salesBusy] : null;
 
   /* ปุ่มของแต่ละเรื่องที่ควรดู */
   const issueAction = (issue) => {
-    if (issue.source === "meta" && canSync) return <button type="button" onClick={syncNow} disabled={busy || !syncable.length}>ดึงข้อมูลตอนนี้</button>;
+    if (issue.source === "meta" && canSync) return <button type="button" onClick={syncNow} disabled={busy || !syncable.length}>ดึงค่าแอดตอนนี้</button>;
     if (issue.source === "sales" && canSync) return <button type="button" onClick={syncSales} disabled={busy}>ดึงยอดขายตอนนี้</button>;
     if (issue.key === "token") return <Link to="/mkt/ads?panel=settings&tab=sources">ไปเชื่อม Meta</Link>;
     const target = issue.tab ?? (issue.source === "sales" ? "sales" : issue.source ? "meta" : null);
@@ -328,15 +408,32 @@ export function SyncStatusView() {
         <div><h1>สถานะ Sync</h1><p>ข้อมูลแต่ละแหล่งมาครบ สด และเชื่อถือได้ไหม</p></div>
         <div className="sy-head-actions">
           <button type="button" className="sy-btn" onClick={reload} disabled={anyLoading} aria-busy={anyLoading}><RefreshCw size={14} className={anyLoading ? "spin" : ""} aria-hidden="true" />{anyLoading ? "กำลังตรวจ…" : "ตรวจใหม่"}</button>
-          {canSync && <button type="button" className="sy-btn primary" onClick={syncNow} disabled={busy || !syncable.length} aria-busy={Boolean(syncing)} title={syncable.length ? "เติมช่วงวันที่ขาด + 3 วันล่าสุด แล้วดึง Creative" : "ต้องเชื่อม Meta และผูกบัญชีก่อน"}><Download size={14} aria-hidden="true" />ดึงข้อมูลตอนนี้</button>}
+          {canSync && <button type="button" className="sy-btn primary" onClick={syncAll} disabled={busy} aria-busy={busy} title="ค่าแอด Meta + Creative + ยอดขายทุกแบรนด์ ในคลิกเดียว"><Download size={14} aria-hidden="true" />ดึงข้อมูลทั้งหมด</button>}
           {canSync && <details className="sy-menu" ref={menuRef}>
             <summary className="sy-btn" aria-label="งานอื่น"><span>งานอื่น</span><ChevronDown size={14} aria-hidden="true" /></summary>
+            {/* จัดกลุ่ม + บอกใต้ชื่อว่าแต่ละอันทำอะไร — ชื่ออย่างเดียวแยกไม่ออกว่า "ตรวจการเชื่อมต่อ" ต่างจาก "สำรวจแหล่งข้อมูล" ยังไง */}
             <div className="sy-menu-list" role="menu">
-              <button type="button" role="menuitem" onClick={reconcileNow} disabled={busy || !syncable.length}><Scale size={14} aria-hidden="true" />ตรวจยอดกับ Meta</button>
-              <button type="button" role="menuitem" onClick={syncSales} disabled={busy}><ShoppingBag size={14} aria-hidden="true" />ดึงยอดขายตอนนี้</button>
-              <button type="button" role="menuitem" onClick={backfillSales} disabled={busy}><CalendarClock size={14} aria-hidden="true" />ดึงยอดขายย้อนหลัง 3 เดือน</button>
-              <button type="button" role="menuitem" onClick={checkSales} disabled={busy}><KeyRound size={14} aria-hidden="true" />ตรวจการเชื่อมต่อระบบขาย</button>
-              <button type="button" role="menuitem" onClick={surveySales} disabled={busy}><Radar size={14} aria-hidden="true" />สำรวจแหล่งข้อมูลระบบขาย</button>
+              <p className="sy-menu-group" role="presentation">ดึงแหล่งเดียว</p>
+              <button type="button" role="menuitem" onClick={syncNow} disabled={busy || !syncable.length}>
+                <Download size={14} aria-hidden="true" /><span><b>ดึงค่าแอด Meta เท่านั้น</b><small>เติมช่วงวันที่ขาด + 3 วันล่าสุด แล้วดึง Creative ต่อ</small></span>
+              </button>
+              <button type="button" role="menuitem" onClick={syncSales} disabled={busy}>
+                <ShoppingBag size={14} aria-hidden="true" /><span><b>ดึงยอดขายเท่านั้น</b><small>ย้อน 14 วัน ทุกแบรนด์ที่เชื่อมแหล่งแล้ว</small></span>
+              </button>
+              <p className="sy-menu-group" role="presentation">ระบบขาย</p>
+              <button type="button" role="menuitem" onClick={backfillSales} disabled={busy}>
+                <CalendarClock size={14} aria-hidden="true" /><span><b>ดึงยอดขายย้อนหลัง 3 เดือน</b><small>เติมข้อมูลเก่า ใช้ตอนเพิ่งเชื่อมแหล่งใหม่</small></span>
+              </button>
+              <button type="button" role="menuitem" onClick={checkSales} disabled={busy}>
+                <KeyRound size={14} aria-hidden="true" /><span><b>ตรวจการเชื่อมต่อ</b><small>เช็กว่าคีย์กับ URL ใช้ได้ ไม่เขียนอะไรลงฐาน</small></span>
+              </button>
+              <button type="button" role="menuitem" onClick={surveySales} disabled={busy}>
+                <Radar size={14} aria-hidden="true" /><span><b>สำรวจแหล่งข้อมูล</b><small>ดูว่าฝั่งขายเปิดอะไรให้เราอ่านได้</small></span>
+              </button>
+              <p className="sy-menu-group" role="presentation">Meta</p>
+              <button type="button" role="menuitem" onClick={reconcileNow} disabled={busy || !syncable.length}>
+                <Scale size={14} aria-hidden="true" /><span><b>ตรวจยอดกับ Meta</b><small>เทียบยอดในฐานกับ Meta ย้อน 7 และ 30 วัน</small></span>
+              </button>
             </div>
           </details>}
           <Link className="sy-btn ghost" to="/mkt/ads?panel=settings"><Settings2 size={14} aria-hidden="true" />ตั้งค่า</Link>
@@ -349,6 +446,7 @@ export function SyncStatusView() {
           <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${clock(lastData)} (${ago(lastData, now)})` : "—"} · ดึงค่าแอดรอบถัดไปราว {clock(nextSyncAt(oldestMetaSync, config.sources?.meta?.syncEveryHours ?? 6, now))}</>}</span>
         </div>
       </div>
+      <SyncTimeline rows={stepRows(run)} headline={runHeadline(run)} onHide={runEnded(run) ? () => setRun(null) : null} />
       {issues.length > 0 && <ul className="sy-issues" aria-label="เรื่องที่ควรดู">{issues.map((issue) => <li key={issue.key} className={issue.level}>
         <span className={`sy-level ${issue.level}`}>{LEVEL[issue.level]}</span>
         <span className="sy-issue-text"><b>{issue.text}</b>{issue.hint && <small>{issue.hint}</small>}</span>

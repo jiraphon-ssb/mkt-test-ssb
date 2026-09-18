@@ -18,9 +18,40 @@
 .sy-menu > summary::-webkit-details-marker { display:none; }
 .sy-menu[open] > summary svg { transform:rotate(180deg); }
 .sy-menu-list { position:absolute; top:calc(100% + 6px); right:0; z-index:30; display:grid; min-width:250px; padding:6px; border:1px solid var(--line); border-radius:10px; background:var(--surface); box-shadow:0 12px 32px #0000002e; }
-.mkt-root .sy-menu-list button { display:flex; align-items:center; gap:9px; min-height:38px; padding:0 10px; border:0; border-radius:7px; background:none; color:var(--ink); font:inherit; font-size:12px; text-align:left; cursor:pointer; }
+.sy-menu-list { min-width:304px; }
+.mkt-root .sy-menu-list button { display:flex; align-items:flex-start; gap:9px; min-height:38px; padding:8px 10px; border:0; border-radius:7px; background:none; color:var(--ink); font:inherit; font-size:12px; text-align:left; cursor:pointer; }
 .mkt-root .sy-menu-list button:hover:not(:disabled) { background:var(--surface-2); }
 .mkt-root .sy-menu-list button:disabled { opacity:.5; cursor:not-allowed; }
+.mkt-root .sy-menu-list button > svg { flex:none; margin-top:1px; color:var(--ink-soft); }
+.mkt-root .sy-menu-list button > span { display:grid; gap:2px; min-width:0; }
+.mkt-root .sy-menu-list button b { font-weight:650; }
+.mkt-root .sy-menu-list button small { color:var(--ink-soft); font-size:11px; line-height:1.35; }
+/* หัวข้อกลุ่มในเมนู — 6 งานเรียงติดกันอ่านไม่ออกว่าอันไหนเรื่องเดียวกัน */
+.sy-menu-group { margin:9px 10px 3px; color:var(--ink-soft); font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.sy-menu-group:first-child { margin-top:2px; }
+
+/* ── ไทม์ไลน์ของรอบที่กดเอง (SyncTimeline) — ปุ่มเดียวทำหลายขั้น ต้องเห็นว่าถึงไหนแล้ว ── */
+.sy-run { margin-top:10px; padding:13px 15px 4px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); }
+.sy-run-head { margin:0 0 11px; font-size:12px; font-weight:650; }
+.sy-run-head.run { color:var(--ink); } .sy-run-head.ok { color:var(--ok-text); } .sy-run-head.bad { color:var(--bad-text); }
+.sy-run ol { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:0; margin:0; padding:0; list-style:none; }
+.sy-run li { position:relative; display:grid; grid-template-columns:22px minmax(0,1fr); column-gap:9px; padding:0 14px 12px 0; }
+/* เส้นเชื่อมไปขั้นถัดไป — ขั้นที่ผ่านแล้วเส้นทึบ ขั้นที่ยังไม่ถึงเส้นประ */
+.sy-run li:not(.last)::after { content:""; position:absolute; top:10px; left:26px; right:6px; border-top:2px dashed var(--line); }
+.sy-run li.ok:not(.last)::after, .sy-run li.bad:not(.last)::after { border-top-style:solid; border-top-color:color-mix(in srgb,var(--ok-text) 45%,transparent); }
+.sy-run-mark { display:grid; place-items:center; width:22px; height:22px; border:2px solid var(--line); border-radius:50%; background:var(--surface); color:var(--ink-soft); }
+.sy-run-mark i { width:6px; height:6px; border-radius:50%; background:var(--line); }
+.sy-run li.ok .sy-run-mark { border-color:var(--ok-text); background:var(--ok-text); color:var(--on-accent,#fff); }
+.sy-run li.bad .sy-run-mark { border-color:var(--bad-text); background:var(--bad-text); color:#fff; }
+.sy-run li.run .sy-run-mark { border-color:var(--accent); color:var(--accent); }
+.sy-run-text { display:grid; gap:2px; min-width:0; padding-top:1px; }
+.sy-run-step { color:var(--ink-soft); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.sy-run-text b { font-size:12px; font-weight:650; }
+.sy-run-state { font-size:11px; font-weight:650; overflow-wrap:anywhere; }
+.sy-run-state.ok { color:var(--ok-text); } .sy-run-state.bad { color:var(--bad-text); }
+.sy-run-state.run { color:var(--accent); } .sy-run-state.muted { color:var(--ink-soft); }
+.sy-run-sub { color:var(--ink-soft); font-size:10.5px; line-height:1.35; }
+.mkt-root .sy-run-hide { min-height:30px; margin:2px 0 8px; padding:0; border:0; background:none; color:var(--ink-soft); font:inherit; font-size:11px; text-decoration:underline; cursor:pointer; }
 
 .sy-verdict { display:flex; align-items:center; gap:12px; margin-top:16px; padding:14px 16px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); }
 .sy-verdict > div { display:grid; gap:3px; min-width:0; }
@@ -130,8 +161,15 @@
   .sy-timeline li { grid-template-columns:44px minmax(0,1fr) auto; column-gap:8px; }
   .sy-tl-kind, .sy-tl-who { display:none; }
 }
+@media (max-width:860px) {
+  .sy-run ol { grid-auto-flow:row; }
+  .sy-run li { padding:0 0 14px; }
+  .sy-run li:not(.last)::after { top:26px; bottom:0; left:10px; right:auto; width:0; border-top:0; border-left:2px dashed var(--line); }
+  .sy-run li.ok:not(.last)::after, .sy-run li.bad:not(.last)::after { border-left-style:solid; border-left-color:color-mix(in srgb,var(--ok-text) 45%,transparent); }
+}
 @media (max-width:560px) {
   .sy-top, .sy-card { padding:14px; }
+  .sy-menu-list { min-width:min(304px,calc(100vw - 40px)); }
   .sy-issues li { grid-template-columns:minmax(0,1fr); gap:6px; }
   .sy-issue-act:empty { display:none; }
   .sy-menu-list { right:auto; left:0; }

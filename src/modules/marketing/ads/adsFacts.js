@@ -3,7 +3,9 @@
    ทุกหน้า ads คำนวณจากการ์ด → ต่อข้อมูลจริงได้โดยไม่เขียนตัวคำนวณใหม่
    กติกา: ไม่ผสมยอดจำลองกับยอดจริง · null ≠ 0 · วันนี้ยังไม่จบ = provisional
    ============================================================ */
-export const ADS_SOURCE_OPTIONS = [["mock", "ข้อมูลจำลอง"], ["meta_pilot", "Meta Pilot"]];
+/* ป้ายที่คนอ่านเข้าใจ — "Meta Pilot" เป็นชื่อภายใน ไม่ได้บอกว่าตัวเลขมาจากไหน
+   (ค่าคีย์ 'meta_pilot' / 'mock' ยังเดิม มีข้อมูลใน localStorage และฐานอ้างอยู่) */
+export const ADS_SOURCE_OPTIONS = [["mock", "ตัวอย่าง"], ["meta_pilot", "ของจริง"]];
 export const normalizeAdsSource = (value) => ADS_SOURCE_OPTIONS.some(([key]) => key === value) ? value : "mock";
 
 /** สิทธิ์ดูยอดจริง: สมาชิกที่ล็อกอินจริงเห็นยอดจริงเป็นค่าเริ่ม · team_lead สลับไปข้อมูลจำลองได้ (ใช้ตอนสาธิต)

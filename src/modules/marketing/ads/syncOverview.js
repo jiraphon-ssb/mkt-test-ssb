@@ -42,7 +42,7 @@ export function metaSourceRow({ accounts = [], ready = true, everyHours = null, 
   const reconciled = connected.filter((row) => row.reconciliation?.ready).length;
   return {
     ...base, sub: `${connected.length} บัญชี`, state, stateLabel,
-    hint: errors ? "ดูรหัสปัญหาในแท็บบัญชี Meta" : missing || stale ? "กดดึงข้อมูลตอนนี้เพื่อเติมช่วงที่ขาด" : null,
+    hint: errors ? "ดูรหัสปัญหาในแท็บบัญชี Meta" : missing || stale ? "กดดึงข้อมูลทั้งหมดเพื่อเติมช่วงที่ขาด" : null,
     fresh: { text: newest ? `${fmtNum(newest.ageHours, 2)} ชม.ก่อน` : latest ? ago(latest, now) : "ยังไม่เคยดึง", sub: everyHours ? `ดึงทุก ${everyHours} ชม.` : null },
     complete: { text: gap ? `ขาด ${gap} วัน` : "ไม่มีวันขาด", sub: `ตรวจยอดผ่าน ${reconciled}/${connected.length}` },
   };

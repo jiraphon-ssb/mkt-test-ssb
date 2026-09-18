@@ -83,13 +83,33 @@ describe("SyncStatusView — โหลดเสร็จ", () => {
   });
 });
 
+/* ปุ่มเดิมสองปุ่มชื่อคล้ายกัน ("ดึงข้อมูลตอนนี้" = ค่าแอด vs "ดึงยอดขายตอนนี้" ในเมนู) ใช้งานยาก
+   ของใหม่: ปุ่มหลักเดียวทำครบ · งานที่เหลืออยู่ในเมนูที่จัดกลุ่มและบอกว่าแต่ละอันทำอะไร */
+describe("SyncStatusView — แถบปุ่มสั่งงาน", () => {
+  it("ปุ่มหลักเดียว 'ดึงข้อมูลทั้งหมด' ไม่มีปุ่มชื่อคล้ายกันซ้อน", () => {
+    show();
+    expect(screen.getByRole("button", { name: /ดึงข้อมูลทั้งหมด/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^ดึงข้อมูลตอนนี้$/ })).toBeNull();
+  });
+  it("เมนูงานอื่นจัดกลุ่ม 3 กลุ่ม · ทุกงานมีคำอธิบายใต้ชื่อ", () => {
+    show();
+    const menu = screen.getByRole("menu");
+    expect([...menu.querySelectorAll(".sy-menu-group")].map((node) => node.textContent)).toEqual(["ดึงแหล่งเดียว", "ระบบขาย", "Meta"]);
+    const items = within(menu).getAllByRole("menuitem");
+    expect(items).toHaveLength(6);
+    for (const item of items) expect(item.querySelector("small")?.textContent?.length).toBeGreaterThan(8);
+    expect(within(menu).getByText("ดึงค่าแอด Meta เท่านั้น")).toBeTruthy();
+    expect(within(menu).getByText("ดึงยอดขายเท่านั้น")).toBeTruthy();
+  });
+});
+
 describe("SyncStatusView — สมาชิกที่ไม่ใช่หัวหน้าทีม", () => {
   it("ยังโหลดสถานะบัญชีจริงจากฐาน (อ่านได้ทุกคน) · ไม่เห็นปุ่มสั่งงาน", async () => {
     auth.user = { role: "member" };
     show();
     expect(pending.connections).toBeTruthy();
     expect(pending.coverage).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /ดึงข้อมูลตอนนี้/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /ดึงข้อมูลทั้งหมด/ })).toBeNull();
     expect(screen.queryByText("งานอื่น")).toBeNull();
   });
 
