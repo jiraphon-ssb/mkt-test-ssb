@@ -68,7 +68,7 @@ export function sourceChips({ summary = {}, sales = [], salesGoals = [], today =
   const withGoal = new Set((salesGoals ?? [])
     .filter((goal) => String(goal?.month ?? "").slice(0, 7) === ym
       && SALES_SOURCE_BRAND_IDS.includes(goal?.brand_id)
-      && Number(goal?.sales_target) > 0)
+      && goal?.sales_target != null)     // 0 = ตั้งใจให้เป็นศูนย์ (กติกาเดียวกับ goalOverrides.js) ไม่ใช่ "ยังไม่ตั้ง"
     .map((goal) => goal.brand_id));
   chips.push({
     key: "goals", label: "เป้าเดือนนี้", fresh: null,

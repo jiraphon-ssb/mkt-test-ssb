@@ -77,11 +77,15 @@ describe("goalGaps — เป้าเดือนนี้มาจากไห
   it("เป้าแบบเก่า: มียอด/ออเดอร์/มัดจำ/ลีด/คนทัก · ขาดงบแอด CPL ROAS %Ads CAC ต้นทุนต่อทัก", () => {
     const out = goalGaps({ goal_source: "sale_target", version: 0, sales_target: 3300000, orders_target: 193, deposits_target: 206, leads_target: 344, inquiry_target: 1173, ad_budget: null, cpl: null, roas: null, pct_ads_new: null, cac: null, cpi: null });
     expect(out.source).toBe("sale_target");
-    expect(out.missing).toEqual(["งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อทัก"]);
+    // "ยอดลูกค้าใหม่" เป็นช่องที่เพิ่มมา 18 ก.ย. 69 (ตั้งเองได้ในหน้าตั้งค่า) เป้าแบบเก่าไม่มีให้
+    expect(out.missing).toEqual(["ยอดลูกค้าใหม่", "งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อทัก"]);
     expect(out.present).toHaveLength(5);
   });
-  it("งบแอด 0 = ยังไม่ตั้ง · ไม่มีเป้าเลย = none", () => {
-    expect(goalGaps({ goal_source: "sale_goal", version: 2, sales_target: 1, ad_budget: 0 }).missing).toContain("งบแอด");
+  /* 18 ก.ย. 69: 0 = ตั้งใจให้เป็นศูนย์ (เดือนที่พักแอด) ไม่ใช่ "ยังไม่ตั้ง"
+     ท่อ sync เขียน null เมื่อไม่ได้ตั้งอยู่แล้ว 0 จึงมาจากคนกรอกเองเท่านั้น */
+  it("งบแอด 0 = ตั้งแล้ว (ตั้งใจให้เป็นศูนย์) · ไม่มีค่า = ยังไม่ตั้ง · ไม่มีเป้าเลย = none", () => {
+    expect(goalGaps({ goal_source: "sale_goal", version: 2, sales_target: 1, ad_budget: 0 }).present).toContain("งบแอด");
+    expect(goalGaps({ goal_source: "sale_goal", version: 2, sales_target: 1, ad_budget: null }).missing).toContain("งบแอด");
     expect(goalGaps(null)).toMatchObject({ source: "none", present: [] });
   });
 });

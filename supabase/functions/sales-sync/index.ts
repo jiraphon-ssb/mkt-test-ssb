@@ -182,7 +182,7 @@ Deno.serve(async (request) => {
   /* ยอด JUNTAKARN ดึงแยกจากยอดพี่ทัช — ผลของมันต้องติดไปกับรอบเสมอ แม้เฟสของพี่ทัชจะล้ม
      (ก่อนหน้านี้เฟสพี่ทัชล้ม = return ก่อนถึงเฟส JK → ยอด JK ไม่อัปเดตเลยทั้งที่ระบบ TMK ปกติ) */
   let jk: { read: number; written: number; error: string | null } = { read: 0, written: 0, error: null };
-  let jkGoals: { read: number; written: number; error: string | null } = { read: 0, written: 0, error: null };
+  let jkGoals: { read: number; written: number; error: string | null; skipped?: string } = { read: 0, written: 0, error: null };
   const failRun = async (code: string, status: number, extra: Record<string, unknown> = {}) => {
     await finishRun(db, runId, { status: "failed", errorCode: code, summary: { ...extra, jk, jkGoals } });
     return json(request, { error: code, runId, jk, jkGoals, ...extra }, status);
@@ -252,10 +252,12 @@ Deno.serve(async (request) => {
      เป้ายอด = ช่องแชท · งบแอด = Facebook + Instagram (RPC คัดให้แล้ว) · ROAS คิดจากสองตัวนี้
      เดือนที่ทีมยังไม่ตั้งเป้า = ไม่เขียนอะไร ไม่ใช่ error (ห้ามเขียนศูนย์ทับเป้าที่คนตั้งเอง)
      ล้มที่นี่ต้องไม่ทำให้ยอดหรือเป้าของแบรนด์อื่นพัง */
-  const runJkGoals = async (months: string[]): Promise<{ read: number; written: number; error: string | null }> => {
+  const runJkGoals = async (months: string[]): Promise<{ read: number; written: number; error: string | null; skipped?: string }> => {
     const jkUrl = Deno.env.get("JK_API_URL")?.trim();
     const jkKey = Deno.env.get("JK_API_KEY")?.trim();
-    if (!jkUrl || !jkKey || !months.length) return { read: 0, written: 0, error: null };
+    // ยังไม่ได้ตั้งคีย์ = ยังไม่เคยยิงไปหา TMK เลย — ต้องแยกจาก "ยิงแล้วเดือนนี้ไม่มีใครตั้งเป้า"
+    if (!jkUrl || !jkKey) return { read: 0, written: 0, error: null, skipped: "JK_NOT_CONFIGURED" };
+    if (!months.length) return { read: 0, written: 0, error: null, skipped: "NO_MONTHS" };
     try {
       const response = await fetch(jkGoalUrl(jkUrl), {
         method: "POST",

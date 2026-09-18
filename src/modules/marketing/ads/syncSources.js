@@ -101,7 +101,7 @@ export function coverageMatrix(facts = [], { brandIds = [], from, to, today = nu
 }
 
 export const GOAL_FIELDS = [
-  ["sales_target", "เป้ายอดขาย"], ["orders_target", "ออเดอร์"], ["deposits_target", "มัดจำ"], ["leads_target", "ลีด"], ["inquiry_target", "คนทัก"],
+  ["sales_target", "เป้ายอดขาย"], ["sales_new_target", "ยอดลูกค้าใหม่"], ["orders_target", "ออเดอร์"], ["deposits_target", "มัดจำ"], ["leads_target", "ลีด"], ["inquiry_target", "คนทัก"],
   ["ad_budget", "งบแอด"], ["cpl", "CPL"], ["roas", "ROAS"], ["pct_ads_new", "%Ads"], ["cac", "CAC"], ["cpi", "ต้นทุนต่อทัก"],
 ];
 
@@ -112,7 +112,8 @@ export function goalGaps(goal) {
   const missing = [];
   for (const [key, label] of GOAL_FIELDS) {
     const value = goal[key];
-    const set = value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) && !(key === "ad_budget" && Number(value) <= 0);
+    // 0 = ตั้งใจให้เป็นศูนย์ (เช่นเดือนที่พักแอด) — ค่าที่ท่อ sync เขียนมาเป็น null อยู่แล้วเมื่อไม่ได้ตั้ง
+    const set = value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
     (set ? present : missing).push(label);
   }
   return { source: goal.goal_source ?? "sale_goal", version: goal.version ?? null, present, missing };

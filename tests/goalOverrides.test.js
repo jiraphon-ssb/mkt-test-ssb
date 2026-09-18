@@ -139,7 +139,7 @@ describe("GOAL_EDIT_FIELDS", () => {
   it("ชื่อช่องตรงกับคอลัมน์ในตาราง override · มีหน่วยครบทุกช่อง", () => {
     const keys = GOAL_EDIT_FIELDS.map((field) => field.key);
     expect(keys).toEqual([
-      "sales_target", "ad_budget", "orders_target", "deposits_target", "leads_target",
+      "sales_target", "sales_new_target", "ad_budget", "orders_target", "deposits_target", "leads_target",
       "inquiry_target", "cpl", "cac", "cpi", "roas", "pct_ads_new",
     ]);
     for (const field of GOAL_EDIT_FIELDS) {
@@ -171,18 +171,65 @@ describe("mergeGoals — คอลัมน์นอกช่องที่แ�
     sales_new_target: 1200000, share_new: 0.35, synced_at: "2026-09-18T08:49:42Z",
   });
   it("ยกมาครบทั้งแถว แม้จะมี override ทับบางช่อง", () => {
-    const row = rowOf([full()], [ov({ ad_budget: 250000 })]);
+    const row = rowOf([full()], [ov({ orders_target: 9 })]);
     expect(row.platform_budgets).toEqual({ meta: 95000 });
     expect(row.caps).toEqual({ cpl: 800 });
     expect(row.sales_new_target).toBe(1200000);
     expect(row.share_new).toBe(0.35);
     expect(row.synced_at).toBe("2026-09-18T08:49:42Z");
-    expect(row.ad_budget).toBe(250000);            // ช่องที่แก้ยังชนะเหมือนเดิม
-    expect(row.sources.ad_budget).toBe("manual");
+    expect(row.ad_budget).toBe(210000);            // ไม่ได้แก้ช่องนี้ → ยังเป็นค่าจากระบบขาย
+    expect(row.orders_target).toBe(9);
+    expect(row.sources.orders_target).toBe("manual");
   });
   it("แถวที่มีแต่ override (ไม่มีของจากระบบขาย) ไม่มีคอลัมน์พวกนี้ปลอมขึ้นมา", () => {
     const row = rowOf([], [ov({ month: "2026-10-01", sales_target: 1 })], "b_td", "2026-10-01");
     expect(row.platform_budgets).toBeUndefined();
     expect(row.caps).toBeUndefined();
+  });
+});
+
+/* ช่องที่แก้เองต้องไหลไปถึงคอลัมน์ jsonb ที่ derive จากมัน ไม่งั้นหน้าที่อ่าน jsonb ยังใช้ค่าเก่า
+   เจอจากรีวิว 18 ก.ย. 69: ตั้งงบแอด 50,000 แล้วกล่องงบบน Overview ยังคิดจาก 70,000 (platform_budgets.meta)
+   และเพดาน CPL ที่ตั้งเอง 180 ไม่มีผลกับการตัดสินแคมเปญ (caps.cpl ยัง 250) */
+describe("mergeGoals — ค่าที่แก้ต้องไหลลงคอลัมน์ที่ derive จากมัน", () => {
+  const synced = () => goal({ ad_budget: 70000, platform_budgets: { meta: 70000 }, cpl: 300, caps: { cpl: 250 } });
+  it("แก้งบแอด = platform_budgets.meta เดินตาม · แก้ CPL = caps.cpl เดินตาม", () => {
+    const row = rowOf([synced()], [ov({ ad_budget: 50000, cpl: 180 })]);
+    expect(row.ad_budget).toBe(50000);
+    expect(row.platform_budgets).toEqual({ meta: 50000 });
+    expect(row.cpl).toBe(180);
+    expect(row.caps).toEqual({ cpl: 180 });
+  });
+  it("ไม่แก้ = คอลัมน์เดิมไม่ถูกแตะ · ไม่ mutate แถวต้นทาง", () => {
+    const rows = [synced()];
+    const row = rowOf(rows, [ov({ orders_target: 5 })]);
+    expect(row.platform_budgets).toEqual({ meta: 70000 });
+    expect(row.caps).toEqual({ cpl: 250 });
+    expect(rows[0].platform_budgets).toEqual({ meta: 70000 });
+  });
+  it("แถวที่ไม่มี caps มาแต่แรก ไม่สร้าง caps ปลอมขึ้นมา", () => {
+    const row = rowOf([goal({ caps: undefined })], [ov({ cpl: 180 })]);
+    expect(row.caps).toBeUndefined();
+    expect(row.cpl).toBe(180);
+  });
+});
+
+/* โหมด "ยอดใหม่" บนหน้า Overview เทียบกับ sales_new_target — ก่อน 18 ก.ย. 69 ช่องนี้ตั้งเองไม่ได้
+   คนตั้งเป้ายอดขายเองแล้วสลับไปโหมดยอดใหม่ จะเห็นเป้าเด้งกลับเป็นของระบบขายเงียบๆ */
+describe("เป้ายอดลูกค้าใหม่ตั้งเองได้", () => {
+  it("merge แล้วชนะ · ไหลถึง plansFromSalesGoals ทั้งสองโหมด", async () => {
+    const { plansFromSalesGoals } = await import("../src/modules/marketing/ads/salesOverview.js");
+    const synced = goal({ sales_target: 3500000, sales_new_target: 900000 });
+    const rows = mergedGoalRows(mergeGoals([synced], [ov({ sales_new_target: 1200000 })]));
+    expect(rows[0].sales_new_target).toBe(1200000);
+    expect(rows[0].sources.sales_new_target).toBe("manual");
+    expect(rows[0].synced.sales_new_target).toBe(900000);
+    expect(plansFromSalesGoals({ goals: rows, month: "2026-09", basis: "new" }).salesTargets[0].amount).toBe(1200000);
+    expect(plansFromSalesGoals({ goals: rows, month: "2026-09", basis: "total" }).salesTargets[0].amount).toBe(3500000);
+  });
+  it("ไม่ได้ตั้งเอง = ใช้ของระบบขายเหมือนเดิม", async () => {
+    const { plansFromSalesGoals } = await import("../src/modules/marketing/ads/salesOverview.js");
+    const rows = mergedGoalRows(mergeGoals([goal({ sales_new_target: 900000 })], [ov({ orders_target: 5 })]));
+    expect(plansFromSalesGoals({ goals: rows, month: "2026-09", basis: "new" }).salesTargets[0].amount).toBe(900000);
   });
 });

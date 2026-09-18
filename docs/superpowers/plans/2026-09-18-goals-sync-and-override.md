@@ -127,7 +127,7 @@ alter table public.ad_sales_goals add constraint ad_sales_goals_goal_source_chec
 บอก: จะเพิ่มตารางใหม่ 1 ตาราง + แก้ check constraint ของ `goal_source` · ไม่แตะข้อมูลเดิม · rollback ได้ตามคอมเมนต์ในไฟล์
 รอคำตอบ แล้วรัน: `npx supabase db push` (deploy gate ต้องผ่านก่อน — ถ้า `.release-ok` ไม่ตรง HEAD ให้หยุดและรายงาน)
 
-- [ ] **Step 3: ยืนยันของจริง**
+- [x] **Step 3: ยืนยันของจริง** — หลัง push ตรวจบนฐานแล้ว: constraint มี `tmk_month` · ตารางมี 0 แถว · policy 2 ตัว · trigger 1 ตัว · FK = no action (`a,a`)
 
 Run: `npx supabase db query --linked "select conname, pg_get_constraintdef(oid) from pg_constraint where conname = 'ad_sales_goals_goal_source_check'"`
 Expected: เห็น `'tmk_month'` ในรายการ
@@ -336,7 +336,7 @@ export function jkGoalUrl(url) {
 
 - [x] **Step 5: รันเทสให้เขียว** — 9 เทสผ่าน (8 + jkGoalUrl)
 
-- [ ] **Step 6: รายงานว่าพร้อม commit (ห้าม commit เอง)**
+- [x] **Step 6: commit** — ผู้ใช้สั่ง → `c5e570d` · `92a57a2` · tag v0.11.0
 
 ---
 
@@ -403,7 +403,7 @@ export function jkGoalUrl(url) {
 
 - [x] **Step 4: เทสข้อความครบ** — เพิ่มเทสล็อกรหัส JK ทั้ง 17 ตัวว่ามีข้อความไทย — เพิ่มใน `tests/adsSyncMessages.test.js` (ถ้ามี) ว่า `adsErrorText("JK_GOAL_NO_PERMISSION")` ไม่คืนโค้ดดิบ · รัน `npx vitest run tests/adsSyncMessages.test.js`
 
-- [ ] **Step 5: ขออนุญาต deploy แล้วรายงาน** — `npx supabase functions deploy sales-sync --use-api` (ต้องผ่าน gate · ห้าม deploy เองถ้ายังไม่ได้รับคำสั่ง)
+- [x] **Step 5: ขึ้นของจริงแล้ว** — ผู้ใช้สั่ง → `sales-sync` version 20 ACTIVE · เป้า JK เข้าจริง (ก.ย. ฿540,000 / งบ ฿95,000) — `npx supabase functions deploy sales-sync --use-api` (ต้องผ่าน gate · ห้าม deploy เองถ้ายังไม่ได้รับคำสั่ง)
 
 ---
 
@@ -695,21 +695,24 @@ export function parseGoalInput(text, unit = "money") {
 **Files:**
 - Modify: `README.md` · `docs/RUNBOOK.md` · `CHANGELOG.md`
 
-- [ ] **Step 1: ให้ผู้ใช้กดดึงแล้วตรวจเลขเป้าของ JK**
+- [x] **Step 1: ตรวจเลขเป้าของ JK** — ผู้ใช้ยืนยัน 18 ก.ย. 69 ว่า**ตรง**: เป้ายอด ฿540,000.00 = ผลรวมเป้าช่องแชทในหน้า TMK · งบแอด ฿95,000.00 = Facebook + Instagram · ROAS เป้า 5.6842
 
 เทียบ `sales_target` / `ad_budget` / `roas` ของ `b_jt` กับหน้า ตั้งค่า › เป้า & คอมมิชชั่น ของ TMK (ผลรวมช่องแชท · งบ FB+IG) — ไม่ตรงให้หยุดและรายงานส่วนต่าง ห้ามปรับสูตรให้ตรงโดยไม่รู้สาเหตุ
 
-- [ ] **Step 2: ตรวจว่า "ตั้งค่าชนะ" จริงบนของจริง**
+- [x] **Step 2: ตรวจว่า "ตั้งค่าชนะ" จริงบนของจริง** — พิสูจน์แล้ว 18 ก.ย. 69:
+  ผู้ใช้ตั้งเองเวลา 15:58 (ROAS 4.2 · %Ads 20% · คนทัก 2,300 · ออเดอร์ 355) · sync รันทับเป้าใหม่เวลา 16:18 (เขียน jkGoals 2 เดือน · success)
+  → หน้าจอเวลา 16:20 ยังขึ้น `เป้า ≥ 4.20×` และ `เพดาน ≤ 20.00%` (ค่าที่ตั้งเอง) ไม่ใช่ 5.68 จาก TMK
+  · trigger ประทับคนแก้ทำงานจริง (`updated_by = u_art` มาจากฐาน ไม่ใช่จากหน้าเว็บ)
 
 แก้ค่าหนึ่งช่องในหน้าตั้งค่า → กดดึงยอดขายอีกรอบ → ค่าที่แก้ต้องยังอยู่ และป้ายยังเป็น "ตั้งค่าเอง"
 
-- [ ] **Step 3: เอกสาร**
+- [x] **Step 3: เอกสาร** — README (ตารางข้อมูลไหล 3 แถวใหม่) · RUNBOOK (หัวข้อ 4 ยอด/เป้า JK ไม่เข้า + เป้าไม่ตรงกับที่ทีมตั้ง) · CHANGELOG v0.11.0
 
 - `README.md` ตาราง "ข้อมูลไหลยังไง": เพิ่มแถวเป้า JUNTAKARN (RPC `jk_ads_monthly_goal` · วันละครั้ง) และแถว override
 - `docs/RUNBOOK.md`: หัวข้อ "เป้าไม่ตรงกับที่ทีมตั้ง" — ดูป้ายที่มาในหน้าตั้งค่าเป้า · ถ้าเป็น "ตั้งค่าเอง" คือมีคนแก้ทับ · รหัส `JK_GOAL_*`
 - `CHANGELOG.md` `[Unreleased]` → `### feat`
 
-- [ ] **Step 4: รันทั้งชุดแล้วรายงาน** — `npm test --silent && npm run lint && npm run build` → รายงานว่าพร้อม commit
+- [x] **Step 4: รันทั้งชุดแล้วรายงาน** — 991 เทสผ่าน · lint 0 error · build ผ่าน · ออก v0.11.0 · migration applied · sales-sync v20 — `npm test --silent && npm run lint && npm run build` → รายงานว่าพร้อม commit
 
 ---
 

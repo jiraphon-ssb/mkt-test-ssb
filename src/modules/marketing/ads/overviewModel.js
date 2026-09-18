@@ -94,7 +94,10 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       const targets = goalTargetsByBrand(ads.salesGoals, goalMonth);
       const goalRows = new Map((ads.salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
       goals = {
-        overall: goalsFor(pipelineValues(overallPipeline), combineGoalTargets(SALES_BRAND_IDS.filter((id) => byId.has(id)).map((id) => ({
+        /* เป้าภาพรวมต้องนับ "ชุดแบรนด์เดียวกับตัวเลขจริง" — overallPipeline รวมเฉพาะแบรนด์ที่เก็บ funnel ครบ
+           ถ้าเอาเป้าของ JUNTAKARN มารวมด้วย จะได้เป้าคนทัก 6,566 (4 แบรนด์) เทียบกับของจริง 2,769 (3 แบรนด์)
+           และเป้า Lead หายทั้งแถวเพราะกติกา all-or-null (ระบบ TMK ไม่มีเป้า Lead) */
+        overall: goalsFor(pipelineValues(overallPipeline), combineGoalTargets(funnelIds.filter((id) => byId.has(id)).map((id) => ({
           brandId: id,
           targets: targets.get(id) ?? {}, weights: { budget: goalRows.get(id)?.ad_budget, revenue: goalRows.get(id)?.sales_target, inquiries: goalRows.get(id)?.inquiry_target },
         }))), targetPeriod),

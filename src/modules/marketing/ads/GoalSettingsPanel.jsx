@@ -98,7 +98,10 @@ export function GoalSettingsPanel({ brands = [], isLead = false, toast }) {
     return typed !== undefined && parseGoalInput(typed, field.unit) === undefined;
   };
   const dirty = Object.values(draft).some((brand) => Object.keys(brand ?? {}).length > 0);
-  const anyInvalid = sourceBrands.some((brand) => GOAL_EDIT_FIELDS.some((field) => fieldError(brand.id, field)));
+  /* พิมพ์ผิดที่แบรนด์หนึ่งต้องไม่ล็อกการบันทึกของแบรนด์อื่น — save() ข้ามแบรนด์ที่กรอกไม่ถูกและรายงานชื่อไว้แล้ว
+     ปุ่มกดไม่ได้ก็ต่อเมื่อทุกแบรนด์ที่แก้ไว้กรอกผิดหมด (กดไปก็ไม่มีอะไรบันทึกได้) */
+  const dirtyBrands = sourceBrands.filter((brand) => Object.keys(draft[brand.id] ?? {}).length > 0);
+  const anyInvalid = dirtyBrands.length > 0 && dirtyBrands.every((brand) => GOAL_EDIT_FIELDS.some((field) => fieldError(brand.id, field)));
 
   const save = async () => {
     if (!canEdit || saving || !dirty) return;

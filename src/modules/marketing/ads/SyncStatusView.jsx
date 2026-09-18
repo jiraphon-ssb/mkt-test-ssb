@@ -296,7 +296,9 @@ export function SyncStatusView() {
          ไม่งั้นคนกดไม่รู้ว่าเป้าถูกดึงไปแล้วหรือยัง */
       const goalParts = [
         out.goals?.error ? adsErrorText(out.goals.error, "เป้าจากระบบขายไม่เข้า") : out.goals?.written ? `ระบบขาย ${out.goals.written.toLocaleString("th-TH")} แถว` : null,
-        out.jkGoals?.error ? adsErrorText(out.jkGoals.error, "เป้า JUNTAKARN ไม่เข้า") : out.jkGoals?.written ? `ระบบ TMK ${out.jkGoals.written.toLocaleString("th-TH")} เดือน` : null,
+        out.jkGoals?.error ? adsErrorText(out.jkGoals.error, "เป้า JUNTAKARN ไม่เข้า")
+          : out.jkGoals?.skipped === "JK_NOT_CONFIGURED" ? "ระบบ TMK ยังไม่ได้ตั้งคีย์ — ข้ามไป"
+            : out.jkGoals?.written ? `ระบบ TMK ${out.jkGoals.written.toLocaleString("th-TH")} เดือน` : null,
       ].filter(Boolean);
       return {
         tone: out.jk?.error ? "bad" : "ok",
@@ -307,7 +309,9 @@ export function SyncStatusView() {
         },
       };
     } catch (error) {
-      return { tone: "bad", parts: [adsErrorText(error, "ดึงยอดขายไม่สำเร็จ")], goals: { tone: "bad", parts: ["ไม่ได้ดึงเป้า เพราะรอบยอดขายล้มก่อน"] } };
+      /* เฟสเป้าของ JK รันก่อนเฟสยอดขายของพี่ทัชในตัว edge function — รอบล้มไม่ได้แปลว่าเป้าไม่เข้า
+         แต่เราอ่านผลกลับมาไม่ได้ (error ไม่ได้พา body มาด้วย) จึงบอกว่า "ไม่ทราบผล" ไม่ใช่ "ไม่ได้ดึง" */
+      return { tone: "bad", parts: [adsErrorText(error, "ดึงยอดขายไม่สำเร็จ")], goals: { tone: "bad", parts: ["ไม่ทราบผลของขั้นเป้า — รอบยอดขายล้มก่อนอ่านผลกลับมา ดูได้ที่แท็บยอดขาย"] } };
     } finally { setSalesBusy(null); }
   };
   /* ดึงย้อนหลังทีละเดือน — function รับครั้งละ ≤93 วัน · พังเดือนไหนบอกเดือนนั้น เดือนที่สำเร็จแล้วไม่เสีย */

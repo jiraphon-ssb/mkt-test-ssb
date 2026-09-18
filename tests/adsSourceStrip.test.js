@@ -48,7 +48,9 @@ describe("sourceChips", () => {
 
   it("เป้า: ขาดบางแบรนด์ = เตือนพร้อมบอกจำนวน · เป้าเดือนอื่นไม่นับ", () => {
     expect(chipOf(sourceChips({ summary, today: TODAY, salesGoals: [goal("b_td")] }), "goals")).toMatchObject({ value: "1/4 แบรนด์", tone: "warn" });
-    expect(chipOf(sourceChips({ summary, today: TODAY, salesGoals: [goal("b_td", 0), goal("b_jt", null)] }), "goals")).toMatchObject({ value: "ยังไม่ตั้งเป้า", tone: "muted" });
+    // เป้า 0 = ตั้งใจให้เป็นศูนย์ → นับว่าตั้งแล้ว · ไม่มีค่า (null) เท่านั้นที่ถือว่ายังไม่ตั้ง
+    expect(chipOf(sourceChips({ summary, today: TODAY, salesGoals: [goal("b_td", 0), goal("b_jt", null)] }), "goals")).toMatchObject({ value: "1/4 แบรนด์", tone: "warn" });
+    expect(chipOf(sourceChips({ summary, today: TODAY, salesGoals: [goal("b_td", null)] }), "goals")).toMatchObject({ value: "ยังไม่ตั้งเป้า", tone: "muted" });
     expect(chipOf(sourceChips({ summary, today: TODAY, salesGoals: [{ brand_id: "b_td", month: "2026-08-01", sales_target: 1 }] }), "goals")).toMatchObject({ value: "ยังไม่ตั้งเป้า", tone: "muted" });
     // JUNTAKARN นับด้วยแล้ว — เป้าจากระบบ TMK หรือที่ตั้งเองในหน้าตั้งค่าก็นับ
     expect(chipOf(sourceChips({ summary, today: TODAY, salesGoals: [goal("b_jt")] }), "goals")).toMatchObject({ value: "1/4 แบรนด์" });

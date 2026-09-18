@@ -40,7 +40,7 @@ export function SalesCheckResult({ result }) {
 const GOAL_FORMAT = {
   sales_target: "money", ad_budget: "money", cpl: "money", cac: "money", cpi: "money", roas: "roas", pct_ads_new: "pct",
 };
-const GOAL_SHORT = { sales_target: "ยอดขาย", cpi: "ต่อทัก" };
+const GOAL_SHORT = { sales_target: "ยอดขาย", sales_new_target: "ยอดใหม่", cpi: "ต่อทัก" };
 const goalValue = (key, value) => {
   const n = Number(value);
   if (value === null || value === undefined || value === "" || !Number.isFinite(n) || (key === "ad_budget" && n <= 0)) return null;

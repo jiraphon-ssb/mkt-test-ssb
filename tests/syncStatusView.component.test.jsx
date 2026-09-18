@@ -213,3 +213,40 @@ describe("SyncStatusView — ไทม์ไลน์มีขั้นเป้
     expect(within(timeline).getByRole("status").textContent).toContain("เป้าเดือนนี้");
   });
 });
+
+/* ขั้น "เป้า" ต้องไม่โกหก 2 แบบที่รีวิวจับได้
+   ก) ยังไม่ได้ตั้งคีย์ JK = ยังไม่เคยยิงไปหา TMK เลย ห้ามขึ้นเขียวว่า "เดือนนี้ไม่มีใครตั้งเป้า"
+   ข) รอบยอดขายล้ม = อ่านผลของขั้นเป้าไม่ได้ ห้ามบอกว่า "ไม่ได้ดึงเป้า" (เฟสเป้ารันไปก่อนแล้ว) */
+describe("SyncStatusView — ขั้นเป้าไม่โกหก", () => {
+  const settleAll = async () => {
+    await settle("syncRuns", []); await settle("connections", []); await settle("recons", []);
+    await settle("coverage", []); await settle("ticks", []); await settle("pipes", []);
+    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] });
+  };
+  const pullSales = async () => { await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึงยอดขายเท่านั้น/ })); }); };
+
+  it("ยังไม่ได้ตั้งคีย์ระบบ TMK = บอกว่าข้ามไป ไม่ใช่ว่าไม่มีใครตั้งเป้า", async () => {
+    salesSyncResult = { written: 42, jk: { written: 0, error: null }, goals: { written: 3, error: null }, jkGoals: { written: 0, error: null, skipped: "JK_NOT_CONFIGURED" } };
+    show();
+    await settleAll();
+    await pullSales();
+    const timeline = screen.getByLabelText("ความคืบหน้าการดึงข้อมูล");
+    expect(within(timeline).getByText(/ระบบ TMK ยังไม่ได้ตั้งคีย์ — ข้ามไป/)).toBeTruthy();
+    expect(within(timeline).queryByText(/ยังไม่มีใครตั้งเป้าในระบบต้นทาง/)).toBeNull();
+  });
+
+  it("รอบยอดขายล้ม = ขั้นเป้าบอกว่าไม่ทราบผล ไม่ใช่บอกว่าไม่ได้ดึง", async () => {
+    const boom = new Error("SALES_READ_FAILED");
+    const { apiClient } = await import("../src/foundation/data/apiClient.js");
+    const original = apiClient.ads.salesSync;
+    apiClient.ads.salesSync = async () => { throw boom; };
+    try {
+      show();
+      await settleAll();
+      await pullSales();
+      const timeline = screen.getByLabelText("ความคืบหน้าการดึงข้อมูล");
+      expect(within(timeline).getByText(/ไม่ทราบผลของขั้นเป้า/)).toBeTruthy();
+      expect(within(timeline).queryByText(/ไม่ได้ดึงเป้า/)).toBeNull();
+    } finally { apiClient.ads.salesSync = original; }
+  });
+});

@@ -54,10 +54,10 @@ describe("GoalMatrix", () => {
     expect(within(td).getByText("เป้าแบบเก่า")).toBeTruthy();
     expect(within(td).getByText("฿3,300,000.00")).toBeTruthy();
     expect(within(td).getByText("1,173")).toBeTruthy();
-    expect(within(td).getAllByText("—")).toHaveLength(6);
+    expect(within(td).getAllByText("—")).toHaveLength(7);   // +1 ช่อง "ยอดลูกค้าใหม่" ที่เพิ่มมา
     // JUNTAKARN ยังไม่มีเป้าเลย จึงเข้ามาในบรรทัดสรุปด้วย (เดิมนับแค่ TEAMDEE)
     const summary = screen.getByText(/ยังไม่ตั้ง:/).textContent;
-    for (const label of ["งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อทัก", "เป้ายอดขาย"]) expect(summary).toContain(label);
+    for (const label of ["งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อทัก", "เป้ายอดขาย", "ยอดลูกค้าใหม่"]) expect(summary).toContain(label);
     expect(within(screen.getByRole("row", { name: /แบรนด์ใหม่/ })).getByText("รอเชื่อมแหล่งข้อมูล")).toBeTruthy();
     // JUNTAKARN มีแหล่งแล้วแต่ยังไม่มีใครตั้งเป้าให้ → ต้องบอกว่า "ยังไม่ตั้งเป้า" ไม่ใช่ "รอเชื่อมแหล่งข้อมูล"
     expect(within(screen.getByRole("row", { name: /JUNTAKARN/ })).getByText("ยังไม่ตั้งเป้า")).toBeTruthy();
@@ -66,7 +66,7 @@ describe("GoalMatrix", () => {
     render(<GoalMatrix brands={[brands[0]]} goals={[]} />);
     expect(screen.getByText("ยังไม่ตั้งเป้า")).toBeTruthy();
     cleanup();
-    const full = { brand_id: "b_td", goal_source: "sale_goal", version: 3, sales_target: 1, orders_target: 1, deposits_target: 1, leads_target: 1, inquiry_target: 1, ad_budget: 1000, cpl: 400, roas: 6, pct_ads_new: 0.16, cac: 5000, cpi: 90 };
+    const full = { brand_id: "b_td", goal_source: "sale_goal", version: 3, sales_target: 1, sales_new_target: 1, orders_target: 1, deposits_target: 1, leads_target: 1, inquiry_target: 1, ad_budget: 1000, cpl: 400, roas: 6, pct_ads_new: 0.16, cac: 5000, cpi: 90 };
     render(<GoalMatrix brands={[brands[0]]} goals={[full]} />);
     expect(screen.getByText("หน้าเป้าหมาย v3")).toBeTruthy();
     expect(screen.getByText("6.00×")).toBeTruthy();

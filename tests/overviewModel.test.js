@@ -69,3 +69,44 @@ describe("funnel ภาพรวมกับแบรนด์ที่ระบ
     expect(jk.items.find((item) => item.key === "qualified").sub).toBe("ระบบขายของแบรนด์นี้ไม่มีขั้นนี้");
   });
 });
+
+/* เป้าภาพรวมต้องเทียบกับชุดแบรนด์เดียวกับตัวเลขจริง
+   บั๊กที่เจอบนหน้าจริง 18 ก.ย. 69: เป้าคนทักภาพรวม 6,566 (รวม JUNTAKARN) เทียบกับของจริง 2,769 (ไม่รวม)
+   และเป้า Lead หายทั้งแถว เพราะระบบ TMK ไม่มีเป้า Lead แล้วโดนกติกา all-or-null ล้างทิ้ง */
+describe("เป้าภาพรวมกับแบรนด์ที่ funnel ไม่ครบ", () => {
+  const brands2 = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jt", name: "JUNTAKARN" }];
+  const factOf = (brand_id, patch) => ({
+    brand_id, fact_date: "2026-09-01", source: brand_id === "b_jt" ? "tmk" : "crm",
+    inquiries: 0, inquiry_filled: true, qualified_leads: 0, leads_new: 0, deposits: 0, deposit_value: 0,
+    orders: 0, orders_new: 0, gross_revenue: 0, revenue_new: 0, refunds: 0, cash_received: 0, cancelled: 0, cancelled_value: 0, ...patch,
+  });
+  const goalOf = (brand_id, patch) => ({ brand_id, month: "2026-09-01", goal_source: "sale_goal", version: 1, ...patch });
+  const v = buildOverviewModel({
+    data: { brands: brands2, settings: {}, cards: [] },
+    ads: {
+      cards: [], source: "meta_pilot", mockFallback: false,
+      sales: [
+        factOf("b_td", { inquiries: 1000, qualified_leads: 300, deposits: 200, orders: 100, gross_revenue: 500000, revenue_new: 200000 }),
+        factOf("b_jt", { inquiries: 500, orders: 50, gross_revenue: 120000, revenue_new: 60000 }),
+      ],
+      salesGoals: [
+        goalOf("b_td", { sales_target: 1000000, ad_budget: 100000, inquiry_target: 2000, leads_target: 600, deposits_target: 400, orders_target: 200, roas: 10, pct_ads_new: 0.1, cpl: 200 }),
+        goalOf("b_jt", { goal_source: "tmk_month", version: 0, sales_target: 540000, ad_budget: 95000, roas: 5.68, inquiry_target: 2300 }),
+      ],
+    },
+    inBrandScope: () => true, brandFilter: "all",
+    filters: { ...base, period: "custom", from: "2026-09-01", to: "2026-09-01", compare: "previous" },
+  });
+  const stage = (key) => v.overallPipeline.items.find((item) => item.key === key);
+
+  it("เป้าคนทักภาพรวม = ของ 3 แบรนด์ที่เก็บครบ ไม่รวมเป้าของ JUNTAKARN", () => {
+    expect(stage("inquiries").value).toBe(1000);
+    expect(v.goals.overall.inquiries?.monthTarget).toBe(2000);   // ไม่ใช่ 2000 + 2300
+  });
+  it("เป้า Lead ไม่หาย เพราะแบรนด์ที่ไม่มีขั้นนี้ไม่ถูกนับเป็นตัวถ่วง", () => {
+    expect(v.goals.overall.qualified?.monthTarget).toBe(600);
+  });
+  it("เป้าของ JUNTAKARN ยังอยู่ครบในหน้าแบรนด์ตัวเอง", () => {
+    expect(v.goals.byBrand.b_jt?.inquiries?.monthTarget).toBe(2300);
+  });
+});

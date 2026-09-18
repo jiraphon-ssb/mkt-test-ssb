@@ -2411,7 +2411,7 @@ async function adsFunctionError(error, fallback) {
 }
 
 // ช่องเป้าที่แก้ได้ (ตรงกับ GOAL_EDIT_FIELDS ใน goalOverrides.js) — ระบุชื่อไว้ชัดๆ คอลัมน์ที่เพิ่มทีหลังจะไม่หลุดออกไปเอง
-const GOAL_OVERRIDE_FIELDS = ["sales_target", "ad_budget", "orders_target", "deposits_target", "leads_target",
+const GOAL_OVERRIDE_FIELDS = ["sales_target", "sales_new_target", "ad_budget", "orders_target", "deposits_target", "leads_target",
   "inquiry_target", "cpl", "cac", "cpi", "roas", "pct_ads_new"];
 const GOAL_OVERRIDE_COLUMNS = ["brand_id", "month", ...GOAL_OVERRIDE_FIELDS, "note", "updated_at", "updated_by"].join(",");
 
@@ -2570,11 +2570,12 @@ const adsData = {
   /** values = ช่องที่ตั้งไว้ (null = ล้างช่องนั้นให้กลับไปใช้ค่าจากระบบขาย)
       รับเฉพาะช่องเป้าที่รู้จัก และวาง brand_id/month ท้ายสุด — values ที่มีคีย์ชื่อซ้ำจะทับคีย์แถวไม่ได้
       updated_by / updated_at ไม่ส่งจากหน้าเว็บ — trigger ที่ฐานประทับจากคนที่เรียกจริง (ปลอมไม่ได้) */
-  async saveGoalOverride({ brandId, month, values = {}, note = null }) {
+  async saveGoalOverride({ brandId, month, values = {}, ...rest }) {
     const db = requireSupabase();
     const safe = Object.fromEntries(GOAL_OVERRIDE_FIELDS.filter((key) => key in values).map((key) => [key, values[key]]));
     const { data, error } = await db.from("ad_sales_goal_overrides")
-      .upsert({ ...safe, note, brand_id: brandId, month }, { onConflict: "brand_id,month" })
+      // ส่ง note เฉพาะตอนผู้เรียกส่งมา — ไม่งั้นทุกครั้งที่บันทึกจะล้างหมายเหตุที่เคยเขียนไว้ทิ้ง
+      .upsert({ ...safe, ...("note" in rest ? { note: rest.note } : {}), brand_id: brandId, month }, { onConflict: "brand_id,month" })
       .select(GOAL_OVERRIDE_COLUMNS).maybeSingle();
     if (error) throw error;
     return data;

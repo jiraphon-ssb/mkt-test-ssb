@@ -7,7 +7,9 @@
    กติกาค่า: null ในตาราง override = "ไม่ได้แก้ช่องนี้" (ตกไปใช้ค่าต้นทาง) · 0 = ตั้งใจให้เป็นศูนย์ */
 
 export const GOAL_EDIT_FIELDS = [
-  { key: "sales_target", label: "เป้ายอดขาย", unit: "money", hint: "ยอดขายที่ต้องทำให้ได้ทั้งเดือน" },
+  { key: "sales_target", label: "เป้ายอดขาย", unit: "money", hint: "ยอดขายรวมทั้งเดือน (ทั้งลูกค้าใหม่และเก่า)" },
+  // หน้า Overview มีปุ่มสลับ "ยอดรวม / ยอดใหม่" — โหมดยอดใหม่เทียบกับช่องนี้ ไม่ใช่เป้ายอดรวม
+  { key: "sales_new_target", label: "เป้ายอดลูกค้าใหม่", unit: "money", hint: "ใช้ตอนหน้า Overview อยู่โหมด “ยอดใหม่”" },
   { key: "ad_budget", label: "งบแอด", unit: "money", hint: "งบค่าแอด Meta ของเดือนนี้" },
   { key: "orders_target", label: "เป้ายืนยันออเดอร์", unit: "count", hint: "จำนวนออเดอร์ที่รับรู้ยอด" },
   { key: "deposits_target", label: "เป้าได้ออเดอร์", unit: "count", hint: "เข้าสเตจออกแบบครั้งแรก" },
@@ -23,7 +25,7 @@ export const GOAL_EDIT_FIELDS = [
 /* กลุ่มสำหรับหน้าตั้งค่า — เรียงตามเส้นทางลูกค้า (คนทัก → Lead → ได้ออเดอร์ → ยืนยันออเดอร์)
    44 ช่องเรียงติดกันเป็นตารางเดียวอ่านไม่ออกว่าอะไรเกี่ยวกับอะไร */
 export const GOAL_FIELD_GROUPS = [
-  { key: "money", label: "ยอดและงบ", fields: ["sales_target", "ad_budget"] },
+  { key: "money", label: "ยอดและงบ", fields: ["sales_target", "sales_new_target", "ad_budget"] },
   { key: "funnel", label: "เส้นทางลูกค้า (จำนวนคน)", fields: ["inquiry_target", "leads_target", "deposits_target", "orders_target"] },
   { key: "efficiency", label: "ประสิทธิภาพที่ต้องคุม", fields: ["cpi", "cpl", "cac", "roas", "pct_ads_new"] },
 ];
@@ -92,6 +94,11 @@ export function mergeGoals(goals = [], overrides = []) {
     row.updated_at = override.updated_at ?? null;
     row.updated_by = override.updated_by ?? null;
     if (touched && !row.goal_source) row.goal_source = "manual";
+    /* คอลัมน์ jsonb ที่ซ้ำความหมายกับช่องที่แก้ได้ ต้องเดินตามค่าที่ชนะด้วย
+       ไม่งั้นหน้าที่อ่าน jsonb (กล่องงบอ่าน platform_budgets.meta · การตัดสินแคมเปญอ่าน caps.cpl)
+       จะยังใช้ค่าจากระบบขาย ทั้งที่หน้าตั้งค่ากับตารางเป้าโชว์ค่าที่แก้แล้ว — สองหน้าขัดกันเอง */
+    if (row.sources.ad_budget === "manual") row.platform_budgets = { ...(row.platform_budgets ?? {}), meta: row.ad_budget };
+    if (row.sources.cpl === "manual" && row.caps?.cpl != null) row.caps = { ...row.caps, cpl: row.cpl };
     out.set(keyOf(override.brand_id, month), row);
   }
   return out;

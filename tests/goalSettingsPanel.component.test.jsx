@@ -190,7 +190,7 @@ describe("GoalSettingsPanel — ความหนาแน่นของหน
     expect(within(card).queryAllByText("จากระบบขาย")).toHaveLength(0);
     expect(within(card).queryAllByText("ยังไม่ตั้ง")).toHaveLength(0);
     expect(within(card).getAllByText(/ตั้งค่าเอง · เดิม ฿210,000.00/)).toHaveLength(1);
-    expect(input("TEAMDEE", "เป้ายอดขาย").closest("label").title).toContain("ยอดขายที่ต้องทำ");
+    expect(input("TEAMDEE", "เป้ายอดขาย").closest("label").title).toContain("ยอดขายรวมทั้งเดือน");
   });
 
   it("จัดช่องเป็น 3 กลุ่มตามเส้นทางลูกค้า", async () => {
@@ -210,5 +210,36 @@ describe("GoalSettingsPanel — ความหนาแน่นของหน
     expect(options).toContain("ก.ย. 2569");
     expect(options).toContain("ม.ค. 2569");                  // ย้อนหลัง 8 เดือน
     expect(options).toHaveLength(15);
+  });
+});
+
+/* แก้หลายแบรนด์ในรอบเดียว — รีวิวจับได้ว่าพิมพ์ผิดที่แบรนด์หนึ่งล็อกปุ่มบันทึกทั้งหน้า
+   ทำให้ branch รายงานรายแบรนด์ใน save() เป็น dead code ตลอดกาล */
+describe("GoalSettingsPanel — บันทึกหลายแบรนด์", () => {
+  it("แก้ 2 แบรนด์ในคลิกเดียว = บันทึกทั้งคู่", async () => {
+    data.goals[THIS_MONTH] = [goal("b_td"), goal("b_jk")];
+    await show();
+    fireEvent.change(input("TEAMDEE", "งบแอด"), { target: { value: "250000" } });
+    fireEvent.change(input("JK Design", "เป้าคนทัก"), { target: { value: "1900" } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /บันทึกเป้าเดือนนี้/ })); });
+    expect(calls.save.map((call) => call.brandId).sort()).toEqual(["b_jk", "b_td"]);
+  });
+
+  it("พิมพ์ผิดที่แบรนด์หนึ่ง ยังบันทึกแบรนด์ที่กรอกถูกได้ และรายงานชื่อแบรนด์ที่ข้าม", async () => {
+    data.goals[THIS_MONTH] = [goal("b_td"), goal("b_jk")];
+    await show();
+    fireEvent.change(input("TEAMDEE", "ROAS เป้า"), { target: { value: "หกเท่า" } });
+    fireEvent.change(input("JK Design", "เป้าคนทัก"), { target: { value: "1900" } });
+    expect(screen.getByRole("button", { name: /บันทึก/ }).disabled).toBe(false);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /บันทึกเป้าเดือนนี้/ })); });
+    expect(calls.save.map((call) => call.brandId)).toEqual(["b_jk"]);
+    expect(toast.mock.calls.at(-1)[0]).toMatch(/TEAMDEE.*ROAS เป้า กรอกไม่ถูก/);
+  });
+
+  it("พิมพ์ผิดทุกแบรนด์ที่แก้ = กดบันทึกไม่ได้", async () => {
+    data.goals[THIS_MONTH] = [goal("b_td")];
+    await show();
+    fireEvent.change(input("TEAMDEE", "ROAS เป้า"), { target: { value: "abc" } });
+    expect(screen.getByRole("button", { name: /บันทึก/ }).disabled).toBe(true);
   });
 });
