@@ -775,6 +775,17 @@ Expected: ผ่านทั้งหมด (เฟส JK ยังไม่ถ�
 
 ถ้าไม่ตรง ให้หยุดและรายงานส่วนต่าง อย่าปรับสูตรให้ตรงโดยไม่รู้สาเหตุ
 
+- [ ] **Step 2.5: สลับ `SALES_BRAND_IDS` ให้รวม JUNTAKARN — ต้องแก้ 3 อย่างนี้พร้อมกัน**
+
+รีวิวความถูกต้อง 18 ก.ย. พบว่าถ้าสลับ `SALES_BRAND_IDS` (`syncSources.js`) ไปใช้ `SALES_SOURCE_BRAND_IDS` เฉยๆ ตัวเลขภาพรวมจะเพี้ยนทันที:
+
+1. **เป้าภาพรวมหายทั้งแถว** — `goalRowsToSalesGoals` เขียนเป้าเฉพาะ `TD/JD/TA` → `b_jt` ไม่มีแถวใน `ad_sales_goals` → `allOrNull` ใน `combineGoalTargets` (`salesOverview.js`) ทำให้ ROAS เป้า · เป้ายอด · งบ กลายเป็น "ยังไม่ตั้งเป้า" ทั้งกระดาน
+   แก้: ให้ `combineGoalTargets` ข้ามแบรนด์ที่ไม่มีเป้า พร้อมบอกบนจอว่า "ไม่รวม JUNTAKARN" หรือเขียนเป้า JK ลง `ad_sales_goals` ก่อน
+2. **%Lead ภาพรวมถูกเจือจาง** — `merge()` ใน `overviewModel.js` บวก `leads` ทุกแบรนด์ และ JK มี `qualified_leads = 0` (ไม่ใช่ null) → คนทักของ JK เข้าไปอยู่ในตัวหารแต่ Lead เป็น 0
+   แก้: รวมตัวหารต่อขั้นเฉพาะแบรนด์ที่มีขั้นนั้น (`funnelStagesOf(id).includes(key)`) และบอกบนจอว่า Lead นับจาก 3 แบรนด์
+3. **`channelFunnel` ยังไม่รู้จัก `BRAND_FUNNEL_STAGES`** — JK จะขึ้น Lead / ได้ออเดอร์ = `0` แทน `—` · และชื่อช่องทางคนละชุด (`FB`/`Line` ของพี่ทัช vs `Facebook`/`LINE` ของ JK) จะได้แถวชื่อซ้ำสองแถว ยอดถูกผ่าครึ่ง
+   แก้: ส่ง `stages` เข้า `channelFunnel` · normalize ชื่อช่องทางให้เป็นชุดเดียว · เพิ่ม `closeRateFromInquiries` ให้แบรนด์ 2 ขั้น
+
 - [ ] **Step 3: อัปเดตเอกสาร**
 
 - `README.md` ตาราง "ข้อมูลไหลยังไง": เพิ่มแถวยอดขาย JUNTAKARN (แหล่ง: ระบบ TMK · RPC `jk_ads_daily_facts` · วันละครั้ง) และแก้บรรทัดที่เขียนว่า JUNTAKARN ยังไม่มีแหล่งยอดขาย

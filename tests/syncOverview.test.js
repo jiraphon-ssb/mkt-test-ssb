@@ -53,6 +53,21 @@ describe("salesSourceRow", () => {
     expect(salesSourceRow({ runs: [run("sales", { status: "failed", error_code: "SALES_KEY_INVALID" })], facts, ready: true, today: "2026-09-17", now: NOW }).state).toBe("bad");
     expect(salesSourceRow({ runs: [run("sales", { started_at: "2026-09-15T10:00:00Z" })], facts, ready: true, today: "2026-09-17", now: NOW }).state).toBe("warn");
   });
+  it("แถวจาก source 'tmk' (JUNTAKARN) ไม่นับในตัวหารของแถวนี้", () => {
+    const withJk = [...facts,
+      { brand_id: "b_jt", fact_date: "2026-09-01", source: "tmk", inquiry_filled: true },
+      { brand_id: "b_jt", fact_date: "2026-09-02", source: "tmk", inquiry_filled: true },
+    ];
+    expect(salesSourceRow({ runs: [run("sales")], facts: withJk, ready: true, today: "2026-09-17", now: NOW }).complete.text).toBe("คนทักทีมกรอก 2/3 วัน");
+  });
+  it("รอบ partial เพราะเฟส JUNTAKARN ล้มอย่างเดียว = แถวนี้ยังปกติ · เป้าล้ม = เตือน", () => {
+    const jkOnly = run("sales", { status: "partial", summary: { jk: { error: "JK_NO_PERMISSION" }, goals: { error: null } } });
+    expect(salesSourceRow({ runs: [jkOnly], facts, ready: true, today: "2026-09-17", now: NOW })).toMatchObject({ state: "ok", stateLabel: "ปกติ" });
+    const goalsBad = run("sales", { status: "partial", summary: { jk: { error: null }, goals: { error: "SALES_GOALS_FAILED" } } });
+    const row = salesSourceRow({ runs: [goalsBad], facts, ready: true, today: "2026-09-17", now: NOW });
+    expect(row.state).toBe("warn");
+    expect(row.hint).toContain("เป้า");
+  });
 });
 
 describe("creativeSourceRow", () => {

@@ -8,20 +8,25 @@ export const SALES_BRAND_IDS = SALES_SOURCE_BRANDS.map((code) => SALE_BRAND_BY_C
 
 /* แถวแหล่งข้อมูลของ JUNTAKARN (ระบบ TMK Operation) — นิยามต่างจากแบรนด์อื่น ต้องเขียนไว้บนจอ ไม่ให้อ่านผิด
    ยังไม่ใส่ b_jt ใน SALES_BRAND_IDS จนกว่าท่อข้อมูลจะทำงานจริง (ไม่งั้น Overview จะบอกว่า "ยังไม่มีข้อมูลยอดขาย" ทั้งที่ยังไม่ได้เชื่อม) */
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const time = (value) => { const t = Date.parse(String(value ?? "")); return Number.isFinite(t) ? t : null; };
 export const JK_BRAND_ID = "b_jt";
 const JK_SOURCE_DETAIL = "นับเฉพาะออเดอร์จากแชท (ไม่รวม Shopee · Lazada · หน้าร้าน) · ยอดลงตามวันที่ออเดอร์ · ไม่มีขั้น Lead และมัดจำ";
 const JK_STALE_DAYS = 2;
 
-export function jkSourceRow(facts = [], { today } = {}) {
+/** runs = ประวัติรอบ pipeline (เฟส JK อยู่ใน summary.jk ของรอบ "sales") — รอบล่าสุดพังต้องขึ้นบนแถวนี้
+    ไม่ใช่ไปโชว์บนแถว "ยอดขาย TD · JD · TA" ซึ่งเขียนสำเร็จคนละท่อ */
+export function jkSourceRow(facts = [], { today, runs = [] } = {}) {
   const days = (facts ?? []).filter((fact) => fact?.brand_id === JK_BRAND_ID && fact?.source === "tmk").map((fact) => fact.fact_date).filter(Boolean).sort();
   const last = days[days.length - 1] ?? null;
-  if (!last) return { state: "waiting", fresh: null, detail: JK_SOURCE_DETAIL };
+  const lastRun = (runs ?? []).filter((run) => run?.pipeline === "sales").sort((a, b) => (time(b?.started_at) ?? 0) - (time(a?.started_at) ?? 0))[0] ?? null;
+  const error = lastRun?.summary?.jk?.error ?? null;
+  if (error) return { state: "error", error, fresh: last, detail: JK_SOURCE_DETAIL };
+  if (!last) return { state: "waiting", error: null, fresh: null, detail: JK_SOURCE_DETAIL };
   const lag = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / 86_400_000);
-  return { state: lag <= JK_STALE_DAYS ? "ok" : "stale", fresh: last, detail: JK_SOURCE_DETAIL };
+  return { state: lag <= JK_STALE_DAYS ? "ok" : "stale", error: null, fresh: last, detail: JK_SOURCE_DETAIL };
 }
 
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
-const time = (value) => { const t = Date.parse(String(value ?? "")); return Number.isFinite(t) ? t : null; };
 
 export const COVERAGE_METRICS = [
   { key: "inquiries", label: "คนทัก (ทีมกรอก)" },

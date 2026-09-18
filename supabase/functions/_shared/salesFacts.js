@@ -229,5 +229,12 @@ export const BRAND_FUNNEL_STAGES = { b_jt: ["inquiries", "closed"] };
 export const funnelStagesOf = (brandId) => BRAND_FUNNEL_STAGES[brandId] ?? FUNNEL_STAGE_KEYS;
 
 /* แบรนด์ที่มีแหล่งยอดขายบนหน้าจอ = 3 แบรนด์ของพี่ทัช + JUNTAKARN (ระบบ TMK Operation)
-   ต่างจาก SALES_SOURCE_BRANDS ซึ่งเป็น "รหัสที่ขอจาก RPC ของพี่ทัช" — ห้ามใส่ JK ลงตัวนั้น (ระบบพี่ทัชมีแถว JK ไม่ครบ จะนับซ้ำ) */
+   ต่างจาก SALES_SOURCE_BRANDS ซึ่งเป็น "รหัสที่ขอจาก RPC ของพี่ทัช" — ห้ามใส่ JK ลงตัวนั้น (ระบบพี่ทัชมีแถว JK ไม่ครบ จะนับซ้ำ)
+
+   ⚠️ ยังไม่มีใครใช้ตัวนี้: สวิตช์จริงคือ SALES_BRAND_IDS ใน syncSources.js
+   ก่อนสลับ SALES_BRAND_IDS มาใช้ชุดนี้ (งาน 6 ของแผน JK) ต้องแก้ 3 อย่างนี้พร้อมกัน ไม่งั้นตัวเลขภาพรวมเพี้ยน:
+     1) เป้าภาพรวม — b_jt ไม่มีแถวใน ad_sales_goals → allOrNull ใน combineGoalTargets ทำให้ "ยังไม่ตั้งเป้า" ทั้งกระดาน
+     2) funnel ภาพรวม — b_jt มี qualified_leads = 0 (ไม่ใช่ null) → %Lead ภาพรวมถูกเจือจาง ต้องรวมตัวหารเฉพาะแบรนด์ที่มีขั้นนั้น
+     3) channelFunnel — ยังไม่รู้จัก BRAND_FUNNEL_STAGES → JK จะโชว์ Lead/ได้ออเดอร์ = 0 แทนที่จะเป็น "—"
+        และชื่อช่องทางคนละชุด (FB/Line ของพี่ทัช vs Facebook/LINE ของ JK) จะได้แถวชื่อซ้ำ */
 export const SALES_SOURCE_BRAND_IDS = [...SALES_SOURCE_BRANDS.map((code) => SALE_BRAND_BY_CODE[code]), "b_jt"];

@@ -174,4 +174,21 @@ describe("แหล่งข้อมูลยอดขาย JUNTAKARN (ระ�
     expect(jkSourceRow([], { today: "2026-09-18" }).state).toBe("waiting");
     expect(jkSourceRow([jkFact("2026-09-17", { brand_id: "b_td", source: "crm" })], { today: "2026-09-18" }).state).toBe("waiting");
   });
+  it("รอบล่าสุดของเฟส JK ล้ม = ขึ้นบนแถวนี้พร้อมรหัส (ไม่ไปขึ้นแถวยอดขายพี่ทัช)", () => {
+    const runs = [
+      { pipeline: "sales", started_at: "2026-09-17T02:00:00Z", summary: { jk: { error: null } } },
+      { pipeline: "sales", started_at: "2026-09-18T02:00:00Z", summary: { jk: { error: "JK_NO_PERMISSION" } } },
+    ];
+    const row = jkSourceRow([jkFact("2026-09-17")], { today: "2026-09-18", runs });
+    expect(row.state).toBe("error");
+    expect(row.error).toBe("JK_NO_PERMISSION");
+    expect(row.fresh).toBe("2026-09-17");
+  });
+  it("รอบล่าสุดสำเร็จหลังรอบที่ล้ม = ไม่ค้างสถานะล้ม", () => {
+    const runs = [
+      { pipeline: "sales", started_at: "2026-09-18T02:00:00Z", summary: { jk: { error: null } } },
+      { pipeline: "sales", started_at: "2026-09-17T02:00:00Z", summary: { jk: { error: "JK_WRITE_FAILED" } } },
+    ];
+    expect(jkSourceRow([jkFact("2026-09-17")], { today: "2026-09-18", runs }).state).toBe("ok");
+  });
 });

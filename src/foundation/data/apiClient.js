@@ -2533,8 +2533,10 @@ const adsData = {
     if (error) throw error;
     return data ?? [];
   },
-  /** ยอดขายจริงรายวันต่อแบรนด์ (มาจากระบบขายผ่าน sales-sync) — อ่านอย่างเดียว */
-  async businessFacts({ from, to } = {}) {
+  /** ยอดขายจริงรายวันต่อแบรนด์ (มาจากระบบขายผ่าน sales-sync) — อ่านอย่างเดียว
+      sources = แหล่งที่ต้องการ: 'crm' = ระบบขายพี่ทัช (TD·JD·TA) · 'tmk' = ระบบ TMK (JUNTAKARN)
+      ค่าเริ่มต้นยังเป็น crm เท่านั้น — หน้าไหนต้องการยอด JK ต้องขอ 'tmk' เอง (ไม่งั้นตัวเลขรวมของหน้าเดิมจะเปลี่ยนโดยไม่ตั้งใจ) */
+  async businessFacts({ from, to, sources = ["crm"] } = {}) {
     const db = requireSupabase();
     let query = db.from("business_daily_facts").select([
       "brand_id,fact_date,source",
@@ -2542,7 +2544,7 @@ const adsData = {
       "qualified_leads,leads_new,deposits,deposit_value",
       "orders,orders_new,gross_revenue,revenue_new,refunds,net_revenue,cash_received,cancelled,cancelled_value",
       "source_updated_at",
-    ].join(",")).eq("source", "crm");
+    ].join(",")).in("source", sources);
     if (from) query = query.gte("fact_date", from);
     if (to) query = query.lte("fact_date", to);
     const { data, error } = await query.order("fact_date", { ascending: false }).limit(2000);

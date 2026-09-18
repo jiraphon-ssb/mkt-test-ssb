@@ -211,7 +211,8 @@ export function salesPipeline({ sales = null, prevSales = null, metaInquiries = 
     { key: "closed", label: "ยืนยันออเดอร์", value: orders, before: only("closed", prevSales ? prevSales.orders : null), conv: share(orders, previousStage("closed")), sub: sales ? null : none },
   ].map((stage) => ({ sense: "higher", fmt: "int", conv: null, ...stage }));
   const rated = stageItems.filter((stage) => stage.conv != null);
-  const worstKey = rated.length ? rated.reduce((a, b) => (b.conv < a.conv ? b : a)).key : null;
+  // มีขั้นที่คิด % ได้แค่ขั้นเดียว (ระบบขาย 2 ขั้นอย่าง JUNTAKARN) = ไม่มี "หล่นแรงสุด" ให้เทียบ
+  const worstKey = rated.length > 1 ? rated.reduce((a, b) => (b.conv < a.conv ? b : a)).key : null;
   const metaNote = "คิดจากค่าแอด Meta";
 
   return {

@@ -6,11 +6,12 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { MemoryRouter } from "react-router-dom";
 
 const pending = {};
+const factArgs = [];
 const deferred = (key) => new Promise((resolve, reject) => { pending[key] = { resolve, reject }; });
 vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   recentSyncs: () => deferred("syncRuns"), connections: () => deferred("connections"), reconciliations: () => deferred("recons"),
   syncCoverage: () => deferred("coverage"), cronTicks: () => deferred("ticks"), pipelineRuns: () => deferred("pipes"),
-  businessFacts: () => deferred("facts"), salesGoals: () => deferred("goals"), oauthStatus: () => deferred("oauth"),
+  businessFacts: (args) => { factArgs.push(args); return deferred("facts"); }, salesGoals: () => deferred("goals"), oauthStatus: () => deferred("oauth"),
 } } }));
 const auth = { demo: false, user: { role: "team_lead" } };
 vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => auth }));
@@ -23,7 +24,7 @@ vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({ toast: 
 } } } }) }));
 const { SyncStatusView } = await import("../src/modules/marketing/ads/SyncStatusView.jsx");
 
-beforeEach(() => { auth.user = { role: "team_lead" }; for (const key of Object.keys(pending)) delete pending[key]; vi.useFakeTimers({ now: new Date("2026-09-17T03:00:00Z"), toFake: ["Date"] }); });
+beforeEach(() => { auth.user = { role: "team_lead" }; factArgs.length = 0; for (const key of Object.keys(pending)) delete pending[key]; vi.useFakeTimers({ now: new Date("2026-09-17T03:00:00Z"), toFake: ["Date"] }); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const show = () => render(<MemoryRouter initialEntries={["/mkt/ads/sync"]}><SyncStatusView /></MemoryRouter>);
 const settle = async (key, value) => { await act(async () => { pending[key].resolve(value); }); };
@@ -90,6 +91,23 @@ describe("SyncStatusView — สมาชิกที่ไม่ใช่หั
     expect(pending.coverage).toBeTruthy();
     expect(screen.queryByRole("button", { name: /ดึงข้อมูลตอนนี้/ })).toBeNull();
     expect(screen.queryByText("งานอื่น")).toBeNull();
+  });
+
+  /* บั๊กที่เทสเดิมมองไม่เห็นเพราะ mock ทั้งก้อน: businessFacts ของจริงกรอง source='crm' ไว้
+     ถ้าหน้านี้ไม่ขอ 'tmk' มาด้วย แถว JK จะบอก "รอเชื่อมแหล่งข้อมูล" ตลอดไปแม้ข้อมูลเข้าฐานแล้ว */
+  it("ขอยอดขายทั้ง crm และ tmk (ไม่งั้นแถว JUNTAKARN ไม่เห็นข้อมูลของตัวเอง)", () => {
+    show();
+    expect(factArgs.length).toBeGreaterThan(0);
+    expect(factArgs[0]?.sources).toEqual(["crm", "tmk"]);
+  });
+
+  it("เฟส JK ของรอบล่าสุดล้ม = แถว JUNTAKARN ขึ้นดึงไม่สำเร็จพร้อมเหตุผลไทย", async () => {
+    show();
+    await settle("pipes", [{ id: "s1", pipeline: "sales", status: "partial", trigger_kind: "cron", started_at: "2026-09-17T02:07:00Z", summary: { jk: { error: "JK_NO_PERMISSION" } } }]);
+    await settle("facts", []);
+    const jk = screen.getByText("ยอดขาย JUNTAKARN").closest('[role="row"]');
+    expect(within(jk).getByText("ดึงไม่สำเร็จ")).toBeTruthy();
+    expect(within(jk).getByText(/service role key/)).toBeTruthy();
   });
 
   it("แถวยอดขาย JUNTAKARN: ยังไม่มีข้อมูล = รอเชื่อม · มีข้อมูลแล้ว = ปกติ พร้อมบอกนิยามที่ต่าง", async () => {

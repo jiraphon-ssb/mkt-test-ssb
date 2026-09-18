@@ -178,9 +178,12 @@ Deno.serve(async (request) => {
   }
 
   const runId = await startRun(db, { pipeline: "sales", trigger, userId, rangeFrom: from, rangeTo: to });
+  /* ยอด JUNTAKARN ดึงแยกจากยอดพี่ทัช — ผลของมันต้องติดไปกับรอบเสมอ แม้เฟสของพี่ทัชจะล้ม
+     (ก่อนหน้านี้เฟสพี่ทัชล้ม = return ก่อนถึงเฟส JK → ยอด JK ไม่อัปเดตเลยทั้งที่ระบบ TMK ปกติ) */
+  let jk: { read: number; written: number; error: string | null } = { read: 0, written: 0, error: null };
   const failRun = async (code: string, status: number, extra: Record<string, unknown> = {}) => {
-    await finishRun(db, runId, { status: "failed", errorCode: code, summary: extra });
-    return json(request, { error: code, runId, ...extra }, status);
+    await finishRun(db, runId, { status: "failed", errorCode: code, summary: { ...extra, jk } });
+    return json(request, { error: code, runId, jk, ...extra }, status);
   };
 
   const headers = { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" };
@@ -208,7 +211,43 @@ Deno.serve(async (request) => {
     return out;
   };
 
+  /* ยอดขาย JUNTAKARN — ระบบ TMK Operation (Supabase คนละโปรเจกต์ · env JK_API_URL / JK_API_KEY)
+     ล้มแยกจากเฟสของพี่ทัช: JK พังต้องไม่ทำให้ยอด TD/JD/TA พังตาม และเฟสพี่ทัชพังก็ต้องไม่ทำให้ JK ไม่ได้ดึง
+     ไม่ได้ตั้ง env = ข้ามเงียบ (ยังไม่เปิดใช้) · ชุดว่างทั้งช่วง = ไม่เขียน กันเขียนศูนย์ทับของจริง */
+  const runJk = async (): Promise<{ read: number; written: number; error: string | null }> => {
+    const jkUrl = Deno.env.get("JK_API_URL")?.trim();
+    const jkKey = Deno.env.get("JK_API_KEY")?.trim();
+    if (!jkUrl || !jkKey) return { read: 0, written: 0, error: null };
+    try {
+      const jkRows: Record<string, unknown>[] = [];
+      for (const window of jkWindows(from, to)) {
+        const response = await fetch(jkFactsUrl(jkUrl, window.from, window.to), {
+          method: "POST",
+          headers: { apikey: jkKey, Authorization: `Bearer ${jkKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ p_from: window.from, p_to: window.to }),
+          signal: AbortSignal.timeout(30_000),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw fail(`JK_${doorState(response.status, (payload as { code?: string } | null)?.code).toUpperCase()}`);
+        if (Array.isArray(payload)) jkRows.push(...payload);
+      }
+      if (jkExtraColumns(jkRows).length) throw fail("JK_COLUMN_LEAK");
+      /* RPC การันตี 1 แถวต่อวัน (generate_series) — ได้วันไม่ครบแปลว่าบางก้อนหลุด
+         ถ้าเขียนต่อจะทับวันที่หายเป็นศูนย์ทับยอดจริง (ยอดขายคือตัวตั้งของ ROAS) */
+      if (jkCoveredDays(jkRows, { from, to }) < rangeDays) throw fail("JK_EMPTY_RESULT");
+      const jkOut = jkRowsToDailyFacts(jkRows, { from, to }).map((row) => ({ ...row, source_updated_at: new Date().toISOString() }));
+      const { error } = await db.from("business_daily_facts").upsert(jkOut, { onConflict: "source,external_record_id" });
+      if (error) throw fail("JK_WRITE_FAILED", { detail: error.message });
+      return { read: jkRows.length, written: jkOut.length, error: null };
+    } catch (error) {
+      const detail = error as { code?: string; detail?: string };
+      console.error("[sales-sync] jk", detail.code, detail.detail ?? "");
+      return { read: 0, written: 0, error: runCode(detail.code, "JK_FAILED") };
+    }
+  };
+
   try {
+    jk = await runJk();
     const facts: Record<string, unknown>[] = [];
     try {
       for (const range of factWindows(from, to, WINDOW_DAYS)) facts.push(...await factsFor(range));
@@ -234,42 +273,6 @@ Deno.serve(async (request) => {
       return await failRun("SALES_WRITE_FAILED", 502);
     }
 
-    /* ยอดขาย JUNTAKARN — ระบบ TMK Operation (Supabase คนละโปรเจกต์ · env JK_API_URL / JK_API_KEY)
-       ล้มแยกจากเฟสของพี่ทัช: JK พังต้องไม่ทำให้ยอด TD/JD/TA ที่เขียนสำเร็จแล้วพังตาม
-       ไม่ได้ตั้ง env = ข้ามเงียบ (ยังไม่เปิดใช้) · ชุดว่างทั้งช่วง = ไม่เขียน กันเขียนศูนย์ทับของจริง */
-    let jk: { read: number; written: number; error: string | null } = { read: 0, written: 0, error: null };
-    const jkUrl = Deno.env.get("JK_API_URL")?.trim();
-    const jkKey = Deno.env.get("JK_API_KEY")?.trim();
-    if (jkUrl && jkKey) {
-      try {
-        const jkRows: Record<string, unknown>[] = [];
-        for (const window of jkWindows(from, to)) {
-          const response = await fetch(jkFactsUrl(jkUrl, window.from, window.to), {
-            method: "POST",
-            headers: { apikey: jkKey, Authorization: `Bearer ${jkKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ p_from: window.from, p_to: window.to }),
-            signal: AbortSignal.timeout(30_000),
-          });
-          const payload = await response.json().catch(() => null);
-          if (!response.ok) throw fail(`JK_${doorState(response.status, (payload as { code?: string } | null)?.code).toUpperCase()}`);
-          if (Array.isArray(payload)) jkRows.push(...payload);
-        }
-        if (jkExtraColumns(jkRows).length) throw fail("JK_COLUMN_LEAK");
-        /* RPC การันตี 1 แถวต่อวัน (generate_series) — ได้วันไม่ครบแปลว่าบางก้อนหลุด
-           ถ้าเขียนต่อจะทับวันที่หายเป็นศูนย์ทับยอดจริง (ยอดขายคือตัวตั้งของ ROAS) */
-        const expectedDays = jkWindows(from, to).reduce((n, window) => n + Math.round((Date.parse(`${window.to}T00:00:00Z`) - Date.parse(`${window.from}T00:00:00Z`)) / 86_400_000) + 1, 0);
-        if (jkCoveredDays(jkRows, { from, to }) < expectedDays) throw fail("JK_EMPTY_RESULT");
-        const jkOut = jkRowsToDailyFacts(jkRows, { from, to }).map((row) => ({ ...row, source_updated_at: new Date().toISOString() }));
-        const { error } = await db.from("business_daily_facts").upsert(jkOut, { onConflict: "source,external_record_id" });
-        if (error) throw fail("JK_WRITE_FAILED", { detail: error.message });
-        jk = { read: jkRows.length, written: jkOut.length, error: null };
-      } catch (error) {
-        const detail = error as { code?: string; detail?: string };
-        console.error("[sales-sync] jk", detail.code, detail.detail ?? "");
-        jk = { read: 0, written: 0, error: runCode(detail.code, "JK_FAILED") };
-      }
-    }
-
     /* เป้า — พังได้โดยไม่ทำให้ยอดขายที่เขียนสำเร็จแล้วพังตาม แต่ต้องบอกในผลลัพธ์ ไม่เงียบ */
     const months = monthsToSync(today);
     let goals: { written: number; bySource: Record<string, number>; error: string | null } = { written: 0, bySource: {}, error: null };
@@ -292,7 +295,7 @@ Deno.serve(async (request) => {
 
     await finishRun(db, runId, {
       status: goals.error || jk.error ? "partial" : "success", rowsRead: facts.length + jk.read, rowsWritten: rows.length + jk.written,
-      summary: { brands: SALES_SOURCE_BRANDS, goals, months, jk }, errorCode: goals.error ?? jk.error,
+      summary: { brands: SALES_SOURCE_BRANDS, goals, months, jk, ssb: { read: facts.length, written: rows.length } }, errorCode: goals.error ?? jk.error,
     });
     console.log(`[sales-sync] ${trigger} ${from}→${to} facts=${facts.length} rows=${rows.length} goals=${goals.written} jk=${jk.written}${goals.error ? ` goalsError=${goals.error}` : ""}${jk.error ? ` jkError=${jk.error}` : ""}`);
     return json(request, { runId, from, to, read: facts.length, written: rows.length, brands: SALES_SOURCE_BRANDS, goals, jk });

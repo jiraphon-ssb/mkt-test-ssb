@@ -55,18 +55,24 @@ export function salesSourceRow({ runs = [], facts = [], ready = true, today, now
   const last = runs.filter((run) => run.pipeline === "sales").sort((a, b) => (time(b.started_at) ?? 0) - (time(a.started_at) ?? 0))[0];
   const month = String(today ?? "").slice(0, 7);
   // วันนี้ที่ทีมยังไม่กรอก ไม่นับเป็นวันที่ขาด (วันยังไม่จบ)
-  const monthFacts = facts.filter((fact) => String(fact.fact_date ?? "").startsWith(month) && (fact.fact_date !== today || fact.inquiry_filled === true));
+  // เฉพาะแถวจากระบบขายพี่ทัช — แถว source 'tmk' (JUNTAKARN) มีแถวของตัวเอง ถ้านับรวมที่นี่ตัวหารจะบวมเท่าตัว
+  const monthFacts = facts.filter((fact) => (fact.source ?? "crm") === "crm" && String(fact.fact_date ?? "").startsWith(month) && (fact.fact_date !== today || fact.inquiry_filled === true));
   const filled = monthFacts.filter((fact) => fact.inquiry_filled === true).length;
   const complete = monthFacts.length ? { text: `คนทักทีมกรอก ${filled}/${monthFacts.length} วัน`, sub: "ยอด · ลีด · ออเดอร์ มาครบ" } : null;
   if (!last) return { ...base, state: "bad", stateLabel: "ยังไม่เคยดึง", hint: "กดดึงยอดขายตอนนี้ในเมนู หรือตรวจคีย์ระบบขาย", fresh: { text: "—", sub: "วันละครั้ง หลัง 9 โมง" }, complete };
   const [label] = statusOf(last.status);
   const failed = last.status === "failed";
   const old = now - (time(last.started_at) ?? 0) > SALES_STALE_HOURS * HOUR;
-  const state = failed ? "bad" : old || last.status === "partial" ? "warn" : last.status === "running" ? "muted" : "ok";
+  /* รอบเป็น partial เพราะเฟส JUNTAKARN พังอย่างเดียว = ท่อของ TD·JD·TA ยังเขียนครบ → แถวนี้ไม่ต้องเตือน
+     (เรื่องของ JK ขึ้นบนแถว "ยอดขาย JUNTAKARN" ของมันเอง) */
+  const partial = last.status === "partial" && !(last.summary?.jk?.error && !last.summary?.goals?.error);
+  const state = failed ? "bad" : old || partial ? "warn" : last.status === "running" ? "muted" : "ok";
   return {
     ...base, state,
-    stateLabel: failed ? "ดึงไม่สำเร็จ" : old ? "ล่าช้า" : last.status === "partial" ? label : last.status === "running" ? "กำลังดึง" : "ปกติ",
-    hint: failed ? adsErrorText(last.error_code, "ดูประวัติรอบในแท็บยอดขาย") : old ? "ไม่ได้ดึงเกินวันครึ่ง — ตรวจตัวดึงอัตโนมัติ" : null,
+    stateLabel: failed ? "ดึงไม่สำเร็จ" : old ? "ล่าช้า" : partial ? label : last.status === "running" ? "กำลังดึง" : "ปกติ",
+    hint: failed ? adsErrorText(last.error_code, "ดูประวัติรอบในแท็บยอดขาย")
+      : old ? "ไม่ได้ดึงเกินวันครึ่ง — ตรวจตัวดึงอัตโนมัติ"
+        : partial ? adsErrorText(last.summary?.goals?.error ?? last.error_code, "ดูประวัติรอบในแท็บยอดขาย") : null,
     fresh: { text: ago(last.started_at, now), sub: "วันละครั้ง หลัง 9 โมง" }, complete,
   };
 }

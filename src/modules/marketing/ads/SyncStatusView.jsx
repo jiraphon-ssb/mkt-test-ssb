@@ -153,7 +153,8 @@ export function SyncStatusView() {
     coverage: !demo ? () => apiClient.ads.syncCoverage() : null,
     ticks: () => apiClient.ads.cronTicks(300),
     pipes: () => apiClient.ads.pipelineRuns({ limit: 200 }),
-    facts: () => apiClient.ads.businessFacts({ from: salesSince, to: today }),
+    // หน้านี้ต้องเห็นยอด JUNTAKARN (source 'tmk') ด้วย ไม่งั้นแถว JK บอก "รอเชื่อมแหล่งข้อมูล" ทั้งที่ข้อมูลเข้าฐานแล้ว
+    facts: () => apiClient.ads.businessFacts({ from: salesSince, to: today, sources: ["crm", "tmk"] }),
     goals: () => apiClient.ads.salesGoals(`${today.slice(0, 7)}-01`),
     oauth: () => apiClient.ads.oauthStatus(),
   });
@@ -206,7 +207,7 @@ export function SyncStatusView() {
   const oldestMetaSync = metaAccounts.filter((row) => row.connected).map((row) => row.lastSuccessAt).filter(Boolean).sort()[0] ?? null;
   const unusedProviders = ADS_PROVIDERS.filter((provider) => provider.id !== "meta" && !accounts.some((row) => row.providerId === provider.id)).map((provider) => provider.name);
   /* JUNTAKARN อ่านจากระบบ TMK Operation — มีแถวของตัวเองที่บอกนิยามที่ต่าง (ไม่ปนกับแบรนด์ที่ยังไม่มีแหล่ง) */
-  const jk = jkSourceRow(facts, { today });
+  const jk = jkSourceRow(facts, { today, runs: pipes });
   const jkBrand = brands.find((brand) => brand.id === JK_BRAND_ID) ?? null;
   const waitingBrands = brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id) && brand.id !== JK_BRAND_ID);
   const timeline = useMemo(() => historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts: metaAccounts, kind: historyFilter, limit: 1000 }), [ticks, syncRuns, pipes, metaAccounts, historyFilter]);
@@ -257,7 +258,8 @@ export function SyncStatusView() {
   const surveySales = () => salesAction("inventory", async () => { await apiClient.ads.salesInventory(); toast?.("สำรวจแหล่งข้อมูลของระบบขายแล้ว", "ok"); });
   const syncSales = () => salesAction("sync", async () => {
     const out = await apiClient.ads.salesSync();
-    toast?.(`ดึงยอดขายแล้ว ${out.written?.toLocaleString("th-TH") ?? 0} วัน×แบรนด์${out.goals?.error ? ` · ${adsErrorText(out.goals.error, "เป้าไม่เข้า")}` : ""}`, out.goals?.error ? "bad" : "ok");
+    const jkNote = out.jk?.error ? ` · ${adsErrorText(out.jk.error, "ยอด JUNTAKARN ไม่เข้า")}` : out.jk?.written ? ` · JUNTAKARN ${out.jk.written.toLocaleString("th-TH")} วัน` : "";
+    toast?.(`ดึงยอดขายแล้ว ${out.written?.toLocaleString("th-TH") ?? 0} วัน×แบรนด์${out.goals?.error ? ` · ${adsErrorText(out.goals.error, "เป้าไม่เข้า")}` : ""}${jkNote}`, out.goals?.error || out.jk?.error ? "bad" : "ok");
     await loadPilotFacts({ force: true });
   });
   /* ดึงย้อนหลังทีละเดือน — function รับครั้งละ ≤93 วัน · พังเดือนไหนบอกเดือนนั้น เดือนที่สำเร็จแล้วไม่เสีย */
@@ -363,10 +365,13 @@ export function SyncStatusView() {
         <SourceRow row={rows.sales} onOpen={() => setTab("sales")} />
         {jkBrand && <SourceRow row={{
           key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, sub: "ระบบ TMK", icon: "sales",
-          state: jk.state === "ok" ? "ok" : jk.state === "stale" ? "warn" : "waiting",
-          stateLabel: jk.state === "ok" ? "ปกติ" : jk.state === "stale" ? "ล่าช้า" : "รอเชื่อมแหล่งข้อมูล",
+          state: jk.state === "ok" ? "ok" : jk.state === "stale" ? "warn" : jk.state === "error" ? "bad" : "waiting",
+          stateLabel: jk.state === "ok" ? "ปกติ" : jk.state === "stale" ? "ล่าช้า" : jk.state === "error" ? "ดึงไม่สำเร็จ" : "รอเชื่อมแหล่งข้อมูล",
           fresh: jk.fresh ? { text: `ล่าสุด ${jk.fresh}`, sub: "วันละครั้ง" } : { text: "—", sub: "ค่าแอด Meta ยังดึงตามปกติ" },
-          complete: { text: "นิยามต่างจากแบรนด์อื่น", sub: jk.detail },
+          // รอบล่าสุดของเฟส JK ล้ม = ช่อง "ครบแค่ไหน" ต้องบอกเหตุผลไทย ไม่ใช่โชว์นิยามเหมือนไม่มีอะไรเกิดขึ้น
+          complete: jk.error
+            ? { text: "ยอดรอบล่าสุดไม่เข้า", sub: adsErrorText(jk.error, "ดึงยอด JUNTAKARN ไม่สำเร็จ") }
+            : { text: "นิยามต่างจากแบรนด์อื่น", sub: jk.detail },
         }} />}
         {waitingBrands.map((brand) => <SourceRow key={brand.id} row={{ key: brand.id, name: `ยอดขาย ${brand.name}`, icon: "sales", state: "waiting", stateLabel: "รอเชื่อมแหล่งข้อมูล", fresh: null, complete: null, hint: "ค่าแอด Meta ยังดึงตามปกติ" }} />)}
       </div>
