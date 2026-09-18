@@ -68,8 +68,8 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
         })];
       }));
       /* ภาพรวม: รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย — ค่าแอดของแบรนด์ที่รอเชื่อมไม่นับ ไม่งั้น ROAS ภาพรวมต่ำเกินจริง */
-      const merge = (map) => {
-        const rows = funnelIds.map((id) => map.get(id)).filter(Boolean);
+      const mergeIds = (map, ids) => {
+        const rows = ids.map((id) => map.get(id)).filter(Boolean);
         if (!rows.length) return null;
         // ตัวไหนมีแบรนด์ที่ไม่รู้ (null เช่น Lead ก่อนระบบขายเก็บจริง) ภาพรวมตัวนั้น = ไม่รู้ ไม่ใช่นับเป็น 0
         return rows.reduce((acc, row) => Object.fromEntries(Object.keys(row).map((key) => [key, acc[key] === null || row[key] == null ? null : (acc[key] ?? 0) + row[key]])), {});
@@ -84,23 +84,42 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       const sourceRows = funnelIds.map((id) => byId.get(id)).filter(Boolean);
       const sumOf = (pick) => sourceRows.some((row) => pick(row) != null) ? sourceRows.reduce((n, row) => n + (pick(row) ?? 0), 0) : null;
       overallPipeline = salesPipeline({
-        sales: merge(pipeSales), prevSales: merge(pipePrev),
+        sales: mergeIds(pipeSales, funnelIds), prevSales: mergeIds(pipePrev, funnelIds),
         metaInquiries: metaInquiriesOf(adsSalePipeline(sourceCards, range, before)),
         spend: sumOf((row) => row.spend), prevSpend: sumOf((row) => row.prevSpend),
         basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: shownTo,
         stages: FUNNEL_STAGE_KEYS,   // แบรนด์ที่เข้า funnel ภาพรวมเก็บครบ 4 ขั้นทุกแบรนด์
       });
       if (funnelExcluded.length) overallPipeline = { ...overallPipeline, excluded: funnelExcluded };
+      /* ROAS · %Ads · CAC ภาพรวมต้องนับ "ทุกแบรนด์ที่มีแหล่งยอดขาย" ตามกติกาที่เขียนไว้ใน README
+         ต่างจากขั้น funnel ที่นับเฉพาะแบรนด์ที่เก็บครบ — ไม่งั้นบนหน้าเดียวกันจะมี ROAS สองค่า
+         (แผงประสิทธิภาพนับ 3 แบรนด์ = 9.05× แต่กราฟแนวโน้มกับ %Ads นับ 4 แบรนด์ = 8.04×)
+         CPL ไม่รวม เพราะตัวหารคือ Lead ซึ่งมีเฉพาะแบรนด์ที่เก็บครบขั้นนั้น */
+      const allRows = SALES_BRAND_IDS.map((id) => byId.get(id)).filter(Boolean);
+      const sumAll = (pick) => allRows.some((row) => pick(row) != null) ? allRows.reduce((n, row) => n + (pick(row) ?? 0), 0) : null;
+      const allPipeline = salesPipeline({
+        sales: mergeIds(pipeSales, SALES_BRAND_IDS), prevSales: mergeIds(pipePrev, SALES_BRAND_IDS),
+        metaInquiries: null,
+        spend: sumAll((row) => row.spend), prevSpend: sumAll((row) => row.prevSpend),
+        basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: shownTo,
+        stages: FUNNEL_STAGE_KEYS,
+      });
+      const allRatios = new Map(["roas", "pctAds", "cac"].map((key) => [key, allPipeline.items.find((item) => item.key === key)]));
+      overallPipeline = { ...overallPipeline, items: overallPipeline.items.map((item) => allRatios.get(item.key) ?? item) };
       const targets = goalTargetsByBrand(ads.salesGoals, goalMonth);
       const goalRows = new Map((ads.salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
+      /* เป้าภาพรวมต้องนับ "ชุดแบรนด์เดียวกับตัวเลขจริงที่มันเทียบ" — ซึ่งบนการ์ดภาพรวมมีสองชุด
+           · ขั้น funnel + CPL = แบรนด์ที่เก็บครบทุกขั้น (JUNTAKARN ไม่มี Lead/มัดจำ)
+           · ROAS + %Ads = ทุกแบรนด์ที่มีแหล่งยอดขาย (เหมือนตัวเลขจริงที่รวม JUNTAKARN)
+         ถ้าใช้ชุดเดียวกันหมด จะได้เป้าคนทัก 6,566 เทียบของจริง 2,769 หรือเป้า ROAS 8.76 เทียบของจริง 8.04 */
+      const goalEntry = (id) => ({
+        targets: targets.get(id) ?? {},
+        weights: { budget: goalRows.get(id)?.ad_budget, revenue: goalRows.get(id)?.sales_target, inquiries: goalRows.get(id)?.inquiry_target },
+      });
+      const funnelTargets = combineGoalTargets(funnelIds.filter((id) => byId.has(id)).map(goalEntry));
+      const allTargets = combineGoalTargets(SALES_BRAND_IDS.filter((id) => byId.has(id)).map(goalEntry));
       goals = {
-        /* เป้าภาพรวมต้องนับ "ชุดแบรนด์เดียวกับตัวเลขจริง" — overallPipeline รวมเฉพาะแบรนด์ที่เก็บ funnel ครบ
-           ถ้าเอาเป้าของ JUNTAKARN มารวมด้วย จะได้เป้าคนทัก 6,566 (4 แบรนด์) เทียบกับของจริง 2,769 (3 แบรนด์)
-           และเป้า Lead หายทั้งแถวเพราะกติกา all-or-null (ระบบ TMK ไม่มีเป้า Lead) */
-        overall: goalsFor(pipelineValues(overallPipeline), combineGoalTargets(funnelIds.filter((id) => byId.has(id)).map((id) => ({
-          brandId: id,
-          targets: targets.get(id) ?? {}, weights: { budget: goalRows.get(id)?.ad_budget, revenue: goalRows.get(id)?.sales_target, inquiries: goalRows.get(id)?.inquiry_target },
-        }))), targetPeriod),
+        overall: goalsFor(pipelineValues(overallPipeline), { ...funnelTargets, roas: allTargets.roas, pctAds: allTargets.pctAds }, targetPeriod),
         byBrand: Object.fromEntries(brandTotals.map((brand) => [brand.id, goalsFor(pipelineValues(pipelines[brand.id]), targets.get(brand.id) ?? {}, targetPeriod)])),
       };
     } else {

@@ -110,3 +110,80 @@ describe("เป้าภาพรวมกับแบรนด์ที่ fun
     expect(v.goals.byBrand.b_jt?.inquiries?.monthTarget).toBe(2300);
   });
 });
+
+/* บนหน้าเดียวกันต้องมี ROAS ค่าเดียว — แผงประสิทธิภาพเคยนับ 3 แบรนด์ (9.05×)
+   ส่วน %Ads กับกราฟแนวโน้มนับ 4 แบรนด์ (8.04×) เพราะ overallPipeline ถูกใช้ทั้งงาน funnel และงานอัตราส่วน
+   กติกาที่เขียนไว้ใน README: ยอดขาย · ROAS · %Ads · CAC ภาพรวมรวม JUNTAKARN · ขั้น funnel ไม่รวม */
+describe("อัตราส่วนภาพรวมนับทุกแบรนด์ที่มีแหล่ง", () => {
+  const brands2 = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jt", name: "JUNTAKARN" }];
+  const card = (brand_id, spend) => ({ id: `${brand_id}-c`, track: "project", status: "measured", brand_id, archived: true, campaign: "c",
+    brief: { channels: ["Facebook"] }, metrics: { spend, impressions: 1000, clicks: 10, reach: 900, leads: 0, revenue: 0, measured_at: "2026-09-01T12:00:00Z" } });
+  const factOf = (brand_id, patch) => ({
+    brand_id, fact_date: "2026-09-01", source: brand_id === "b_jt" ? "tmk" : "crm",
+    inquiries: 0, inquiry_filled: true, qualified_leads: 0, leads_new: 0, deposits: 0, deposit_value: 0,
+    orders: 0, orders_new: 0, gross_revenue: 0, revenue_new: 0, refunds: 0, cash_received: 0, cancelled: 0, cancelled_value: 0, ...patch,
+  });
+  const v = buildOverviewModel({
+    data: { brands: brands2, settings: {}, cards: [] },
+    ads: {
+      cards: [card("b_td", 100000), card("b_jt", 50000)], source: "meta_pilot", mockFallback: false, salesGoals: [],
+      sales: [
+        factOf("b_td", { inquiries: 1000, qualified_leads: 300, deposits: 200, orders: 100, orders_new: 60, gross_revenue: 1000000, revenue_new: 400000 }),
+        factOf("b_jt", { inquiries: 500, orders: 50, orders_new: 40, gross_revenue: 200000, revenue_new: 100000 }),
+      ],
+    },
+    inBrandScope: () => true, brandFilter: "all",
+    filters: { ...base, period: "custom", from: "2026-09-01", to: "2026-09-01", compare: "previous" },
+  });
+  const item = (key) => v.overallPipeline.items.find((x) => x.key === key)?.value;
+
+  it("ROAS · %Ads · CAC ภาพรวม = ทุกแบรนด์ (รวม JUNTAKARN)", () => {
+    expect(item("roas")).toBeCloseTo(1200000 / 150000, 4);        // ไม่ใช่ 1,000,000 ÷ 100,000
+    expect(item("pctAds")).toBeCloseTo(150000 / 500000, 4);
+    expect(item("cac")).toBeCloseTo(150000 / 100, 4);             // ออเดอร์ลูกค้าใหม่ 60 + 40
+  });
+  it("ขั้น funnel ยังนับเฉพาะแบรนด์ที่เก็บครบ · CPL ใช้ฐานเดียวกับ Lead", () => {
+    expect(item("inquiries")).toBe(1000);
+    expect(item("qualified")).toBe(300);
+    expect(item("cpl")).toBeCloseTo(100000 / 300, 4);             // ค่าแอดของแบรนด์ที่มี Lead เท่านั้น
+    expect(v.overallPipeline.excluded).toEqual(["JUNTAKARN"]);
+  });
+});
+
+/* เป้าบนการ์ดภาพรวมมีสองฐาน — ต้องตรงกับตัวเลขจริงที่มันเทียบ
+   ขั้น funnel + CPL = แบรนด์ที่เก็บครบ · ROAS + %Ads = ทุกแบรนด์ที่มีแหล่ง */
+describe("ฐานของเป้าภาพรวมตรงกับฐานของตัวเลขจริง", () => {
+  const brands2 = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jt", name: "JUNTAKARN" }];
+  const card = (brand_id, spend) => ({ id: `${brand_id}-c`, track: "project", status: "measured", brand_id, archived: true, campaign: "c",
+    brief: { channels: ["Facebook"] }, metrics: { spend, impressions: 1000, clicks: 10, reach: 900, leads: 0, revenue: 0, measured_at: "2026-09-01T12:00:00Z" } });
+  const factOf = (brand_id, patch) => ({
+    brand_id, fact_date: "2026-09-01", source: brand_id === "b_jt" ? "tmk" : "crm",
+    inquiries: 0, inquiry_filled: true, qualified_leads: 0, leads_new: 0, deposits: 0, deposit_value: 0,
+    orders: 0, orders_new: 0, gross_revenue: 0, revenue_new: 0, refunds: 0, cash_received: 0, cancelled: 0, cancelled_value: 0, ...patch,
+  });
+  const v = buildOverviewModel({
+    data: { brands: brands2, settings: {}, cards: [] },
+    ads: {
+      cards: [card("b_td", 100000), card("b_jt", 50000)], source: "meta_pilot", mockFallback: false,
+      sales: [
+        factOf("b_td", { inquiries: 1000, qualified_leads: 300, deposits: 200, orders: 100, orders_new: 60, gross_revenue: 1000000, revenue_new: 400000 }),
+        factOf("b_jt", { inquiries: 500, orders: 50, orders_new: 40, gross_revenue: 200000, revenue_new: 100000 }),
+      ],
+      salesGoals: [
+        { brand_id: "b_td", month: "2026-09-01", goal_source: "sale_goal", version: 1, sales_target: 2000000, ad_budget: 200000, roas: 10, pct_ads_new: 0.1, inquiry_target: 2000, leads_target: 600, deposits_target: 400, orders_target: 200, cpl: 200 },
+        { brand_id: "b_jt", month: "2026-09-01", goal_source: "tmk_month", version: 0, sales_target: 500000, ad_budget: 100000, roas: 5 },
+      ],
+    },
+    inBrandScope: () => true, brandFilter: "all",
+    filters: { ...base, period: "custom", from: "2026-09-01", to: "2026-09-01", compare: "previous" },
+  });
+
+  it("เป้า ROAS ถ่วงด้วยงบของทุกแบรนด์ (ฐานเดียวกับ ROAS จริง)", () => {
+    // (10 × 200,000 + 5 × 100,000) ÷ 300,000
+    expect(v.goals.overall.roas?.target).toBeCloseTo((10 * 200000 + 5 * 100000) / 300000, 4);
+  });
+  it("เป้าขั้น funnel ยังเป็นของแบรนด์ที่เก็บครบ", () => {
+    expect(v.goals.overall.inquiries?.monthTarget).toBe(2000);
+    expect(v.goals.overall.qualified?.monthTarget).toBe(600);
+  });
+});
