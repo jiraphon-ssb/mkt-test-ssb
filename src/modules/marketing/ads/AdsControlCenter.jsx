@@ -240,7 +240,7 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
     </nav>
     <p className="acc-goal-note" role="note">เป้าหลักมาจากระบบขายเอง (หน้าเป้าหมาย · ระบบ TMK ของ JUNTAKARN) — แท็บ "เป้า" ไว้ดูว่าเดือนนี้ได้อะไรมาแล้ว ขาดอะไร และเติมเองได้ ค่าที่เติมที่นั่นชนะค่าที่ดึงมา · ภาพรวมความครบดูที่ <Link to="/mkt/ads/sync">สถานะ Sync</Link></p>
     {tab === "sources" && <Connections brands={brands} config={config} setConfig={setConfig} toast={toast} isLead={isLead} />}
-    {tab === "goals" && <GoalSettingsPanel brands={brands} isLead={isLead} toast={toast} profileId={user?.mktProfileId ?? null} />}
+    {tab === "goals" && <GoalSettingsPanel brands={brands} isLead={isLead} toast={toast} />}
     {tab === "rules" && <Rules rules={rules} setRules={setRules} creativeRules={creativeRules} setCreativeRules={setCreativeRules} brands={brands} isLead={isLead} />}
     {tab === "reconcile" && <Reconciliation config={currentConfig} brands={brands} toast={toast} isLead={isLead} />}
   </main>;

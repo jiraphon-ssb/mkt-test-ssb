@@ -37,7 +37,7 @@ const displayOf = (value, unit) => {
   return fmtNum(value, 0);
 };
 
-export function GoalSettingsPanel({ brands = [], isLead = false, toast, profileId = null }) {
+export function GoalSettingsPanel({ brands = [], isLead = false, toast }) {
   const [month, setMonth] = useState(() => monthStart(new Date()));
   const [state, setState] = useState({ status: "loading", goals: [], overrides: [], error: null });
   const [draft, setDraft] = useState({});        // { brandId: { field: ข้อความที่พิมพ์ } }
@@ -111,7 +111,7 @@ export function GoalSettingsPanel({ brands = [], isLead = false, toast, profileI
         if (invalid) { failed.push(`${brand.name} (${invalid.label} กรอกไม่ถูก)`); continue; }
         const hasAny = Object.values(values).some((value) => value != null);
         try {
-          if (hasAny) await apiClient.ads.saveGoalOverride({ brandId: brand.id, month, values, updatedBy: profileId });
+          if (hasAny) await apiClient.ads.saveGoalOverride({ brandId: brand.id, month, values });
           else await apiClient.ads.clearGoalOverride(brand.id, month);
         } catch (error) { failed.push(`${brand.name} (${adsErrorText(error, "บันทึกไม่สำเร็จ")})`); }
       }

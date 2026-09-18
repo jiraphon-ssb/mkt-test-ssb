@@ -36,7 +36,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const show = async (props = {}) => {
-  const view = render(<MemoryRouter><GoalSettingsPanel brands={brands} isLead toast={toast} profileId="p1" {...props} /></MemoryRouter>);
+  const view = render(<MemoryRouter><GoalSettingsPanel brands={brands} isLead toast={toast} {...props} /></MemoryRouter>);
   await act(async () => {});
   return view;
 };
@@ -79,7 +79,8 @@ describe("GoalSettingsPanel", () => {
     fireEvent.change(input("TEAMDEE", "เป้าคนทัก"), { target: { value: "1500" } });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /บันทึกเป้าเดือนนี้/ })); });
     expect(calls.save).toHaveLength(1);
-    expect(calls.save[0]).toMatchObject({ brandId: "b_td", month: THIS_MONTH, updatedBy: "p1" });
+    expect(calls.save[0]).toMatchObject({ brandId: "b_td", month: THIS_MONTH });
+    expect(calls.save[0].updatedBy).toBeUndefined();   // ใครแก้/เมื่อไหร่ ประทับจากฐาน ไม่ใช่จากหน้าเว็บ
     expect(calls.save[0].values).toMatchObject({ ad_budget: 250000, inquiry_target: 1500, sales_target: null, roas: null });
   });
 

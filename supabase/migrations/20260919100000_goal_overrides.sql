@@ -58,6 +58,23 @@ create policy ad_goal_overrides_write on public.ad_sales_goal_overrides
   for all to authenticated using (public.mkt_is_team_lead()) with check (public.mkt_is_team_lead());
 revoke all on public.ad_sales_goal_overrides from anon;
 
+-- ร่องรอยว่าใครแก้เมื่อไหร่ ต้องมาจากฐาน ไม่ใช่จากหน้าเว็บ
+-- (ถ้าเชื่อ client หัวหน้าทีมคนหนึ่งยิง PostgREST ตรง แล้วใส่ชื่อคนอื่น/เวลาย้อนหลังได้
+--  — ตารางนี้ถือเป้ายอดขาย/งบแอดทั้งบริษัท ร่องรอยเดียวที่มีจึงต้องเชื่อถือได้)
+create or replace function public.ad_goal_override_stamp() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  new.updated_at := now();
+  new.updated_by := (select p.id from public.mkt_profile p
+                     where p.auth_user_id = (select auth.uid()) limit 1);
+  return new;
+end;
+$$;
+drop trigger if exists ad_goal_overrides_stamp on public.ad_sales_goal_overrides;
+create trigger ad_goal_overrides_stamp before insert or update
+  on public.ad_sales_goal_overrides for each row
+  execute function public.ad_goal_override_stamp();
+
 -- เป้าของ JUNTAKARN มาจากหน้าตั้งค่าเป้าของระบบ TMK (tmk_monthly_history)
 -- เดิม check รับแค่ sale_goal / sale_target → เฟสใหม่จะโดน 23514 ทุกครั้งเหมือนที่เคยเจอกับ source='tmk'
 alter table public.ad_sales_goals drop constraint if exists ad_sales_goals_goal_source_check;
@@ -77,6 +94,9 @@ comment on column public.ad_sales_goals.goal_source is
 --   select polname, pg_get_expr(polqual, polrelid) as using_expr, pg_get_expr(polwithcheck, polrelid) as check_expr
 --   from pg_policy where polrelid = 'public.ad_sales_goal_overrides'::regclass;
 --   -- ต้องมี 2 policy: read (true) · write (mkt_is_team_lead ทั้งสองช่อง)
+--
+--   select tgname from pg_trigger where tgrelid = 'public.ad_sales_goal_overrides'::regclass and not tgisinternal;
+--   -- ต้องเห็น ad_goal_overrides_stamp (ตัวประทับตราคนแก้/เวลาแก้)
 --
 --   select confdeltype from pg_constraint
 --   where conrelid = 'public.ad_sales_goal_overrides'::regclass and contype = 'f';

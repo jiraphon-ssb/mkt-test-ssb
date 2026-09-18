@@ -19,6 +19,13 @@ const positive = (value) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+const ROAS_MAX = 99_999_999;
+const roasOf = (salesTarget, adBudget) => {
+  if (salesTarget === null || adBudget === null) return null;
+  const value = salesTarget / adBudget;
+  return Number.isFinite(value) && value <= ROAS_MAX ? value : null;
+};
+
 export function jkGoalRows(rows = []) {
   const out = [];
   for (const row of rows ?? []) {
@@ -35,7 +42,8 @@ export function jkGoalRows(rows = []) {
       goal_source: "tmk_month",
       sales_target: salesTarget,
       ad_budget: adBudget,
-      roas: salesTarget !== null && adBudget !== null ? salesTarget / adBudget : null,
+      // numeric(12,4) รับได้ราว 1e8 — งบแอดที่พิมพ์ผิดเป็น 0.01 จะทำให้ ROAS ล้นและรอบล้มทั้งรอบ (22003)
+      roas: roasOf(salesTarget, adBudget),
       platform_budgets: adBudget !== null ? { meta: adBudget } : {},
     });
   }

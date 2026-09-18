@@ -77,3 +77,13 @@ describe("jkGoalUrl", () => {
     expect(new URL(url).searchParams.get("select")).toBe(JK_GOAL_COLUMNS.join(","));
   });
 });
+
+/* งบแอดที่พิมพ์ผิดเป็นเลขจิ๋ว (เช่น 0.01) ทำให้ ROAS ล้นคอลัมน์ numeric(12,4) แล้วรอบล้มทั้งรอบ (22003)
+   กันที่ต้นทาง: ล้นเมื่อไหร่ = ไม่รู้ ไม่ใช่เขียนค่าประหลาดลงเป้า */
+describe("ROAS ไม่ล้นคอลัมน์", () => {
+  it("งบแอดจิ๋วจนอัตราส่วนเกินพิสัย = roas null แต่เป้ายอดกับงบยังเขียนได้", () => {
+    const out = jkGoalRows([row({ sales_target: 900000, ad_budget: 0.0001 })])[0];
+    expect(out).toMatchObject({ sales_target: 900000, ad_budget: 0.0001, roas: null });
+    expect(jkGoalRows([row({ sales_target: 900000, ad_budget: 0.01 })])[0].roas).toBeCloseTo(90000000);
+  });
+});
