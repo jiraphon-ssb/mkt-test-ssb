@@ -178,3 +178,37 @@ describe("GoalSettingsPanel — อ่านค่าที่แก้เอง
     } finally { apiClient.ads.goalOverrides = original; }
   });
 });
+
+/* ลายตา: ของเดิมเขียน "จากระบบขาย"/"ยังไม่ตั้ง" ใต้ทุกช่อง = ตัวหนังสือซ้ำ 44 บรรทัดต่อหน้า
+   ของใหม่ใต้ช่องมีเฉพาะตอนไม่ปกติ · คำอธิบายย้ายไป tooltip · ช่องจัดเป็นกลุ่ม */
+describe("GoalSettingsPanel — ความหนาแน่นของหน้าจอ", () => {
+  it("ช่องปกติไม่มีตัวหนังสือใต้ช่อง · ช่องที่ตั้งเองทับมี · คำอธิบายอยู่ใน tooltip", async () => {
+    data.goals[THIS_MONTH] = [goal("b_td")];
+    data.overrides[THIS_MONTH] = [{ brand_id: "b_td", month: THIS_MONTH, ad_budget: 250000 }];
+    await show();
+    const card = brandCard("TEAMDEE");
+    expect(within(card).queryAllByText("จากระบบขาย")).toHaveLength(0);
+    expect(within(card).queryAllByText("ยังไม่ตั้ง")).toHaveLength(0);
+    expect(within(card).getAllByText(/ตั้งค่าเอง · เดิม ฿210,000.00/)).toHaveLength(1);
+    expect(input("TEAMDEE", "เป้ายอดขาย").closest("label").title).toContain("ยอดขายที่ต้องทำ");
+  });
+
+  it("จัดช่องเป็น 3 กลุ่มตามเส้นทางลูกค้า", async () => {
+    data.goals[THIS_MONTH] = [goal("b_td")];
+    await show();
+    const groups = [...brandCard("TEAMDEE").querySelectorAll(".gs-group-label")].map((node) => node.textContent);
+    expect(groups).toEqual(["ยอดและงบ", "เส้นทางลูกค้า (จำนวนคน)", "ประสิทธิภาพที่ต้องคุม"]);
+  });
+
+  it("เลือกเดือนล่วงหน้าได้ถึง 6 เดือน และติดป้ายว่าล่วงหน้า", async () => {
+    data.goals[THIS_MONTH] = [goal("b_td")];
+    await show();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "เดือนของเป้า" })); });
+    const options = screen.getAllByRole("option").map((node) => node.textContent);
+    expect(options[0]).toBe("มี.ค. 2570 · ล่วงหน้า");        // ก.ย. 2569 + 6 เดือน
+    expect(options).toContain("ต.ค. 2569 · ล่วงหน้า");
+    expect(options).toContain("ก.ย. 2569");
+    expect(options).toContain("ม.ค. 2569");                  // ย้อนหลัง 8 เดือน
+    expect(options).toHaveLength(15);
+  });
+});

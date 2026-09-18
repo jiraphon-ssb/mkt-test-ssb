@@ -10,7 +10,7 @@ import { fmtMoney, fmtNum, fmtPct } from "../dash/charts/theme.js";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { BrandMark } from "./BrandMark.jsx";
 import { adsErrorText } from "./adsSyncMessages.js";
-import { GOAL_EDIT_FIELDS, changedFromSource, goalRowFor, mergeGoals, missingGoalFields, parseGoalInput } from "./goalOverrides.js";
+import { GOAL_EDIT_FIELDS, GOAL_FIELD_GROUPS, changedFromSource, goalRowFor, mergeGoals, missingGoalFields, parseGoalInput } from "./goalOverrides.js";
 import { SALES_BRAND_IDS } from "./syncSources.js";
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -153,9 +153,16 @@ export function GoalSettingsPanel({ brands = [], isLead = false, toast }) {
     }
   };
 
+  /* เดือนที่เลือกได้ — ล่วงหน้า 6 เดือน (ตั้งเป้าล่วงหน้าได้) ถึงย้อนหลัง 8 เดือน
+     เดือนข้างหน้าติดป้ายไว้ ไม่งั้นเผลอตั้งเป้าผิดเดือนแล้วไม่รู้ตัว */
   const monthOptions = useMemo(() => {
     const now = monthStart(new Date());
-    return [1, 0, -1, -2, -3, -4, -5].map((by) => { const value = shiftMonth(now, by); return [value, monthLabel(value)]; });
+    const offsets = [];
+    for (let by = 6; by >= -8; by -= 1) offsets.push(by);
+    return offsets.map((by) => {
+      const value = shiftMonth(now, by);
+      return [value, by > 0 ? `${monthLabel(value)} · ล่วงหน้า` : monthLabel(value)];
+    });
   }, []);
 
   /* สรุปหัวหน้า: ได้อะไรมาแล้ว · ยังขาดอะไร (ขาด = ไม่มีทั้งค่าจากระบบขายและที่ตั้งเอง) */
@@ -228,27 +235,32 @@ export function GoalSettingsPanel({ brands = [], isLead = false, toast }) {
               {changed.length > 0 && <p className="gs-changed" role="note">
                 ต้นทางเปลี่ยนหลังจากตั้งค่าไว้: {changed.map((item) => `${item.label} (ระบบขายให้มา ${displayOf(item.source, GOAL_EDIT_FIELDS.find((f) => f.key === item.key)?.unit)})`).join(" · ")} — ค่าที่ตั้งเองยังถูกใช้อยู่
               </p>}
-              <div className="gs-grid">
-                {GOAL_EDIT_FIELDS.map((field) => {
-                  const source = row?.sources?.[field.key] ?? null;
-                  const synced = row?.synced?.[field.key] ?? null;
-                  const bad = fieldError(brand.id, field);
-                  return <label key={field.key} className={`gs-field${bad ? " bad" : ""}`}>
-                    <span className="gs-label">{field.label}<small>{field.hint}</small></span>
-                    {/* ชื่อช่องสำหรับตัวช่วยอ่าน = ชื่อช่องล้วน (คำอธิบายใต้ชื่อเป็นข้อความประกอบ ไม่เอามาปนชื่อ) */}
-                    <input type="text" inputMode="decimal" autoComplete="off" disabled={!canEdit} aria-label={field.label}
-                      value={valueText(brand.id, field)} placeholder="ยังไม่ตั้ง"
-                      onChange={(event) => setValue(brand.id, field.key, event.target.value)} />
-                    <span className="gs-under">
-                      {bad ? <b className="gs-bad">กรอกเป็นตัวเลข เช่น 1,300,000 หรือ 12%</b>
-                        : source === "manual"
-                          ? <>ตั้งค่าเอง{synced != null && <> · ระบบขายให้มา {displayOf(synced, field.unit)}</>}
-                            {canEdit && synced != null && <button type="button" className="gs-restore" onClick={() => setValue(brand.id, field.key, textOf(synced, field.unit))}><RotateCcw size={11} aria-hidden="true" /> คืนค่า</button>}</>
-                          : source ? <>จาก{SOURCE_TEXT[source] ?? source}</> : <>ยังไม่ตั้ง</>}
-                    </span>
-                  </label>;
-                })}
-              </div>
+              {GOAL_FIELD_GROUPS.map((group) => <div key={group.key} className="gs-group">
+                <p className="gs-group-label">{group.label}</p>
+                <div className="gs-grid">
+                  {group.fields.map((key) => {
+                    const field = GOAL_EDIT_FIELDS.find((item) => item.key === key);
+                    const source = row?.sources?.[field.key] ?? null;
+                    const synced = row?.synced?.[field.key] ?? null;
+                    const bad = fieldError(brand.id, field);
+                    /* ใต้ช่องเขียนเฉพาะตอนที่ "ไม่ปกติ" — พิมพ์ผิด หรือ ตั้งค่าเองทับค่าที่ดึงมา
+                       ของเดิมเขียน "จากระบบขาย"/"ยังไม่ตั้ง" ใต้ทุกช่อง = ตัวหนังสือซ้ำ 44 บรรทัดต่อหน้า */
+                    const note = bad ? "bad" : source === "manual" ? "manual" : null;
+                    return <label key={field.key} className={`gs-field${bad ? " bad" : ""}`} title={field.hint}>
+                      <span className="gs-label">{field.label}</span>
+                      <input type="text" inputMode="decimal" autoComplete="off" disabled={!canEdit} aria-label={field.label}
+                        value={valueText(brand.id, field)} placeholder="—"
+                        onChange={(event) => setValue(brand.id, field.key, event.target.value)} />
+                      {note && <span className="gs-under">
+                        {note === "bad"
+                          ? <b className="gs-bad">กรอกเป็นตัวเลข เช่น 1,300,000 หรือ 12%</b>
+                          : <>ตั้งค่าเอง{synced != null && <> · เดิม {displayOf(synced, field.unit)}</>}
+                            {canEdit && synced != null && <button type="button" className="gs-restore" onClick={() => setValue(brand.id, field.key, textOf(synced, field.unit))}><RotateCcw size={11} aria-hidden="true" /> คืนค่า</button>}</>}
+                      </span>}
+                    </label>;
+                  })}
+                </div>
+              </div>)}
             </article>;
           })}
         </div>

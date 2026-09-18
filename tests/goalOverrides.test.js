@@ -148,3 +148,15 @@ describe("GOAL_EDIT_FIELDS", () => {
     }
   });
 });
+
+/* หน้าตั้งค่าจัดช่องเป็นกลุ่ม — ทุกช่องต้องอยู่ในกลุ่มพอดีหนึ่งกลุ่ม ไม่ตกหล่นและไม่ซ้ำ
+   (ถ้าเพิ่มช่องใหม่แล้วลืมใส่กลุ่ม ช่องนั้นจะหายไปจากหน้าจอเงียบๆ) */
+import { GOAL_FIELD_GROUPS } from "../src/modules/marketing/ads/goalOverrides.js";
+describe("GOAL_FIELD_GROUPS", () => {
+  it("ครอบทุกช่องพอดีหนึ่งครั้ง · เรียงตามเส้นทางลูกค้า", () => {
+    const inGroups = GOAL_FIELD_GROUPS.flatMap((group) => group.fields);
+    expect([...inGroups].sort()).toEqual(GOAL_EDIT_FIELDS.map((field) => field.key).sort());
+    expect(new Set(inGroups).size).toBe(inGroups.length);
+    expect(GOAL_FIELD_GROUPS[1].fields).toEqual(["inquiry_target", "leads_target", "deposits_target", "orders_target"]);
+  });
+});

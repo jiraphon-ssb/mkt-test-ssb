@@ -220,15 +220,18 @@
 .gs-brand-src small { color:var(--ink-soft); font-size:10.5px; }
 .gs-changed { margin:0 0 10px; padding:7px 10px; border:1px solid var(--warn-line,var(--line)); border-radius:8px; background:var(--warn-soft); color:var(--warn-text); font-size:11px; line-height:1.5; }
 
-.gs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px 12px; }
-.gs-field { display:grid; gap:4px; min-width:0; }
-.gs-label { display:grid; gap:1px; color:var(--ink); font-size:11.5px; font-weight:600; }
-.gs-label small { color:var(--ink-soft); font-size:10.5px; font-weight:400; line-height:1.35; }
+/* จัดเป็นกลุ่มตามเส้นทางลูกค้า — 11 ช่องเรียงติดกันแถวเดียวอ่านไม่ออกว่าอะไรเกี่ยวกับอะไร */
+.gs-group + .gs-group { margin-top:12px; }
+.gs-group-label { margin:0 0 6px; color:var(--ink-soft); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.gs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:8px 10px; }
+.gs-field { display:grid; gap:3px; min-width:0; align-content:start; }
+.gs-label { color:var(--ink); font-size:11.5px; font-weight:600; }
 .mkt-root .gs-field input { width:100%; min-height:34px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; }
 .mkt-root .gs-field input:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:1px; }
 .mkt-root .gs-field input:disabled { opacity:.6; cursor:not-allowed; }
 .mkt-root .gs-field.bad input { border-color:var(--bad-text); }
-.gs-under { display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-height:15px; color:var(--ink-soft); font-size:10.5px; }
+/* ใต้ช่องมีเฉพาะตอนไม่ปกติ (ตั้งค่าเองทับ / พิมพ์ผิด) จึงไม่ต้องกันที่ไว้ */
+.gs-under { display:flex; flex-wrap:wrap; align-items:center; gap:5px; color:var(--ink-soft); font-size:10.5px; }
 .gs-under .gs-bad { color:var(--bad-text); font-weight:600; }
 .mkt-root .gs-restore { display:inline-flex; align-items:center; gap:3px; padding:0; border:0; background:none; color:var(--ink); font:inherit; font-size:10.5px; text-decoration:underline; cursor:pointer; }
 .gs-note { margin:0; color:var(--ink-soft); font-size:11px; line-height:1.55; }

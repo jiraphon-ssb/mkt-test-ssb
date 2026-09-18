@@ -20,6 +20,14 @@ export const GOAL_EDIT_FIELDS = [
   { key: "pct_ads_new", label: "%Ads เป้า", unit: "pct", hint: "ค่าแอด ÷ ยอดลูกค้าใหม่" },
 ];
 
+/* กลุ่มสำหรับหน้าตั้งค่า — เรียงตามเส้นทางลูกค้า (คนทัก → Lead → ได้ออเดอร์ → ยืนยันออเดอร์)
+   44 ช่องเรียงติดกันเป็นตารางเดียวอ่านไม่ออกว่าอะไรเกี่ยวกับอะไร */
+export const GOAL_FIELD_GROUPS = [
+  { key: "money", label: "ยอดและงบ", fields: ["sales_target", "ad_budget"] },
+  { key: "funnel", label: "เส้นทางลูกค้า (จำนวนคน)", fields: ["inquiry_target", "leads_target", "deposits_target", "orders_target"] },
+  { key: "efficiency", label: "ประสิทธิภาพที่ต้องคุม", fields: ["cpi", "cpl", "cac", "roas", "pct_ads_new"] },
+];
+
 const FIELD_KEYS = GOAL_EDIT_FIELDS.map((field) => field.key);
 const LABEL_OF = Object.fromEntries(GOAL_EDIT_FIELDS.map((field) => [field.key, field.label]));
 const ENDED_SOURCES = ["sale_goal", "sale_target", "tmk_month"];
