@@ -31,3 +31,25 @@ describe("functionErrorCode — แปลง error ของ supabase.functions.
     expect(adsErrorText("MEMBER_REQUIRED")).toContain("โปรไฟล์ทีม");
   });
 });
+
+/* เฟสของ JUNTAKARN (ยอด + เป้า) — รหัสพวกนี้ขึ้นหน้าจอโดยตรง ห้ามหลุดเป็นโค้ดดิบ */
+describe("รหัสของสะพาน JUNTAKARN มีข้อความไทยครบ", () => {
+  const codes = [
+    "JK_MISSING", "JK_NO_PERMISSION", "JK_BAD_KEY", "JK_ERROR", "JK_OPEN",
+    "JK_COLUMN_LEAK", "JK_EMPTY_RESULT", "JK_WRITE_FAILED", "JK_FAILED",
+    "JK_GOAL_MISSING", "JK_GOAL_NO_PERMISSION", "JK_GOAL_BAD_KEY", "JK_GOAL_ERROR", "JK_GOAL_OPEN",
+    "JK_GOAL_COLUMN_LEAK", "JK_GOAL_WRITE_FAILED", "JK_GOAL_FAILED",
+  ];
+  it("ทุกรหัสมีคำอธิบายไทย ไม่คืนโค้ดดิบ", () => {
+    for (const code of codes) {
+      const text = adsErrorText(code, "__none__");
+      expect(text, code).not.toBe("__none__");
+      expect(text, code).not.toBe(code);
+      expect(text.length, code).toBeGreaterThan(10);
+    }
+  });
+  it("รหัสเป้าแยกจากรหัสยอด (อ่านแล้วรู้ว่าเป็นเรื่องเป้า)", () => {
+    expect(adsErrorText("JK_GOAL_NO_PERMISSION")).toContain("เป้า");
+    expect(adsErrorText("JK_NO_PERMISSION")).not.toContain("เป้า");
+  });
+});

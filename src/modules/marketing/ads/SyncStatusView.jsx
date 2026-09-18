@@ -27,6 +27,7 @@ import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryLis
 import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
 import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import { newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
+import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
 import "./adsWorkspace.css";
 import "./syncStatus.css";
 
@@ -182,6 +183,7 @@ export function SyncStatusView() {
     // หน้านี้ต้องเห็นยอด JUNTAKARN (source 'tmk') ด้วย ไม่งั้นแถว JK บอก "รอเชื่อมแหล่งข้อมูล" ทั้งที่ข้อมูลเข้าฐานแล้ว
     facts: () => apiClient.ads.businessFacts({ from: salesSince, to: today, sources: ["crm", "tmk"] }),
     goals: () => apiClient.ads.salesGoals(`${today.slice(0, 7)}-01`),
+    goalOverrides: () => apiClient.ads.goalOverrides({ months: [`${today.slice(0, 7)}-01`] }),
     oauth: () => apiClient.ads.oauthStatus(),
   });
   useEffect(() => { reload(); }, [reload, canSync, demo]);
@@ -204,7 +206,8 @@ export function SyncStatusView() {
   const syncRuns = useMemo(() => normalizeSyncRuns(dataOf("syncRuns", [])), [res.syncRuns?.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const pipes = dataOf("pipes", []);
   const facts = dataOf("facts", []);
-  const goals = dataOf("goals", []);
+  // เป้าที่หน้านี้ใช้ = ค่าที่ merge แล้ว (ที่แก้ในหน้าตั้งค่าชนะ) ไม่งั้นตารางเป้าจะบอกว่า "ยังไม่ตั้ง" ทั้งที่ตั้งไว้แล้ว
+  const goals = useMemo(() => mergedGoalRows(mergeGoals(dataOf("goals", []), dataOf("goalOverrides", []))), [res.goals?.data, res.goalOverrides?.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const authorizations = res.oauth?.data?.authorizations ?? [];
   const now = Date.now();
 
@@ -223,7 +226,7 @@ export function SyncStatusView() {
     rows, cron, now,
     authorizations: { ready: ready("oauth") && !res.oauth?.error, items: authorizations },
     goals: {
-      ready: ready("goals") && !res.goals?.error,
+      ready: ready("goals", "goalOverrides") && !res.goals?.error,
       missingByBrand: brands.filter((brand) => SALES_BRAND_IDS.includes(brand.id)).map((brand) => ({ name: brand.name, missing: goalGaps(goals.find((goal) => goal.brand_id === brand.id) ?? null).missing })),
     },
   });
@@ -491,7 +494,7 @@ export function SyncStatusView() {
           </div> : <div className="sy-empty"><Database size={22} aria-hidden="true" /><strong>ยังไม่มีบัญชี Meta ที่เปิดใช้</strong><Link to="/mkt/ads?panel=settings&tab=sources">ไปตั้งค่าบัญชี</Link></div>}
           <CreativeRunsPanel latestByConnection={latestBy(pipes.filter((run) => run.pipeline === "creatives"), (run) => run.connection_id)} accounts={metaAccounts} />
         </>)}
-        {tab === "sales" && (!ready("facts", "goals", "pipes") ? <Skeleton lines={5} wide /> : <div className="sy-sales-tab">
+        {tab === "sales" && (!ready("facts", "goals", "goalOverrides", "pipes") ? <Skeleton lines={5} wide /> : <div className="sy-sales-tab">
           <SalesCheckResult result={checkResult} />
           <h3 className="sy-sub">เป้าเดือนนี้</h3>
           <GoalMatrix brands={brands} goals={goals} />

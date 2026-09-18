@@ -11,12 +11,14 @@ afterEach(cleanup);
 const brands = [{ id: "b_td", name: "TEAMDEE" }];
 
 describe("AdsControlCenter", () => {
-  it("ไม่มีแท็บเป้า · บอกว่าเป้ามาจากระบบขายพร้อมลิงก์ไปสถานะ Sync", () => {
+  /* 18 ก.ย. 69: แท็บ "เป้า" กลับมา แต่สัญญาเปลี่ยน — ไม่ใช่ที่ตั้งเป้าหลักเหมือนยุคก่อน
+     เป้าหลักยังมาจากระบบขาย/ระบบ TMK · แท็บนี้ไว้ดูว่าได้อะไรมาแล้ว ขาดอะไร แล้วเติมทับได้ */
+  it("มีแท็บเป้า · บอกว่าเป้าหลักมาจากระบบขายพร้อมลิงก์ไปสถานะ Sync", () => {
     render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} /></MemoryRouter>);
     const tabs = screen.getByRole("navigation", { name: "หมวดการตั้งค่า Overview ads" });
-    expect(tabs.textContent).not.toMatch(/เป้า/);
-    expect(tabs.textContent).toMatch(/1 · บัญชี.*2 · กฎ.*3 · ตรวจยอด/);
-    expect(screen.getByRole("note").textContent).toMatch(/ใช้ของระบบขาย/);
+    expect(tabs.textContent).toMatch(/1 · บัญชี.*2 · เป้า.*3 · กฎ.*4 · ตรวจยอด/);
+    expect(screen.getByRole("note").textContent).toMatch(/มาจากระบบขายเอง/);
+    expect(screen.getByRole("note").textContent).toMatch(/ชนะค่าที่ดึงมา/);
     expect(screen.getByRole("link", { name: "สถานะ Sync" }).getAttribute("href")).toBe("/mkt/ads/sync");
   });
 
@@ -30,7 +32,7 @@ describe("AdsControlCenter", () => {
 
   it("แท็บกฎ: เหลือเฉพาะช่องที่ระบบใช้จริง (ล่าช้า · ขาดหาย · ผลต่างยอด) · ไม่อ้าง CRM แล้ว", () => {
     render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    fireEvent.click(screen.getByRole("button", { name: /3 · กฎ/ }));
     const labels = [...document.querySelectorAll(".acc-rule strong")].map((el) => el.textContent);
     expect(labels).toEqual(["ข้อมูลเริ่มล่าช้า", "ข้อมูลขาดหาย", "ผลต่างยอดที่ยอมรับ"]);
     expect(document.body.textContent).not.toMatch(/CRM/);
@@ -40,7 +42,7 @@ describe("AdsControlCenter", () => {
   it("กฎคัดครีเอทีฟ: เพิ่มกฎ เลือกตัวชี้วัด ใส่เพดาน แล้วบันทึกลง settings", () => {
     const onSave = vi.fn();
     render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={onSave} toast={() => {}} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    fireEvent.click(screen.getByRole("button", { name: /3 · กฎ/ }));
     expect(screen.getByRole("heading", { name: "กฎคัดครีเอทีฟ" })).toBeTruthy();
     expect(screen.getByText(/ยังไม่มีกฎ/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "เพิ่มกฎ" }));
@@ -57,7 +59,7 @@ describe("AdsControlCenter", () => {
   it("กฎคัดครีเอทีฟ: เปลี่ยนตัวชี้วัดแล้วเงื่อนไขเปลี่ยนตามค่าเริ่มของตัวนั้น · ลบกฎได้", () => {
     const saved = { creativeRules: [{ id: "r1", name: "", brandId: "all", metric: "cpa", op: "lte", value: 900, minSpend: 0 }] };
     render(<MemoryRouter><AdsControlCenter brands={brands} saved={saved} onSave={() => {}} toast={() => {}} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    fireEvent.click(screen.getByRole("button", { name: /3 · กฎ/ }));
     fireEvent.click(screen.getByRole("button", { name: "ตัวชี้วัด กฎ 1" }));
     fireEvent.click(screen.getByRole("option", { name: "ROAS (Meta)" }));
     expect(screen.getByRole("button", { name: "เงื่อนไข กฎ 1" }).textContent).toMatch(/อย่างน้อย/);
@@ -69,7 +71,7 @@ describe("AdsControlCenter", () => {
     const toast = vi.fn();
     const saved = { creativeRules: [{ id: "r1", name: "คัด roas", brandId: "all", metric: "roas", op: "gte", value: null, minSpend: 500 }] };
     render(<MemoryRouter><AdsControlCenter brands={brands} saved={saved} onSave={() => {}} toast={toast} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    fireEvent.click(screen.getByRole("button", { name: /3 · กฎ/ }));
     const input = screen.getByRole("textbox", { name: "ค่าเกณฑ์ กฎ 1" });
     expect(input.getAttribute("aria-invalid")).toBe("true");
     expect(input.getAttribute("placeholder")).toBe("เช่น 3");
@@ -79,7 +81,7 @@ describe("AdsControlCenter", () => {
 
   it("พิมพ์ค่าที่อ่านไม่ออก: บอกทันทีใต้กฎ", () => {
     render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} toast={() => {}} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: /2 · กฎ/ }));
+    fireEvent.click(screen.getByRole("button", { name: /3 · กฎ/ }));
     fireEvent.click(screen.getByRole("button", { name: "เพิ่มกฎ" }));
     fireEvent.change(screen.getByRole("textbox", { name: "ค่าเกณฑ์ กฎ 1" }), { target: { value: "สามพัน" } });
     expect(screen.getByText("ค่าเกณฑ์ต้องเป็นตัวเลข เช่น 1,000")).toBeTruthy();

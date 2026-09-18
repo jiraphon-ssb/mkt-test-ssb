@@ -2,6 +2,7 @@
    สถานะประตู/ชนิดคีย์ใช้ของเดิมร่วมกับสะพานพี่ทัช (doorState / describeSalesKey ใน salesBridge.js)
    ขอเฉพาะ JK_FACT_COLUMNS เสมอ — ข้อมูลลูกค้าไม่ข้ามระบบ (ตัดตั้งแต่ฝั่งขอ ไม่ใช่ดึงมาแล้วทิ้ง) */
 import { JK_FACT_COLUMNS } from "./jkFacts.js";
+import { JK_GOAL_COLUMNS } from "./jkGoals.js";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const baseOf = (url) => String(url ?? "").trim().replace(/\/+$/, "");
@@ -11,6 +12,13 @@ export function jkFactsUrl(url, from, to) {
   if (!ISO.test(String(from ?? "")) || !ISO.test(String(to ?? ""))) throw new Error("DATE_INVALID");
   const target = new URL(`${baseOf(url)}/rest/v1/rpc/jk_ads_daily_facts`);
   target.searchParams.set("select", JK_FACT_COLUMNS.join(","));
+  return target.toString();
+}
+
+/** เป้ารายเดือน — ขอทีเดียวได้หลายเดือน (เดือนละแถว ไม่มีทางชนเพดาน) */
+export function jkGoalUrl(url) {
+  const target = new URL(`${baseOf(url)}/rest/v1/rpc/jk_ads_monthly_goal`);
+  target.searchParams.set("select", JK_GOAL_COLUMNS.join(","));
   return target.toString();
 }
 

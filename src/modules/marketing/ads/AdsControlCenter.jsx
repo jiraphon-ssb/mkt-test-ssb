@@ -1,7 +1,7 @@
 import { fmtMoney, fmtNum, fmtPct } from "../dash/charts/theme.js";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, LoaderCircle, LogOut, Save, Scale, ShieldAlert } from "lucide-react";
+import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, LoaderCircle, LogOut, Save, Scale, ShieldAlert, Target } from "lucide-react";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { BrandMark } from "./BrandMark.jsx";
@@ -12,6 +12,7 @@ import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
 import { applyConnectionResult, applyReconciliation, enabledMetaMappings, latestReconcileByConnection, needsPostScopeReconnect } from "./adsConnectionSync.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { CreativeRulesEditor } from "../creatives/CreativeRulesEditor.jsx";
+import { GoalSettingsPanel } from "./GoalSettingsPanel.jsx";
 import { incompleteRules, normalizeCreativeRules, ruleTitle } from "../creatives/creativeRules.js";
 
 const SOURCE_DETAILS = {
@@ -185,7 +186,7 @@ function Reconciliation({ config, brands, toast, isLead }) {
 export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const initial = useMemo(() => saved ?? {}, [saved]);
   const requestedTab = new URLSearchParams(window.location.search).get("tab");
-  const [tab, setTab] = useState(["sources", "rules", "reconcile"].includes(requestedTab) ? requestedTab : "sources");
+  const [tab, setTab] = useState(["sources", "goals", "rules", "reconcile"].includes(requestedTab) ? requestedTab : "sources");
   /* กลับจาก Meta OAuth: callback แนบ ?oauth=success|error มา → แจ้งผลครั้งเดียวแล้วล้าง param ออกจาก URL */
   useEffect(() => {
     const result = oauthResultMessage(window.location.search);
@@ -231,14 +232,15 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   };
   const currentConfig = { ...config, rules };
   const health = adsDataHealth(currentConfig);
-  const primaryTabs = [["sources",Link2,"1 · บัญชี"],["rules",ShieldAlert,"2 · กฎ"],["reconcile",Scale,"3 · ตรวจยอด"]];
+  const primaryTabs = [["sources",Link2,"1 · บัญชี"],["goals",Target,"2 · เป้า"],["rules",ShieldAlert,"3 · กฎ"],["reconcile",Scale,"4 · ตรวจยอด"]];
   return <main className="aw acc">
     <header className="acc-header"><div><Link to="/mkt/ads"><ArrowLeft size={15} /> Overview ads</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div><button type="button" className="acc-save" onClick={save} disabled={linking || !isLead} aria-busy={linking} title={isLead ? undefined : "เฉพาะหัวหน้าทีมบันทึกการตั้งค่าได้"}>{linking ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} {linking ? "กำลังผูกบัญชี…" : "บันทึก"}</button></header>
     <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
       {primaryTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}
     </nav>
-    <p className="acc-goal-note" role="note">เป้ายอดขาย งบแอด และเพดาน CPL / ROAS / %Ads ใช้ของระบบขาย (หน้าเป้าหมาย) ทั้งหมด · ดูว่าเดือนนี้ตั้งช่องไหนแล้วที่ <Link to="/mkt/ads/sync">สถานะ Sync</Link></p>
+    <p className="acc-goal-note" role="note">เป้าหลักมาจากระบบขายเอง (หน้าเป้าหมาย · ระบบ TMK ของ JUNTAKARN) — แท็บ "เป้า" ไว้ดูว่าเดือนนี้ได้อะไรมาแล้ว ขาดอะไร และเติมเองได้ ค่าที่เติมที่นั่นชนะค่าที่ดึงมา · ภาพรวมความครบดูที่ <Link to="/mkt/ads/sync">สถานะ Sync</Link></p>
     {tab === "sources" && <Connections brands={brands} config={config} setConfig={setConfig} toast={toast} isLead={isLead} />}
+    {tab === "goals" && <GoalSettingsPanel brands={brands} isLead={isLead} toast={toast} profileId={user?.mktProfileId ?? null} />}
     {tab === "rules" && <Rules rules={rules} setRules={setRules} creativeRules={creativeRules} setCreativeRules={setCreativeRules} brands={brands} isLead={isLead} />}
     {tab === "reconcile" && <Reconciliation config={currentConfig} brands={brands} toast={toast} isLead={isLead} />}
   </main>;

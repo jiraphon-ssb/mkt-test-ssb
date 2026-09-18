@@ -2551,6 +2551,32 @@ const adsData = {
     if (error) throw error;
     return data ?? [];
   },
+  /* ── เป้าที่คนแก้เองในหน้าตั้งค่า (ad_sales_goal_overrides) ──
+     ชนะค่าที่ดึงมาทีละช่อง (ดู goalOverrides.js) · อ่านได้ทุกคนที่ล็อกอิน เขียนได้เฉพาะหัวหน้าทีมตาม RLS
+     ตารางนี้ท่อ sync ไม่แตะเลย — ค่าที่ตั้งไว้จึงไม่หายตอนดึงรอบใหม่ */
+  async goalOverrides({ months = null } = {}) {
+    const db = requireSupabase();
+    let query = db.from("ad_sales_goal_overrides").select("*");
+    if (months?.length) query = query.in("month", months);
+    const { data, error } = await query.order("month", { ascending: false }).limit(500);
+    if (error) throw error;
+    return data ?? [];
+  },
+  /** values = ช่องที่ตั้งไว้ (null = ล้างช่องนั้นให้กลับไปใช้ค่าจากระบบขาย) */
+  async saveGoalOverride({ brandId, month, values = {}, note = null, updatedBy = null }) {
+    const db = requireSupabase();
+    const { data, error } = await db.from("ad_sales_goal_overrides")
+      .upsert({ brand_id: brandId, month, ...values, note, updated_by: updatedBy, updated_at: new Date().toISOString() }, { onConflict: "brand_id,month" })
+      .select().maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+  /** ล้างทั้งแถว = กลับไปใช้ค่าจากระบบขายทุกช่องของเดือนนั้น */
+  async clearGoalOverride(brandId, month) {
+    const db = requireSupabase();
+    const { error } = await db.from("ad_sales_goal_overrides").delete().eq("brand_id", brandId).eq("month", month);
+    if (error) throw error;
+  },
   /** เป้ารายเดือนจากหน้าเป้าหมายของระบบขาย (sale_goal → sale_target) — อ่านอย่างเดียว */
   async salesGoals(month) {
     const db = requireSupabase();

@@ -71,10 +71,18 @@ export function GoalMatrix({ brands = [], goals = [] }) {
             if (!SALES_BRAND_IDS.includes(brand.id)) return <tr key={brand.id}><th scope="row">{brand.name}</th><td colSpan={GOAL_FIELDS.length + 1}><span className="sy-chip muted">รอเชื่อมแหล่งข้อมูล</span></td></tr>;
             const goal = byBrand.get(brand.id) ?? null;
             const gap = goalGaps(goal);
-            const source = gap.source === "sale_goal" ? `หน้าเป้าหมาย v${gap.version}` : gap.source === "sale_target" ? "เป้าแบบเก่า" : "ยังไม่ตั้งเป้า";
+            const manualFields = Object.entries(goal?.sources ?? {}).filter(([, from]) => from === "manual").map(([key]) => GOAL_SHORT[key] ?? key);
+            /* ที่มาของเป้า 4 แบบ: หน้าเป้าหมายของพี่ทัช · เป้าแบบเก่า · ระบบ TMK (JUNTAKARN) · ตั้งเองในหน้าตั้งค่า */
+            const SOURCE_TEXT = { sale_goal: `หน้าเป้าหมาย v${gap.version}`, sale_target: "เป้าแบบเก่า", tmk_month: "ระบบ TMK", manual: "ตั้งค่าเอง" };
+            const source = SOURCE_TEXT[gap.source] ?? "ยังไม่ตั้งเป้า";
             return <tr key={brand.id}>
               <th scope="row">{brand.name}</th>
-              <td><span className={`sy-chip ${gap.source === "sale_goal" ? "ok" : gap.source === "sale_target" ? "warn" : "bad"}`}>{source}</span></td>
+              <td>
+                <span className={`sy-chip ${["sale_goal", "tmk_month", "manual"].includes(gap.source) ? "ok" : gap.source === "sale_target" ? "warn" : "bad"}`}>{source}</span>
+                {/* แถวหนึ่งมีได้ทั้งค่าจากระบบขายและค่าที่แก้เอง — บอกว่าแก้ไว้กี่ช่อง ไม่งั้นอ่านไม่ออกว่าตัวไหนถูกทับ */}
+                {manualFields.length > 0 && gap.source !== "manual"
+                  && <span className="sy-chip ok" title={`แก้เอง: ${manualFields.join(" · ")}`}>ตั้งค่าเอง {manualFields.length} ช่อง</span>}
+              </td>
               {GOAL_FIELDS.map(([key]) => { const text = goal ? goalValue(key, goal[key]) : null; return <td key={key} className={text ? "num" : "num unset"}>{text ?? <>—<span className="sr-only">ยังไม่ตั้ง</span></>}</td>; })}
             </tr>;
           })}

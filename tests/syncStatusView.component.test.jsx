@@ -11,7 +11,8 @@ const deferred = (key) => new Promise((resolve, reject) => { pending[key] = { re
 vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   recentSyncs: () => deferred("syncRuns"), connections: () => deferred("connections"), reconciliations: () => deferred("recons"),
   syncCoverage: () => deferred("coverage"), cronTicks: () => deferred("ticks"), pipelineRuns: () => deferred("pipes"),
-  businessFacts: (args) => { factArgs.push(args); return deferred("facts"); }, salesGoals: () => deferred("goals"), oauthStatus: () => deferred("oauth"),
+  businessFacts: (args) => { factArgs.push(args); return deferred("facts"); }, salesGoals: () => deferred("goals"),
+  goalOverrides: () => deferred("goalOverrides"), oauthStatus: () => deferred("oauth"),
 } } }));
 const auth = { demo: false, user: { role: "team_lead" } };
 vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => auth }));
@@ -28,6 +29,8 @@ beforeEach(() => { auth.user = { role: "team_lead" }; factArgs.length = 0; for (
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const show = () => render(<MemoryRouter initialEntries={["/mkt/ads/sync"]}><SyncStatusView /></MemoryRouter>);
 const settle = async (key, value) => { await act(async () => { pending[key].resolve(value); }); };
+// เป้าของหน้านี้ = เป้าจากระบบขาย + ค่าที่คนแก้เอง (merge) → เทสต้องปล่อยทั้งสองก้อน
+const settleGoals = async (goals = [], overrides = []) => { await settle("goals", goals); await settle("goalOverrides", overrides); };
 
 describe("SyncStatusView — ระหว่างโหลด", () => {
   it("ไม่สรุปว่ายังไม่เคยดึง / ยังไม่ได้เชื่อม / ข้อมูลขาด · บอกว่ากำลังตรวจ", () => {
@@ -60,7 +63,7 @@ describe("SyncStatusView — โหลดเสร็จ", () => {
     await settle("ticks", [{ id: "t1", started_at: "2026-09-17T02:07:00Z", finished_at: "2026-09-17T02:07:02Z", status: "success", source: "pg_cron" }]);
     await settle("pipes", [{ id: "s1", pipeline: "sales", status: "success", trigger_kind: "cron", started_at: "2026-09-17T02:07:00Z" }]);
     await settle("facts", []);
-    await settle("goals", [{ brand_id: "b_td", goal_source: "sale_goal", version: 2, sales_target: 1, ad_budget: 1, cpl: 1, roas: 1, pct_ads_new: 1, cac: 1, cpi: 1, inquiry_target: 1, leads_target: 1, deposits_target: 1, orders_target: 1 }]);
+    await settleGoals([{ brand_id: "b_td", month: "2026-09-01", goal_source: "sale_goal", version: 2, sales_target: 1, ad_budget: 1, cpl: 1, roas: 1, pct_ads_new: 1, cac: 1, cpi: 1, inquiry_target: 1, leads_target: 1, deposits_target: 1, orders_target: 1 }]);
     await settle("oauth", { authorizations: [{ id: "a1", status: "connected", expires_at: null, provider_user_name: "อาร์ต" }] });
 
     expect(screen.getByRole("status").textContent).toContain("ข้อมูลใช้ได้ · มี");
@@ -138,5 +141,40 @@ describe("SyncStatusView — สมาชิกที่ไม่ใช่หั
     expect(within(jk).getByText("ปกติ")).toBeTruthy();
     expect(within(jk).getByText(/นับเฉพาะออเดอร์จากแชท/)).toBeTruthy();
     expect(within(jk).getByText(/วันที่ออเดอร์/)).toBeTruthy();
+  });
+});
+
+/* ค่าที่แก้ในหน้าตั้งค่าเป้าต้องชนะถึงหน้าจอจริง ไม่ใช่ชนะแค่ในฟังก์ชัน merge
+   (ถ้าลืมต่อ merge เข้าหน้านี้ ตารางเป้าจะบอกว่า "ยังไม่ตั้ง" ทั้งที่ตั้งไว้แล้ว) */
+describe("SyncStatusView — เป้าที่ตั้งเองชนะเป้าจากระบบขาย", () => {
+  const openSales = async () => { await act(async () => { fireEvent.click(screen.getByRole("tab", { name: /ยอดขาย/ })); }); };
+
+  it("แก้งบแอดในตั้งค่า = ตารางเป้าใช้ค่าที่แก้ และบอกที่มาว่าตั้งค่าเอง", async () => {
+    show();
+    await settle("pipes", []);
+    await settle("facts", []);
+    await settleGoals(
+      [{ brand_id: "b_td", month: "2026-09-01", goal_source: "sale_goal", version: 2, sales_target: 3500000, ad_budget: 210000 }],
+      [{ brand_id: "b_td", month: "2026-09-01", ad_budget: 250000, updated_at: "2026-09-18T10:00:00Z" }],
+    );
+    await openSales();
+    // ตารางเป้าอยู่ในบล็อก sy-goal-block — แถวชื่อแบรนด์มีทั้งในตารางเป้าและตารางความครบ
+    const row = within(document.querySelector(".sy-goal-block")).getByRole("row", { name: /TEAMDEE/ });
+    expect(within(row).getByText("฿250,000.00")).toBeTruthy();      // ค่าที่แก้
+    expect(within(row).queryByText("฿210,000.00")).toBeNull();      // ค่าจากระบบขายไม่ถูกใช้
+    expect(within(row).getByText("฿3,500,000.00")).toBeTruthy();    // ช่องที่ไม่ได้แก้ยังมาจากระบบขาย
+    expect(within(row).getByText(/ตั้งค่าเอง 1 ช่อง/)).toBeTruthy();
+    expect(within(row).getByText(/หน้าเป้าหมาย v2/)).toBeTruthy();   // ช่องที่เหลือยังมาจากระบบขาย
+  });
+
+  it("เป้าของ JUNTAKARN ที่มาจากระบบ TMK บอกที่มาถูก (ไม่ใช่ 'ยังไม่ตั้งเป้า')", async () => {
+    show();
+    await settle("pipes", []);
+    await settle("facts", []);
+    await settleGoals([{ brand_id: "b_jt", month: "2026-09-01", goal_source: "tmk_month", version: 0, sales_target: 900000, ad_budget: 150000, roas: 6 }], []);
+    await openSales();
+    const row = within(document.querySelector(".sy-goal-block")).getByRole("row", { name: /JUNTAKARN/ });
+    expect(within(row).getByText("ระบบ TMK")).toBeTruthy();
+    expect(within(row).getByText("฿900,000.00")).toBeTruthy();
   });
 });
