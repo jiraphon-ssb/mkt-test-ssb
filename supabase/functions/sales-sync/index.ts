@@ -9,6 +9,8 @@ import { adminClient, corsHeaders, isServiceRole, json, requireTeamLead } from "
 import { finishRun, runCode, startRun } from "../_shared/pipelineRuns.ts";
 import { runTriggerOf } from "../_shared/serviceAuth.js";
 import { SALES_SOURCE_BRANDS, factWindows, factsToDailyRows, goalRowsToSalesGoals } from "../_shared/salesFacts.js";
+import { jkExtraColumns, jkRowsToDailyFacts } from "../_shared/jkFacts.js";
+import { jkFactsUrl, jkWindows } from "../_shared/jkBridge.js";
 import {
   PAGE_LIMIT, describeSalesKey, describeSalesUrl, doorState, factsProbeUrl, goalProbeUrl,
   goalsUrl, monthsToSync, probeVerdict, summarizeFacts, summarizeGoals, targetsUrl,
@@ -232,6 +234,38 @@ Deno.serve(async (request) => {
       return await failRun("SALES_WRITE_FAILED", 502);
     }
 
+    /* ยอดขาย JUNTAKARN — ระบบ TMK Operation (Supabase คนละโปรเจกต์ · env JK_API_URL / JK_API_KEY)
+       ล้มแยกจากเฟสของพี่ทัช: JK พังต้องไม่ทำให้ยอด TD/JD/TA ที่เขียนสำเร็จแล้วพังตาม
+       ไม่ได้ตั้ง env = ข้ามเงียบ (ยังไม่เปิดใช้) · ชุดว่างทั้งช่วง = ไม่เขียน กันเขียนศูนย์ทับของจริง */
+    let jk: { read: number; written: number; error: string | null } = { read: 0, written: 0, error: null };
+    const jkUrl = Deno.env.get("JK_API_URL")?.trim();
+    const jkKey = Deno.env.get("JK_API_KEY")?.trim();
+    if (jkUrl && jkKey) {
+      try {
+        const jkRows: Record<string, unknown>[] = [];
+        for (const window of jkWindows(from, to)) {
+          const response = await fetch(jkFactsUrl(jkUrl, window.from, window.to), {
+            method: "POST",
+            headers: { apikey: jkKey, Authorization: `Bearer ${jkKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ p_from: window.from, p_to: window.to }),
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok) throw fail(`JK_${doorState(response.status, (payload as { code?: string } | null)?.code).toUpperCase()}`);
+          if (Array.isArray(payload)) jkRows.push(...payload);
+        }
+        if (jkExtraColumns(jkRows).length) throw fail("JK_COLUMN_LEAK");
+        const jkOut = jkRowsToDailyFacts(jkRows, { from, to }).map((row) => ({ ...row, source_updated_at: new Date().toISOString() }));
+        if (!jkRows.length) throw fail("JK_EMPTY_RESULT");
+        const { error } = await db.from("business_daily_facts").upsert(jkOut, { onConflict: "source,external_record_id" });
+        if (error) throw fail("JK_WRITE_FAILED", { detail: error.message });
+        jk = { read: jkRows.length, written: jkOut.length, error: null };
+      } catch (error) {
+        const detail = error as { code?: string; detail?: string };
+        console.error("[sales-sync] jk", detail.code, detail.detail ?? "");
+        jk = { read: 0, written: 0, error: runCode(detail.code, "JK_FAILED") };
+      }
+    }
+
     /* เป้า — พังได้โดยไม่ทำให้ยอดขายที่เขียนสำเร็จแล้วพังตาม แต่ต้องบอกในผลลัพธ์ ไม่เงียบ */
     const months = monthsToSync(today);
     let goals: { written: number; bySource: Record<string, number>; error: string | null } = { written: 0, bySource: {}, error: null };
@@ -253,11 +287,11 @@ Deno.serve(async (request) => {
     }
 
     await finishRun(db, runId, {
-      status: goals.error ? "partial" : "success", rowsRead: facts.length, rowsWritten: rows.length,
-      summary: { brands: SALES_SOURCE_BRANDS, goals, months }, errorCode: goals.error,
+      status: goals.error || jk.error ? "partial" : "success", rowsRead: facts.length + jk.read, rowsWritten: rows.length + jk.written,
+      summary: { brands: SALES_SOURCE_BRANDS, goals, months, jk }, errorCode: goals.error ?? jk.error,
     });
-    console.log(`[sales-sync] ${trigger} ${from}→${to} facts=${facts.length} rows=${rows.length} goals=${goals.written}${goals.error ? ` goalsError=${goals.error}` : ""}`);
-    return json(request, { runId, from, to, read: facts.length, written: rows.length, brands: SALES_SOURCE_BRANDS, goals });
+    console.log(`[sales-sync] ${trigger} ${from}→${to} facts=${facts.length} rows=${rows.length} goals=${goals.written} jk=${jk.written}${goals.error ? ` goalsError=${goals.error}` : ""}${jk.error ? ` jkError=${jk.error}` : ""}`);
+    return json(request, { runId, from, to, read: facts.length, written: rows.length, brands: SALES_SOURCE_BRANDS, goals, jk });
   } catch (error) {
     // พังนอกเหนือที่คาดไว้ — ปิดรอบให้เป็น failed ไม่ให้ค้าง running ในหน้า Sync
     console.error("[sales-sync] crash", error instanceof Error ? error.message : error);
