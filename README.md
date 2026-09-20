@@ -52,8 +52,8 @@ tests/                     vitest — logic ล้วน + component (jsdom ป�
 | ค่าแอด · คนทักจากแอด · ยอดที่ Meta เห็น | Meta Marketing API (OAuth อ่านอย่างเดียว) | pg_cron ทุกชั่วโมงนาทีที่ 7 · ดึงซ้ำตามรอบที่ตั้ง (ค่าเริ่ม 6 ชม.) | `ad_daily_facts` |
 | รูป/ข้อความโฆษณา | Meta (creative + โพสต์เพจ) | วันละครั้งต่อบัญชี | `ad_creatives` |
 | ยอดขาย · funnel · เงินเข้า · เป้า | ระบบขายของพี่ทัช (`sale_dashboard_facts` · `sale_goal`) | วันละครั้งหลัง 9 โมง ย้อน 14 วัน | `business_daily_facts` · `ad_sales_goals` |
-| ยอดขาย JUNTAKARN (เฉพาะออเดอร์จากแชท) | ระบบ TMK Operation (RPC `jk_ads_daily_facts`) | วันละครั้ง พร้อมรอบยอดขาย | `business_daily_facts` (`source='tmk'`) |
-| เป้าเดือนของ JUNTAKARN | ระบบ TMK (RPC `jk_ads_monthly_goal` — เป้าช่องแชท + งบแอด FB/IG) | วันละครั้ง เดือนนี้ + เดือนก่อน | `ad_sales_goals` (`goal_source='tmk_month'`) |
+| ยอดขาย JUNTAKARN (เฉพาะออเดอร์ช่องทาง Facebook) | ระบบ TMK Operation (RPC `jk_ads_daily_facts`) | วันละครั้ง พร้อมรอบยอดขาย | `business_daily_facts` (`source='tmk'`) |
+| เป้าเดือนของ JUNTAKARN | ระบบ TMK (RPC `jk_ads_monthly_goal` — เป้าช่อง Facebook + งบแอด FB/IG) | วันละครั้ง เดือนนี้ + เดือนก่อน | `ad_sales_goals` (`goal_source='tmk_month'`) |
 | เป้าที่คนแก้เอง | หน้าตั้งค่า › เป้า (หัวหน้าทีมเท่านั้น) | ตอนกดบันทึก · **ชนะค่าที่ดึงมาเสมอ ทีละช่อง ทีละเดือน** | `ad_sales_goal_overrides` |
 | ประวัติรอบ | ทุกงานข้างบน | ทุกครั้งที่วิ่ง · เก็บ 90 วัน | `ad_cron_ticks` · `ad_sync_runs` · `data_pipeline_runs` |
 

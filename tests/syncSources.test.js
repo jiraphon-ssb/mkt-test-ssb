@@ -179,7 +179,7 @@ describe("แหล่งข้อมูลยอดขาย JUNTAKARN (ระ�
     const row = jkSourceRow([jkFact("2026-09-16"), jkFact("2026-09-17")], { today: "2026-09-18" });
     expect(row.state).toBe("ok");
     expect(row.fresh).toBe("2026-09-17");
-    expect(row.detail).toContain("นับเฉพาะออเดอร์จากแชท");
+    expect(row.detail).toContain("นับเฉพาะออเดอร์ช่องทาง Facebook");
     expect(row.detail).toContain("วันที่ออเดอร์");
   });
   it("ข้อมูลล่าสุดค้างหลายวัน = ล่าช้า · ไม่มีแถวเลย = รอเชื่อม", () => {

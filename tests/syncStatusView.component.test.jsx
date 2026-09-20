@@ -142,7 +142,7 @@ describe("SyncStatusView — สมาชิกที่ไม่ใช่หั
     await settle("facts", [{ brand_id: "b_jt", fact_date: "2026-09-17", source: "tmk", inquiry_filled: true, orders: 2 }]);
     const jk = screen.getByText("ยอดขาย JUNTAKARN").closest('[role="row"]');
     expect(within(jk).getByText("ปกติ")).toBeTruthy();
-    expect(within(jk).getByText(/นับเฉพาะออเดอร์จากแชท/)).toBeTruthy();
+    expect(within(jk).getByText(/นับเฉพาะออเดอร์ช่องทาง Facebook/)).toBeTruthy();
     expect(within(jk).getByText(/วันที่ออเดอร์/)).toBeTruthy();
   });
 });
