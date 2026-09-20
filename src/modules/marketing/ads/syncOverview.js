@@ -2,7 +2,6 @@
    หน้าตอบคำถามเดียว: ข้อมูลแต่ละแหล่งมาครบ สด เชื่อถือได้ไหม และต้องแก้อะไร
    กติกา: ข้อมูลส่วนไหนยังโหลดไม่เสร็จ = state "loading" ห้ามสรุปว่า "ยังไม่มี/ยังไม่เชื่อม" จากค่าเก่า
    (บน production หน้าเดิมโชว์ "ยังไม่เคยดึง" ระหว่างรอ API ทั้งที่ดึงสำเร็จแล้ว) */
-import { fmtNum } from "../dash/charts/theme.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { tokenDaysLeft } from "./syncSources.js";
 
@@ -12,14 +11,30 @@ const num = (value) => Number(value ?? 0).toLocaleString("th-TH");
 const SALES_STALE_HOURS = 36;      // ดึงวันละครั้งหลัง 9 โมง — เกินวันครึ่ง = ข้ามไปหนึ่งวันแล้ว
 const CREATIVE_WINDOW_HOURS = 48;  // รีเฟรชวันละครั้งต่อบัญชี (ครั้งละบัญชี) — เกิน 2 วัน = ค้าง
 
-/** "53 นาทีก่อน" · "4.9 ชม.ก่อน" · "3 วันก่อน" */
+/** "53 นาทีก่อน" · "4 ชม. 54 นาทีก่อน" · "3 วันก่อน" — หน่วยเดียวกันทุกแถวบนหน้า Sync
+    เดิมช่วงชั่วโมงเขียนเป็นทศนิยม ("4.90 ชม.ก่อน") ซึ่งเป็นแถวเดียวในหน้าที่ใช้ทศนิยมกับเวลา
+    อ่านเทียบกับ "3 นาทีก่อน" ข้างๆ ไม่ได้ — ชม.+นาที บอกเวลาจริงตรงกว่าและไม่ทิ้งความละเอียด */
+function since(ms) {
+  if (ms < HOUR) return `${Math.max(1, Math.floor(ms / 60_000))} นาทีก่อน`;
+  if (ms < 48 * HOUR) {
+    const hours = Math.floor(ms / HOUR);
+    const minutes = Math.floor((ms % HOUR) / 60_000);
+    return minutes ? `${hours} ชม. ${minutes} นาทีก่อน` : `${hours} ชม.ก่อน`;
+  }
+  return `${Math.floor(ms / (24 * HOUR))} วันก่อน`;
+}
+
 export function ago(value, now = Date.now()) {
   const t = time(value);
   if (t === null) return "—";
-  const ms = Math.max(0, now - t);
-  if (ms < HOUR) return `${Math.max(1, Math.floor(ms / 60_000))} นาทีก่อน`;
-  if (ms < 48 * HOUR) return `${fmtNum((ms / HOUR), 2)} ชม.ก่อน`;
-  return `${Math.floor(ms / (24 * HOUR))} วันก่อน`;
+  return since(Math.max(0, now - t));
+}
+
+/** แถวที่รู้แค่ "กี่ชั่วโมงมาแล้ว" (ไม่มี timestamp) — ต้องอ่านออกเป็นแบบเดียวกับ ago */
+export function agoHours(hours) {
+  // null/undefined = ยังไม่รู้ ไม่ใช่ 0 ชั่วโมง (Number(null) = 0 จะกลายเป็น "1 นาทีก่อน" ทั้งที่ยังไม่เคยดึง)
+  if (hours === null || hours === undefined || !Number.isFinite(Number(hours))) return "—";
+  return since(Math.max(0, Number(hours)) * HOUR);
 }
 
 const STATUS = { success: ["สำเร็จ", "ok"], partial: ["สำเร็จบางส่วน", "warn"], failed: ["ไม่สำเร็จ", "bad"], error: ["ไม่สำเร็จ", "bad"], running: ["กำลังทำงาน", "muted"] };
@@ -43,7 +58,7 @@ export function metaSourceRow({ accounts = [], ready = true, everyHours = null, 
   return {
     ...base, sub: `${connected.length} บัญชี`, state, stateLabel,
     hint: errors ? "ดูรหัสปัญหาในแท็บบัญชี Meta" : missing || stale ? "กดดึงข้อมูลทั้งหมดเพื่อเติมช่วงที่ขาด" : null,
-    fresh: { text: newest ? `${fmtNum(newest.ageHours, 2)} ชม.ก่อน` : latest ? ago(latest, now) : "ยังไม่เคยดึง", sub: everyHours ? `ดึงทุก ${everyHours} ชม.` : null },
+    fresh: { text: newest ? agoHours(newest.ageHours) : latest ? ago(latest, now) : "ยังไม่เคยดึง", sub: everyHours ? `ดึงทุก ${everyHours} ชม.` : null },
     complete: { text: gap ? `ขาด ${gap} วัน` : "ไม่มีวันขาด", sub: `ตรวจยอดผ่าน ${reconciled}/${connected.length}` },
   };
 }
@@ -59,7 +74,7 @@ export function salesSourceRow({ runs = [], facts = [], ready = true, today, now
   const monthFacts = facts.filter((fact) => (fact.source ?? "crm") === "crm" && String(fact.fact_date ?? "").startsWith(month) && (fact.fact_date !== today || fact.inquiry_filled === true));
   const filled = monthFacts.filter((fact) => fact.inquiry_filled === true).length;
   const complete = monthFacts.length ? { text: `คนทักทีมกรอก ${filled}/${monthFacts.length} วัน`, sub: "ยอด · ลีด · ออเดอร์ มาครบ" } : null;
-  if (!last) return { ...base, state: "bad", stateLabel: "ยังไม่เคยดึง", hint: "กดดึงยอดขายตอนนี้ในเมนู หรือตรวจคีย์ระบบขาย", fresh: { text: "—", sub: "วันละครั้ง หลัง 9 โมง" }, complete };
+  if (!last) return { ...base, state: "bad", stateLabel: "ยังไม่เคยดึง", hint: "กดดึงยอดขายตอนนี้ในเมนู หรือตรวจคีย์ระบบขาย", fresh: { text: "—", sub: "ดึงวันละครั้ง · หลัง 9 โมง" }, complete };
   const [label] = statusOf(last.status);
   const failed = last.status === "failed";
   const old = now - (time(last.started_at) ?? 0) > SALES_STALE_HOURS * HOUR;
@@ -73,7 +88,7 @@ export function salesSourceRow({ runs = [], facts = [], ready = true, today, now
     hint: failed ? adsErrorText(last.error_code, "ดูประวัติรอบในแท็บยอดขาย")
       : old ? "ไม่ได้ดึงเกินวันครึ่ง — ตรวจตัวดึงอัตโนมัติ"
         : partial ? adsErrorText(last.summary?.goals?.error ?? last.error_code, "ดูประวัติรอบในแท็บยอดขาย") : null,
-    fresh: { text: ago(last.started_at, now), sub: "วันละครั้ง หลัง 9 โมง" }, complete,
+    fresh: { text: ago(last.started_at, now), sub: "ดึงวันละครั้ง · หลัง 9 โมง" }, complete,
   };
 }
 
@@ -88,16 +103,16 @@ export function creativeSourceRow({ runs = [], accounts = [], ready = true, now 
     if (!prev || (time(run.started_at) ?? 0) > (time(prev.started_at) ?? 0)) latest.set(run.connection_id, run);
   }
   const mine = ids.map((id) => latest.get(id)).filter(Boolean);
-  if (!mine.length) return { ...base, state: "waiting", stateLabel: "รอรอบแรก", hint: null, fresh: { text: "ยังไม่มีรอบที่บันทึก", sub: "วันละครั้งต่อบัญชี" }, complete: null };
+  if (!mine.length) return { ...base, state: "waiting", stateLabel: "รอรอบแรก", hint: null, fresh: { text: "ยังไม่มีรอบที่บันทึก", sub: "ดึงวันละครั้ง · ต่อบัญชี" }, complete: null };
   const recent = mine.filter((run) => now - (time(run.started_at) ?? 0) <= CREATIVE_WINDOW_HOURS * HOUR);
   const failed = mine.filter((run) => run.status === "failed");
   const newest = mine.map((run) => run.started_at).sort().at(-1);
   const state = failed.length ? "bad" : recent.length === 0 ? "warn" : "ok";
   return {
     ...base, state,
-    stateLabel: failed.length ? `รีเฟรชไม่สำเร็จ ${failed.length} บัญชี` : recent.length === 0 ? "ค้าง" : "ปกติ",
+    stateLabel: failed.length ? `รีเฟรชไม่สำเร็จ ${failed.length} บัญชี` : recent.length === 0 ? "ล่าช้า" : "ปกติ",
     hint: failed.length ? adsErrorText(failed[0].error_code, "ดูรายบัญชีในแท็บบัญชี Meta") : recent.length === 0 ? "ไม่ได้รีเฟรชเกิน 2 วัน" : null,
-    fresh: { text: ago(newest, now), sub: "วันละครั้งต่อบัญชี" },
+    fresh: { text: ago(newest, now), sub: "ดึงวันละครั้ง · ต่อบัญชี" },
     complete: { text: `${recent.length}/${ids.length} บัญชีรีเฟรชใน 2 วัน`, sub: null },
   };
 }

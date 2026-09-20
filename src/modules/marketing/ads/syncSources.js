@@ -19,14 +19,24 @@ const JK_STALE_DAYS = 2;
 /** runs = ประวัติรอบ pipeline (เฟส JK อยู่ใน summary.jk ของรอบ "sales") — รอบล่าสุดพังต้องขึ้นบนแถวนี้
     ไม่ใช่ไปโชว์บนแถว "ยอดขาย TD · JD · TA" ซึ่งเขียนสำเร็จคนละท่อ */
 export function jkSourceRow(facts = [], { today, runs = [] } = {}) {
-  const days = (facts ?? []).filter((fact) => fact?.brand_id === JK_BRAND_ID && fact?.source === "tmk").map((fact) => fact.fact_date).filter(Boolean).sort();
-  const last = days[days.length - 1] ?? null;
+  const mine = (facts ?? []).filter((fact) => fact?.brand_id === JK_BRAND_ID && fact?.source === "tmk");
+  const dates = mine.map((fact) => fact.fact_date).filter(Boolean).sort();
+  const last = dates[dates.length - 1] ?? null;
   const lastRun = (runs ?? []).filter((run) => run?.pipeline === "sales").sort((a, b) => (time(b?.started_at) ?? 0) - (time(a?.started_at) ?? 0))[0] ?? null;
+  /* ranAt = รอบดึงทำงานเมื่อไร — หน่วยเดียวกับคอลัมน์ "สดแค่ไหน" ของอีก 3 แถว
+     (เดิมแถวนี้เอา "วันที่ของข้อมูล" ไปวางในคอลัมน์นั้น คนละความหมายกับแถวข้างบน อ่านเทียบกันไม่ได้) */
+  const ranAt = lastRun?.started_at ?? null;
+  // ความครบของเดือนนี้ นับแบบเดียวกับแถวยอดขาย: วันนี้ที่ทีมยังไม่กรอกไม่นับเป็นวันที่ขาด (วันยังไม่จบ)
+  const month = String(today ?? "").slice(0, 7);
+  const monthFacts = mine.filter((fact) => String(fact.fact_date ?? "").startsWith(month) && (fact.fact_date !== today || fact.inquiry_filled === true));
+  const days = monthFacts.length;
+  const filled = monthFacts.filter((fact) => fact.inquiry_filled === true).length;
+  const base = { error: null, fresh: last, ranAt, days, filled, detail: JK_SOURCE_DETAIL };
   const error = lastRun?.summary?.jk?.error ?? null;
-  if (error) return { state: "error", error, fresh: last, detail: JK_SOURCE_DETAIL };
-  if (!last) return { state: "waiting", error: null, fresh: null, detail: JK_SOURCE_DETAIL };
+  if (error) return { ...base, state: "error", error };
+  if (!last) return { ...base, state: "waiting", fresh: null };
   const lag = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / 86_400_000);
-  return { state: lag <= JK_STALE_DAYS ? "ok" : "stale", error: null, fresh: last, detail: JK_SOURCE_DETAIL };
+  return { ...base, state: lag <= JK_STALE_DAYS ? "ok" : "stale" };
 }
 
 

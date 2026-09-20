@@ -136,14 +136,20 @@ describe("SyncStatusView — สมาชิกที่ไม่ใช่หั
     expect(within(jk).getByText(/service role key/)).toBeTruthy();
   });
 
-  it("แถวยอดขาย JUNTAKARN: ยังไม่มีข้อมูล = รอเชื่อม · มีข้อมูลแล้ว = ปกติ พร้อมบอกนิยามที่ต่าง", async () => {
+  /* แถวนี้เคยอ่านคนละภาษากับอีก 3 แถว: "สดแค่ไหน" โชว์วันที่ของข้อมูล (ไม่ใช่เวลารอบดึง)
+     และ "ครบแค่ไหน" โชว์คำนิยามแทนความครบ → เทียบข้ามแถวไม่ได้ */
+  it("แถวยอดขาย JUNTAKARN: อ่านคอลัมน์เดียวกับแถวอื่นได้ · นิยามที่ต่างย้ายไปใต้ชื่อแหล่ง", async () => {
     show();
     await settle("pipes", [{ id: "s1", pipeline: "sales", status: "success", trigger_kind: "cron", started_at: "2026-09-17T02:07:00Z" }]);
     await settle("facts", [{ brand_id: "b_jt", fact_date: "2026-09-17", source: "tmk", inquiry_filled: true, orders: 2 }]);
     const jk = screen.getByText("ยอดขาย JUNTAKARN").closest('[role="row"]');
     expect(within(jk).getByText("ปกติ")).toBeTruthy();
-    expect(within(jk).getByText(/นับเฉพาะออเดอร์ช่องทาง Facebook/)).toBeTruthy();
-    expect(within(jk).getByText(/วันที่ออเดอร์/)).toBeTruthy();
+    expect(within(jk).getByText("53 นาทีก่อน")).toBeTruthy();
+    expect(within(jk).getByText("ดึงวันละครั้ง · พร้อมยอดขาย")).toBeTruthy();
+    expect(within(jk).getByText(/ข้อมูลถึง 17 ก\.ย\./)).toBeTruthy();
+    expect(within(jk).getByText("คนทักทีมกรอก 1/1 วัน")).toBeTruthy();
+    expect(within(jk).getByText("ระบบ TMK · เฉพาะ Facebook").title).toContain("นับเฉพาะออเดอร์ช่องทาง Facebook");
+    expect(within(jk).getByRole("button", { name: /ดูรายละเอียด/ })).toBeTruthy();
   });
 });
 

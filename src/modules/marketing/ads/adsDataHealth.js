@@ -1,5 +1,5 @@
-import { fmtNum } from "../dash/charts/theme.js";
 import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, validateAdsConnection } from "./adsConnectorContract.js";
+import { agoHours } from "./syncOverview.js";
 
 const HOURS = 3_600_000;
 const validDate = (value) => {
@@ -36,7 +36,7 @@ export function sourceHealth(source, config = {}, rules = {}, now = new Date()) 
   if (configured.length && !connected.length) { state = "waiting"; label = "รอเชื่อมบัญชี"; detail = `${configured.length} mapping พร้อม · ยังไม่มี OAuth`; }
   if (connected.length) { state = "missing"; label = "ยังไม่มีข้อมูล"; detail = "เชื่อมแล้ว แต่ยังไม่เคย sync สำเร็จ"; }
   if (syncing.length) { state = "syncing"; label = "กำลังดึงข้อมูล"; detail = syncing.some((row) => row.syncStatus === "backfill") ? "กำลังดึงข้อมูลย้อนหลัง" : "กำลังอัปเดตข้อมูลล่าสุด"; }
-  if (latest) { state = ageHours > missingAfter ? "missing" : ageHours > staleAfter ? "stale" : "healthy"; label = state === "healthy" ? "ข้อมูลปกติ" : state === "stale" ? "ข้อมูลล่าช้า" : "ข้อมูลขาด"; detail = `อัปเดตล่าสุด ${fmtNum(ageHours, 2)} ชม.ก่อน`; }
+  if (latest) { state = ageHours > missingAfter ? "missing" : ageHours > staleAfter ? "stale" : "healthy"; label = state === "healthy" ? "ข้อมูลปกติ" : state === "stale" ? "ข้อมูลล่าช้า" : "ข้อมูลขาด"; detail = `อัปเดตล่าสุด ${agoHours(ageHours)}`; }
   if (gaps.length) { state = "missing"; label = "ข้อมูลไม่ครบ"; detail = `${gaps.length} บัญชีมีช่วงวันที่ขาด`; }
   if (errors.length) { state = "error"; label = "ดึงข้อมูลไม่สำเร็จ"; detail = `${errors.length} บัญชีมีข้อผิดพลาด`; }
   const tolerance = Number(rules.reconciliationTolerance ?? 1);

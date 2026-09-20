@@ -2,7 +2,7 @@
    โครง: สรุปบนสุด → เรื่องที่ควรดู → ตารางแหล่งข้อมูล (แหล่งละแถว) → แท็บรายละเอียด (บัญชี Meta · ยอดขาย · สิทธิ์และคีย์ · ประวัติ)
    โหลดแยกทีละส่วน — ส่วนไหนยังไม่มาขึ้น "กำลังตรวจ…" ห้ามสรุปว่า "ยังไม่มี" จากค่าเก่า (บั๊กหน้าเดิมบน production)
    logic อยู่ใน syncOverview.js (มีเทส) · ไฟล์นี้ประกอบหน้าและสั่งงานเท่านั้น */
-import { fmtNum } from "../dash/charts/theme.js";
+import { dayLabel } from "../dash/charts/theme.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -25,7 +25,7 @@ import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
 import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
 import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
-import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
+import { ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import { newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
 import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
 import "./adsWorkspace.css";
@@ -97,7 +97,7 @@ function SourceRow({ row, onOpen }) {
   const Icon = SOURCE_ICON[row.icon] ?? Database;
   const loading = row.state === "loading";
   return <div className="sy-src" role="row">
-    <div role="cell" className="sy-src-name"><Icon size={17} aria-hidden="true" /><span><b>{row.name}</b>{row.sub && <small>{row.sub}</small>}</span></div>
+    <div role="cell" className="sy-src-name"><Icon size={17} aria-hidden="true" /><span><b>{row.name}</b>{row.sub && <small title={row.subTitle || undefined}>{row.sub}</small>}</span></div>
     <div role="cell"><StateChip state={row.state} label={row.stateLabel} /></div>
     <div role="cell" className="sy-src-fact" data-label="สดแค่ไหน">{loading ? <Skeleton lines={2} /> : row.fresh ? <><b>{row.fresh.text}</b>{row.fresh.sub && <small>{row.fresh.sub}</small>}</> : <b>—</b>}</div>
     <div role="cell" className="sy-src-fact" data-label="ครบแค่ไหน">{loading ? <Skeleton lines={2} /> : row.complete ? <><b>{row.complete.text}</b>{row.complete.sub && <small>{row.complete.sub}</small>}</> : <small>{row.hint ?? "—"}</small>}</div>
@@ -111,7 +111,7 @@ function AccountRow({ row }) {
   return <div className="sy-acct" role="row">
     <div role="cell" className="sy-acct-name"><b>{row.brand}</b><small>{row.provider} · {row.accountId}</small></div>
     <div role="cell"><StateChip state={state} label={row.label} /></div>
-    <div role="cell" data-label="ดึงล่าสุด"><b>{row.lastSuccessAt ? when(row.lastSuccessAt) : "ยังไม่เคยสำเร็จ"}</b><small>{row.ageHours == null ? "—" : `${fmtNum(row.ageHours, 2)} ชม.ก่อน`}</small></div>
+    <div role="cell" data-label="ดึงล่าสุด"><b>{row.lastSuccessAt ? when(row.lastSuccessAt) : "ยังไม่เคยสำเร็จ"}</b><small>{agoHours(row.ageHours)}</small></div>
     <div role="cell" data-label="วันที่ขาด"><b>{row.missingDays ? `${row.missingDays} วัน` : row.connected ? "ไม่มี" : "—"}</b><small>{row.errorCode ? adsErrorText(row.errorCode, row.errorCode) : row.creativeEnabled ? "รวม Creative" : "สถิติเท่านั้น"}</small></div>
     <div role="cell" data-label="ตรวจยอดกับ Meta"><b>{row.reconciliation?.ready ? "ผ่าน 7 และ 30 วัน" : "ยังไม่ผ่าน"}</b></div>
   </div>;
@@ -237,6 +237,7 @@ export function SyncStatusView() {
   const unusedProviders = ADS_PROVIDERS.filter((provider) => provider.id !== "meta" && !accounts.some((row) => row.providerId === provider.id)).map((provider) => provider.name);
   /* JUNTAKARN อ่านจากระบบ TMK Operation — มีแถวของตัวเองที่บอกนิยามที่ต่าง (ไม่ปนกับแบรนด์ที่ยังไม่มีแหล่ง) */
   const jk = jkSourceRow(facts, { today, runs: pipes });
+  const jkReady = ready("pipes", "facts");
   const jkBrand = brands.find((brand) => brand.id === JK_BRAND_ID) ?? null;
   const waitingBrands = brands.filter((brand) => !SALES_BRAND_IDS.includes(brand.id) && brand.id !== JK_BRAND_ID);
   const timeline = useMemo(() => historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts: metaAccounts, kind: historyFilter, limit: 1000 }), [ticks, syncRuns, pipes, metaAccounts, historyFilter]);
@@ -480,16 +481,25 @@ export function SyncStatusView() {
         <SourceRow row={rows.meta} onOpen={() => setTab("meta")} />
         <SourceRow row={rows.creatives} onOpen={() => setTab("meta")} />
         <SourceRow row={rows.sales} onOpen={() => setTab("sales")} />
-        {jkBrand && <SourceRow row={{
-          key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, sub: "ระบบ TMK", icon: "sales",
+        {jkBrand && <SourceRow onOpen={() => setTab("sales")} row={jkReady ? {
+          key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, icon: "sales",
+          /* นิยามที่ต่างจากแบรนด์อื่นอยู่ใต้ชื่อแหล่ง (คำเต็มเป็น tooltip) ไม่ใช่ไปเบียดคอลัมน์ "ครบแค่ไหน"
+             ซึ่งอีก 3 แถวใช้บอกความครบของข้อมูล */
+          sub: "ระบบ TMK · เฉพาะ Facebook", subTitle: jk.detail,
           state: jk.state === "ok" ? "ok" : jk.state === "stale" ? "warn" : jk.state === "error" ? "bad" : "waiting",
           stateLabel: jk.state === "ok" ? "ปกติ" : jk.state === "stale" ? "ล่าช้า" : jk.state === "error" ? "ดึงไม่สำเร็จ" : "รอเชื่อมแหล่งข้อมูล",
-          fresh: jk.fresh ? { text: `ล่าสุด ${jk.fresh}`, sub: "วันละครั้ง" } : { text: "—", sub: "ค่าแอด Meta ยังดึงตามปกติ" },
-          // รอบล่าสุดของเฟส JK ล้ม = ช่อง "ครบแค่ไหน" ต้องบอกเหตุผลไทย ไม่ใช่โชว์นิยามเหมือนไม่มีอะไรเกิดขึ้น
+          // "สดแค่ไหน" = รอบดึงทำงานเมื่อไร หน่วยเดียวกับแถวอื่น (เดิมใส่วันที่ของข้อมูล = คนละเรื่อง)
+          fresh: { text: jk.ranAt ? ago(jk.ranAt, now) : "ยังไม่เคยดึง", sub: "ดึงวันละครั้ง · พร้อมยอดขาย" },
+          // รอบล่าสุดของเฟส JK ล้ม = ช่อง "ครบแค่ไหน" ต้องบอกเหตุผลไทย ไม่ใช่โชว์ความครบเหมือนไม่มีอะไรเกิดขึ้น
           complete: jk.error
             ? { text: "ยอดรอบล่าสุดไม่เข้า", sub: adsErrorText(jk.error, "ดึงยอด JUNTAKARN ไม่สำเร็จ") }
-            : { text: "นิยามต่างจากแบรนด์อื่น", sub: jk.detail },
-        }} />}
+            : jk.fresh
+              ? { text: `ข้อมูลถึง ${dayLabel(jk.fresh)}`, sub: `คนทักทีมกรอก ${jk.filled}/${jk.days} วัน` }
+              : null,
+          hint: "ค่าแอด Meta ยังดึงตามปกติ",
+        } : { key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, sub: "ระบบ TMK · เฉพาะ Facebook", subTitle: jk.detail, icon: "sales",
+          // ระหว่างโหลดห้ามสรุปว่า "ยังไม่เคยดึง" — กติกาเดียวกับอีก 3 แถว (บั๊กบน production 17 ก.ย.)
+          state: "loading", stateLabel: "กำลังตรวจ…", fresh: null, complete: null }} />}
         {waitingBrands.map((brand) => <SourceRow key={brand.id} row={{ key: brand.id, name: `ยอดขาย ${brand.name}`, icon: "sales", state: "waiting", stateLabel: "รอเชื่อมแหล่งข้อมูล", fresh: null, complete: null, hint: "ค่าแอด Meta ยังดึงตามปกติ" }} />)}
       </div>
       {unusedProviders.length > 0 && <p className="sy-note">ยังไม่ใช้: {unusedProviders.join(" · ")}</p>}

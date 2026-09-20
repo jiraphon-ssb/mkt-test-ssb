@@ -182,6 +182,19 @@ describe("แหล่งข้อมูลยอดขาย JUNTAKARN (ระ�
     expect(row.detail).toContain("นับเฉพาะออเดอร์ช่องทาง Facebook");
     expect(row.detail).toContain("วันที่ออเดอร์");
   });
+  /* คอลัมน์ "สดแค่ไหน" ของอีก 3 แถวคือ "รอบดึงทำงานเมื่อไร" แต่แถวนี้เคยโชว์ "วันที่ของข้อมูล"
+     = คนละความหมายบนคอลัมน์เดียวกัน อ่านเทียบกันไม่ได้ → ต้องคืนเวลารอบดึงมาด้วย
+     และคอลัมน์ "ครบแค่ไหน" ต้องบอกความครบจริงแบบแถวยอดขาย ไม่ใช่เอานิยามมาวาง */
+  it("คืนเวลารอบดึงล่าสุด + ความครบของเดือนนี้ ให้เทียบกับแถวอื่นได้", () => {
+    const runs = [{ pipeline: "sales", started_at: "2026-09-18T02:07:00Z", summary: { jk: { error: null } } }];
+    const row = jkSourceRow([jkFact("2026-09-16"), jkFact("2026-09-17", { inquiry_filled: false })], { today: "2026-09-18", runs });
+    expect(row.ranAt).toBe("2026-09-18T02:07:00Z");
+    expect(row.days).toBe(2);
+    expect(row.filled).toBe(1);
+  });
+  it("ยังไม่เคยมีรอบ = ranAt เป็น null (ห้ามเดาจากวันที่ของข้อมูล)", () => {
+    expect(jkSourceRow([jkFact("2026-09-17")], { today: "2026-09-18" }).ranAt).toBeNull();
+  });
   it("ข้อมูลล่าสุดค้างหลายวัน = ล่าช้า · ไม่มีแถวเลย = รอเชื่อม", () => {
     expect(jkSourceRow([jkFact("2026-09-10")], { today: "2026-09-18" }).state).toBe("stale");
     expect(jkSourceRow([], { today: "2026-09-18" }).state).toBe("waiting");

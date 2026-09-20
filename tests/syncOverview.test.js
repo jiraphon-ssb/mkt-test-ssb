@@ -2,7 +2,7 @@
    กติกาหลัก: ระหว่างโหลดห้ามบอกว่า "ยังไม่มี/ยังไม่เชื่อม" (บั๊กบน production 17 ก.ย.) */
 import { describe, expect, it } from "vitest";
 import {
-  creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, nextSyncAt, salesSourceRow, syncIssues, syncVerdict,
+  ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, nextSyncAt, salesSourceRow, syncIssues, syncVerdict,
 } from "../src/modules/marketing/ads/syncOverview.js";
 
 const NOW = Date.parse("2026-09-17T03:00:00Z");   // 10:00 เวลาไทย
@@ -17,7 +17,7 @@ describe("metaSourceRow", () => {
   it("ครบ 4 บัญชี ปกติ = ok · บอกความสดจากบัญชีที่ดึงล่าสุด · ตรวจยอดผ่าน x/y", () => {
     const row = metaSourceRow({ accounts: [acc(), acc({ key: "b", reconciliation: { ready: false } })], ready: true, everyHours: 6, now: NOW });
     expect(row).toMatchObject({ state: "ok", stateLabel: "ปกติ", sub: "2 บัญชี" });
-    expect(row.fresh.text).toBe("4.90 ชม.ก่อน");
+    expect(row.fresh.text).toBe("4 ชม. 54 นาทีก่อน");
     expect(row.fresh.sub).toBe("ดึงทุก 6 ชม.");
     expect(row.complete).toEqual({ text: "ไม่มีวันขาด", sub: "ตรวจยอดผ่าน 1/2" });
   });
@@ -27,6 +27,21 @@ describe("metaSourceRow", () => {
   });
   it("ไม่มีบัญชีที่เชื่อม = waiting", () => {
     expect(metaSourceRow({ accounts: [], ready: true, now: NOW }).state).toBe("waiting");
+  });
+});
+
+describe("ago — หน่วยเวลาเดียวกันทั้งหน้า", () => {
+  it("ต่ำกว่าชั่วโมง = นาที · ข้ามชั่วโมง = ชม. + นาที (ไม่ใช่ทศนิยมของชั่วโมง) · เกิน 2 วัน = วัน", () => {
+    expect(ago("2026-09-17T02:47:00Z", NOW)).toBe("13 นาทีก่อน");
+    expect(ago("2026-09-16T22:06:00Z", NOW)).toBe("4 ชม. 54 นาทีก่อน");
+    expect(ago("2026-09-17T00:00:00Z", NOW)).toBe("3 ชม.ก่อน");        // นาทีลงตัว = ไม่ต้องเขียน 0 นาที
+    expect(ago("2026-09-14T03:00:00Z", NOW)).toBe("3 วันก่อน");
+    expect(ago(null, NOW)).toBe("—");
+  });
+  it("agoHours = สูตรเดียวกัน ใช้กับแถวที่รู้แค่จำนวนชั่วโมง", () => {
+    expect(agoHours(4.9)).toBe("4 ชม. 54 นาทีก่อน");
+    expect(agoHours(0.25)).toBe("15 นาทีก่อน");
+    expect(agoHours(null)).toBe("—");
   });
 });
 
@@ -80,6 +95,10 @@ describe("creativeSourceRow", () => {
     expect(ok).toMatchObject({ state: "ok", complete: { text: "2/2 บัญชีรีเฟรชใน 2 วัน" } });
     const part = creativeSourceRow({ runs: [run("creatives", { connection_id: "c1" })], accounts, ready: true, now: NOW });
     expect(part.complete.text).toBe("1/2 บัญชีรีเฟรชใน 2 วัน");
+  });
+  it("จังหวะดึงเขียนรูปแบบเดียวกับแถวอื่น · เก่าเกิน 2 วัน ใช้คำว่า ล่าช้า ไม่ใช่ ค้าง", () => {
+    expect(creativeSourceRow({ runs: [run("creatives", { connection_id: "c1" })], accounts, ready: true, now: NOW }).fresh.sub).toBe("ดึงวันละครั้ง · ต่อบัญชี");
+    expect(creativeSourceRow({ runs: [run("creatives", { connection_id: "c1", started_at: "2026-09-14T00:00:00Z" })], accounts, ready: true, now: NOW }).stateLabel).toBe("ล่าช้า");
   });
   it("รอบล่าสุดของบัญชีไหนล้ม = bad · เก่าเกิน 2 วัน = warn", () => {
     expect(creativeSourceRow({ runs: [run("creatives", { connection_id: "c1", status: "failed" })], accounts, ready: true, now: NOW }).state).toBe("bad");
