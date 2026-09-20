@@ -1,0 +1,40 @@
+/* หน้าปัดจังหวะ — ใช้ token เชิงความหมายของโมดูล marketing (--line · --ink-soft · --ok/--warn/--bad)
+   ไม่ใช้ --color-zinc-* ตรงๆ เพราะสเกลนี้สลับความหมายระหว่างธีมมืด/สว่าง (zinc-950 = พื้น · zinc-100 = ตัวอักษร)
+   เคยเลือก zinc-100 เป็นสีราง แล้วรางกลายเป็นสีขาวสว่างจ้าบนธีมมืด (จับได้ตอนเช็ค token จริงบนหน้าเว็บ) */
+.pg { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+.pg svg { display: block; overflow: visible; }
+.pg-track { stroke: var(--line); }
+.pg-track.right { stroke: color-mix(in srgb, var(--line) 55%, transparent); }  /* ครึ่งเกินแผนจางกว่า — รู้ว่าปลายโค้งตกฝั่งไหนโดยไม่ต้องมองหมุด */
+.pg-tick { stroke: var(--ink); }
+.pg-pin { fill: var(--ink); }
+.pg-pin-label { fill: var(--ink); font-size: 9.5px; font-weight: 500; }
+.pg-caption, .pg-end { fill: var(--ink-soft); font-size: 9.5px; }
+.pg-end { font-size: 9px; opacity: .7; }
+.pg-value { font-size: 21px; font-weight: 600; fill: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.pg-over { font-size: 15px; font-weight: 600; fill: var(--ink-soft); }
+.pg-state { font-size: 12px; color: var(--ink-soft); }
+.pg-reason { font-size: 11px; color: var(--ink-soft); }
+
+.pg.emerald .pg-val { stroke: var(--ok); }
+.pg.amber   .pg-val { stroke: var(--warn); }
+.pg.rose    .pg-val { stroke: var(--bad); }
+.pg.emerald .pg-value, .pg.emerald .pg-over { fill: var(--ok); }
+.pg.amber   .pg-value, .pg.amber   .pg-over { fill: var(--warn); }
+.pg.rose    .pg-value, .pg.rose    .pg-over { fill: var(--bad); }
+.pg.emerald .pg-state { color: var(--ok-text); }
+.pg.amber   .pg-state { color: var(--warn-text); }
+.pg.rose    .pg-state { color: var(--bad-text); }
+
+/* ส่วนโค้งกวาดตอนโหลด — ปิดให้คนที่ตั้งค่าลดการเคลื่อนไหว */
+@media (prefers-reduced-motion: no-preference) {
+  .pg-val { animation: pg-sweep .45s ease-out; }
+  @keyframes pg-sweep { from { stroke-dasharray: 0 400; } to { stroke-dasharray: 400 0; } }
+}
+
+/* โหมดมินิ — ใช้ตอนมีหลายอันเรียงกัน (ฝั่งซ้าย · funnel · การ์ดประสิทธิภาพ)
+   ตัดป้ายปลายรางกับคำใต้ตัวเลขออก เหลือส่วนโค้ง ตัวเลข และคำสถานะ — ข้อมูลเท่าเดิม แค่ไม่ซ้ำ */
+.pg--mini .pg-value { font-size: 15px; }
+.pg--mini .pg-state { font-size: 10.5px; margin-top: -2px; }
+.pg--mini .pg-reason { font-size: 9.5px; }
+.pg--mini .pg-side { color: var(--ink-soft); }
+.pg--mini .pg-tick { stroke-width: 2; }
