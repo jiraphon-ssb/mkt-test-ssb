@@ -5,7 +5,6 @@
 import { fmtNum } from "../dash/charts/theme.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { tokenDaysLeft } from "./syncSources.js";
-import { coveragePace, freshnessPace } from "./paceEngine.js";
 
 const HOUR = 3_600_000;
 const time = (value) => { const t = Date.parse(value ?? ""); return Number.isFinite(t) ? t : null; };
@@ -37,17 +36,15 @@ export function metaSourceRow({ accounts = [], ready = true, everyHours = null, 
   const count = (states) => connected.filter((row) => states.includes(row.state)).length;
   const errors = count(["error"]), missing = count(["missing"]), stale = count(["stale"]);
   const [state, stateLabel] = errors ? ["bad", `ดึงไม่สำเร็จ ${errors} บัญชี`] : missing ? ["bad", `ข้อมูลขาด ${missing} บัญชี`] : stale ? ["warn", `ล่าช้า ${stale} บัญชี`] : ["ok", "ปกติ"];
-  const successes = connected.map((row) => row.lastSuccessAt).filter(Boolean).sort();
-  const oldestSuccess = successes[0] ?? null;
-  const stalest = connected.filter((row) => row.ageHours != null).sort((a, b) => b.ageHours - a.ageHours)[0];
+  const latest = connected.map((row) => row.lastSuccessAt).filter(Boolean).sort().at(-1) ?? null;
+  const newest = connected.filter((row) => row.ageHours != null).sort((a, b) => a.ageHours - b.ageHours)[0];
   const gap = connected.reduce((n, row) => n + (row.missingDays || 0), 0);
   const reconciled = connected.filter((row) => row.reconciliation?.ready).length;
   return {
     ...base, sub: `${connected.length} บัญชี`, state, stateLabel,
     hint: errors ? "ดูรหัสปัญหาในแท็บบัญชี Meta" : missing || stale ? "กดดึงข้อมูลทั้งหมดเพื่อเติมช่วงที่ขาด" : null,
-    fresh: { text: stalest ? `${fmtNum(stalest.ageHours, 2)} ชม.ก่อน` : oldestSuccess ? ago(oldestSuccess, now) : "ยังไม่เคยดึง", sub: everyHours ? `ดึงทุก ${everyHours} ชม.` : null },
+    fresh: { text: newest ? `${fmtNum(newest.ageHours, 2)} ชม.ก่อน` : latest ? ago(latest, now) : "ยังไม่เคยดึง", sub: everyHours ? `ดึงทุก ${everyHours} ชม.` : null },
     complete: { text: gap ? `ขาด ${gap} วัน` : "ไม่มีวันขาด", sub: `ตรวจยอดผ่าน ${reconciled}/${connected.length}` },
-    pace: { freshness: freshnessPace(oldestSuccess, everyHours, now), coverage: coveragePace(reconciled, connected.length) },
   };
 }
 
@@ -77,7 +74,6 @@ export function salesSourceRow({ runs = [], facts = [], ready = true, today, now
       : old ? "ไม่ได้ดึงเกินวันครึ่ง — ตรวจตัวดึงอัตโนมัติ"
         : partial ? adsErrorText(last.summary?.goals?.error ?? last.error_code, "ดูประวัติรอบในแท็บยอดขาย") : null,
     fresh: { text: ago(last.started_at, now), sub: "วันละครั้ง หลัง 9 โมง" }, complete,
-    pace: { freshness: freshnessPace(last.started_at, 24, now), coverage: coveragePace(filled, monthFacts.length) },
   };
 }
 
@@ -95,16 +91,14 @@ export function creativeSourceRow({ runs = [], accounts = [], ready = true, now 
   if (!mine.length) return { ...base, state: "waiting", stateLabel: "รอรอบแรก", hint: null, fresh: { text: "ยังไม่มีรอบที่บันทึก", sub: "วันละครั้งต่อบัญชี" }, complete: null };
   const recent = mine.filter((run) => now - (time(run.started_at) ?? 0) <= CREATIVE_WINDOW_HOURS * HOUR);
   const failed = mine.filter((run) => run.status === "failed");
-  const dates = mine.map((run) => run.started_at).filter(Boolean).sort();
-  const oldest = dates[0] ?? null;
+  const newest = mine.map((run) => run.started_at).sort().at(-1);
   const state = failed.length ? "bad" : recent.length === 0 ? "warn" : "ok";
   return {
     ...base, state,
     stateLabel: failed.length ? `รีเฟรชไม่สำเร็จ ${failed.length} บัญชี` : recent.length === 0 ? "ค้าง" : "ปกติ",
     hint: failed.length ? adsErrorText(failed[0].error_code, "ดูรายบัญชีในแท็บบัญชี Meta") : recent.length === 0 ? "ไม่ได้รีเฟรชเกิน 2 วัน" : null,
-    fresh: { text: ago(oldest, now), sub: "บัญชีที่เก่าสุด · วันละครั้ง" },
+    fresh: { text: ago(newest, now), sub: "วันละครั้งต่อบัญชี" },
     complete: { text: `${recent.length}/${ids.length} บัญชีรีเฟรชใน 2 วัน`, sub: null },
-    pace: { freshness: freshnessPace(oldest, 24, now), coverage: coveragePace(recent.length, ids.length) },
   };
 }
 

@@ -12,9 +12,7 @@ import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { fmtMoney, fmtPct, fmtNum, fmtInt } from "../dash/charts/theme.js";
 import { PlatformIcon } from "../ads/PlatformIcon.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
-import { filterCreativeLibrary, creativeEvidencePace, creativeLibrarySummary, formatBreakdown, FORMAT_LABELS } from "./creativeLibrary.js";
-import { PaceMeter } from "../ads/PaceMeter.jsx";
-import { coveragePace } from "../ads/paceEngine.js";
+import { filterCreativeLibrary, creativeLibrarySummary, formatBreakdown, FORMAT_LABELS } from "./creativeLibrary.js";
 import { creativeRuleSummary, evaluateCreativeRules, filterByRuleOutcome, normalizeCreativeRules, ruleTitle } from "./creativeRules.js";
 import { CreativePreview } from "./CreativePreview.jsx";
 import { CreativeMedia } from "./CreativeMedia.jsx";
@@ -33,13 +31,11 @@ const PAGE_SIZES = [12, 24, 48];   // หารลงตัวกับกริ
 
 function CreativeCard({ row, checked, onToggle, onPreview, ruleResult }) {
   const links = postLinksOf(row.asset);
-  const evidence = creativeEvidencePace(row);
   return <article className={`cl-card ${row.fatigue ? "is-fatigue" : ""}`}>
     <CreativeMedia row={row} onPreview={onPreview} />
     <div className="cl-card-body">
       <header><div><span><PlatformIcon channel={row.platform} size={14} /> {row.platform}</span><strong title={row.creative}>{row.creative}</strong><small>{row.brand} · {row.campaigns.length} แคมเปญ</small></div><label className="cl-check"><input type="checkbox" checked={checked} onChange={onToggle} /><span>เทียบ</span></label></header>
       <div className="cl-metrics"><div><span>ค่าแอด</span><b>{metric(row.spend, "money")}</b></div><div><span>การซื้อ</span><b title={row.purchases == null ? "บัญชีนี้ Meta ไม่ได้วัดการซื้อ" : undefined}>{metric(row.purchases, "count")}</b></div><div><span>ต่อการซื้อ</span><b>{metric(row.cpa, "money")}</b></div><div><span>ROAS</span><b>{metric(row.roas, "roas")}</b></div><div><span>CPL</span><b>{metric(row.cpl, "money")}</b></div><div><span>CTR</span><b>{metric(row.ctr, "pct")}</b></div></div>
-      <div className="cl-evidence"><PaceMeter pace={evidence} label={evidence.label} detail={evidence.detail} compact /></div>
       {ruleResult && <p className={`cl-rule cl-rule--${ruleResult.status}`}><b>{RULE_TEXT[ruleResult.status]}</b>{ruleResult.text && <span>{ruleResult.text}</span>}</p>}
       <footer><span className={`cl-action cl-action--${row.tone}`}>{row.fatigue ? "เริ่มล้า" : actionText[row.action] ?? row.action}</span><span>ความถี่ {metric(row.frequency)}</span>{links.length > 0 && <span className="cl-links">{links.map((link) => <a key={link.key} href={link.url} target="_blank" rel="noreferrer" aria-label={`${link.label} ของ ${row.creative}`}>{link.key === "facebook" ? "FB" : "IG"} <ExternalLink size={11} /></a>)}</span>}</footer>
     </div>
@@ -117,7 +113,7 @@ export function CreativeLibraryView() {
           <td>{metric(f.cpa, "money")}{bestCpa && <small className="cl-best"> ต่ำสุด</small>}</td><td>{metric(f.ctr, "pct")}</td><td>{f.fatigue}</td></tr>; })}</tbody></table></div>
       <p className="aw-key">รูปแบบมาจาก Meta ถ้า Meta ไม่ระบุ อ่านจากคำนำหน้าชื่อชิ้นงาน (VDO · PIC · Album) · "ต่ำสุด" เทียบเฉพาะรูปแบบที่มีตั้งแต่ 3 ชิ้น · กดชื่อรูปแบบเพื่อกรอง</p>
     </section>}
-    <section className="cl-summary"><div><span>ชิ้นงานในช่วงนี้</span><b>{v.summary.count}</b></div><div><span>ค่าแอดรวม</span><b>{metric(v.summary.spend, "money")}</b></div><div><span>การซื้อ (Meta)</span><b>{metric(v.summary.purchases, "count")}</b></div><div><span>สื่อพร้อมใช้</span><b>{v.summary.withMedia}/{v.summary.count}</b><PaceMeter pace={coveragePace(v.summary.withMedia, v.summary.count)} compact /></div><div className={v.summary.tired ? "warn" : ""}><span>เริ่มล้า</span><b>{v.summary.tired}</b></div></section>
+    <section className="cl-summary"><div><span>ชิ้นงานในช่วงนี้</span><b>{v.summary.count}</b></div><div><span>ค่าแอดรวม</span><b>{metric(v.summary.spend, "money")}</b></div><div><span>การซื้อ (Meta)</span><b>{metric(v.summary.purchases, "count")}</b></div><div><span>มีภาพ/วิดีโอแล้ว</span><b>{v.summary.withMedia}</b></div><div className={v.summary.tired ? "warn" : ""}><span>เริ่มล้า</span><b>{v.summary.tired}</b></div></section>
     <CompareTray rows={chosen} onRemove={(key) => setSelected((current) => current.filter((item) => item !== key))} onClear={() => setSelected([])} />
     <div ref={listTop} className="cl-list-top" />
     {v.rows.length ? <><section className="cl-grid">{pager.pageItems.map((row) => <CreativeCard key={row.key} row={row} checked={selected.includes(row.key)} onToggle={() => toggle(row.key)} onPreview={ads.canPreview ? setPreviewRow : undefined} ruleResult={evaluateCreativeRules(row, rules, activeRule)} />)}</section>

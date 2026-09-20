@@ -1,15 +1,3 @@
-import { thresholdPace } from "../ads/paceEngine.js";
-
-export function creativeEvidencePace(row) {
-  if (!row?.complete) return { ...thresholdPace(null, 5), label: "ข้อมูลยังไม่ครบ", detail: "รอ Sync" };
-  const usesPurchases = row.purchases != null;
-  const value = usesPurchases ? row.purchases : row.leads;
-  const target = usesPurchases ? 3 : 5;
-  const pace = thresholdPace(value, target);
-  return { ...pace, label: usesPurchases ? "หลักฐานการซื้อ" : "หลักฐานผลลัพธ์",
-    detail: pace.state === "ontrack" ? "ข้อมูลพอตัดสิน" : `อีก ${pace.remaining} ${usesPurchases ? "การซื้อ" : "ผลลัพธ์"}` };
-}
-
 export function creativeLibrarySummary(rows = []) {
   const withMedia = rows.filter((row) => row.asset?.media?.some((item) => item.imageUrl || item.thumbnailUrl || item.videoUrl));
   const tired = rows.filter((row) => row.fatigue);

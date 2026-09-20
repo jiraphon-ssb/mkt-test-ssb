@@ -60,10 +60,10 @@ function monthTarget(v, brandId, key) {
   return goalKey?goals?.[goalKey]?.monthTarget ?? null:null;
 }
 const dateLabel=(iso)=>new Date(`${iso}T00:00:00`).toLocaleDateString('th-TH',{day:'numeric',month:'short'});
-export function WorkspaceTrends({v,brandId,sales=null,compact=false,initialMetric='spend'}) {
-  const [key,setKey]=useState(initialMetric);
+export function WorkspaceTrends({v,brandId,sales=null}) {
+  const [key,setKey]=useState('spend');
   const [split,setSplit]=useState(false);
-  const [chosenMode,setChosenMode]=useState(()=>compact?'cumulative':readMode());
+  const [chosenMode,setChosenMode]=useState(readMode);
   const chooseMode=(m)=>{setChosenMode(m);try{localStorage.setItem(MODE_KEY,m);}catch{/* โหมดส่วนตัว — ไม่จำก็ได้ */}};
   // Frequency สะสมไม่ได้ → แสดงรายวันแทน (ไม่ล้างค่าที่เลือกไว้ กลับไปแท็บอื่นยังเป็นสะสม)
   const mode=chosenMode==='cumulative'&&!canCumulate(key)?'line':chosenMode;
@@ -128,10 +128,6 @@ export function WorkspaceTrends({v,brandId,sales=null,compact=false,initialMetri
       :(result.splitOn?'สีแต่ละเส้นแทนกลุ่มข้อมูล':'เส้นเขียว = ช่วงนี้ · เส้นเทาประ = ช่วงเทียบ จับคู่วันตามลำดับในช่วง (ชี้ที่จุดเพื่อดูวันจริงของช่วงเทียบ)')+' · จุด = วันที่มีค่า ช่วงประจางระหว่างจุด = วันที่ไม่มีค่าที่คำนวณได้';
   const openNote=result.openFrom==null?'':mode==='bar'?'แท่งจางท้ายสุด = วันนี้ยังไม่จบ ตัวเลขยังเพิ่มได้ · ':'เส้นประจางช่วงท้าย = วันนี้ยังไม่จบ ตัวเลขยังเพิ่มได้ · ';
   const needsTarget=mode==='cumulative'&&v.monthView&&!result.splitOn&&additive&&!waiting&&result.target==null;
-  if(compact) return <section className="aw-pace-trend" aria-label={`${label}และแนวโน้ม`}>
-    <div className="aw-pace-trend-head"><span>ยอดสะสมรายวัน</span><span className={result.delta == null ? 'zinc' : result.delta >= 0 ? 'emerald' : 'rose'}>{result.delta==null?'เทียบไม่ได้':`${result.delta>=0?'+':''}${fmtNum(result.delta, 1)}%`} · {v.compareLabel}</span></div>
-    <ChartBox type="line" height={132} ariaLabel={`${label}สะสม`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(paint)}} options={baseOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:tooltipLabel}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:6}},y:{beginAtZero:true,ticks:{maxTicksLimit:4,callback:n=>tick(key,n)}}}})}/>
-  </section>;
   return <section className="aw-panel aw-trends"><div className="aw-section-label">ตัวชี้วัดและแนวโน้ม <span>{new Date(v.range.start).toLocaleDateString('th-TH')} – {new Date(new Date(v.range.end)-1).toLocaleDateString('th-TH')}</span></div>
     <div className="aw-trend-controls"><div className="aw-tabs">{metrics.slice(0,TABS).map(([k,l])=><button key={k} aria-pressed={key===k} aria-selected={key===k} onClick={()=>setKey(k)}>{l}</button>)}<Dropdown className="aw-tabs-more" ariaLabel="ตัวชี้วัดอื่น" placeholder="ตัวชี้วัดอื่น" options={metrics.slice(TABS)} value={metrics.slice(TABS).some(m=>m[0]===key)?key:null} onChange={setKey} /></div>
       <div className="aw-trend-view"><div className="aw-seg" role="group" aria-label="รูปแบบกราฟ">{TREND_MODES.map(([k,l])=>{const blocked=k==='cumulative'&&!canCumulate(key);return <button key={k} type="button" aria-pressed={mode===k} disabled={blocked} title={blocked?`${label} สะสมไม่ได้`:undefined} onClick={()=>chooseMode(k)}>{l}</button>;})}</div>
