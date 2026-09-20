@@ -11,7 +11,7 @@ const pointOnArc = (position) => {
  * progress = actual ÷ target/จังหวะ (1 = พอดี) · ถ้าส่ง expected จะคำนวณ progress ÷ expected
  * health ใช้ progress 0–1 โดยตรง (1 = สด/ครบ)
  */
-export function PaceMeter({ pace, label, detail = null, expected = null, compact = false, variant = "bar", kind = "outcome", actualText = null, planText = null }) {
+export function PaceMeter({ pace, label, detail = null, expected = null, compact = false, variant = "bar", kind = "outcome", actualText = null, planText = null, centerText = null }) {
   const raw = pace?.ratioToPace ?? (expected > 0 && pace?.progress != null ? pace.progress / expected : pace?.progress);
   const progress = raw == null || !Number.isFinite(raw) ? null : raw;
   const tone = paceTone(pace?.state);
@@ -39,7 +39,7 @@ export function PaceMeter({ pace, label, detail = null, expected = null, compact
       <line className="pace-target" x1={target.x} y1={target.y - 7} x2={target.x} y2={target.y + 7} transform={`rotate(${targetPosition * 180 - 90} ${target.x} ${target.y})`} />
       {progress != null && <circle className={`pace-dot ${tone}`} cx={point.x} cy={point.y} r={compact ? 5 : 6} />}
     </svg>
-    <div className="pace-center"><b className={tone}>{display}</b><small>{detail ?? "เทียบจังหวะที่ควรเป็น"}</small></div>
+    <div className="pace-center"><b className={tone}>{display}</b><small>{centerText ?? (kind === "spend" ? "ของงบที่ควรใช้วันนี้" : kind === "health" ? "ความพร้อมของข้อมูล" : "ของยอดที่ควรได้วันนี้")}</small></div>
     {!compact && <><div className="pace-scale"><span>{side[0]}</span><span>{side[1]}</span><span>{side[2]}</span></div>{(actualText || planText) && <div className="pace-facts"><span>{actualText}</span><span>{planText}</span></div>}</>}
   </div>;
 }
