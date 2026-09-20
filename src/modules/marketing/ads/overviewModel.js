@@ -5,10 +5,17 @@ import { compareRange, effectiveCompare, isoDay, periodRange, sameDatesLastMonth
 import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues, plansFromTargets } from "../adsTargets.js";
 import { applySalesToBrands, applySalesToSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals, salesFactsByBrand, salesPipeline } from "./salesOverview.js";
 import { FUNNEL_STAGE_KEYS, funnelStagesOf, metricCoverage } from "./salesFacts.js";
-import { SALES_BRAND_IDS } from "./syncSources.js";
+import { GOAL_FIELDS, SALES_BRAND_IDS } from "./syncSources.js";
+import { monthClock, paceOf } from "./paceEngine.js";
+import { brandAdvice, todayActions } from "./overviewActions.js";
+import { adsCreativeRows, adsDailySeries } from "../adsOverview.js";
 
 export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filters }) {
-  const { period, from: customFrom, to: customTo, compare: chosenCompare, channel, basis: revenueBasis } = filters;
+  /* หน้า Overview เป็น "เดือนปัจจุบัน" เสมอ (อาร์ตเคาะ 21 ก.ย. 69) — บังคับที่โมเดล ไม่ใช่แค่ซ่อนกิ่งบนจอ
+     เคยลบแต่กิ่ง else ในคอมโพเนนต์ แล้วปล่อยให้ตัวเลือกช่วงยังเปลี่ยนข้อมูลได้
+     ผล: เลือก "7 วัน" แล้วได้ยอด 7 วันมาหารกับเป้าทั้งเดือน โดยยังติดป้ายว่า "ยอดรวมเดือนปัจจุบัน" */
+  const { compare: chosenCompare, channel, basis: revenueBasis } = filters;
+  const period = "mtd", customFrom = null, customTo = null;
   const compare = effectiveCompare(period, chosenCompare);
     const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
@@ -130,6 +137,45 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
         byBrand: Object.fromEntries(brandTotals.map((brand) => [brand.id, goalsFor({ ...pipelineValues(pipelines[brand.id]), pctAds: brand.pctAds }, normalizeTargets(savedTargets[brand.id]), targetPeriod)])),
       };
     }
+    /* ---------- ชั้นตัดสินใจของหน้า Overview (รื้อ 21 ก.ย. 69) ----------
+       ทุกการ์ดอ่านจากชุดนี้ชุดเดียว — จังหวะ · คำแนะนำ · เรื่องที่ต้องทำวันนี้
+       ค่าแอดจาก Meta มาช้ากว่ายอดขาย 1 วันเสมอ จึงตั้งเพดานความเก่าไว้ 2 วัน
+       (1 วันจะทำให้จังหวะงบขึ้น "ยังตัดสินใจไม่ได้" ทุกเช้า · เกิน 2 วัน = ท่อมีปัญหาจริง) */
+    const clock = monthClock(today);
+    const spendDays = adsDailySeries(scopedAll, monthRange).filter((day) => day.spend > 0);
+    const spendThrough = spendDays.length ? spendDays[spendDays.length - 1].day : null;
+    const paceSet = (row) => {
+      const rev = paceOf({ actual: row.revenue, target: row.revTarget, clock });
+      const budget = paceOf({ actual: row.spend, target: row.budget, clock, direction: "spend", freshThrough: spendThrough, staleAfterDays: 2 });
+      return { rev, budget, advice: brandAdvice({ revPace: rev, budgetPace: budget }) };
+    };
+    const brandRows = brandTotals.map((brand) => ({
+      ...brand, revShare: share(brand.revenue, summary.revenue), spendShare: share(brand.spend, summary.spend),
+      channels: filteredById.get(brand.id)?.channels ?? [], pace2: paceSet(brand),
+    }));
+    const overallPace = paceSet({ revenue: summary.revenue, revTarget: summary.revTarget, spend: summary.spend, budget: summary.budget });
+    /* เป้าที่ยังไม่ตั้ง — ดูเฉพาะแบรนด์ที่มีแหล่งยอดขายแล้ว (แบรนด์ที่ยังไม่เชื่อมไม่ใช่เรื่องต้องทำวันนี้) */
+    const goalRowOf = new Map((ads.salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
+    const gaps = real ? brandRows.filter((brand) => SALES_BRAND_IDS.includes(brand.id)).map((brand) => {
+      const goal = goalRowOf.get(brand.id);
+      const missing = GOAL_FIELDS.filter(([key]) => {
+        const value = goal?.[key];
+        return !(value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)));
+      }).map(([, label]) => label);
+      return { brandId: brand.id, name: brand.name, missing };
+    }).filter((gap) => gap.missing.length) : [];
+    const creativeAlerts = real ? adsCreativeRows(scoped, range, brands)
+      .filter((row) => row.action === "Stop" || row.action === "Fix")
+      .slice(0, 6)
+      .map((row) => ({ id: row.key, name: row.creative, brand: row.brand, action: row.action, why: row.why, next: row.next, spend: row.spend, tone: row.tone }))
+      : [];
+    const actionList = todayActions({
+      brands: brandRows.map((brand) => ({ id: brand.id, name: brand.name, revPace: brand.pace2.rev, budgetPace: brand.pace2.budget })),
+      goalGaps: gaps, creatives: creativeAlerts,
+    });
+    const actions = actionList.items;
+    const actionsTotal = actionList.total;
+
     return {
       scoped,
       scopedAll, // ทุกช่องทาง — กราฟแนวโน้มแท็บที่ใช้ระบบขายหารด้วยค่าแอดทุกช่องทาง (ยอดขายไม่แยกตามแพลตฟอร์มโฆษณา)
@@ -141,9 +187,15 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       revenueBasis,
       channelList: adsChannelList(scopedAll),
       summary,
-      brands: brandTotals.map((brand) => ({ ...brand, revShare: share(brand.revenue, summary.revenue), spendShare: share(brand.spend, summary.spend), channels: filteredById.get(brand.id)?.channels ?? [] })),
+      brands: brandRows,
       pipelines,
       overallPipeline,
       goals,
+      clock,
+      spendThrough,
+      overallPace,
+      goalGaps: gaps,
+      actions,
+      actionsTotal,
     };
 }

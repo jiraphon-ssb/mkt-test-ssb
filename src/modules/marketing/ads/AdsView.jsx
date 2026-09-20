@@ -6,6 +6,8 @@ import { Icon } from "../mktIcon.jsx";
 import { PlatformIcon, platformMeta } from "./PlatformIcon.jsx";
 import { AdsWorkspace } from "./AdsWorkspace.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
+import { InfoTip } from "../ui/InfoTip.jsx";
+import { PaceGauge } from "./PaceGauge.jsx";
 import { CompareControl } from "../ui/CompareControl.jsx";
 import { DateRangePicker } from "../ui/DateRangePicker.jsx";
 import { RevenueBasisToggle } from "../ui/RevenueBasisToggle.jsx";
@@ -32,7 +34,7 @@ const fmtMetric = (fmt, v) => {
 
 /** การ์ดตัวชี้วัดหนึ่งใบ — สรุปไม่ได้ = ขีด พร้อมเหตุผล ไม่ใช่ศูนย์
     ใบที่มีข้อมูลกดได้ → เปิดกราฟรายวันเต็มตัวใต้กริด */
-function SalePipeline({ items, worstKey = null, row = false, title = true, goals = null }) {
+export function SalePipeline({ items, worstKey = null, row = false, title = true, goals = null, gauge = false }) {   // export ไว้ให้เทสระดับหน้าจอเรียกตรงได้
   return (
     <div className={`ads-pipe ${row ? "ads-pipe--row" : ""}`}>
       {!row && title && <span className="ads-pipe-title">Sale pipeline</span>}
@@ -41,6 +43,43 @@ function SalePipeline({ items, worstKey = null, row = false, title = true, goals
         const good = d == null || d === 0 ? null : it.sense === "lower" ? d < 0 : d > 0;
         /* ฐานเล็ก (ต่ำกว่า 10) — % แกว่งแรงจากส่วนต่างไม่กี่หน่วย อย่าให้สีตะโกน */
         const tiny = it.fmt === "int" && (it.value ?? 0) < 10 && (it.before ?? 0) < 10;
+        const deltaText = d == null ? "เทียบไม่ได้"
+          : `${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}% เทียบช่วงก่อน${good == null ? "" : good ? " (ดีขึ้น)" : " (แย่ลง)"}${tiny ? " · ฐานเล็ก" : ""}`;
+        const convText = it.conv != null ? `${fmtPct(it.conv, 0)} จากขั้นก่อน` : it.convPlaceholder ?? null;
+        const goal = goals?.[it.key] ?? null;
+        /* โหมด gauge (หน้า Overview): บนจอเหลือแค่ค่าของขั้น + จังหวะ — บริบทที่เหลือย้ายมาอยู่ในไอคอน i
+           (อาร์ต 21 ก.ย. 69: "ข้อมูลไม่จำเป็นเยอะเกิน เอาไปอยู่ในไอคอน i เพื่ออธิบายแทน") */
+        if (gauge) {
+          const paceValue = goal ? (goal.kind === "higher" ? goal.pace : goal.pct) : null;
+          /* บริบทที่ไม่ใช้ตัดสินใจ อยู่ในไอคอน i (อาร์ต 21 ก.ย. 69: "ข้อมูลไม่จำเป็นเยอะเกิน") */
+          const tip = [it.sub, convText,
+            goal?.pct != null ? `ทำได้ ${fmtNum(goal.pct * 100, 2)}% ของเป้าเดือน` : null,
+          ].filter(Boolean);
+          return (
+            <div className="ads-pipe-item aw-metric ads-stage" key={it.key}>
+              <div className="aw-metric-head ads-stage-head">
+                <b>{it.label}<InfoTip label={it.label} lines={tip} /></b>
+                {worstKey === it.key && <span className="ads-stage-worst">หล่นแรงสุด</span>}
+              </div>
+              <div className="aw-metric-body">
+                <b className="aw-metric-num mono">{fmtMetric(it.fmt, it.value)}
+                  {goal?.target != null && <small> / {fmtMetric(it.fmt, goal.monthTarget ?? goal.target)}</small>}</b>
+                {goal?.paceState && <PaceGauge mini width={86} caption="" showValue={false} showState={false}
+                  kind={goal.kind ?? "higher"} title={`จังหวะ ${it.label}`}
+                  pace={{ value: paceValue, state: goal.paceState, direction: goal.kind ?? "higher" }} />}
+              </div>
+              <div className="aw-metric-foot">
+                {goal?.state === "set"
+                  ? <span className={goal.tone}>จังหวะ <b>{fmtNum((paceValue ?? 0) * 100, 2)}%</b> {goal.text}</span>
+                  : <span className="zinc">{goal?.state === "nodata" ? "ยังไม่มีข้อมูล" : "ยังไม่ตั้งเป้า"}</span>}
+                {/* ดีขึ้น/แย่ลงเทียบเดือนก่อน (อาร์ตขอ 21 ก.ย. ค่ำ) — ฐานเล็ก/เทียบไม่ได้ = สีจาง ไม่ตะโกน */}
+                <span className={d == null || tiny || good == null ? "ads-muted" : good ? "ads-good" : "ads-over"}>
+                  {d == null ? "เทียบเดือนก่อนไม่ได้" : `${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}%${good == null ? "" : good ? " ดีขึ้น" : " แย่ลง"}${tiny ? " · ฐานเล็ก" : ""}`}
+                </span>
+              </div>
+            </div>
+          );
+        }
         return (
           <div className="ads-pipe-item" key={it.key}>
             <span className="ads-pipe-label">{it.label}</span>
@@ -54,7 +93,6 @@ function SalePipeline({ items, worstKey = null, row = false, title = true, goals
                 </span>
               )}
             </span>
-            {/* อัตราแปลงจากขั้นก่อน — ขั้นที่แปลงต่ำสุดคือคอขวดของเส้นทางขาย */}
             {it.conv != null ? (
               <span className={`ads-pipe-conv ${worstKey === it.key ? "ads-pipe-conv--worst" : ""}`}>
                 {fmtPct(it.conv, 0)} {worstKey === it.key ? "· หล่นแรงสุด" : "จากขั้นก่อน"}
@@ -63,7 +101,7 @@ function SalePipeline({ items, worstKey = null, row = false, title = true, goals
               <span className="ads-pipe-conv">{it.convPlaceholder}</span>
             ) : null}
             {it.sub && <span className="ads-pipe-sub">{it.sub}</span>}
-            {goals?.[it.key] && <GoalLine metric={it.key} goal={goals[it.key]} />}
+            {goal && <GoalLine metric={it.key} goal={goal} />}
           </div>
         );
       })}
@@ -259,9 +297,9 @@ export function AdsView() {
   const changeRange = ({ period: nextPeriod, from, to }) => setFilters({ period: nextPeriod, from, to });
 
   return <AdsWorkspace v={v} ads={ads} selected={filters.brand === "all" ? null : filters.brand} onSelect={(id) => setFilters({ brand: id ?? "all" })} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
-    <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
+    {/* หน้านี้เป็นเดือนปัจจุบันเสมอ — ไม่มีตัวเลือกช่วงและตัวเทียบ (ยังอยู่ในหน้าแคมเปญ/Creative) */}
+    <span className="aw-period">เดือนนี้ · {v.rangeLabel}</span>
     <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
     <Dropdown label="ช่องทาง" options={[["all", "ทั้งหมด"], ...v.channelList.map((item) => [item, item])]} value={channel} onChange={setChannel} />
-    <CompareControl period={period} value={compare} onChange={setCompare} />
   </>} />;
 }

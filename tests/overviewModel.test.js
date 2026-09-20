@@ -19,10 +19,15 @@ describe("ฐานเทียบของเดือนนี้", () => {
   it("แคมเปญ: เดือนนี้เทียบวันเดียวกันเดือนก่อนเหมือนกัน", () => {
     expect(buildCampaignsModel(args({ period: "mtd", compare: "previous" })).compareLabel).toBe("วันเดียวกันเดือนก่อน");
   });
-  it("ช่วงอื่นยังเลือกฐานเองได้", () => {
-    const v = buildOverviewModel(args({ period: "7d", compare: "previous" }));
-    expect(v.before).toEqual(compareRange("7d", periodRange("7d", null, null), "previous"));
-    expect(v.compareLabel).toBe("ช่วงก่อนหน้า");
+  /* หน้า Overview เป็นเดือนปัจจุบันเสมอ (อาร์ตเคาะ 21 ก.ย. 69)
+     เคยลบแต่กิ่ง else บนจอ แล้วปล่อยให้ตัวเลือกช่วงเปลี่ยนข้อมูลได้ → เลือก "7 วัน" แล้วได้ยอด 7 วัน
+     มาหารกับเป้าทั้งเดือน โดยยังติดป้ายว่า "ยอดรวมเดือนปัจจุบัน" (เจอตอนรีวิวตัวเอง) */
+  it("เลือกช่วงอื่นมาก็ไม่ขยับ — หน้านี้คิดจากเดือนปัจจุบันเสมอ", () => {
+    const month = buildOverviewModel(args({ period: "mtd", compare: "lastMonth" }));
+    const week = buildOverviewModel(args({ period: "7d", compare: "previous" }));
+    expect(week.range).toEqual(month.range);
+    expect(week.monthView).toBe(true);
+    expect(week.compareLabel).toBe("วันเดียวกันเดือนก่อน");
   });
 });
 

@@ -21,33 +21,34 @@
 .aw-filter { padding-left:10px; border-left:1px solid var(--line); }.aw-filter select { min-width:116px; }
 .aw-demo { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font-size:10px; color:var(--ink-soft); white-space:nowrap; }.aw-demo i { width:6px; height:6px; border-radius:50%; background:var(--warn); }
 .aw-live { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font-size:10px; color:var(--ink-soft); white-space:nowrap; }.aw-live i { width:6px; height:6px; border-radius:50%; background:var(--ok); }
-.aw-layout { display:grid; grid-template-columns:250px minmax(0,1fr); gap:28px; align-items:start; }
-.aw-brands { position:sticky; top:80px; }
+.aw-layout { display:grid; grid-template-columns:250px minmax(0,1fr); gap:24px; align-items:start; }
+@media (max-width:1180px){ .aw-layout { grid-template-columns:minmax(0,1fr); } .aw-brands { position:static; } }
+.aw-brands { position:sticky; top:80px; display:grid; gap:10px; align-content:start; }
+.aw-brands>p { font-size:11px; color:var(--ink-soft); margin:2px 0 6px; }
 .aw-section-label { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; font-weight:700; }
 .aw-section-label>span { font-size:11px; font-weight:500; color:var(--ink-soft); }
-.aw-brands>p { font-size:11px; color:var(--ink-soft); margin:6px 0 18px; }
 .mkt-root .aw-brand { display:block; width:100%; text-align:left; padding:16px; margin:0 0 10px; background:var(--surface); border:1px solid var(--line); border-radius:10px; color:var(--ink); cursor:pointer; }
 .mkt-root .aw-brand.selected { border-color:var(--aw-accent); box-shadow:inset 3px 0 var(--aw-accent); background:color-mix(in srgb,var(--aw-accent) 7%,var(--surface)); }
 .aw-brand>div { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
 .aw-brand>div>span:last-child { margin-left:auto; }
 .aw-brand strong { font-size:14px; }.aw-brand b { font-size:17px; }.aw-brand small { font-size:11px; color:var(--ink-soft); }.aw-brand>div>small { margin-left:auto; }
 .aw-content { display:grid; gap:18px; min-width:0; }
-.aw-hero { background:color-mix(in srgb,var(--aw-accent) 7%,var(--surface)); color:var(--ink); border:1px solid color-mix(in srgb,var(--aw-accent) 28%,var(--line)); border-radius:16px; padding:28px; box-shadow:inset 0 3px 0 color-mix(in srgb,var(--aw-accent) 82%,transparent); }
-.aw-hero-top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:30px; }
+.aw-hero { background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:16px; padding:24px 26px; }
+.aw-hero-top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
 .aw-brand-title { display:flex; align-items:center; gap:12px; }.aw-brand-title h2 { font-size:22px; margin:0; }
 .aw-status { font-size:11px; border:1px solid color-mix(in srgb,var(--aw-accent) 36%,var(--line)); border-radius:30px; padding:5px 12px; color:var(--accent-text)!important; background:var(--accent-soft); }
-.aw-hero-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:36px; }.aw-hero .aw-eyebrow { color:var(--accent-text); }
+.aw-hero-grid { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:24px; align-items:center; }.aw-hero .aw-eyebrow { color:var(--ink-soft); }
 .aw-revenue { font-size:clamp(32px,4.3vw,60px); font-weight:650; letter-spacing:-.045em; line-height:1.25; font-variant-numeric:tabular-nums; margin-top:10px; }
-.aw-hero p { font-size:12px; color:var(--ink-soft); }.aw-hero-foot { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--ink-soft); margin-top:10px; }
+.aw-hero p { font-size:12px; color:var(--ink-soft); }
 .aw-track { display:block!important; position:relative; height:7px; background:var(--line); border-radius:9px; margin:14px 0!important; overflow:visible; }
-.aw-track i { display:block; height:100%; border-radius:9px; background:var(--aw-accent); }.aw-track i.rose { background:var(--bad); }.aw-track i.amber { background:var(--warn); }.aw-track em { position:absolute; top:-4px; width:2px; height:15px; background:var(--ink-soft); }
+.aw-track i { display:block; height:100%; border-radius:9px; background:var(--aw-accent); }.aw-track i.rose { background:var(--bad); }.aw-track i.amber { background:var(--warn); }.aw-track i.emerald { background:var(--ok); }.aw-track i.zinc { background:var(--ink-soft); }.aw-track em { position:absolute; top:-4px; width:2px; height:15px; background:var(--ink-soft); }
 .aw-hero .aw-track { background:var(--line); }.aw-hero .aw-track i { background:var(--aw-accent); }.aw-hero .aw-track em { background:var(--ink); }
 .aw-forecast { border-left:1px solid var(--line); padding-left:32px; display:flex; flex-direction:column; justify-content:center; }.aw-forecast>span { font-size:12px;color:var(--ink-soft); }.aw-forecast h3 { font-size:30px; margin:8px 0 0; letter-spacing:-.03em; }.aw-forecast strong { font-size:14px; }.aw-forecast small { color:var(--ink-soft); font-size:11px; margin-top:16px; }
 .aw .rose { color:var(--bad-text); }.aw .emerald { color:var(--ok-text); }.aw .amber { color:var(--warn-text); }
 .aw-panel { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:22px; min-width:0; }
-.aw-middle { display:grid; grid-template-columns:1.5fr 1fr; gap:18px; }.aw-spend { font-size:28px; font-weight:650; margin-top:18px; font-variant-numeric:tabular-nums; }.aw-spend small { font-size:14px;color:var(--ink-soft);font-weight:400; }
+.aw-middle { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; }.aw-spend { font-size:28px; font-weight:650; margin-top:18px; font-variant-numeric:tabular-nums; }.aw-spend small { font-size:14px;color:var(--ink-soft);font-weight:400; }
 .aw-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0 0; }.aw-facts dt { font-size:11px;color:var(--ink-soft);margin-bottom:4px; }.aw-facts dd { font-size:16px;font-weight:600;margin:0;font-variant-numeric:tabular-nums; }
-.aw-efficiency>div:not(:first-child) { display:flex; align-items:center; justify-content:space-between; padding:15px 0;border-bottom:1px solid var(--line); }.aw-efficiency small { display:block;font-size:11px;color:var(--ink-soft); }.aw-efficiency b { font-size:27px; }.aw-efficiency p { font-size:11px;color:var(--ink-soft);line-height:1.7; }
+.aw-efficiency .aw-metric { display:flex; align-items:center; justify-content:space-between; padding:15px 0;border-bottom:1px solid var(--line); }.aw-efficiency small { display:block;font-size:11px;color:var(--ink-soft); }.aw-efficiency b { font-size:27px; }.aw-efficiency p { font-size:11px;color:var(--ink-soft);line-height:1.7; }
 .aw-journey { container-type:inline-size; }
 /* ต้องเป็น grid จริง — สไตล์กลาง .ads-pipe--row เป็น flex ตัดบรรทัด การ์ดที่ 4 เคยตกบรรทัดไปทับแถบเป้าที่จอ ~800px */
 .aw-journey .ads-pipe--row { display:grid; width:100%; grid-template-columns:repeat(4,minmax(0,1fr)); row-gap:14px; margin-top:20px; }
@@ -237,3 +238,113 @@
 .gs-note { margin:0; color:var(--ink-soft); font-size:11px; line-height:1.55; }
 .gs-note a { color:var(--ink); text-decoration:underline; text-underline-offset:2px; }
 @media(max-width:680px){ .gs-grid { grid-template-columns:minmax(0,1fr); } .gs-head { align-items:stretch; flex-direction:column; } }
+
+
+/* ================= Overview รื้อใหม่ 21 ก.ย. 69 =================
+   เลิกใช้ sidebar (.aw-layout/.aw-brands) — พอร์ตแบรนด์ยุบเข้าตารางเดียวที่กดเลือกได้
+   บล็อกบน = การ์ดยอด + สิ่งที่ต้องทำวันนี้ เคียงกัน ให้ "ตอนนี้เป็นไง" กับ "ต้องทำอะไร" อยู่ในสายตาเดียว */
+.aw-top { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:18px; align-items:start; }
+@media (max-width:1100px){ .aw-top { grid-template-columns:minmax(0,1fr); } }
+
+/* ประโยคตัดสินใจ — บรรทัดเดียว บอกทั้งช่องว่างและสิ่งที่ต้องทำต่อวัน */
+.aw-decide { margin:16px 0 0; padding-top:14px; border-top:1px solid var(--line); font-size:13px; line-height:1.75; }
+.aw-decide b { font-size:14px; }
+.aw-decide.rose b { color:var(--bad-text); } .aw-decide.emerald b { color:var(--ok-text); } .aw-decide.zinc b { color:var(--ink-soft); }
+.aw-decide span { color:var(--ink-soft); }
+
+/* สิ่งที่ต้องทำวันนี้ — สูงสุด 3 เรื่อง เรียงตามผลกระทบ */
+.aw-actions .aw-action-list { list-style:none; margin:14px 0 0; padding:0; display:grid; gap:10px; }
+.aw-action-list li { display:grid; grid-template-columns:8px minmax(0,1fr) auto; align-items:start; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:10px; background:var(--bg); }
+.aw-action-list li.bad { border-color:color-mix(in srgb,var(--bad) 45%,var(--line)); }
+.aw-dot { width:8px; height:8px; border-radius:50%; margin-top:6px; background:var(--ink-soft); }
+.aw-dot.rose { background:var(--bad); } .aw-dot.amber { background:var(--warn); } .aw-dot.emerald { background:var(--ok); }
+.aw-action-text { min-width:0; } .aw-action-text b { display:block; font-size:13px; line-height:1.5; }
+.aw-action-text small { display:block; font-size:11.5px; color:var(--ink-soft); margin-top:3px; line-height:1.6; }
+.aw-action-list button { background:none; border:1px solid var(--line); color:var(--ink-soft); border-radius:8px; padding:4px 10px; font-size:11.5px; cursor:pointer; white-space:nowrap; }
+.aw-action-list button:hover { color:var(--ink); border-color:var(--ink-soft); }
+
+/* ตารางแบรนด์ — แทน sidebar + ตารางเปรียบเทียบเดิม (ข้อมูลชุดเดียวเคยวาดสองที่) */
+.aw-brandtable th button { display:flex; align-items:center; gap:8px; background:none; border:0; color:inherit; font:inherit; cursor:pointer; padding:0; text-align:left; }
+.aw-brandtable tr.selected { background:color-mix(in srgb,var(--aw-accent) 9%,transparent); }
+.aw-brandtable tr:hover:not(.selected) { background:color-mix(in srgb,var(--ink) 4%,transparent); }
+.aw-brandtable td .aw-track { margin:0 0 5px!important; }
+.aw-brandtable td span { font-size:11.5px; font-variant-numeric:tabular-nums; }
+.aw-brandtable small { color:var(--ink-soft); }
+
+/* แนวโน้มพับไว้ — หัวการ์ดสรุปพอให้ตัดสินว่าจะเปิดดูไหม */
+.aw-trends-fold > summary { cursor:pointer; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; list-style:none; }
+.aw-trends-fold > summary::-webkit-details-marker { display:none; }
+.aw-trends-fold > summary::before { content:'▸'; color:var(--ink-soft); font-size:11px; }
+.aw-trends-fold[open] > summary::before { content:'▾'; }
+.aw-trends-fold > summary small { font-size:11.5px; color:var(--ink-soft); }
+.aw-trends-fold > summary .aw-section-label { display:inline-flex; }
+.aw-trends-fold[open] > summary { margin-bottom:14px; }
+
+/* สูตรไม่เปิดค้าง — กดดูเมื่ออยากรู้ */
+.aw-formula { margin-top:14px; }
+.aw-formula > summary { cursor:pointer; font-size:11.5px; color:var(--ink-soft); }
+.aw-formula p { font-size:11.5px; color:var(--ink-soft); line-height:1.8; margin:8px 0 0; }
+
+
+/* ทั้งแถวกดได้ตามที่คำอธิบายใต้ตารางบอก */
+.aw-brandtable tr.aw-row { cursor:pointer; }
+/* หน้านี้เป็นเดือนปัจจุบันเสมอ — แสดงช่วงเป็นข้อความ ไม่ใช่ตัวเลือกที่กดแล้วทำให้ตัวเลขเพี้ยน */
+.aw-period { font-size:12px; color:var(--ink-soft); padding:6px 0; }
+
+/* การ์ดที่มีหน้าปัด: เนื้อหาซ้าย หน้าปัดขวา · จอแคบให้หน้าปัดลงมาอยู่ล่างแทนการบีบจนอ่านไม่ออก */
+.aw-card-grid { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:center; margin-top:16px; }
+@media (max-width:1320px){ .aw-card-grid { grid-template-columns:minmax(0,1fr); justify-items:center; } }
+
+/* หน้าปัดมินิเรียงคู่ในฝั่งซ้าย — ยอดกับค่าแอดอยู่ระดับสายตาเดียวกัน */
+.aw-minirow { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px; justify-items:center; }
+/* การ์ดประสิทธิภาพ: ตัวชี้วัดละคอลัมน์ มีหน้าปัดของตัวเอง */
+.aw-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-top:16px; }
+.aw-efficiency .aw-metric { display:grid!important; grid-template-rows:auto 1fr; gap:10px; padding:14px!important; border:1px solid var(--line)!important; border-radius:12px; background:var(--bg); }
+.aw-metric-head b { font-size:13px; font-weight:600; }
+.aw-metric-head small { display:block; font-size:11px; color:var(--ink-soft); margin-top:2px; }
+/* ตัวเลขซ้าย หน้าปัดขวา · align-items:end ทำให้ฐานของหน้าปัดทุกกล่องอยู่ระดับเดียวกัน */
+/* ตัวเลขเด่นตัวเดียวต่อกล่อง — หน้าปัดไม่มีตัวเลขของตัวเอง ไม่งั้นแข่งกันเองว่าจะอ่านตัวไหนก่อน */
+.aw-metric-body { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:58px; }
+.aw-metric-num { font-size:28px; font-weight:650; line-height:1; font-variant-numeric:tabular-nums; }
+/* แถวล่างเต็มความกว้าง เป้าซ้าย ผลขวา — ทุกกล่องจบที่ระดับเดียวกัน ไม่ขาดเป็นก้อน */
+/* แถวล่างของกล่องตัวชี้วัด: เรียงซ้ายทีละบรรทัด ห้ามหักกลางประโยค — แบบเดียวกับกล่องขั้น funnel
+   (เดิม flex space-between พอที่แคบมันพับครึ่งๆ กลางๆ แต่ละกล่องหน้าตาไม่เหมือนกัน) */
+.aw-metric-foot { display:grid; gap:5px; justify-items:start;
+  padding-top:10px; border-top:1px solid var(--line); font-size:11.5px; }
+.aw-metric-foot>span { white-space:nowrap; }
+.aw-metric-foot .ads-goal--target { margin:0; color:var(--ink-soft); }
+.aw-metric-foot>span b { font-size:12.5px; font-variant-numeric:tabular-nums; }
+.aw-efficiency .aw-metric .pg { margin:0; }
+/* funnel บนหน้า Overview — โครงเดียวกับกล่อง Metric ของการ์ดประสิทธิภาพ (แบบที่อาร์ตบอกว่าดีแล้ว):
+     ชื่อขั้น+ⓘ (+ป้ายหล่นแรงสุดชิดขวา)
+     ค่าจริง / เป้า ..................... ส่วนโค้ง
+     ─────────────────────────────
+     จังหวะ · สถานะ
+     เทียบเดือนก่อน
+   ⚠️ ตัวกล่องใช้ display:block เท่านั้น — สไตล์กลาง .ads-pipe-item (mktStyles ~3044) ประกาศ grid 2 คอลัมน์ไว้
+   ที่ผ่านมาใช้ grid/flex บนตัวกล่องแล้วโดนของกลางสอดแทรกจนผังกระจายคนละมุมมาแล้ว 3 รอบ
+   block ทำให้ลำดับบน→ล่างการันตีด้วยตัวมันเอง ไม่มีคอลัมน์ให้แตก */
+.aw-journey .ads-pipe--row { column-gap:12px; }
+.aw-journey .ads-pipe-item.ads-stage { display:block!important;
+  padding:14px!important; border:1px solid var(--line)!important; border-left:1px solid var(--line)!important; border-radius:12px; background:var(--bg); }
+.ads-stage-head { display:flex; align-items:center; gap:8px; min-height:24px; }
+.ads-stage-head b { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.ads-stage-worst { margin-left:auto; font-size:10.5px; color:var(--warn-text); border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));
+  border-radius:99px; padding:2px 8px; white-space:nowrap; }
+/* ค่าซ้าย ส่วนโค้งขวา — ตัวเลขห้ามหักกลาง (เคยได้ "3,060 /" แล้วขึ้นบรรทัดใหม่ "4,266") */
+.ads-stage .aw-metric-body { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px; min-height:0; }
+.ads-stage .aw-metric-num { white-space:nowrap; }
+/* จังหวะกับเทียบเดือนก่อน = สองบรรทัดเรียงซ้าย เหมือนกันทุกกล่อง · ห้ามหักกลางประโยค ("เหนือ|แผน") */
+.ads-stage .aw-metric-foot { margin-top:10px; display:grid!important; gap:5px; justify-items:start; }
+.ads-stage .aw-metric-foot>span { white-space:nowrap; }
+.ads-stage .aw-metric-foot>span b { font-variant-numeric:tabular-nums; }
+.ads-stage .aw-metric-num small { font-size:13px; font-weight:400; color:var(--ink-soft); }
+/* ไอคอน i ที่กดได้จริง (ui/InfoTip.jsx) — ไม่ใช้ title ของเบราว์เซอร์ที่ต้องจ่อค้างและมือถือไม่ขึ้น */
+.ui-info { position:relative; display:inline-block; margin-left:6px; vertical-align:1px; }
+.ui-info-btn { width:15px; height:15px; padding:0; border:1px solid var(--line); border-radius:50%;
+  background:none; color:var(--ink-soft); font-size:9.5px; line-height:1; cursor:pointer; }
+.ui-info-btn:hover, .ui-info-btn:focus-visible { color:var(--ink); border-color:var(--ink-soft); }
+.ui-info-box { position:absolute; z-index:40; top:calc(100% + 6px); left:-8px; min-width:196px; max-width:280px;
+  display:grid; gap:5px; padding:10px 12px; border:1px solid var(--line); border-radius:10px;
+  background:var(--surface); box-shadow:0 10px 26px rgb(0 0 0 / .45); font-size:11.5px; line-height:1.6; color:var(--ink-soft); text-align:left; }
+.ui-info-box[data-align="end"] { left:auto; right:-8px; }

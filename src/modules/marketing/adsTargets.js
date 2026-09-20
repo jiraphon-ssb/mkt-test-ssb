@@ -7,6 +7,7 @@
    ดี/แย่ตัดสินจากเป้า ไม่ใช่จากการเทียบช่วงก่อนอย่างเดียว
    ============================================================ */
 import { normalizeAdPlatform } from "./adsOverview.js";
+import { paceLabel, paceTone, thresholdOf } from "./ads/paceEngine.js";
 
 export const TARGET_METRICS = [
   { key: "roas", label: "ROAS", kind: "ratio", better: "higher", setting: "roas" },
@@ -66,16 +67,17 @@ export function targetProgress(metric, value, target, period = { mode: "month", 
     const goal = period.mode === "range" ? target * (period.rangeDays / period.monthDays) : target;
     const expected = period.mode === "range" ? goal : target * (period.elapsed ?? 1);
     if (value == null) return { state: "nodata", tone: "zinc", text: "ยังไม่มีข้อมูล", target: goal, monthTarget, expected };
-    const ratio = expected > 0 ? value / expected : 1;
-    const [tone, text] = tone3(ratio, period.mode === "range" ? ["ถึงเป้า", "ใกล้เป้า", "ต่ำกว่าเป้า"] : ["ตามเป้า", "ใกล้เป้า", "ช้ากว่าเป้า"]);
-    return { state: "set", tone, text, target: goal, monthTarget, expected, pct: value / goal, gap: value - goal };
+    /* จังหวะ = ทำได้ ÷ ที่ควรได้ถึงวันนี้ — เกณฑ์และคำเดียวกับ Pace Engine ทั้งหน้า (รื้อ 21 ก.ย. 69)
+       เดิมบล็อกนี้ตัดสินเอง คำจึงไม่ตรงกับการ์ดยอดขายและตารางแบรนด์ที่อ่านจาก paceOf */
+    const pace = thresholdOf(value, expected);
+    return { state: "set", tone: paceTone(pace.state), text: paceLabel(pace.state), pace: pace.value, paceState: pace.state, kind: "higher",
+      target: goal, monthTarget, expected, pct: value / goal, gap: value - goal };
   }
   if (value == null) return { state: "nodata", tone: "zinc", text: "ยังไม่มีข้อมูล", target };
-  const pct = value / target;
-  const [tone, text] = m.better === "lower"
-    ? (pct <= 1 ? ["emerald", "อยู่ในเป้า"] : pct <= 1.1 ? ["amber", "เกินเป้าเล็กน้อย"] : ["rose", "เกินเป้า"])
-    : tone3(pct, ["ถึงเป้า", "ใกล้เป้า", "ต่ำกว่าเป้า"]);
-  return { state: "set", tone, text, target, pct, gap: value - target };
+  const rate = thresholdOf(value, target, { direction: m.better === "lower" ? "lower" : "higher" });
+  return { state: "set", tone: paceTone(rate.state), text: paceLabel(rate.state, m.better === "lower" ? "rate_lower" : "rate_higher"),
+    paceState: rate.state, kind: m.better === "lower" ? "rate_lower" : "rate_higher",
+    target, pct: rate.value, gap: value - target };
 }
 
 /** จับคู่ค่าจริง {key: value} กับเป้า (normalize แล้ว) ทุกตัวชี้วัด → {key: progress} */

@@ -57,12 +57,12 @@ describe("targetProgress — ทำได้เท่าไรจากเป้
   it("ยอดนับ โหมดเดือนนี้: เทียบเป้าเดือน (pct) แต่ตัดสินจากจังหวะที่ควรถึงวันนี้", () => {
     const p = targetProgress(metric("closed"), 45, 100, MONTH);
     expect(p).toMatchObject({ target: 100, monthTarget: 100, expected: 50, pct: 0.45, gap: -55, tone: "amber", text: "ใกล้เป้า" });
-    expect(targetProgress(metric("closed"), 60, 100, MONTH)).toMatchObject({ tone: "emerald", text: "ตามเป้า" });
-    expect(targetProgress(metric("closed"), 30, 100, MONTH)).toMatchObject({ tone: "rose", text: "ช้ากว่าเป้า" });
+    expect(targetProgress(metric("closed"), 60, 100, MONTH)).toMatchObject({ tone: "emerald", text: "เหนือแผน" });
+    expect(targetProgress(metric("closed"), 30, 100, MONTH)).toMatchObject({ tone: "rose", text: "ช้ากว่าแผน" });
   });
   it("ยอดนับ โหมดช่วงอื่น: เป้าเดือนเฉลี่ยตามจำนวนวันในช่วง", () => {
     const p = targetProgress(metric("inquiries"), 30, 112, WEEK);   // 112 × 7/28 = 28
-    expect(p).toMatchObject({ target: 28, monthTarget: 112, gap: 2, tone: "emerald", text: "ถึงเป้า" });
+    expect(p).toMatchObject({ target: 28, monthTarget: 112, gap: 2, tone: "emerald", text: "เหนือแผน" });
     expect(p.pct).toBeCloseTo(30 / 28);
   });
 });
