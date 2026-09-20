@@ -8,6 +8,8 @@ import { X } from "lucide-react";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { GoalLine } from "../ui/GoalLine.jsx";
 import { goalsFor } from "../adsTargets.js";
+import { paceStatus } from "../adsOverview.js";
+import { PaceMeter } from "../ads/PaceMeter.jsx";
 
 const fmtRoas = (x) => (x == null ? "—" : `${fmtNum(x, 2)}x`);
 const STATUS = { active: "กำลังรัน", paused: "พักอยู่", unknown: "ไม่ระบุสถานะ" };
@@ -31,10 +33,12 @@ function Delta({ row, compareLabel }) {
 function BudgetPace({ row }) {
   if (row.budget == null) return <span className="cp-no-value">ยังไม่ตั้งงบ</span>;
   if (row.monthSpend == null) return <div className="cp-budget-stack"><b className="mono">{fmtMoney(row.budget)}</b><small className="ads-muted">ไม่มีข้อมูลเดือนนี้</small></div>;
-  const fast = row.pace.used > row.pace.expected + 0.1;
+  const status = paceStatus(row.pace);
+  const state = status.tone === "emerald" ? "ontrack" : status.tone === "amber" ? "warn" : status.tone === "rose" ? "bad" : "slow";
   return <div className="cp-budget-stack">
     <div><b className="mono">{fmtMoney(row.monthSpend)}</b><small> / {fmtMoney(row.budget)}</small></div>
-    <div className="cp-pace-line"><div className="ads-brand-bar" role="img" aria-label={`ใช้ไป ${fmtPct(row.pace.used, 0)} ของงบ · ควรถึง ${fmtPct(row.pace.expected, 0)}`}><i style={{ width: `${Math.min(100, Math.round(row.pace.used * 100))}%`, background: fast ? "var(--warn)" : "var(--ok)" }} /><span className="ads-brand-bar-tick" style={{ left: `${Math.round(row.pace.expected * 100)}%` }} /></div><small className={fast ? "amber" : "ads-muted"}>{fmtPct(row.pace.used, 0)}</small></div>
+    <PaceMeter pace={{ progress: row.pace.used, state }} expected={row.pace.expected} label={status.text} detail={fmtPct(row.pace.used, 0)} compact />
+    {row.pace.daysLeft > 0 && row.pace.requiredDaily != null && <small className="ads-muted">ใช้ได้อีกเฉลี่ย {fmtMoney(row.pace.requiredDaily)}/วัน</small>}
   </div>;
 }
 

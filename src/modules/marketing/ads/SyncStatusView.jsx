@@ -28,6 +28,7 @@ import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, la
 import { ago, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import { newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
 import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
+import { PaceMeter } from "./PaceMeter.jsx";
 import "./adsWorkspace.css";
 import "./syncStatus.css";
 
@@ -99,8 +100,8 @@ function SourceRow({ row, onOpen }) {
   return <div className="sy-src" role="row">
     <div role="cell" className="sy-src-name"><Icon size={17} aria-hidden="true" /><span><b>{row.name}</b>{row.sub && <small>{row.sub}</small>}</span></div>
     <div role="cell"><StateChip state={row.state} label={row.stateLabel} /></div>
-    <div role="cell" className="sy-src-fact" data-label="สดแค่ไหน">{loading ? <Skeleton lines={2} /> : row.fresh ? <><b>{row.fresh.text}</b>{row.fresh.sub && <small>{row.fresh.sub}</small>}</> : <b>—</b>}</div>
-    <div role="cell" className="sy-src-fact" data-label="ครบแค่ไหน">{loading ? <Skeleton lines={2} /> : row.complete ? <><b>{row.complete.text}</b>{row.complete.sub && <small>{row.complete.sub}</small>}</> : <small>{row.hint ?? "—"}</small>}</div>
+    <div role="cell" className="sy-src-fact" data-label="สดแค่ไหน">{loading ? <Skeleton lines={2} /> : row.fresh ? <><b>{row.fresh.text}</b>{row.fresh.sub && <small>{row.fresh.sub}</small>}<PaceMeter pace={row.pace?.freshness} compact /></> : <b>—</b>}</div>
+    <div role="cell" className="sy-src-fact" data-label="ครบแค่ไหน">{loading ? <Skeleton lines={2} /> : row.complete ? <><b>{row.complete.text}</b>{row.complete.sub && <small>{row.complete.sub}</small>}<PaceMeter pace={row.pace?.coverage} compact /></> : <small>{row.hint ?? "—"}</small>}</div>
     <div role="cell" className="sy-src-go">{onOpen && <button type="button" onClick={onOpen} aria-label={`ดูรายละเอียด ${row.name}`}>รายละเอียด <ArrowRight size={13} aria-hidden="true" /></button>}</div>
   </div>;
 }

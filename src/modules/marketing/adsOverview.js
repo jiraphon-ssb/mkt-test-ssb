@@ -8,6 +8,7 @@
 import { fmtNum, fmtMoney } from "./dash/charts/theme.js";
 import { adsRollup, analyticsCards, cardAnchorISO, inRange } from "./mktAnalytics.js";
 import { creativeAssetOf } from "./ads/metaCreativeContract.js";
+import { cumulativePace, monthClock } from "./ads/paceEngine.js";
 
 /** อัตราส่วนแบบปลอดภัย — ตัวหาร 0 หรือค่าว่างคืน null (null ≠ 0) */
 export const share = (a, b) => (a == null || b == null || b <= 0 ? null : a / b);
@@ -292,10 +293,10 @@ export function budgetOf(brandId, channel, month, adBudgets = []) {
    today = "YYYY-MM-DD" · เทียบ "ใช้ไปแล้ว" กับ "ควรใช้ ณ วันนี้" แล้วคาดยอดสิ้นเดือน
    งบไม่มี/0 → used/remaining/forecastOver = null (ยังประเมินเทียบเพดานไม่ได้) */
 export function budgetPace(spend, budget, today) {
-  const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7)), day = Number(today.slice(8, 10));
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const elapsed = Math.min(Math.max(day, 1), daysInMonth);
-  const expected = elapsed / daysInMonth;                 // สัดส่วนวันที่ผ่านไปของเดือน
+  const clock = monthClock(today);
+  const daysInMonth = clock.daysTotal;
+  const elapsed = clock.daysElapsed;
+  const expected = clock.elapsed;                         // สัดส่วนวันที่ผ่านไปของเดือน
   if (spend == null || !Number.isFinite(spend)) {
     return {
       used: null, expected, expectedSpend: budget > 0 ? budget * expected : null,
@@ -309,7 +310,8 @@ export function budgetPace(spend, budget, today) {
   if (budget == null || budget <= 0) {
     return { used: null, expected, expectedSpend: null, vsPace: null, remaining: null, average, forecast, forecastOver: null, daysLeft, requiredDaily: null, daysToExhaust: null };
   }
-  const remaining = budget - spend;
+  const central = cumulativePace({ actual: spend, target: budget, elapsed: expected, daysLeft, direction: "lower" });
+  const remaining = central.remaining;
   return {
     used: spend / budget,                                 // ใช้ไปกี่ % ของงบ
     expected,
@@ -320,7 +322,7 @@ export function budgetPace(spend, budget, today) {
     forecast,
     forecastOver: forecast - budget,                      // >0 = คาดว่าจะเกินงบสิ้นเดือน
     daysLeft,
-    requiredDaily: daysLeft > 0 ? Math.max(0, remaining) / daysLeft : null,
+    requiredDaily: central.requiredDaily,
     daysToExhaust: average > 0 && remaining > 0 ? remaining / average : remaining <= 0 ? 0 : null,
   };
 }
@@ -457,15 +459,13 @@ export function adsFunnel(cards, range, prev = null) {
    เป้ามาจาก data.sales_targets (mock ราย แบรนด์×เดือน) — ไม่มีเป้า = null ไม่เดา */
 /** จังหวะทำยอดจากเป้ารายได้ — ได้กี่ % ของที่ควรได้ ณ วันนี้ (elapsed = สัดส่วนวันที่ผ่านไป) */
 export function revenuePace(revenue, target, elapsed) {
-  const expectedToDate = target == null ? null : target * elapsed;
-  /* คาดปิดเดือน (run-rate เชิงเส้น) — ไม่ต้องมีเป้าก็คาดได้ แต่ "เกิน/ขาดเป้า" ต้องมีเป้า */
-  const forecast = revenue == null || !(elapsed > 0) ? null : revenue / elapsed;
+  const central = cumulativePace({ actual: revenue, target, elapsed, direction: "higher" });
   return {
-    expectedToDate,
-    pctOfExpected: share(revenue, expectedToDate),
-    behind: revenue == null || expectedToDate == null ? null : expectedToDate - revenue,
-    forecast,
-    forecastVsTarget: forecast == null || target == null ? null : forecast - target,  // + เกินเป้า / − ขาดเป้า
+    expectedToDate: central.expectedToDate,
+    pctOfExpected: central.ratioToPace,
+    behind: central.actual == null || central.expectedToDate == null ? null : central.expectedToDate - central.actual,
+    forecast: central.forecast,
+    forecastVsTarget: central.forecastVsTarget,
   };
 }
 
