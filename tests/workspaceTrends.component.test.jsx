@@ -92,6 +92,13 @@ describe("WorkspaceTrends — Lead · ได้ออเดอร์ · ยื�
 });
 
 describe("WorkspaceTrends — รูปแบบกราฟ เส้น / แท่ง / สะสม", () => {
+  it("โหมดสรุปบน Overview แสดงยอดขายสะสมทันทีและซ่อนชุดควบคุมกราฟ", () => {
+    render(<WorkspaceTrends v={{ ...v, rangeLabel: "1–2 ก.ย." }} sales={sales} compact initialMetric="revenue" />);
+    expect(screen.getByText("ยอดสะสมรายวัน")).toBeTruthy();
+    expect(series("ช่วงนี้")).toEqual([20000, 30000]);
+    expect(screen.queryByRole("button", { name: "เส้น" })).toBeNull();
+  });
+
   it("ค่าเริ่มต้นเป็นเส้น · กดแท่งแล้วกราฟเป็นแท่ง ค่ายังเป็นรายวัน", () => {
     render(<WorkspaceTrends v={v} sales={sales} />);
     expect(chart.last.type).toBe("line");

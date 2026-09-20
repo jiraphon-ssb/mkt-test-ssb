@@ -36,10 +36,12 @@
 .aw-hero-top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:30px; }
 .aw-brand-title { display:flex; align-items:center; gap:12px; }.aw-brand-title h2 { font-size:22px; margin:0; }
 .aw-status { font-size:11px; border:1px solid color-mix(in srgb,var(--aw-accent) 36%,var(--line)); border-radius:30px; padding:5px 12px; color:var(--accent-text)!important; background:var(--accent-soft); }
-.aw-hero-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:36px; }.aw-hero .aw-eyebrow { color:var(--accent-text); }
+.aw-hero-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(260px,.85fr); gap:32px; }.aw-hero .aw-eyebrow { color:var(--accent-text); }
 .aw-revenue { font-size:clamp(32px,4.3vw,60px); font-weight:650; letter-spacing:-.045em; line-height:1.25; font-variant-numeric:tabular-nums; margin-top:10px; }
 .aw-hero p { font-size:12px; color:var(--ink-soft); }.aw-hero-foot { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--ink-soft); margin-top:10px; }
 .aw-hero .pace-meter{margin-top:18px}.aw-budget-panel .pace-meter{margin:14px auto 4px}
+.aw-pace-trend{min-width:0;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.aw-pace-trend-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:2px;color:var(--ink-soft);font-size:10px}.aw-pace-trend-head span:last-child{font-weight:700}.aw-pace-trend .chart-box{margin-top:2px}.aw-pace-trend>p{margin:2px 0 0;font-size:10px;color:var(--ink-soft)}
+.aw-pace-summary{align-items:center;text-align:center}.aw-pace-summary .pace-meter{width:min(100%,250px);margin:0 auto 16px}.aw-pace-summary>span,.aw-pace-summary>small{align-self:stretch;text-align:left}.aw-pace-summary h3,.aw-pace-summary>p,.aw-pace-summary>strong{align-self:stretch;text-align:left}
 .aw-track { display:block!important; position:relative; height:7px; background:var(--line); border-radius:9px; margin:14px 0!important; overflow:visible; }
 .aw-track i { display:block; height:100%; border-radius:9px; background:var(--aw-accent); }.aw-track i.rose { background:var(--bad); }.aw-track i.amber { background:var(--warn); }.aw-track em { position:absolute; top:-4px; width:2px; height:15px; background:var(--ink-soft); }
 .aw-hero .aw-track { background:var(--line); }.aw-hero .aw-track i { background:var(--aw-accent); }.aw-hero .aw-track em { background:var(--ink); }
