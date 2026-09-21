@@ -1,10 +1,14 @@
 /* ads-cron — pg_cron ยิงเข้ามาทุกชั่วโมง แล้วสั่งดึง/ตรวจยอดเท่าที่ถึงคิวในรอบนั้น
-   สิทธิ์: service role เท่านั้น · ไม่แตะ token เอง ปล่อยให้ ads-sync / ads-reconcile ถอดรหัสตามเดิม
+   สิทธิ์: service role เท่านั้น · งาน sync/reconcile ไม่แตะ token เอง ปล่อยให้ ads-sync / ads-reconcile ถอดรหัสตามเดิม
+   (ยกเว้นงาน snapshot บัญชี — เบาพอที่จะทำในนี้ตรงๆ: 1 request/รอบ ไม่คุ้มแตกเป็น function ใหม่ · spec 2026-09-22)
    ทำทีละน้อยต่อรอบ (ดึง ≤4 ก้อน · ตรวจยอด ≤4 บัญชี) เพราะ Edge Function มีเพดานเวลา — ที่เหลือรอบหน้าค่อยทำ
    ทุกรอบบันทึกลง ad_cron_ticks แม้ไม่มีอะไรต้องทำ เพื่อให้ตอบได้ว่าระบบยังวิ่งอยู่จริง */
-import { adminClient, corsHeaders, env, isServiceRole, json } from "../_shared/adsOAuth.ts";
+import { adminClient, corsHeaders, decryptToken, env, graphVersion, isServiceRole, json } from "../_shared/adsOAuth.ts";
 import { DEFAULT_SYNC_EVERY_HOURS, planCreativeTargets, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../_shared/adsCron.js";
 import { hourInTimeZone, todayInTimeZone } from "../_shared/metaInsights.js";
+import { fetchAccountSnapshots } from "../_shared/adsAccountSnapshot.js";
+
+const cronSleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const MAX_SYNC_JOBS = 4;
 const MAX_RECONCILE = 4;
@@ -176,6 +180,25 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
     .filter((connectionId) => !stopped.has(connectionId));
   const creatives: JobResult[] = [];
   for (const connectionId of creativeTargets) creatives.push({ connectionId, ...(await call("ads-creatives", { connectionId })) });
+
+  /* snapshot บัญชีแอดทุกตัวที่ token เห็น (หน้า บิล & กระทบยอด — spec 2026-09-22)
+     ใช้ authorization ที่ active ตัวแรกพอ (ทุก token เห็นชุดบัญชีเดียวกันของทีม) · ล้มห้ามล้มรอบ sync */
+  try {
+    const { data: snapAuth } = await db.from("ad_provider_authorizations")
+      .select("token_ciphertext,token_iv").eq("status", "active").limit(1).maybeSingle();
+    if (snapAuth) {
+      const snapToken = await decryptToken(snapAuth.token_ciphertext, snapAuth.token_iv);
+      const snapshots = await fetchAccountSnapshots({ fetch, token: snapToken, sleep: cronSleep, version: graphVersion() });
+      if (snapshots.length) {
+        const fetchedAt = new Date().toISOString();
+        const { error: snapError } = await db.from("ad_account_snapshots")
+          .upsert(snapshots.map((row) => ({ ...row, fetched_at: fetchedAt })), { onConflict: "external_account_id" });
+        if (snapError) console.error("[ads-cron] snapshot upsert", snapError.message);
+      }
+    }
+  } catch (error) {
+    console.error("[ads-cron] snapshot", error instanceof Error ? error.message : error);
+  }
 
   const summary = summarizeTick({
     planned: jobs.length + targets.length + creativeTargets.length, sync, reconcile,
