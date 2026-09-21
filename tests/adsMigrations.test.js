@@ -200,3 +200,26 @@ describe("20260917120000 ประวัติรอบดึงข้อมู�
     expect(sql).toMatch(/--.*drop column if exists[^\n]*platform_pct/);
   });
 });
+
+/* 0011 — บิล & กระทบยอด (spec docs/superpowers/specs/2026-09-22-billing-recon.md) */
+describe("0011_ad_billing", () => {
+  const sql = read("src/supabase/migrations/0011_ad_billing.sql");
+  it("สามตารางเปิด RLS และจำกัด team_lead", () => {
+    for (const t of ["ad_account_snapshots", "ad_billing_reviews", "ad_billing_charges"]) {
+      expect(sql).toContain(`create table ${t}`);
+      expect(sql).toContain(`alter table ${t} enable row level security`);
+    }
+    expect(sql.match(/mkt_is_team_lead\(\)/g).length).toBeGreaterThanOrEqual(4);
+  });
+  it("reviews เป็น append-only: ไม่มี policy update/delete และ revoke ไว้", () => {
+    expect(sql).toContain("revoke update, delete on ad_billing_reviews");
+    expect(sql).not.toMatch(/create policy [^;]* on ad_billing_reviews\s+for (update|delete)/i);
+  });
+  it("RPC เขียนรีวิวตรวจสิทธิ์เองและ insert เท่านั้น", () => {
+    expect(sql).toContain("create or replace function mkt_billing_review_add");
+    expect(sql).toContain("security definer");
+    expect(sql).toMatch(/if not mkt_is_team_lead\(\) then\s*raise/i);
+    const body = sql.slice(sql.indexOf("create or replace function mkt_billing_review_add"));   // เฉพาะตัว RPC — revoke/คอมเมนต์ข้างบนมีคำว่า update โดยชอบ
+    expect(body.replace(/--[^\n]*/g, "")).not.toMatch(/\b(update|delete)\s/i);
+  });
+});
