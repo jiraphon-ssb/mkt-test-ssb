@@ -53,12 +53,13 @@ export function formatBreakdown(rows = []) {
   const groups = new Map();
   for (const row of rows) {
     const format = creativeFormatOf(row);
-    const g = groups.get(format) ?? { format, count: 0, spend: 0, leads: 0, clicks: 0, impressions: 0, purchases: null, purchaseSpend: 0, fatigue: 0 };
+    const g = groups.get(format) ?? { format, count: 0, spend: 0, leads: 0, clicks: 0, impressions: 0, purchases: null, purchaseSpend: 0, fatigue: 0, resultEvents: new Set() };
     g.count += 1;
     g.spend += Number(row.spend) || 0;
     g.leads += Number(row.leads) || 0;
     g.clicks += Number(row.clicks) || 0;
     g.impressions += Number(row.impressions) || 0;
+    for (const event of row.resultEvents ?? []) g.resultEvents.add(event);
     if (row.purchases != null) { g.purchases = (g.purchases ?? 0) + row.purchases; g.purchaseSpend += Number(row.spend) || 0; }
     if (row.fatigue) g.fatigue += 1;
     groups.set(format, g);
@@ -66,7 +67,8 @@ export function formatBreakdown(rows = []) {
   const ratio = (a, b) => (b > 0 ? a / b : null);
   return [...groups.values()].sort((a, b) => b.spend - a.spend).map((g) => ({
     format: g.format, label: FORMAT_LABELS[g.format], count: g.count, spend: g.spend, spendShare: ratio(g.spend, total),
-    leads: g.leads, cpl: ratio(g.spend, g.leads), purchases: g.purchases, cpa: g.purchases == null ? null : ratio(g.purchaseSpend, g.purchases),
+    leads: g.leads, cpl: g.resultEvents.size > 1 ? null : ratio(g.spend, g.leads), resultComparable: g.resultEvents.size <= 1,
+    purchases: g.purchases, cpa: g.purchases == null ? null : ratio(g.purchaseSpend, g.purchases),
     ctr: ratio(g.clicks, g.impressions), fatigue: g.fatigue,
   }));
 }

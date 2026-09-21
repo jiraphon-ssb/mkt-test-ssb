@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ADS_PROVIDERS, buildAdsSyncRequest, buildMetaCreativeSyncRequest, validateAdsConnection } from "../src/modules/marketing/ads/adsConnectorContract.js";
+import { ADS_PROVIDERS, META_RESULT_EVENTS, buildAdsSyncRequest, buildMetaCreativeSyncRequest, metaResultLabel, validateAdsConnection } from "../src/modules/marketing/ads/adsConnectorContract.js";
 
 describe("ads connector contract", () => {
+  it("แสดงชื่อ Meta result ที่คนอ่านได้ แต่ยังเก็บ event key เดิมไว้ sync", () => {
+    expect(META_RESULT_EVENTS.map(([key]) => key)).toEqual(ADS_PROVIDERS.find((provider) => provider.id === "meta").leadEvents);
+    expect(metaResultLabel("messaging_conversation_started_7d")).toBe("การสนทนาผ่านข้อความที่เริ่มต้น");
+    expect(metaResultLabel("unknown")).toBe("ผลลัพธ์จาก Meta");
+  });
   it("defines every planned provider once", () => {
     expect(ADS_PROVIDERS.map((provider) => provider.id)).toEqual(["meta", "google", "tiktok", "shopee"]);
   });

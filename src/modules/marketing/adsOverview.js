@@ -719,12 +719,24 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     const asset = creativeAssetOf(c.creative_data ?? c.ad_creative);
     const creative = c.creative ?? asset?.name ?? c.brief?.creative ?? "ไม่ระบุชิ้นงาน";
     const platform = adPlatformOf(c);
-    const key = `${c.brand_id}|${platform}|${creative}`;
+    /* ชื่อโฆษณาซ้ำกันได้ จึงยึดโพสต์จริงก่อน แล้วค่อย Meta creative/ad id
+       mock เก่าที่ไม่มี id จึงค่อยรวมตามชื่อ */
+    const stableId = asset?.storyId
+      ? `${asset.connectionId ?? c.connection_id ?? ""}:story:${asset.storyId}`
+      : asset?.instagramMediaId
+        ? `${asset.connectionId ?? c.connection_id ?? ""}:instagram:${asset.instagramMediaId}`
+        : asset?.creativeId
+        ? `${asset.connectionId ?? c.connection_id ?? ""}:creative:${asset.creativeId}`
+        : (asset?.adId || c.ad_id)
+          ? `${asset?.connectionId ?? c.connection_id ?? ""}:ad:${asset?.adId ?? c.ad_id}`
+          : `name:${creative}`;
+    const key = `${c.brand_id}|${platform}|${stableId}`;
     let row = acc.get(key);
     if (!row) {
       row = {
         key, creative, platform, brandId: c.brand_id, brand: names.get(c.brand_id) ?? c.brand_id,
-        campaigns: new Set(), asset, spend: 0, leads: 0, revenue: 0, purchases: undefined, impressions: 0, clicks: 0, reach: 0,
+        campaigns: new Set(), resultEvents: new Set(), resultLabels: new Set(), currencies: new Set(), asset,
+        spend: 0, leads: 0, revenue: 0, purchases: undefined, impressions: 0, clicks: 0, reach: 0,
         early: { imp: 0, clk: 0 }, late: { imp: 0, clk: 0 }, complete: true,
       };
       acc.set(key, row);
@@ -733,6 +745,9 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     const m = c.metrics ?? {};
     if (m.spend == null || m.leads == null || m.revenue == null) row.complete = false;
     row.campaigns.add(c.campaign ?? c.brief?.campaign ?? "ไม่ระบุแคมเปญ");
+    if (c.result_event ?? m.result_event) row.resultEvents.add(c.result_event ?? m.result_event);
+    if (c.result_label ?? m.result_label) row.resultLabels.add(c.result_label ?? m.result_label);
+    if (c.currency) row.currencies.add(c.currency);
     row.spend += m.spend ?? 0;
     row.leads += m.leads ?? 0;
     row.revenue = row.revenue == null || m.revenue == null ? null : row.revenue + m.revenue;
@@ -745,17 +760,22 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     half.imp += m.impressions ?? 0;
     half.clk += m.clicks ?? m.link_clicks ?? 0;
   }
-  return [...acc.values()].map(({ early, late, campaigns, ...row }) => {
+  return [...acc.values()].map(({ early, late, campaigns, resultEvents, resultLabels, currencies, ...row }) => {
     const ctr = share(row.clicks, row.impressions);
     const ctrEarly = share(early.clk, early.imp), ctrLate = share(late.clk, late.imp);
     const ctrDrop = ctrEarly == null || ctrLate == null || ctrEarly === 0 ? null : (ctrEarly - ctrLate) / ctrEarly;
     const enoughVolume = early.imp >= (rules.fatigueMinImpressions ?? 0) && late.imp >= (rules.fatigueMinImpressions ?? 0);
+    /* reach รายวันบวกข้ามวันไม่ได้ในความหมาย unique reach ทั้งช่วง
+       อัตรานี้จึงเป็นค่าเฉลี่ยรายวันแบบถ่วงด้วย reach ไม่ใช่ period frequency ของ Meta */
     const frequency = share(row.impressions, row.reach);
     const fatigue = (frequency != null && frequency > rules.fatigueFreq)
       || (enoughVolume && ctrDrop != null && ctrDrop > rules.fatigueCtrDrop);
     const base = {
       ...row,
       campaigns: [...campaigns],
+      resultEvents: [...resultEvents], resultLabels: [...resultLabels], currencies: [...currencies],
+      resultLabel: resultLabels.size === 1 ? [...resultLabels][0] : resultLabels.size > 1 ? "ผลลัพธ์หลายแบบ" : "ผลลัพธ์",
+      currency: currencies.size === 1 ? [...currencies][0] : currencies.size > 1 ? null : "THB",
       ctr, ctrEarly, ctrLate, ctrDrop, frequency, fatigue,
       cpc: share(row.spend, row.clicks),
       cpl: row.leads > 0 ? row.spend / row.leads : null,

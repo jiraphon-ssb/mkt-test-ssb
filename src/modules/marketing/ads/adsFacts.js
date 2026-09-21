@@ -1,3 +1,5 @@
+import { metaResultLabel } from "./adsConnectorContract.js";
+
 /* ============================================================
    adsFacts — ยอดจริงจาก ad_daily_facts → "การ์ดแอด" รูปเดียวกับ mock (pure · มีเทส)
    ทุกหน้า ads คำนวณจากการ์ด → ต่อข้อมูลจริงได้โดยไม่เขียนตัวคำนวณใหม่
@@ -62,6 +64,7 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
     const spend = num(f.spend), leads = num(f.leads);
     const value = num(f.attributed_value);
     const campaign = f.campaign_name || f.campaign_id || null;
+    const resultEvent = connection.config?.leadEvent ?? "messaging_conversation_started_7d";
     cards.push({
       id: `mf_${f.connection_id}_${f.fact_date}_${f.ad_id}`,
       source: "meta",
@@ -80,6 +83,10 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
       creative: f.ad_name || f.ad_id || null,
       creative_data: creativeAssetFromRow(creativeByAd.get(`${f.connection_id}|${f.ad_id}`)),
       account_id: connection.external_account_id,
+      connection_id: connection.id,
+      currency: connection.currency ?? "THB",
+      result_event: resultEvent,
+      result_label: metaResultLabel(resultEvent),
       fact_date: f.fact_date,
       provisional: f.fact_date === today,
       is_realtime: false,
@@ -88,6 +95,7 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
       metrics: {
         spend, impressions: num(f.impressions), reach: num(f.reach), clicks: num(f.clicks), link_clicks: num(f.link_clicks),
         leads, conversions: leads, orders: null, engagement: null,
+        result_event: resultEvent, result_label: metaResultLabel(resultEvent),
         cpl: spend != null && leads > 0 ? spend / leads : null,
         // Meta ไม่ส่ง action_values ที่เป็นศูนย์ → บัญชีที่วัด purchase ได้ แถวที่ไม่มี = 0 · บัญชีที่ไม่เคยมี = ไม่รู้ (null)
         revenue: value ?? (tracksValue.has(f.connection_id) ? 0 : null),

@@ -7,16 +7,15 @@ import { fmtInt, fmtMoney, fmtNum } from "../dash/charts/theme.js";
    ratio / count / money = เทียบค่าตรงๆ · scale = ตัวคูณจากค่าในแถวเป็นหน่วยที่คนกรอก (CTR เก็บ 0.012 กรอก 1.2) */
 export const CREATIVE_RULE_METRICS = [
   { key: "cpa", label: "ต้นทุนต่อการซื้อ (Meta)", kind: "cost", count: "purchases", noun: "การซื้อ", unit: "money", defaultOp: "lte" },
-  // ฟิลด์ leads ของตัวเชื่อม Meta ใช้ messaging_conversation_started_7d เป็นค่าเริ่มต้น
-  // จึงไม่เรียก CPL เพราะทำให้เข้าใจผิดว่าเป็น Instant Form lead
-  { key: "cpl", label: "ต้นทุนต่อการเริ่มสนทนา", kind: "cost", count: "leads", noun: "การเริ่มสนทนา", unit: "money", defaultOp: "lte" },
+  // ฟิลด์ leads ใช้ event ที่เลือกใน connection จึงต้องใช้คำกลาง (รายละเอียด event แสดงบนการ์ด)
+  { key: "cpl", label: "ต้นทุนต่อผลลัพธ์จาก Meta", kind: "cost", count: "leads", noun: "ผลลัพธ์", unit: "money", defaultOp: "lte" },
   { key: "cpc", label: "ต้นทุนต่อคลิกทั้งหมด (CPC)", kind: "cost", count: "clicks", noun: "คลิก", unit: "money", defaultOp: "lte" },
   { key: "cpm", label: "ต้นทุนต่อ 1,000 การเห็น (CPM)", kind: "cost", count: "impressions", noun: "การเห็น", per: 1000, unit: "money", defaultOp: "lte" },
   { key: "roas", label: "ROAS จากการซื้อ (Meta)", kind: "ratio", unit: "times", defaultOp: "gte" },
   { key: "ctr", label: "CTR (คลิกทั้งหมด)", kind: "ratio", unit: "pct", scale: 100, defaultOp: "gte" },
-  { key: "frequency", label: "ความถี่", kind: "ratio", unit: "times", defaultOp: "lte" },
+  { key: "frequency", label: "ความถี่เฉลี่ยรายวัน", kind: "ratio", unit: "times", defaultOp: "lte" },
   { key: "purchases", label: "จำนวนการซื้อ", kind: "count", unit: "count", defaultOp: "gte" },
-  { key: "leads", label: "จำนวนการเริ่มสนทนา", kind: "count", unit: "count", defaultOp: "gte" },
+  { key: "leads", label: "จำนวนผลลัพธ์จาก Meta", kind: "count", unit: "count", defaultOp: "gte" },
   { key: "spend", label: "ค่าแอด", kind: "money", unit: "money", defaultOp: "lte" },
 ];
 const METRIC = Object.fromEntries(CREATIVE_RULE_METRICS.map((m) => [m.key, m]));
@@ -90,7 +89,7 @@ export const ruleTitle = (rule) => {
   const name = String(rule?.name ?? "").trim();
   if (!name || GENERIC_RULE_NAMES.test(name)) return canonicalRuleLabel(rule);
   const normalized = name.replace(/\broas\b/ig, "ROAS").replace(/\bctr\b/ig, "CTR");
-  return rule?.metric === "cpl" ? normalized.replace(/\bcpl\b/ig, "ต้นทุนต่อการเริ่มสนทนา") : normalized;
+  return rule?.metric === "cpl" ? normalized.replace(/\bcpl\b/ig, "ต้นทุนต่อผลลัพธ์จาก Meta") : normalized;
 };
 
 export function describeRule(rule) {
@@ -104,6 +103,9 @@ export function evaluateCreativeRule(row, rule) {
   const m = METRIC[rule?.metric];
   if (!m || rule.value == null) return { status: "na", actual: null, text: "กฎยังไม่ใส่ค่า" };
   if (rule.brandId && rule.brandId !== "all" && row.brandId !== rule.brandId) return { status: "na", actual: null, text: "กฎนี้ใช้กับแบรนด์อื่น" };
+  if (["money", "cost"].includes(m.kind) && row.currency && row.currency !== "THB") {
+    return { status: "nodata", actual: null, text: `กฎนี้ตั้งเป็นบาท แต่บัญชีใช้ ${row.currency}` };
+  }
   const spend = row.spend ?? 0;
   if (rule.minSpend > 0 && spend < rule.minSpend) {
     return { status: "pending", actual: null, text: `ใช้ไป ${fmtMoney(spend)} ยังไม่ถึงขั้นต่ำ ${fmtMoney(rule.minSpend)}` };

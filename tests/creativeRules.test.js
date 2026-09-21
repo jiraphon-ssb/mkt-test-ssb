@@ -1,4 +1,4 @@
-/* กฎคัดครีเอทีฟ: ค่าแอดที่ใช้ไป เทียบกับผลที่ได้ (การซื้อ/การเริ่มสนทนา/คลิก ฯลฯ) ตามเกณฑ์ที่ทีมตั้ง */
+/* กฎคัดครีเอทีฟ: ค่าแอดที่ใช้ไป เทียบกับผลที่ได้ (การซื้อ/ผลลัพธ์จาก Meta/คลิก ฯลฯ) ตามเกณฑ์ที่ทีมตั้ง */
 import { describe, expect, it } from "vitest";
 import { CREATIVE_RULE_METRICS, parseRuleNumber, incompleteRules, normalizeCreativeRules, evaluateCreativeRule, evaluateCreativeRules, creativeRuleSummary, filterByRuleOutcome, describeRule, ruleTitle } from "../src/modules/marketing/creatives/creativeRules.js";
 
@@ -39,6 +39,9 @@ describe("parseRuleNumber — พิมพ์แบบคนพิมพ์จ�
 });
 
 describe("evaluateCreativeRule", () => {
+  it("กฎหน่วยบาทไม่ตัดสินบัญชีต่างสกุลเงิน", () => {
+    expect(evaluateCreativeRule(row({ currency: "USD" }), rule())).toMatchObject({ status: "nodata", text: "กฎนี้ตั้งเป็นบาท แต่บัญชีใช้ USD" });
+  });
   it("ต้นทุนต่อการซื้อเกินเพดาน = ไม่ผ่าน พร้อมเหตุผลที่มีตัวเลขจริง", () => {
     const r = evaluateCreativeRule(row(), rule());
     expect(r.status).toBe("fail");
@@ -97,7 +100,7 @@ describe("หลายกฎ · สรุป · กรอง", () => {
   });
   it("ชื่อกฎทั่วไปแบบเก่าแสดงชื่อ metric ที่ตรงกับข้อมูล Meta", () => {
     expect(ruleTitle(rule({ name: "คัด roas", metric: "roas" }))).toBe("ROAS จากการซื้อ (Meta)");
-    expect(ruleTitle(rule({ name: "คัด CPL", metric: "cpl" }))).toBe("ต้นทุนต่อการเริ่มสนทนา");
+    expect(ruleTitle(rule({ name: "คัด CPL", metric: "cpl" }))).toBe("ต้นทุนต่อผลลัพธ์จาก Meta");
     expect(ruleTitle(rule({ name: "คัดCTR", metric: "ctr" }))).toBe("CTR (คลิกทั้งหมด)");
     expect(ruleTitle(rule({ name: "ชิ้นชนะสำหรับโปรเดือนนี้", metric: "roas" }))).toBe("ชิ้นชนะสำหรับโปรเดือนนี้");
   });

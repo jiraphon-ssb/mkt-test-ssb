@@ -45,9 +45,16 @@ describe("รูปแบบชิ้นงาน — จาก format ของ
       { creative: "PIC | c", spend: 2000, leads: 40, purchases: null, clicks: 200, impressions: 10000, fatigue: false },
     ];
     expect(formatBreakdown(rows)).toEqual([
-      { format: "video", label: "วิดีโอ", count: 2, spend: 4000, spendShare: 4000 / 6000, leads: 40, cpl: 100, purchases: 4, cpa: 1000, ctr: 150 / 15000, fatigue: 1 },
-      { format: "image", label: "ภาพ", count: 1, spend: 2000, spendShare: 2000 / 6000, leads: 40, cpl: 50, purchases: null, cpa: null, ctr: 0.02, fatigue: 0 },
+      { format: "video", label: "วิดีโอ", count: 2, spend: 4000, spendShare: 4000 / 6000, leads: 40, cpl: 100, resultComparable: true, purchases: 4, cpa: 1000, ctr: 150 / 15000, fatigue: 1 },
+      { format: "image", label: "ภาพ", count: 1, spend: 2000, spendShare: 2000 / 6000, leads: 40, cpl: 50, resultComparable: true, purchases: null, cpa: null, ctr: 0.02, fatigue: 0 },
     ]);
+  });
+  it("ผลลัพธ์คนละ Meta event ห้ามรวมเป็นต้นทุนต่อผลลัพธ์ก้อนเดียว", () => {
+    const [group] = formatBreakdown([
+      { creative: "VDO | message", spend: 1000, leads: 10, resultEvents: ["messaging_conversation_started_7d"] },
+      { creative: "VDO | lead", spend: 1000, leads: 5, resultEvents: ["lead"] },
+    ]);
+    expect(group).toMatchObject({ leads: 15, cpl: null, resultComparable: false });
   });
 });
 

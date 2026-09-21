@@ -1,11 +1,19 @@
 import { META_AD_CREATIVE_FIELDS } from "./metaCreativeContract.js";
 
+/** ความหมายของ action ที่เก็บใน ad_daily_facts.leads — ชื่อใน UI ต้องไม่เผยคีย์ดิบของ Graph API */
+export const META_RESULT_EVENTS = [
+  ["messaging_conversation_started_7d", "การสนทนาผ่านข้อความที่เริ่มต้น"],
+  ["lead", "Lead"],
+  ["onsite_conversion.lead_grouped", "Lead (รวม)"],
+];
+export const metaResultLabel = (event) => META_RESULT_EVENTS.find(([key]) => key === event)?.[1] ?? "ผลลัพธ์จาก Meta";
+
 export const ADS_PROVIDERS = [
   {
     id: "meta", name: "Meta Ads", color: "#1877F2", phase: 1,
     accountPrefix: "act_", accountLabel: "Ad account ID",
     metrics: ["spend", "reach", "impressions", "clicks", "actions", "action_values"],
-    leadEvents: ["messaging_conversation_started_7d", "lead", "onsite_conversion.lead_grouped"],
+    leadEvents: META_RESULT_EVENTS.map(([key]) => key),
     doc: "https://developers.facebook.com/docs/marketing-api/insights",
   },
   {

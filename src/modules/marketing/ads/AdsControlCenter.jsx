@@ -6,7 +6,7 @@ import { apiClient } from "../../../foundation/data/apiClient.js";
 import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { BrandMark } from "./BrandMark.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
-import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, validateAdsConnection } from "./adsConnectorContract.js";
+import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, metaResultLabel, validateAdsConnection } from "./adsConnectorContract.js";
 import { adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
 import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
 import { applyConnectionResult, applyReconciliation, enabledMetaMappings, latestReconcileByConnection, needsPostScopeReconnect } from "./adsConnectionSync.js";
@@ -99,7 +99,7 @@ function Connections({ brands, config, setConfig, toast, isLead }) {
         <label><span>ดึงทุก</span><Dropdown className="dd--block" ariaLabel="ดึงทุก" options={[["1", "1 ชั่วโมง"], ["3", "3 ชั่วโมง"], ["6", "6 ชั่วโมง"]]} value={String(sourceConfig.syncEveryHours)} onChange={(value) => updateSource({ syncEveryHours: Number(value) })} /></label>
         <label><span>ย้อนหลัง</span><Dropdown className="dd--block" ariaLabel="ย้อนหลัง" options={[["30", "30 วัน"], ["90", "90 วัน"], ["180", "180 วัน"]]} value={String(sourceConfig.backfillDays)} onChange={(value) => updateSource({ backfillDays: Number(value) })} /></label>
         <label><span>Attribution</span><Dropdown className="dd--block" ariaLabel="Attribution" options={[["platform_default", "ตามแพลตฟอร์ม"], ["7d_click_1d_view", "7d click / 1d view"], ["1d_click", "1d click"]]} value={sourceConfig.attribution} onChange={(value) => updateSource({ attribution: value })} /></label>
-        <label><span>Lead event</span><Dropdown className="dd--block" ariaLabel="Lead event" options={source.leadEvents.map((event) => [event, event])} value={sourceConfig.leadEvent ?? source.leadEvents[0]} onChange={(value) => updateSource({ leadEvent: value })} /></label>
+        <label><span>ผลลัพธ์ที่ใช้วัด</span><Dropdown className="dd--block" ariaLabel="ผลลัพธ์ที่ใช้วัด" options={source.leadEvents.map((event) => [event, source.id === "meta" ? metaResultLabel(event) : event])} value={sourceConfig.leadEvent ?? source.leadEvents[0]} onChange={(value) => updateSource({ leadEvent: value })} /></label>
       </div></details>
       {!isLead && <div className="acc-callout"><CircleAlert size={17} /><span>หัวหน้าทีมเป็นคนผูกบัญชีกับแบรนด์ · คุณเชื่อม Meta ของตัวเองด้านบนได้ แล้วแจ้งหัวหน้าทีมว่าเชื่อมบัญชีไหนไว้</span></div>}
       <div className="acc-mapping-head"><span>แบรนด์</span><span>{source.accountLabel}</span><span>Timezone / เงิน</span><span>สถานะ</span></div>

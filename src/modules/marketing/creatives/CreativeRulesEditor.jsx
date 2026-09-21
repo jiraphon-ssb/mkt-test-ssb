@@ -18,7 +18,7 @@ export function CreativeRulesEditor({ rules, setRules, brands = [], disabled = f
     <header className="acc-sheet-head"><div><span className="acc-kicker">CREATIVE RULES</span><h2>กฎคัดครีเอทีฟ</h2><p>ตั้งเกณฑ์ว่าค่าแอดที่ใช้ไปคุ้มกับผลหรือไม่ แล้วใช้กรองในหน้า Creative Library · ตัวเลขเป็นของ Meta (การซื้อและ ROAS ตาม attribution ของ Meta)</p></div>
       <button type="button" className="acc-rule-add" onClick={add} disabled={disabled || rules.length >= MAX_CREATIVE_RULES}><Plus size={14} /> เพิ่มกฎ</button></header>
     {rules.length === 0
-      ? <p className="acc-rule-empty">ยังไม่มีกฎ · ตัวอย่าง: ต้นทุนต่อการซื้อไม่เกิน ฿1,000 เมื่อใช้เงินแล้วอย่างน้อย ฿500 · CTR อย่างน้อย 1% · ความถี่ไม่เกิน 3×</p>
+      ? <p className="acc-rule-empty">ยังไม่มีกฎ · ตัวอย่าง: ต้นทุนต่อการซื้อไม่เกิน ฿1,000 เมื่อใช้เงินแล้วอย่างน้อย ฿500 · CTR อย่างน้อย 1% · ความถี่เฉลี่ยรายวันไม่เกิน 3×</p>
       : <ol className="acc-crule-list">{rules.map((rule, i) => {
         const n = i + 1;
         const [preview] = normalizeCreativeRules([rule]);
@@ -40,6 +40,6 @@ export function CreativeRulesEditor({ rules, setRules, brands = [], disabled = f
           <small className={problem ? "acc-crule-incomplete" : undefined} role={problem ? "status" : undefined}>{problem ?? describeRule(preview)}</small>
         </li>;
       })}</ol>}
-    <p className="acc-rule-help">ต้นทุนต่อผล (การซื้อ · การเริ่มสนทนา · คลิกทั้งหมด): ถ้ายังไม่มีผลเลยแต่ใช้เงินเกินเพดานแล้ว นับว่าไม่ผ่าน · ใช้เงินยังไม่ถึงขั้นต่ำ = ยังตัดสินไม่ได้</p>
+    <p className="acc-rule-help">ต้นทุนต่อผล (การซื้อ · ผลลัพธ์ที่ตั้งใน Meta · คลิกทั้งหมด): ถ้ายังไม่มีผลเลยแต่ใช้เงินเกินเพดานแล้ว นับว่าไม่ผ่าน · ใช้เงินยังไม่ถึงขั้นต่ำ = ยังตัดสินไม่ได้</p>
   </section>;
 }

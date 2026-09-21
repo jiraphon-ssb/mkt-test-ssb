@@ -17,12 +17,19 @@ describe("factsToAdCards", () => {
     expect(card).toMatchObject({
       id: "mf_conn-1_2026-09-10_a1", source: "meta", track: "project", status: "measured", brand_id: "teamdee",
       campaign: "Sofa Sale", creative: "Video A", ad_platform: "Meta Ads", provisional: false,
+      connection_id: "conn-1", currency: "THB", result_event: "messaging_conversation_started_7d",
+      result_label: "การสนทนาผ่านข้อความที่เริ่มต้น",
       brief: { channels: ["Meta Ads"], publish_at: null },
       metrics: { spend: 1500.5, impressions: 40000, reach: 30000, clicks: 800, link_clicks: 600, leads: 30, conversions: 30, revenue: null, new_revenue: null },
     });
     const at = new Date(card.metrics.measured_at);
     expect([at.getFullYear(), at.getMonth() + 1, at.getDate()]).toEqual([2026, 9, 10]);   // เที่ยงวันตามเวลาเครื่อง → ตกวันเดียวกันเสมอ
     expect(card.metrics.cpl).toBeCloseTo(50.0167, 3);
+  });
+  it("พกนิยามผลลัพธ์และสกุลเงินจาก connection ไปกับทุกแถว เพื่อไม่ให้ UI เดาความหมายเอง", () => {
+    const [card] = factsToAdCards([fact()], [conn({ currency: "USD", config: { leadEvent: "lead" } })], { today: "2026-09-14" });
+    expect(card).toMatchObject({ currency: "USD", result_event: "lead", result_label: "Lead" });
+    expect(card.metrics).toMatchObject({ result_event: "lead", result_label: "Lead" });
   });
   it("ตัวคำนวณเดิมนับการ์ดจริงได้ (ช่องทาง Meta Ads · ยอดรวมถูก)", () => {
     const cards = factsToAdCards([fact(), fact({ ad_id: "a2", spend: 499.5, leads: 10 })], [conn()], { today: "2026-09-14" });

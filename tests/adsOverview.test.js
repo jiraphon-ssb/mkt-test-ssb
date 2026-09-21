@@ -564,6 +564,34 @@ describe("ครีเอทีฟ — ตัวไหนเวิร์ค / �
     expect(rows[0].roas).toBe(4);
     expect(rows[0].brand).toBe("TEAMDEE");
   });
+  it("ชื่อเหมือนกันแต่ Meta creative id คนละตัว ต้องไม่ถูกรวมเป็นชิ้นเดียว", () => {
+    const asset = (creativeId, adId) => ({ provider: "meta", connectionId: "conn-1", creativeId, adId, name: "ชื่อซ้ำ", media: [] });
+    const rows = adsCreativeRows([
+      { ...shot("a", "ชื่อซ้ำ", 5), creative_data: asset("cr-1", "ad-1") },
+      { ...shot("b", "ชื่อซ้ำ", 20), creative_data: asset("cr-2", "ad-2") },
+    ], RANGE_M, brands);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.key)).size).toBe(2);
+  });
+  it("creative id เดียวกันข้ามหลายวันรวมกัน และพกนิยามผลลัพธ์/สกุลเงินมาถึงหน้า Creative", () => {
+    const asset = { provider: "meta", connectionId: "conn-1", creativeId: "cr-1", adId: "ad-1", name: "ชิ้นจริง", media: [] };
+    const meta = { result_event: "lead", result_label: "Lead", currency: "USD" };
+    const rows = adsCreativeRows([
+      { ...shot("a", "ชื่อวันแรก", 5), ...meta, creative_data: asset },
+      { ...shot("b", "ชื่อวันที่สอง", 20), ...meta, creative_data: asset },
+    ], RANGE_M, brands);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ spend: 4000, resultLabel: "Lead", resultEvents: ["lead"], currency: "USD" });
+  });
+  it("โพสต์เดียวกันที่ถูกใช้ผ่านหลาย Meta creative id ต้องรวมเป็นชิ้นงานเดียว", () => {
+    const asset = (creativeId, adId) => ({ provider: "meta", connectionId: "conn-1", storyId: "page_123", creativeId, adId, name: "โพสต์เดียวกัน", media: [] });
+    const rows = adsCreativeRows([
+      { ...shot("a", "Ad A", 5), creative_data: asset("cr-1", "ad-1") },
+      { ...shot("b", "Ad B", 20), creative_data: asset("cr-2", "ad-2") },
+    ], RANGE_M, brands);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].spend).toBe(4000);
+  });
   it("จำนวนการซื้อรวมรายชิ้นงาน + ต้นทุนต่อการซื้อ · ไม่มีการซื้อ = CPA null · บัญชีไม่วัดการซื้อ = null ไม่ใช่ 0", () => {
     const [row] = adsCreativeRows([shot("a", "ซื้อ", 5, { purchases: 3 }), shot("b", "ซื้อ", 20, { purchases: 1 })], RANGE_M, brands);
     expect(row.purchases).toBe(4);
