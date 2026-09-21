@@ -28,6 +28,7 @@ const MODULE_ELEMENTS = {
   mkt_campaigns: <MarketingModule view="campaigns" />,
   mkt_creatives: <MarketingModule view="creatives" />,
   mkt_sync: <MarketingModule view="sync" />,
+  mkt_billing: <MarketingModule view="billing" />,
 };
 
 export default function AppShell() {

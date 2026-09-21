@@ -70,3 +70,17 @@ describe("ตารางรายเดือน", () => {
     expect(screen.queryByText(/การตัดบัตรรายครั้ง/)).toBeNull();
   });
 });
+
+describe("แท็บ บิล & กระทบยอด ใน AdsSectionTabs", () => {
+  it("team_lead เห็นแท็บ · role อื่นไม่เห็น", async () => {
+    const { AdsSectionTabs } = await import("../src/modules/marketing/ads/AdsSectionTabs.jsx");
+    const tabs = () => render(<MemoryRouter><AdsSectionTabs /></MemoryRouter>);
+    tabs();
+    expect(screen.getByText("บิล & กระทบยอด")).toBeTruthy();
+    cleanup();
+    state.role = "staff";
+    tabs();
+    expect(screen.queryByText("บิล & กระทบยอด")).toBeNull();
+    expect(screen.getByText("ภาพรวม")).toBeTruthy();
+  });
+});
