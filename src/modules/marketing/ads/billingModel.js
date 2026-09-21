@@ -129,3 +129,13 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
 
   return { month, rangeLabel, rows, totals, alerts };
 }
+
+/** รายการบัญชีที่เชื่อม สกัดจาก cards (มี account_id + brand_id ติดมาแล้ว) — ไม่ต้องดึง ad_connections แยก */
+export function connectionsFromCards(cards = []) {
+  const seen = new Map();
+  for (const cardRow of cards) {
+    if (!cardRow?.account_id || seen.has(cardRow.account_id)) continue;
+    seen.set(cardRow.account_id, { external_account_id: cardRow.account_id, brand_id: cardRow.brand_id ?? "", account_name: "" });
+  }
+  return [...seen.values()];
+}

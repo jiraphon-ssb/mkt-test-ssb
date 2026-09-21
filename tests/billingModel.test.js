@@ -87,3 +87,18 @@ describe("บัญชีนอกระบบ + สถานะบัญชี 
     expect(clean.alerts).toEqual([]);
   });
 });
+
+describe("connectionsFromCards", () => {
+  it("สกัดรายการบัญชีที่เชื่อมจาก cards (unique) — ชื่อบัญชีเติมจาก snapshot ตอน build", async () => {
+    const { connectionsFromCards } = await import("../src/modules/marketing/ads/billingModel.js");
+    const list = connectionsFromCards([
+      card("111000111", "A", "05", 1), card("111000111", "B", "06", 2),
+      { ...card("222000222", "C", "05", 3), brand_id: "b_td" },
+      { campaign: "no-account", metrics: { spend: 9 } },
+    ]);
+    expect(list).toEqual([
+      { external_account_id: "111000111", brand_id: "b_jd", account_name: "" },
+      { external_account_id: "222000222", brand_id: "b_td", account_name: "" },
+    ]);
+  });
+});
