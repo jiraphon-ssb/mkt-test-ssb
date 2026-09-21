@@ -40,6 +40,29 @@ describe("CreativeLibraryView", () => {
     expect(screen.getByRole("link", { name: "ตั้งกฎ" }).getAttribute("href")).toBe("/mkt/ads?panel=settings&tab=rules");
   });
 
+  it("มีกฎแต่ยังไม่ใส่ค่าเกณฑ์: แสดงชื่อกฎและสถานะรอค่าเกณฑ์ ไม่บอกว่าไม่มีกฎ", () => {
+    state.settings = { ads_control: { creativeRules: [
+      { id: "r1", name: "คัด ROAS", brandId: "all", metric: "roas", op: "gte", value: null, minSpend: 1000 },
+      { id: "r2", name: "คัด CPL", brandId: "all", metric: "cpl", op: "lte", value: null, minSpend: 1000 },
+    ] } };
+    view();
+    const rules = within(screen.getByRole("region", { name: "กฎคัดครีเอทีฟที่ตั้งไว้" }));
+    expect(rules.getByText("ตั้งไว้ 2 · พร้อมใช้ 0 · รอค่าเกณฑ์ 2")).toBeTruthy();
+    expect(rules.getByText("คัด ROAS")).toBeTruthy();
+    expect(rules.getByText("คัด CPL")).toBeTruthy();
+    expect(rules.getAllByText("รอใส่ค่าเกณฑ์")).toHaveLength(2);
+    expect(screen.queryByText(/ยังไม่มีกฎคัดครีเอทีฟ/)).toBeNull();
+  });
+
+  it("กฎที่พร้อมใช้แสดงบนหน้าและกดจากแถบกฎเพื่อเปิดผลได้", () => {
+    state.settings = { ads_control: { creativeRules: [{ id: "r1", name: "CPA ไม่เกิน 1,000", brandId: "all", metric: "cpa", op: "lte", value: 1000, minSpend: 500 }] } };
+    view();
+    const rules = within(screen.getByRole("region", { name: "กฎคัดครีเอทีฟที่ตั้งไว้" }));
+    fireEvent.click(rules.getByRole("button", { name: /CPA ไม่เกิน 1,000/ }));
+    expect(within(card("ชิ้นแพง")).getByText("ไม่ผ่านกฎ")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "ผลตามกฎ" })).toBeTruthy();
+  });
+
   it("เลือกกฎ: การ์ดบอกผ่าน/ไม่ผ่านพร้อมเหตุผล · สรุปนับชิ้นและเงินที่ใช้กับชิ้นที่ไม่ผ่าน · กดกรองเฉพาะไม่ผ่าน", () => {
     state.settings = { ads_control: { creativeRules: [{ id: "r1", name: "CPA ไม่เกิน 1,000", brandId: "all", metric: "cpa", op: "lte", value: 1000, minSpend: 500 }] } };
     view();

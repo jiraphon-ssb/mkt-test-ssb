@@ -13,7 +13,7 @@ import { fmtMoney, fmtPct, fmtNum, fmtInt } from "../dash/charts/theme.js";
 import { PlatformIcon } from "../ads/PlatformIcon.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { filterCreativeLibrary, creativeLibrarySummary, formatBreakdown, FORMAT_LABELS } from "./creativeLibrary.js";
-import { creativeRuleSummary, evaluateCreativeRules, filterByRuleOutcome, normalizeCreativeRules, ruleTitle } from "./creativeRules.js";
+import { creativeRuleSummary, describeRule, evaluateCreativeRules, filterByRuleOutcome, normalizeCreativeRules, ruleTitle } from "./creativeRules.js";
 import { CreativePreview } from "./CreativePreview.jsx";
 import { CreativeMedia } from "./CreativeMedia.jsx";
 import { postLinksOf } from "../ads/metaCreativeContract.js";
@@ -47,6 +47,20 @@ function CompareTray({ rows, onRemove, onClear }) {
   return <section className="cl-compare" aria-label="เปรียบเทียบครีเอทีฟ"><header><div><strong>เทียบ {rows.length} ชิ้น</strong><span>ดูบนฐานช่วงเวลาเดียวกัน</span></div><button type="button" onClick={onClear}>ล้างทั้งหมด</button></header><div className="cl-compare-grid">{rows.map((row) => <article key={row.key}><button type="button" aria-label={`เอา ${row.creative} ออกจากการเปรียบเทียบ`} onClick={() => onRemove(row.key)}><X size={14} /></button><strong>{row.creative}</strong><small>{row.brand} · {row.platform}</small><dl><div><dt>ค่าแอด</dt><dd>{metric(row.spend, "money")}</dd></div><div><dt>การซื้อ</dt><dd>{metric(row.purchases, "count")}</dd></div><div><dt>ต่อการซื้อ</dt><dd>{metric(row.cpa, "money")}</dd></div><div><dt>ROAS</dt><dd>{metric(row.roas, "roas")}</dd></div><div><dt>CPL</dt><dd>{metric(row.cpl, "money")}</dd></div><div><dt>CTR</dt><dd>{metric(row.ctr, "pct")}</dd></div></dl></article>)}</div></section>;
 }
 
+function RuleCatalog({ configuredRules, activeRule, onSelect }) {
+  if (!configuredRules.length) return <p className="cl-rule-hint">ยังไม่มีกฎคัดครีเอทีฟ · <Link to="/mkt/ads?panel=settings&tab=rules">ตั้งกฎ</Link> เช่น ต้นทุนต่อการซื้อไม่เกินเท่าไร แล้วกรองชิ้นที่ไม่คุ้มได้จากตัวกรอง "กฎ"</p>;
+  const ready = configuredRules.filter((rule) => rule.value != null);
+  const pending = configuredRules.filter((rule) => rule.value == null);
+  return <section className="cl-rule-catalog" aria-label="กฎคัดครีเอทีฟที่ตั้งไว้">
+    <header><div><strong>กฎคัดครีเอทีฟ</strong><span>ตั้งไว้ {configuredRules.length} · พร้อมใช้ {ready.length}{pending.length ? ` · รอค่าเกณฑ์ ${pending.length}` : ""}</span></div><Link to="/mkt/ads?panel=settings&tab=rules">แก้กฎ</Link></header>
+    <div className="cl-rule-catalog-list">{configuredRules.map((rule) => rule.value == null
+      ? <div key={rule.id} className="cl-rule-pill is-pending"><b>{rule.name || "กฎยังไม่ตั้งชื่อ"}</b><small>รอใส่ค่าเกณฑ์</small></div>
+      : <button key={rule.id} type="button" className={`cl-rule-pill ${activeRule === rule.id ? "is-active" : ""}`} aria-pressed={activeRule === rule.id} onClick={() => onSelect(activeRule === rule.id ? "none" : rule.id)}><b>{ruleTitle(rule)}</b><small>{describeRule(rule)}</small></button>
+    )}</div>
+    {!ready.length && <p>กฎถูกบันทึกแล้ว แต่ยังใช้ตัดสินชิ้นงานไม่ได้จนกว่าจะใส่ค่าเกณฑ์</p>}
+  </section>;
+}
+
 /* ตัวกรองเฉพาะหน้า Creative (อยู่ในลิงก์ ไม่ข้ามหน้า) · ช่วงวันและแบรนด์ใช้ร่วมกับ Overview/แคมเปญ */
 const CREATIVE_FILTERS = {
   platform: { default: "all" }, state: { default: "all", allowed: ["all", "fatigue", "ready", "waiting"] },
@@ -68,7 +82,8 @@ export function CreativeLibraryView() {
   const setSort = (next) => setFilters({ sort: next });
   const setQuery = (next) => setFilters({ q: next });
   const setOutcome = (next) => setFilters({ outcome: next });
-  const rules = useMemo(() => normalizeCreativeRules(data.settings?.ads_control?.creativeRules).filter((rule) => rule.value != null), [data.settings]);
+  const configuredRules = useMemo(() => normalizeCreativeRules(data.settings?.ads_control?.creativeRules), [data.settings]);
+  const rules = useMemo(() => configuredRules.filter((rule) => rule.value != null), [configuredRules]);
   // กฎที่เลือกไว้ถูกลบไปแล้ว → กลับเป็นไม่ใช้กฎ
   const activeRule = ruleId === "all" ? (rules.length ? "all" : "none") : rules.some((rule) => rule.id === ruleId) ? ruleId : "none";
   const [selected, setSelected] = useState([]);
@@ -102,7 +117,7 @@ export function CreativeLibraryView() {
         <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((item) => [item.id, item.name])]} value={v.brandSel} onChange={setBrand} /><Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.platforms.map((item) => [item, item])]} value={platform} onChange={setPlatform} /><Dropdown label="รูปแบบ" options={[["all", "ทุกรูปแบบ"], ...Object.entries(FORMAT_LABELS)]} value={format} onChange={setFormat} /><Dropdown label="สถานะ" options={[["all", "ทั้งหมด"], ["fatigue", "เริ่มล้า"], ["ready", "มีสื่อแล้ว"], ["waiting", "รอสื่อ"]]} value={state} onChange={setState} /><Dropdown label="กฎ" options={[["none", "ไม่ใช้กฎ"], ...(rules.length > 1 ? [["all", "ทุกกฎ"]] : []), ...rules.map((rule) => [rule.id, ruleTitle(rule)])]} value={activeRule} onChange={(next) => setFilters(next === "none" ? { rule: next, outcome: "all" } : { rule: next })} />{activeRule !== "none" && <Dropdown label="ผล" options={[["all", "ทั้งหมด"], ["fail", "ไม่ผ่าน"], ["pass", "ผ่าน"], ["pending", "ยังตัดสินไม่ได้"]]} value={outcome} onChange={setOutcome} />}<Dropdown label="เรียง" options={[["spend", "ค่าแอดสูงสุด"], ["purchases", "การซื้อสูงสุด"], ["cpa", "ต้นทุนต่อการซื้อต่ำสุด"], ["roas", "ROAS สูงสุด"], ["cpl", "CPL ต่ำสุด"], ["ctr", "CTR สูงสุด"], ["frequency", "เห็นซ้ำสูงสุด"]]} value={sort} onChange={setSort} /><label className="cl-search ads-search"><Search size={14} aria-hidden="true" /><input type="search" aria-label="ค้นหาครีเอทีฟ" placeholder="ค้นหาชิ้นงานหรือแคมเปญ" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       </div>
     </section>
-    {!rules.length && <p className="cl-rule-hint">ยังไม่มีกฎคัดครีเอทีฟ · <Link to="/mkt/ads?panel=settings&tab=rules">ตั้งกฎ</Link> เช่น ต้นทุนต่อการซื้อไม่เกินเท่าไร แล้วกรองชิ้นที่ไม่คุ้มได้จากตัวกรอง "กฎ"</p>}
+    <RuleCatalog configuredRules={configuredRules} activeRule={activeRule} onSelect={(next) => setFilters({ rule: next, outcome: "all" })} />
     {v.ruleSummary && <section className="cl-rule-summary" aria-label="ผลตามกฎ"><button type="button" aria-pressed={outcome === "fail"} className="fail" onClick={() => setOutcome(outcome === "fail" ? "all" : "fail")}><span>ไม่ผ่าน</span><b>{v.ruleSummary.fail}</b><small>ค่าแอด {fmtMoney(v.ruleSummary.failSpend)}</small></button><button type="button" aria-pressed={outcome === "pass"} className="pass" onClick={() => setOutcome(outcome === "pass" ? "all" : "pass")}><span>ผ่าน</span><b>{v.ruleSummary.pass}</b></button><button type="button" aria-pressed={outcome === "pending"} onClick={() => setOutcome(outcome === "pending" ? "all" : "pending")}><span>ยังตัดสินไม่ได้</span><b>{v.ruleSummary.pending + v.ruleSummary.nodata}</b><small>{v.ruleSummary.nodata ? `ไม่มีข้อมูล ${v.ruleSummary.nodata}` : "ใช้เงินยังไม่ถึงเกณฑ์"}</small></button>{v.ruleSummary.na > 0 && <div><span>ไม่เข้าข่ายกฎ</span><b>{v.ruleSummary.na}</b><small>กฎของแบรนด์อื่น</small></div>}<Link to="/mkt/ads?panel=settings&tab=rules">แก้กฎ</Link></section>}
     {v.formats.length > 0 && <section className="cl-formats" aria-labelledby="cl-formats-h"><h2 id="cl-formats-h">เทียบตามรูปแบบชิ้นงาน</h2>
       <div className="aw-table-scroll"><table><thead><tr><th>รูปแบบ</th><th>ชิ้น</th><th>ค่าแอด</th><th>สัดส่วน</th><th>CPL (Meta)</th><th>การซื้อ</th><th>ต่อการซื้อ</th><th>CTR</th><th>เริ่มล้า</th></tr></thead>
