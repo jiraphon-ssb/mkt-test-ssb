@@ -60,8 +60,9 @@ describe("ตารางรายเดือน", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "หมายเหตุ" }), { target: { value: "เทียบ statement แล้ว" } });
     fireEvent.click(screen.getByRole("button", { name: "บันทึกผลตรวจ" }));
     await waitFor(() => expect(calls.addReview).toHaveLength(1));
+    // reviewer ไม่ถูกส่งจาก client — RPC ผูกจาก auth.uid() ฝั่ง server (กันปลอมชื่อคนตรวจ)
     expect(calls.addReview[0]).toEqual({ month: "2026-09-01", external_account_id: "111000111",
-      verdict: "noted", statement_amount: 180900, note: "เทียบ statement แล้ว", reviewer: "อาร์ต" });
+      verdict: "noted", statement_amount: 180900, note: "เทียบ statement แล้ว" });
   });
   it("ทุกอย่างปกติ = ไม่มีแถบเตือน · ส่วนการตัดรายครั้งซ่อนเมื่อ charges ว่าง", async () => {
     show();

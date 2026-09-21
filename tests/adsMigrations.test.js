@@ -219,6 +219,9 @@ describe("0011_ad_billing", () => {
     expect(sql).toContain("create or replace function mkt_billing_review_add");
     expect(sql).toContain("security definer");
     expect(sql).toMatch(/if not mkt_is_team_lead\(\) then\s*raise/i);
+    // ชื่อผู้ตรวจต้องมาจาก auth.uid() ฝั่ง server — ห้ามรับจาก payload (ปลอมชื่อในหลักฐาน append-only ได้)
+    expect(sql).not.toContain("p_entry->>'reviewer'");
+    expect(sql).toContain("auth_user_id = auth.uid()");
     const body = sql.slice(sql.indexOf("create or replace function mkt_billing_review_add"));   // เฉพาะตัว RPC — revoke/คอมเมนต์ข้างบนมีคำว่า update โดยชอบ
     expect(body.replace(/--[^\n]*/g, "")).not.toMatch(/\b(update|delete)\s/i);
   });

@@ -53,13 +53,17 @@ create policy charges_read on ad_billing_charges for select to authenticated usi
 revoke update, delete on ad_billing_reviews from anon, authenticated;
 
 -- RPC เขียนผลตรวจ — security definer (ผ่าน RLS ได้) จึงต้องตรวจ team_lead เองในตัว และทำได้แค่ insert
+-- reviewer ผูกจาก auth.uid() ฝั่ง server เสมอ (security-review 22 ก.ย.: รับจาก client = ปลอมชื่อคนตรวจได้
+-- ทำลาย non-repudiation ของหลักฐาน append-only)
 create or replace function mkt_billing_review_add(p_entry jsonb) returns uuid
 language plpgsql security definer set search_path = public as $$
-declare v_id uuid;
+declare v_id uuid; v_reviewer text;
 begin
   if not mkt_is_team_lead() then
     raise exception 'FORBIDDEN';
   end if;
+  select coalesce(nullif(display_name, ''), auth.uid()::text) into v_reviewer
+    from mkt_profile where auth_user_id = auth.uid();
   insert into ad_billing_reviews (month, external_account_id, verdict, statement_amount, note, reviewer)
   values (
     (p_entry->>'month')::date,
@@ -67,7 +71,7 @@ begin
     p_entry->>'verdict',
     nullif(p_entry->>'statement_amount','')::numeric,
     coalesce(p_entry->>'note',''),
-    p_entry->>'reviewer'
+    coalesce(v_reviewer, 'team_lead')
   )
   returning id into v_id;
   return v_id;

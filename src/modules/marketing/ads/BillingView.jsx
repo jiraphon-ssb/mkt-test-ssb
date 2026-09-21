@@ -18,7 +18,7 @@ const shiftMonth = (iso, by) => { const d = new Date(`${iso}T00:00:00`); d.setMo
 const STATUS_TEXT = { match: "ตรงกัน", minor: "ต่างเล็กน้อย", review: "ต้องตรวจ", nostatement: "ยังไม่กรอก", offsystem: "นอกระบบ" };
 const STATUS_TONE = { match: "emerald", minor: "amber", review: "rose", nostatement: "zinc", offsystem: "rose" };
 
-function ConfirmForm({ row, month, reviewer, onSaved }) {
+function ConfirmForm({ row, month, onSaved }) {
   const [statementText, setStatementText] = useState(row.statement != null ? String(row.statement) : "");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -28,10 +28,11 @@ function ConfirmForm({ row, month, reviewer, onSaved }) {
     if (Number.isNaN(statement)) { setError("ยอด statement ต้องเป็นตัวเลข เช่น 180,900"); return; }
     setSaving(true); setError(null);
     try {
+      /* ไม่ส่ง reviewer — RPC ผูกชื่อจาก auth.uid() ฝั่ง server (กันปลอมชื่อคนตรวจ · security-review 22 ก.ย.) */
       await apiClient.ads.addBillingReview({
         month, external_account_id: row.external_account_id,
         verdict: statement == null && note === "" ? "match" : "noted",
-        statement_amount: statement, note, reviewer,
+        statement_amount: statement, note,
       });
       onSaved();
     } catch { setError("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง"); }
@@ -139,7 +140,7 @@ export function BillingView({ month: initialMonth }) {
               {row.campaigns.slice(0, 5).map((c) => <div key={c.name}><span>{c.name}</span><b>{money(c.spend)}</b><small className="zinc">{fmtNum(c.share * 100, 2)}%</small></div>)}
               {row.campaigns.length > 5 && <small className="zinc">อีก {row.campaigns.length - 5} แคมเปญ</small>}
             </div>}
-            <ConfirmForm row={row} month={month} reviewer={user?.name ?? "team_lead"}
+            <ConfirmForm row={row} month={month}
               onSaved={() => { setOpenAccount(null); setReloadKey((k) => k + 1); }} />
           </div>}
         </div>)}

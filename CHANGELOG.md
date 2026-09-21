@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-09-22
+
+### security
+- **RPC ผลตรวจบิลผูกชื่อผู้ตรวจจาก auth.uid() ฝั่ง server** — เดิมรับจาก client ปลอมชื่อในหลักฐาน append-only ได้ (finding จาก /security-review รอบ release · LOW แต่แก้ก่อน tag)
+
 ### changed
 - **ยอด · เป้า · คนทัก ของ JUNTAKARN เปลี่ยนฐานเป็น "Facebook ช่องเดียว"** (เดิมนับทุกช่องแชท = FB + LINE + โทร)
   หน้านี้วัดผลค่าแอด Meta ที่ยิงลงเพจ Facebook ตัวตั้งกับตัวหารต้องมาจากช่องเดียวกัน
