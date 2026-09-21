@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../useMkt.jsx";
-import { change, paceStatus } from "../adsOverview.js";
+import { change } from "../adsOverview.js";
+import { paceFlag, paceTone, trendPaceState } from "./paceEngine.js";
 import { fmtCompact, fmtInt, fmtMoney, fmtPct, fmtNum } from "../dash/charts/theme.js";
 import { Icon } from "../mktIcon.jsx";
 import { PlatformIcon, platformMeta } from "./PlatformIcon.jsx";
@@ -58,7 +59,7 @@ export function SalePipeline({ items, worstKey = null, row = false, title = true
           return (
             <div className="ads-pipe-item aw-metric ads-stage" key={it.key}>
               <div className="aw-metric-head ads-stage-head">
-                <b>{it.label}<InfoTip label={it.label} lines={tip} /></b>
+                <b><span className="ads-stage-name">{it.label}</span><InfoTip label={it.label} lines={tip} /></b>
                 {worstKey === it.key && <span className="ads-stage-worst">หล่นแรงสุด</span>}
               </div>
               <div className="aw-metric-body">
@@ -74,7 +75,7 @@ export function SalePipeline({ items, worstKey = null, row = false, title = true
                   : <span className="zinc">{goal?.state === "nodata" ? "ยังไม่มีข้อมูล" : "ยังไม่ตั้งเป้า"}</span>}
                 {/* ดีขึ้น/แย่ลงเทียบเดือนก่อน (อาร์ตขอ 21 ก.ย. ค่ำ) — ฐานเล็ก/เทียบไม่ได้ = สีจาง ไม่ตะโกน */}
                 <span className={d == null || tiny || good == null ? "ads-muted" : good ? "ads-good" : "ads-over"}>
-                  {d == null ? "เทียบเดือนก่อนไม่ได้" : `${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}%${good == null ? "" : good ? " ดีขึ้น" : " แย่ลง"}${tiny ? " · ฐานเล็ก" : ""}`}
+                  {d == null ? "เทียบเดือนก่อนไม่ได้" : `เทียบเดือนก่อน ${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}%${good == null ? "" : good ? " ดีขึ้น" : " แย่ลง"}${tiny ? " · ฐานเล็ก" : ""}`}
                 </span>
               </div>
             </div>
@@ -166,66 +167,74 @@ function ChannelCardRange({ c }) {
   );
 }
 
-function ChannelCard({ c, monthView = true }) {
+export function ChannelCard({ c, monthView = true }) {    // export ให้เทสระดับหน้าจอเรียกตรงได้
   const [openDetail, setOpenDetail] = useState(false);
-  const st = paceStatus(c.pace);
   const meta = platformMeta(c.key);
   if (!monthView) return <ChannelCardRange c={c} />;
   const d = c.delivery;
+  /* รื้อ 21 ก.ย. ค่ำ (อาร์ตขอ "ทำให้ครบเหมือนที่เคยแก้ๆมา") — ภาษาเดียวกับการ์ดงบ/tile ทั้งหน้า:
+     ตัวเลขใหญ่ ค่าจริง/งบ · หน้าปัด mini · facts แถวเดียว · จังหวะ+คำสถานะจาก engine · ป้ายเฉพาะเมื่อมีเรื่อง */
+  const ratio = c.pace.used != null && c.pace.expected > 0 ? c.pace.used / c.pace.expected : null;
+  const state = trendPaceState({ ratio, direction: "spend", overTarget: c.pace.remaining != null && c.pace.remaining < 0 });
+  const tone = paceTone(state);
+  const flag = paceFlag(state, "spend");
   return (
     <div className="ads-chan-card" style={{ borderTopColor: meta.color }}>
       <div className="ads-chan-head">
         <span className="ads-chan-name"><PlatformIcon channel={c.key} size={15} /><b>{c.key}</b></span>
-        <span className={`ads-badge ads-badge--${st.tone}`}>{st.text}</span>
+        {flag && <span className={`aw-flag aw-flag--${flag.tone}`}>{flag.text}</span>}
       </div>
-      {/* ชั้นนี้ตอบคำถามเดียว: เงินที่จ่ายไปคุ้มไหม — ยอดขาย/เป้าอยู่ชั้นแบรนด์ ไม่ซ้ำกัน
-          ใช้ Bullet chart ตาม charts.csv (Performance vs Target แบบ compact: หลาย KPI เรียงกัน
-          ในที่แคบ) — เกจสงวนไว้ให้การ์ดแบรนด์ซึ่งเป็น "KPI เดี่ยวที่ต้องเน้น" */}
+      {/* สองคอลัมน์แบบ hero (อาร์ตเคาะ 21 ก.ย. ค่ำ): เนื้อหาซ้าย · คอลัมน์ pace ขวาใช้หน้าปัดใหญ่
+          พร้อมประโยคเงินใต้หน้าปัด — เรื่องจังหวะทั้งหมดอยู่ที่เดียว ไม่กระจายเป็นเศษประโยคท้ายการ์ด */}
       <div className="ads-chan-main">
-        <div className="ads-chan-top">
-          <span className="ads-chan-spend mono">
-            ค่าแอด <b>{fmtMoney(c.spend)}</b>
-            {/* งบระดับช่องทางไม่ได้มีใครกรอก — ระบบแบ่งจากงบของแบรนด์ตามสัดส่วนแผนก่อนหน้า จึงต้องบอกให้ชัด */}
-            <span className="ads-muted" title="ระบบแบ่งงบของแบรนด์ให้แต่ละแพลตฟอร์มตามสัดส่วนแผนก่อนหน้า ไม่ใช่งบที่ตั้งรายแพลตฟอร์ม">
-              {" "}จากงบ {c.budget != null ? `${fmtMoney(c.budget)} (แบ่งจากงบแบรนด์)` : "ยังไม่ตั้งงบ"}
+        <div className="aw-card-grid">
+          <div>
+            <span className="ads-chan-num">
+              <b className="aw-metric-num mono">{fmtMoney(c.spend)}{c.budget != null && <small> / {fmtMoney(c.budget)}</small>}</b>
+              {/* งบระดับช่องทางไม่ได้มีใครกรอก — ระบบแบ่งจากงบของแบรนด์ตามสัดส่วนแผนก่อนหน้า */}
+              <InfoTip label={`งบ ${c.key}`} lines={[c.budget != null ? "งบแพลตฟอร์ม = แบ่งจากงบของแบรนด์ตามสัดส่วนแผนก่อนหน้า ไม่ใช่งบที่ตั้งรายแพลตฟอร์ม" : "ยังไม่ตั้งงบแบรนด์ จึงยังแบ่งงบให้แพลตฟอร์มนี้ไม่ได้", c.pace.used != null ? `ใช้ไป ${fmtPct(c.pace.used)} ของงบ` : null]}/>
             </span>
-          </span>
-          <span className="ads-chan-pct mono">
-            <span className="ads-chan-pctads">%Ads <b>{c.pctAds != null ? fmtPct(c.pctAds, 1) : "—"}</b></span>
-            {c.pace.used != null && <> · {fmtPct(c.pace.used)} ของงบ</>}
-          </span>
-        </div>
 
-        {c.budget != null ? (
-          <div className="ads-bullet" role="img"
-            aria-label={`ใช้ไป ${fmtMoney(c.spend)} จากงบ ${fmtMoney(c.budget)} · ควรใช้ ${fmtMoney(c.pace.expectedSpend)} ณ วันนี้`}>
-            {/* ช่วงคุณภาพ: ก่อนขีด = ยังตามจังหวะ · หลังขีด = เร็วกว่าจังหวะ (มีคำกำกับใต้แถบ) */}
-            <span className="ads-bullet-range ads-bullet-range--ok" style={{ width: `${Math.round(c.pace.expected * 100)}%` }} />
-            <span className="ads-bullet-range ads-bullet-range--warn" style={{ left: `${Math.round(c.pace.expected * 100)}%` }} />
-            <i className="ads-bullet-fill" style={{ width: `${Math.min(100, Math.round(c.pace.used * 100))}%`, background: GAUGE_TONE[st.tone] }} />
-            <span className="ads-bullet-marker" style={{ left: `${Math.round(c.pace.expected * 100)}%` }} />
+            {c.budget != null ? (
+              <div className="ads-bullet" role="img"
+                aria-label={`ใช้ไป ${fmtMoney(c.spend)} จากงบ ${fmtMoney(c.budget)} · ควรใช้ ${fmtMoney(c.pace.expectedSpend)} ณ วันนี้`}>
+                {/* ช่วงคุณภาพ: ก่อนขีด = ยังตามจังหวะ · หลังขีด = เร็วกว่าจังหวะ (มีคำกำกับใต้แถบ) */}
+                <span className="ads-bullet-range ads-bullet-range--ok" style={{ width: `${Math.round(c.pace.expected * 100)}%` }} />
+                <span className="ads-bullet-range ads-bullet-range--warn" style={{ left: `${Math.round(c.pace.expected * 100)}%` }} />
+                <i className="ads-bullet-fill" style={{ width: `${Math.min(100, Math.round(c.pace.used * 100))}%`, background: GAUGE_TONE[tone] }} />
+                <span className="ads-bullet-marker" style={{ left: `${Math.round(c.pace.expected * 100)}%` }} />
+              </div>
+            ) : (
+              <div className="empty-row">ยังไม่ตั้งงบช่องทางนี้ — เทียบจังหวะไม่ได้</div>
+            )}
+
+            {c.budget != null && (
+              <dl className="aw-facts">
+                <div><dt>ควรใช้วันนี้</dt><dd>{fmtMoney(c.pace.expectedSpend)}</dd></div>
+                <div><dt>งบคงเหลือ</dt><dd>{c.pace.remaining != null ? fmtMoney(c.pace.remaining) : "—"}</dd></div>
+                <div><dt>คาดใช้สิ้นเดือน</dt><dd>{c.pace.forecast != null ? fmtMoney(c.pace.forecast) : "—"}</dd></div>
+                <div><dt>เฉลี่ย/วัน</dt><dd>{c.pace.average != null ? fmtMoney(c.pace.average) : "—"}</dd></div>
+                <div><dt>เหลือเวลา</dt><dd>{c.pace.daysLeft != null ? `${c.pace.daysLeft} วัน` : "—"}</dd></div>
+                <div><dt>%Ads</dt><dd>{c.pctAds != null ? fmtPct(c.pctAds, 1) : "—"}</dd></div>
+              </dl>
+            )}
+
+            {/* ประโยคเงินอยู่ฝั่งซ้ายใต้ facts (อาร์ต 21 ก.ย. ค่ำ) — เติมที่ว่างให้การ์ดไม่สูงโปร่ง
+                สี bold ตามเนื้อความ ไม่ใช่สถานะรวม (สถานะ ontrack แต่พูดว่า "คาดเกินงบ" แล้วย้อมเขียว = สับสน) */}
+            {c.pace.vsPace != null && <p className="aw-decide aw-decide--left">
+              <b className={c.pace.vsPace > 0 ? "ads-over" : "ads-good"}>
+                {c.pace.vsPace > 0 ? `ใช้เร็วกว่าจังหวะ ${fmtMoney(c.pace.vsPace)}` : `ใช้ช้ากว่าจังหวะ ${fmtMoney(-c.pace.vsPace)}`}</b>
+              <span> · {forecastNote(c.pace)}</span>
+            </p>}
           </div>
-        ) : (
-          <div className="empty-row">ยังไม่ตั้งงบช่องทางนี้ — เทียบจังหวะไม่ได้</div>
-        )}
 
-        {/* บรรทัดเอก: สรุปให้เลยว่าเร็ว/ช้ากว่าจังหวะกี่บาท คนอ่านไม่ต้องลบเลขเอง */}
-        {c.pace.vsPace != null && (
-          <p className="ads-chan-verdict">
-            <b className={c.pace.vsPace > 0 ? "ads-over" : "ads-good"}>
-              {c.pace.vsPace > 0
-                ? <>ใช้เร็วกว่าจังหวะ {fmtMoney(c.pace.vsPace)}</>
-                : <>ใช้ช้ากว่าจังหวะ {fmtMoney(-c.pace.vsPace)}</>}
-            </b>
-            <span className="ads-muted"> · ควรใช้ตอนนี้ {fmtMoney(c.pace.expectedSpend)} · {forecastNote(c.pace)}</span>
-          </p>
-        )}
-
-        <p className="ads-chan-support ads-muted">
-          เหลือ {c.pace.remaining != null ? fmtMoney(Math.abs(c.pace.remaining)) : "—"}
-          {c.pace.remaining != null && c.pace.remaining < 0 ? " (เกินงบ)" : ""} ·
-          เฉลี่ย/วัน {fmtMoney(c.pace.average)} · ผ่านไป {fmtPct(c.pace.expected, 0)} ของเดือน เหลือ {c.pace.daysLeft} วัน
-        </p>
+          {ratio != null && state !== "unknown" && (
+            <div className="aw-hero-side">
+              <PaceGauge width={178} kind="spend" title="จังหวะใช้งบ" caption="ของงบที่ควรใช้วันนี้"
+                pace={{ value: ratio, state, direction: "spend" }}/>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* พับเดียว เปิดทีเดียวเห็นหมด — เดิมแยกสองปุ่ม แต่ละฝั่งได้ความกว้างครึ่งเดียว

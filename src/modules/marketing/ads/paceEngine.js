@@ -104,6 +104,22 @@ export const paceLabel = (state, direction = "higher") => (LABEL[direction] ?? L
 const TONE = { ontrack: "emerald", warn: "amber", bad: "rose", unknown: "zinc" };
 export const paceTone = (state) => TONE[state] ?? "zinc";
 
+/* ป้ายมุมการ์ด (ตระกูลเดียวกับ "หล่นแรงสุด" ของ funnel — อาร์ตขอ 21 ก.ย. ค่ำ)
+   คำป้าย = สิ่งที่ต้องทำ ไม่ใช่คำสถานะ (คำสถานะอยู่ในหน้าปัด/ประโยคอยู่แล้ว ป้ายซ้ำ = ขยะ)
+   ontrack/unknown = null → การ์ดปกติเงียบ ตามกติกา exception-based ของฝั่งซ้าย */
+/** สถานะจากอัตราส่วนที่คิดมาแล้ว (current ÷ expected) — หัวกราฟแนวโน้มใช้ เพราะจังหวะคำนวณจาก series ไม่ใช่ clock
+    เกณฑ์ต้องตรงกับ paceOf: ยอด ≥100% ตามแผน ≥85% เตือน · งบเขตปลอดภัย ≤110% และเกินงบจริงเท่านั้นที่แดง */
+export function trendPaceState({ ratio, direction = "higher", overTarget = false }) {
+  if (ratio == null || !Number.isFinite(ratio)) return "unknown";
+  if (direction === "spend") return overTarget ? "bad" : ratio <= 1.1 ? "ontrack" : "warn";
+  return ratio >= 1 ? "ontrack" : ratio >= 0.85 ? "warn" : "bad";
+}
+
+const FLAG_BAD = { higher: "ต้องเร่ง", spend: "ต้องคุมงบ", rate_higher: "ต้องแก้", rate_lower: "ต้องแก้" };
+export const paceFlag = (state, kind = "higher") =>
+  state === "bad" ? { text: FLAG_BAD[kind] ?? FLAG_BAD.higher, tone: "rose" }
+  : state === "warn" ? { text: "เฝ้าระวัง", tone: "amber" } : null;
+
 /** ป้อนตารางตัดสินใจ 2×2 — เร็ว/ช้า เทียบกับจังหวะที่ควรเป็น · ตัดสินไม่ได้ = null (ห้ามเดาเป็นช้า)
     ฝั่งงบต้องมี "เขตปลอดภัย" ไม่ใช่ตัดที่ 100% เป๊ะ — ใช้เกินแผน 2.57% (TEAMDEE 21 ก.ย.) คือตามแผน
     ถ้าตัดที่ 100% แบรนด์ปกติจะเด้งขึ้นช่อง "ตรวจแคมเปญทันที" ทุกวัน จนคนเลิกเชื่อรายการเตือน

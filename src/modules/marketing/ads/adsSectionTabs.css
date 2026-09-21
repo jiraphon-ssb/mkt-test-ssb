@@ -64,10 +64,8 @@
 .mkt-root .cp-summary .ads-goal { margin-top:4px; }
 .mkt-root .ads-pipe-item .ads-goal { grid-column:1/-1; }
 
-/* การ์ด "ประสิทธิภาพ" ขึ้นก่อน "งบโฆษณา/ค่าแอด" — เน้น ROAS/%Ads ก่อนงบ · คอลัมน์แคบอยู่ซ้าย · จอแคบซ้อนเป็นอันแรก */
-.mkt-root .ads-suite .aw-middle { grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); }
-.mkt-root .ads-suite .aw-middle>.aw-efficiency { order:-1; }
-@media(max-width:1100px){ .mkt-root .ads-suite .aw-middle { grid-template-columns:1fr; } }
+/* รื้อ 21 ก.ย. ค่ำ: .aw-middle เป็นแถบเต็มกว้างซ้อนกัน (งบ → ประสิทธิภาพ) — กฎ 2 คอลัมน์เดิมลบแล้ว
+   ห้ามเพิ่ม override .aw-middle ที่นี่อีก (specificity ชนะไฟล์หลัก ทำให้แก้ adsWorkspace.css แล้วไม่เห็นผล) */
 .ads-section-tabs-wrap { width:100%; margin:0; padding:0; }
 .ads-section-tabs { display:flex; align-items:center; gap:3px; width:max-content; max-width:100%; padding:4px; overflow-x:auto; border:1px solid var(--line); border-radius:9px; background:var(--surface); scrollbar-width:none; }.ads-section-tabs::-webkit-scrollbar{display:none}
 /* สีลิงก์: ต้องใช้ specificity สูงกว่า rule ลิงก์ของแพลตฟอร์ม ไม่งั้นแท็บที่ไม่ active กลายเป็นสีม่วงของลิงก์ทั่วไป */
@@ -84,12 +82,13 @@
 .mkt-root .ads-suite .ads-source-note.ok .ads-source-verdict svg { color:var(--ok-text); }
 .mkt-root .ads-suite .ads-source-note.warn .ads-source-verdict svg,
 .mkt-root .ads-suite .ads-source-note.warn .ads-source-verdict b { color:var(--warn-text); }
-.mkt-root .ads-suite .ads-source-flag { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border:1px solid var(--warn-line,var(--line)); border-radius:999px; background:var(--warn-soft); color:var(--warn-text); }
+/* ข้อความจางธรรมดา ไม่ใช่ pill เหลือง — วันนี้ยังไม่จบคือสภาพปกติทุกวัน ไม่ควรดูเป็นคำเตือน (มินิมอล 21 ก.ย. ค่ำ) */
+.mkt-root .ads-suite .ads-source-flag { display:inline-flex; align-items:center; gap:5px; color:var(--ink-soft); }
 .mkt-root .ads-suite .ads-source-reload { display:inline-flex; align-items:center; gap:5px; margin-left:auto; height:27px; padding:0 11px; border:1px solid var(--line); border-radius:7px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:11px; cursor:pointer; }
 .mkt-root .ads-suite .ads-source-reload:hover { border-color:color-mix(in srgb,var(--ink) 22%,var(--line)); }
 
 /* ป้ายความสดรายแหล่ง — ชื่อแหล่งตัวจาง ค่าตัวเข้ม อ่านเป็นคู่ได้ในสายตาเดียว */
-.mkt-root .ads-suite .ads-source-chips { display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:0; list-style:none; }
+.mkt-root .ads-suite .ads-source-chips { display:flex; flex-wrap:wrap; gap:6px; margin:9px 0 2px; padding:0; list-style:none; }
 .mkt-root .ads-suite .ads-source-chips li { display:flex; align-items:baseline; gap:7px; padding:4px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); }
 .mkt-root .ads-suite .ads-source-chips li>span { color:var(--ink-soft); }
 .mkt-root .ads-suite .ads-source-chips li>b { color:var(--ink); font-weight:650; font-variant-numeric:tabular-nums; }

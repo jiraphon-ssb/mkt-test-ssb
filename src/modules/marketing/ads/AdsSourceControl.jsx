@@ -31,20 +31,21 @@ export function AdsSourceNotice({ ads }) {
   const today = isoDay(new Date());
   const chips = sourceChips({ summary, sales: ads.sales, salesGoals: ads.salesGoals, today });
   const verdict = stripVerdict(chips);
-  /* สามชั้น: สรุปหนึ่งบรรทัด → ป้ายความสดรายแหล่ง → ที่มาของตัวเลขพับเก็บไว้ (เป็นข้อมูลอ้างอิง ไม่ต้องอ่านทุกครั้ง) */
+  /* มินิมอล (อาร์ต 21 ก.ย. ค่ำ): บนแถบเหลือบรรทัดเดียว — สรุป (บอกชื่อแหล่งที่มีปัญหาในตัว) + โหลดใหม่
+     ป้ายรายแหล่งย้ายเข้า fold "ที่มาของตัวเลข" · ธงวันนี้ยังไม่จบเป็นข้อความจาง ไม่ใช่ pill เหลือง (มันคือสภาพปกติทุกวัน) */
   return <section className={`ads-source-note ${verdict.state}`} aria-label="ที่มาของตัวเลข">
     <div className="ads-source-top">
       <p className="ads-source-verdict" role="status"><Database size={14} aria-hidden="true" /><b>{verdict.text}</b></p>
       {summary.provisionalToday && <span className="ads-source-flag"><Clock3 size={13} aria-hidden="true" /> วันนี้ยังไม่สิ้นสุด ยอดยังเปลี่ยนได้</span>}
       <button type="button" className="ads-source-reload" onClick={ads.reload}><RefreshCw size={13} aria-hidden="true" /> โหลดใหม่</button>
     </div>
-    <ul className="ads-source-chips">
-      {chips.map((chip) => <li key={chip.key} className={chip.tone}>
-        <span>{chip.label}</span><b>{chip.value}</b>
-      </li>)}
-    </ul>
     <details className="ads-source-legend">
       <summary>ที่มาของตัวเลข</summary>
+      <ul className="ads-source-chips">
+        {chips.map((chip) => <li key={chip.key} className={chip.tone}>
+          <span>{chip.label}</span><b>{chip.value}</b>
+        </li>)}
+      </ul>
       <dl>
         {SOURCE_LEGEND.map((item) => <div key={item.from}><dt>{item.from}</dt><dd>{item.metrics}</dd></div>)}
         <div><dt>ดึงค่าแอดล่าสุด</dt><dd>{when(summary.lastSuccessAt)}</dd></div>

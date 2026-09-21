@@ -37,10 +37,12 @@ describe("AdsSourceNotice — สามชั้น", () => {
     expect(screen.getByRole("button", { name: /โหลดใหม่/ })).toBeTruthy();
   });
 
-  it("ชั้นที่ 2 ป้ายครบทั้ง 4 แหล่ง · ค่าอ่านเป็นคำ ไม่ได้บอกด้วยสีอย่างเดียว", () => {
+  it("ชั้นที่ 2 ป้ายรายแหล่งย้ายเข้า fold (มินิมอล 21 ก.ย. ค่ำ — สรุปบรรทัดบนบอกแหล่งที่มีปัญหาอยู่แล้ว)", () => {
     show();
     const chips = screen.getAllByRole("listitem");
     expect(chips).toHaveLength(4);
+    expect(chips[0].closest("details")).toBeTruthy();          // อยู่ใน "ที่มาของตัวเลข" ไม่ลอยบนแถบ
+    expect(document.querySelector(".ads-source-top .ads-source-chips")).toBeNull();
     expect(chips.map((chip) => chip.querySelector("span").textContent))
       .toEqual(["ค่าแอด Meta", "ยอดขาย TD · JD · TA", "ยอดขาย JUNTAKARN", "เป้าเดือนนี้"]);
     expect(within(chips[0]).getByText("4 บัญชี · ถึง 18 ก.ย.")).toBeTruthy();

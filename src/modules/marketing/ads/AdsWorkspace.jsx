@@ -7,10 +7,13 @@ import { change, share } from '../adsOverview.js';
 import './adsWorkspace.css';
 import { WorkspaceTrends } from './WorkspaceTrends.jsx';
 import { AdsControlCenter } from './AdsControlCenter.jsx';
-import { GoalLine } from '../ui/GoalLine.jsx';
+import { GoalLine, fmtTarget } from '../ui/GoalLine.jsx';
 import { AdsSourceControl, AdsSourceNotice } from './AdsSourceControl.jsx';
 import { PaceGauge } from './PaceGauge.jsx';
-import { paceLabel, paceReason, paceTone } from './paceEngine.js';
+import { paceFlag, paceLabel, paceReason, paceTone } from './paceEngine.js';
+
+/* ป้ายมุมการ์ด — ระบบเดียวทั้งหน้า (hero · งบ · กล่องตัวชี้วัด) ตระกูลเดียวกับ "หล่นแรงสุด" ของ funnel */
+const Flag = ({ flag }) => flag ? <span className={`aw-flag aw-flag--${flag.tone}`}>{flag.text}</span> : null;
 
 const money = n => n == null ? '—' : fmtMoney(n);
 const pct = n => n == null ? '—' : fmtPct(n, 1);
@@ -30,25 +33,39 @@ function Metric({ name, sub, value, goal, metric, empty, item }) {
   const tone = paceTone(goal?.paceState);
   const d = item ? change(item.value, item.before) : null;
   const good = d == null || d === 0 ? null : (item?.sense ?? (metric === 'pctAds' ? 'lower' : 'higher')) === 'lower' ? d < 0 : d > 0;
+  const flag = empty ? null : paceFlag(goal?.paceState, kind);
   return <div className="aw-metric">
-    <div className="aw-metric-head"><b>{name}</b><small>{sub}</small></div>
+    <div className="aw-metric-head">
+      <div><b>{name}</b><small>{sub}</small></div>
+      {flag && <Flag flag={flag}/>}
+    </div>
     <div className="aw-metric-body">
-      <b className="aw-metric-num">{value}</b>
+      {/* ค่าจริง / เป้า แบบเดียวกับ funnel (อาร์ตเคาะ 21 ก.ย. ค่ำ) — คง ≥/≤ ไว้ ไม่งั้น %Ads ที่เป็นเพดานจะอ่านกลับทาง */}
+      <b className="aw-metric-num">{value}{!empty && goal?.target != null && <small> / {kind === 'rate_lower' ? '≤' : '≥'} {fmtTarget(metric, goal.target)}</small>}</b>
       {!empty && goal?.paceState && <PaceGauge mini width={86} caption="" kind={kind} showValue={false} showState={false}
         pace={{ value: goal.pct, state: goal.paceState, direction: kind }} title={`${name} เทียบเป้า`}/>}
     </div>
+    {/* สองประโยคเต็ม มีประธานครบ (direct-labeling) — เป้าย้ายขึ้นตัวเลขใหญ่แล้ว บรรทัดนี้ไม่พูดซ้ำ */}
     {empty ? <small className="aw-key">{empty}</small> : <div className="aw-metric-foot">
-      <GoalLine metric={metric} goal={goal} targetOnly/>
-      <span className={tone}><b>{pace(goal?.pct)}</b> {paceLabel(goal?.paceState, kind)}</span>
+      <span><span className="zinc">ทำได้ </span><b className={tone}>{pace(goal?.pct)}</b> <span className={tone}>{paceLabel(goal?.paceState, kind)}</span></span>
       <span className={d == null || good == null ? 'ads-muted' : good ? 'ads-good' : 'ads-over'}>
-        {d == null ? 'เทียบเดือนก่อนไม่ได้' : `${d >= 0 ? '▲' : '▼'} ${fmtNum(Math.abs(d), 2)}%${good == null ? '' : good ? ' ดีขึ้น' : ' แย่ลง'}`}
+        {d == null ? 'เทียบเดือนก่อนไม่ได้' : `เทียบเดือนก่อน ${d >= 0 ? '▲' : '▼'} ${fmtNum(Math.abs(d), 2)}%${good == null ? '' : good ? ' ดีขึ้น' : ' แย่ลง'}`}
       </span>
     </div>}
   </div>;
 }
 
-function MiniPace({ label, p, spend = false }) {
-  return <PaceGauge mini width={96} label={label} caption="" pace={p} kind={spend ? 'spend' : 'higher'} title={`จังหวะ${label}`}/>;
+/* การ์ดฝั่งซ้าย = ตัวเลือกแบรนด์ ไม่ใช่แดชบอร์ดย่อ (รื้อ 21 ก.ย. ค่ำ — เดิมหน้าปัด 2 อัน/การ์ด
+   รวม 10 อันในราง 250px การ์ดสูงจนต้องเลื่อนหาแบรนด์ หน้าที่หลักพัง)
+   ยอดพูดเสมอหนึ่งบรรทัด · ค่าแอดพูดเฉพาะเมื่อมีเรื่อง — แบรนด์ที่งบตามแผนไม่ต้องเปลืองบรรทัด */
+function BrandStatus({ pace2 }) {
+  const rev = pace2?.rev, budget = pace2?.budget;
+  const revTone = paceTone(rev?.state);
+  const alert = budget && budget.state !== 'unknown' && budget.state !== 'ontrack';
+  return <>
+    <small className={`aw-brand-line ${revTone}`}>ยอด <b>{pace(rev?.value)}</b> {paceLabel(rev?.state)}</small>
+    {alert && <small className={`aw-brand-line ${paceTone(budget.state)}`}>ค่าแอด {paceLabel(budget.state, 'spend')} · <b>{pace(budget.value)}</b></small>}
+  </>;
 }
 
 /* แถบเป้า (bullet bar) — ขีดคือจังหวะที่ควรถึงวันนี้ ไม่ใช่เส้นตกแต่ง */
@@ -82,10 +99,6 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
   const pipeline = overview ? v.overallPipeline : v.pipelines[picked.id];
   const goals = overview ? v.goals?.overall : v.goals?.byBrand?.[picked?.id];
   const roas = pipeline?.items.find(x => x.key === 'roas')?.value;
-  /* ข้อมูลยังมาไม่ครบ ห้ามสรุปว่า "ยังไม่ได้ตั้งเป้า" — กฎเดียวกับหน้า Sync
-     (เจอตอนรีวิวตัวเอง 21 ก.ย.: 10 วินาทีแรกการ์ดนี้ประกาศว่า 3 แบรนด์ยังไม่ตั้งเป้า ทั้งที่ตั้งครบ) */
-  const loading = real && ads.pilot?.status !== 'ready';
-  const actions = overview ? (v.actions ?? []) : (v.actions ?? []).filter(a => a.brandId === picked.id);
 
   if (new URLSearchParams(search).get('panel') === 'settings') {
     return <AdsControlCenter brands={v.brands} saved={settings?.ads_control} onSave={updateAdsControl} toast={toast}/>;
@@ -116,27 +129,32 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
         <button type="button" className={`aw-brand ${overview ? 'selected' : ''}`} aria-pressed={overview} onClick={() => setSelected(null)}>
           <div><strong>ภาพรวมทุกแบรนด์</strong><span>↗</span></div>
           <b>{money(s.revenue)}</b><small> {revenueLabel}เดือนปัจจุบัน</small>
-          <div className="aw-minirow"><MiniPace label="ยอด" p={v.overallPace?.rev}/><MiniPace label="ค่าแอด" p={v.overallPace?.budget} spend/></div>
+          <Track value={share(s.revenue, s.revTarget)} expected={v.clock?.elapsed} label="ภาพรวม" tone={paceTone(v.overallPace?.rev?.state)}/>
+          <BrandStatus pace2={v.overallPace}/>
         </button>
         {v.brands.map(x => <button key={x.id} type="button" className={`aw-brand ${x.id === picked?.id ? 'selected' : ''}`} aria-pressed={x.id === picked?.id} onClick={() => setSelected(x.id)}>
           <div><BrandMark brand={x}/><strong>{x.name}</strong><span>↗</span></div>
           <div><b>{money(x.revenue)}</b><small>{pace(share(x.revenue, x.revTarget))} ของเป้ารวม</small></div>
           {noSales(x) ? <small className="zinc">{noSales(x)}</small> : <>
-            <div className="aw-minirow"><MiniPace label="ยอด" p={x.pace2?.rev}/><MiniPace label="ค่าแอด" p={x.pace2?.budget} spend/></div>
+            <Track value={share(x.revenue, x.revTarget)} expected={v.clock?.elapsed} label={x.name} tone={paceTone(x.pace2?.rev?.state)}/>
+            <BrandStatus pace2={x.pace2}/>
           </>}
         </button>)}
         <div className="aw-key">ขีดบนแถบ = จังหวะที่ควรถึงวันนี้</div>
       </aside>
 
     <div className="aw-content">
-      <div className="aw-top">
+      <div>
         <section className="aw-hero">
-          <div className="aw-hero-top"><div className="aw-brand-title">{!overview && <BrandMark brand={head}/>}<h2>{head.name}</h2></div></div>
+          <div className="aw-hero-top"><div className="aw-brand-title">{!overview && <BrandMark brand={head}/>}<h2>{head.name}</h2></div><Flag flag={paceFlag(rev?.state)}/></div>
           <div className="aw-hero-grid">
             <div>
               <span className="aw-eyebrow">{revenueLabel}เดือนปัจจุบัน{real ? ' · จากระบบขาย' : ''}</span>
-              <div className="aw-revenue">{money(head.revenue)}</div>
-              <p>{noSales(head) ? <b>{noSales(head)}</b> : <>{revenueLabel === 'ยอดใหม่' ? 'จากเป้ารวม' : 'จากเป้า'} <b>{targetText(head.revTarget)}</b>{head.revTarget != null && <span> · ทำได้ {pace(share(head.revenue, head.revTarget))}</span>}</>}</p>
+              {/* ค่าจริง / เป้า ในตัวเลขใหญ่ (อาร์ตขอ 21 ก.ย. ค่ำ) — แบบเดียวกับการ์ดงบ/tile/แพลตฟอร์ม */}
+              <div className="aw-revenue">{money(head.revenue)}{head.revTarget != null && <small> / {money(head.revTarget)}</small>}</div>
+              <p>{noSales(head) ? <b>{noSales(head)}</b>
+                : head.revTarget == null ? 'ยังไม่ตั้งเป้าเดือนนี้'
+                : <>ทำได้ <b>{pace(share(head.revenue, head.revTarget))}</b> ของเป้า{revenueLabel === 'ยอดใหม่' ? 'รวม' : 'เดือน'}</>}</p>
               <Track value={share(head.revenue, head.revTarget)} expected={v.clock?.elapsed} tone={paceTone(rev?.state)} label="ยอดขายเทียบเป้า"/>
               <dl className="aw-facts">
                 <div><dt>ควรถึงวันนี้</dt><dd>{money(rev?.expectedToDate)}</dd></div>
@@ -147,45 +165,18 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
               {overview && real && s.excludedWaiting?.length > 0 && <p className="aw-key">ไม่รวม {s.excludedWaiting.join(' · ')} (รอเชื่อมแหล่งข้อมูลยอดขาย)</p>}
               {overview && real && s.targetExcluded?.length > 0 && <p className="aw-key">เป้ารวมยังไม่รวม {s.targetExcluded.join(' · ')} (ยังไม่ตั้งเป้าเดือนนี้ในหน้าเป้าหมายของระบบขาย)</p>}
             </div>
-            <PaceGauge pace={rev} width={GAUGE_W}/>
+            {/* คอลัมน์ pace: หน้าปัด + ประโยคตัดสินใจอยู่ด้วยกัน (อาร์ตเคาะ 21 ก.ย. ค่ำ) — คำตอบ "แล้วต้องทำไง" อยู่ติดกับสิ่งที่มันอธิบาย */}
+            <div className="aw-hero-side">
+              <PaceGauge pace={rev} width={GAUGE_W}/>
+              {decide && <p className={`aw-decide ${decide.tone}`}><b>{decide.text}</b>{decide.more && <span>{decide.more}</span>}</p>}
+            </div>
           </div>
-          {decide && <p className={`aw-decide ${decide.tone}`}><b>{decide.text}</b>{decide.more && <span> — {decide.more}</span>}</p>}
         </section>
 
-        <section className="aw-panel aw-actions" aria-labelledby="aw-actions-title">
-          <div className="aw-section-label" id="aw-actions-title">สิ่งที่ต้องทำวันนี้ {!loading && actions.length > 0 && <span>{actions.length}</span>}</div>
-          {loading
-            ? <p className="aw-key">กำลังตรวจข้อมูล…</p>
-            : actions.length === 0
-            ? <p className="aw-key">ยังไม่มีเรื่องที่ต้องลงมือ — ทุกแบรนด์อยู่ในจังหวะที่รับได้</p>
-            : <ul className="aw-action-list">{actions.map(item => <li key={item.key} className={item.level}>
-              <span className={`aw-dot ${item.tone}`} aria-hidden="true" />
-              <span className="aw-action-text"><b>{item.title}</b><small>{item.detail}</small></span>
-              {item.brandId && item.brandId !== picked?.id && <button type="button" onClick={() => setSelected(item.brandId)}>ดูแบรนด์</button>}
-            </li>)}</ul>}
-          {!loading && overview && (v.actionsTotal ?? 0) > actions.length && <p className="aw-key">และอีก {v.actionsTotal - actions.length} เรื่อง — ดูในตารางแบรนด์และหน้า Creative</p>}
-        </section>
       </div>
 
+      {/* ลำดับ: ประสิทธิภาพก่อนงบ (อาร์ตสั่งสลับ 21 ก.ย. ค่ำ) */}
       <div className="aw-middle">
-        <section className="aw-panel">
-          <div className="aw-section-label">{real ? 'งบโฆษณา Meta' : 'งบโฆษณา'} <span className={paceTone(p2?.budget?.state)}>{head.budget == null && real ? 'ยังไม่ตั้งเป้างบ' : paceLabel(p2?.budget?.state, 'spend')}</span></div>
-          <div className="aw-card-grid">
-            <div>
-              <div className="aw-spend">{money(head.spend)} <small>/ {targetText(head.budget)}</small></div>
-                  <Track value={share(head.spend, head.budget)} expected={v.clock?.elapsed} tone={paceTone(p2?.budget?.state)} label="ใช้เงินเทียบงบ"/>
-              <dl className="aw-facts">
-                <div><dt>ควรใช้วันนี้</dt><dd>{money(p2?.budget?.expectedToDate)}</dd></div>
-                <div><dt>งบคงเหลือ</dt><dd>{money(p2?.budget?.remaining)}</dd></div>
-                <div><dt>คาดใช้สิ้นเดือน</dt><dd>{money(p2?.budget?.forecast)}</dd></div>
-                <div><dt>เหลือเวลา</dt><dd>{v.clock?.daysLeft == null ? '—' : `${v.clock.daysLeft} วัน`}</dd></div>
-              </dl>
-            </div>
-            <PaceGauge pace={p2?.budget} kind="spend" title="จังหวะใช้งบ" caption="ของงบที่ควรใช้วันนี้" width={GAUGE_W}/>
-          </div>
-          {p2?.budget?.reason === 'stale' && <p className="aw-key">ค่าแอดมีถึง {v.spendThrough} — ยังตัดสินจังหวะงบไม่ได้</p>}
-        </section>
-
         <section className="aw-panel aw-efficiency">
           <div className="aw-section-label">ประสิทธิภาพ{real && <span className="zinc">คิดจากค่าแอด Meta</span>}</div>
           <div className="aw-metrics">
@@ -198,6 +189,26 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
           </div>
           <details className="aw-formula"><summary>สูตรที่ใช้</summary>{real ? <p>ROAS = ยอดขายจริง ÷ ค่าแอด Meta<br/>%Ads = ค่าแอด Meta ÷ ยอดลูกค้าใหม่</p> : <p>ROAS = ยอดขาย ÷ ค่าแอด<br/>%Ads = ค่าแอด ÷ ยอดขาย</p>}</details>
         </section>
+
+        <section className="aw-panel">
+          <div className="aw-section-label">{real ? 'งบโฆษณา Meta' : 'งบโฆษณา'} {head.budget == null && real
+            ? <span className="zinc">ยังไม่ตั้งเป้างบ</span>
+            : <Flag flag={paceFlag(p2?.budget?.state, 'spend')}/>}</div>
+          <div className="aw-card-grid">
+            <div>
+              <div className="aw-spend">{money(head.spend)} <small>/ {targetText(head.budget)}</small></div>
+              <Track value={share(head.spend, head.budget)} expected={v.clock?.elapsed} tone={paceTone(p2?.budget?.state)} label="ใช้เงินเทียบงบ"/>
+              <dl className="aw-facts">
+                <div><dt>ควรใช้วันนี้</dt><dd>{money(p2?.budget?.expectedToDate)}</dd></div>
+                <div><dt>งบคงเหลือ</dt><dd>{money(p2?.budget?.remaining)}</dd></div>
+                <div><dt>คาดใช้สิ้นเดือน</dt><dd>{money(p2?.budget?.forecast)}</dd></div>
+                <div><dt>เหลือเวลา</dt><dd>{v.clock?.daysLeft == null ? '—' : `${v.clock.daysLeft} วัน`}</dd></div>
+              </dl>
+            </div>
+            <PaceGauge pace={p2?.budget} kind="spend" title="จังหวะใช้งบ" caption="ของงบที่ควรใช้วันนี้" width={GAUGE_W}/>
+          </div>
+          {p2?.budget?.reason === 'stale' && <p className="aw-key">ค่าแอดมีถึง {v.spendThrough} — ยังตัดสินจังหวะงบไม่ได้</p>}
+        </section>
       </div>
 
       <section className="aw-panel aw-journey">
@@ -206,15 +217,16 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
         {real && overview && pipeline?.excluded?.length > 0 && <p className="aw-key">ไม่รวม {pipeline.excluded.join(' · ')} — ระบบขายของแบรนด์นี้มี 2 ขั้น (คนทัก → ยืนยันออเดอร์) ถ้านับรวมอัตราผ่าน Lead จะต่ำกว่าความจริง · ยอดขายและ ROAS ภาพรวมรวมแบรนด์นี้แล้ว</p>}
       </section>
 
-      <section className="aw-panel" aria-labelledby="aw-brands-title">
+      {/* ตารางแบรนด์เป็นของภาพรวม (อาร์ตเคาะ 21 ก.ย. ค่ำ) — ในแบรนด์ใช้ฝั่งซ้ายสลับแบรนด์ ไม่ต้องซ้ำ */}
+      {overview && <section className="aw-panel" aria-labelledby="aw-brands-title">
         <div className="aw-section-label" id="aw-brands-title">แบรนด์ <span>{v.brands.length}</span></div>
         <div className="aw-table-scroll"><table className="aw-comparison aw-brandtable">
           <thead><tr><th>แบรนด์</th><th>{revenueLabel} / เป้า</th><th>จังหวะยอด</th><th>จังหวะงบ</th><th>ROAS</th><th>คาดปิดเดือน</th><th>ควรทำ</th></tr></thead>
           <tbody>
             <tr className={`aw-row ${overview ? 'selected' : ''}`} onClick={() => setSelected(null)}><th><button type="button" onClick={(e) => { e.stopPropagation(); setSelected(null); }}>ภาพรวมทุกแบรนด์</button></th>
               <td>{money(s.revenue)}<small> / {targetText(s.revTarget)}</small></td>
-              <td><Track value={share(s.revenue, s.revTarget)} expected={v.clock?.elapsed} label="จังหวะยอด" tone={paceTone(v.overallPace?.rev?.state)}/><span className={paceTone(v.overallPace?.rev?.state)}>{pace(v.overallPace?.rev?.value)}</span></td>
-              <td><Track value={share(s.spend, s.budget)} expected={v.clock?.elapsed} label="จังหวะงบ" tone={paceTone(v.overallPace?.budget?.state)}/><span className={paceTone(v.overallPace?.budget?.state)}>{pace(v.overallPace?.budget?.value)}</span></td>
+              <td><Track value={share(s.revenue, s.revTarget)} expected={v.clock?.elapsed} label="จังหวะยอด" tone={paceTone(v.overallPace?.rev?.state)}/><span className={paceTone(v.overallPace?.rev?.state)}>{pace(v.overallPace?.rev?.value)} {paceLabel(v.overallPace?.rev?.state)}</span></td>
+              <td><Track value={share(s.spend, s.budget)} expected={v.clock?.elapsed} label="จังหวะงบ" tone={paceTone(v.overallPace?.budget?.state)}/><span className={paceTone(v.overallPace?.budget?.state)}>{pace(v.overallPace?.budget?.value)} {paceLabel(v.overallPace?.budget?.state, 'spend')}</span></td>
               <td>{(() => { const r = v.overallPipeline?.items.find(i => i.key === 'roas')?.value; return r == null ? '—' : `${fmtNum(r, 2)}×`; })()}</td>
               <td>{money(v.overallPace?.rev?.forecast)}</td>
               <td className={v.overallPace?.advice?.tone}>{v.overallPace?.advice?.action}{v.overallPace?.advice?.overBudget && <small> · เกินงบแล้ว</small>}</td></tr>
@@ -223,8 +235,8 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
               <tr key={x.id} className={`aw-row ${x.id === picked?.id ? 'selected' : ''}`} onClick={() => setSelected(x.id)}>
                 <th><button type="button" onClick={(e) => { e.stopPropagation(); setSelected(x.id); }}><BrandMark brand={x}/>{x.name}</button></th>
                 <td>{money(x.revenue)}<small> / {targetText(x.revTarget)}</small></td>
-                <td><Track value={share(x.revenue, x.revTarget)} expected={v.clock?.elapsed} label="จังหวะยอด" tone={paceTone(x.pace2?.rev?.state)}/><span className={paceTone(x.pace2?.rev?.state)}>{pace(x.pace2?.rev?.value)}</span></td>
-                <td><Track value={share(x.spend, x.budget)} expected={v.clock?.elapsed} label="จังหวะงบ" tone={paceTone(x.pace2?.budget?.state)}/><span className={paceTone(x.pace2?.budget?.state)}>{pace(x.pace2?.budget?.value)}</span></td>
+                <td><Track value={share(x.revenue, x.revTarget)} expected={v.clock?.elapsed} label="จังหวะยอด" tone={paceTone(x.pace2?.rev?.state)}/><span className={paceTone(x.pace2?.rev?.state)}>{pace(x.pace2?.rev?.value)} {paceLabel(x.pace2?.rev?.state)}</span></td>
+                <td><Track value={share(x.spend, x.budget)} expected={v.clock?.elapsed} label="จังหวะงบ" tone={paceTone(x.pace2?.budget?.state)}/><span className={paceTone(x.pace2?.budget?.state)}>{pace(x.pace2?.budget?.value)} {paceLabel(x.pace2?.budget?.state, 'spend')}</span></td>
                 <td>{r == null ? '—' : `${fmtNum(r, 2)}×`}</td>
                 <td>{money(x.pace2?.rev?.forecast)}</td>
                 <td className={a?.tone}>{noSales(x) ?? <>{a?.action}{a?.overBudget && <small> · เกินงบแล้ว</small>}</>}</td>
@@ -232,12 +244,10 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
           </tbody>
         </table></div>
         <p className="aw-key">ขีดบนแถบ = จังหวะที่ควรถึงวันนี้ · กดแถวเพื่อดูแบรนด์นั้น</p>
-      </section>
+      </section>}
 
-      <details className="aw-panel aw-trends-fold">
-        <summary><span className="aw-section-label">ตัวชี้วัดและแนวโน้ม</span><small>{head.revChangePct == null ? 'เทียบเดือนก่อนไม่ได้' : `${revenueLabel}${head.revChangePct >= 0 ? 'เพิ่มขึ้น' : 'ลดลง'} ${fmtNum(Math.abs(head.revChangePct), 2)}% จากเดือนก่อน`} · กดเพื่อดูกราฟ</small></summary>
-        <WorkspaceTrends v={v} brandId={overview ? null : picked.id} sales={real ? ads.sales : null}/>
-      </details>
+      {/* กางตลอด (อาร์ตเคาะ 21 ก.ย. ค่ำ) — WorkspaceTrends มีหัวการ์ดของตัวเองอยู่แล้ว ไม่ต้องห่อซ้ำ */}
+      <WorkspaceTrends v={v} brandId={overview ? null : picked.id} sales={real ? ads.sales : null}/>
 
       {!overview && <section className="aw-panel aw-detail">
         <div className="aw-tabs" role="tablist" aria-label="รายละเอียดแบรนด์">

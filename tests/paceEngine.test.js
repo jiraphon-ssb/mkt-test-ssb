@@ -1,7 +1,7 @@
 /* Pace Engine กลาง — สูตรเดียวใช้ทั้ง ยอดขาย · งบ · ผลลัพธ์ (สเปก 2026-09-21 หัวข้อ 5)
    กติกาเหล็ก: ไม่รู้ = "ยังตัดสินใจไม่ได้" ห้ามแปลงเป็น 0 หรือเดาเป็นเขียว/แดง */
 import { describe, expect, it } from "vitest";
-import { monthClock, paceBucket, paceLabel, paceOf, paceTone } from "../src/modules/marketing/ads/paceEngine.js";
+import { monthClock, paceBucket, paceFlag, paceLabel, paceOf, paceTone, trendPaceState } from "../src/modules/marketing/ads/paceEngine.js";
 
 describe("monthClock", () => {
   it("นับวันที่ผ่านไปของเดือน · เดือนสั้นเดือนยาวถูกต้อง", () => {
@@ -82,6 +82,25 @@ describe("ป้ายและโทนสี", () => {
     expect(paceLabel("warn", "spend")).toBe("ใช้เร็วกว่าแผน");
     expect(paceTone("unknown")).toBe("zinc");
     expect(paceTone("ontrack")).toBe("emerald");
+  });
+  it("paceFlag — ป้ายมุมการ์ด: บอกว่าต้องทำอะไร ไม่ซ้ำคำสถานะ · การ์ดปกติเงียบ (exception-based)", () => {
+    expect(paceFlag("bad")).toEqual({ text: "ต้องเร่ง", tone: "rose" });            // ยอดช้า = เร่งยอด
+    expect(paceFlag("bad", "spend")).toEqual({ text: "ต้องคุมงบ", tone: "rose" });  // เกินงบ = คุมงบ
+    expect(paceFlag("bad", "rate_higher")).toEqual({ text: "ต้องแก้", tone: "rose" });
+    expect(paceFlag("bad", "rate_lower")).toEqual({ text: "ต้องแก้", tone: "rose" });
+    expect(paceFlag("warn", "spend")).toEqual({ text: "เฝ้าระวัง", tone: "amber" });
+    expect(paceFlag("warn", "rate_lower")).toEqual({ text: "เฝ้าระวัง", tone: "amber" });
+    expect(paceFlag("ontrack")).toBeNull();
+    expect(paceFlag("unknown", "spend")).toBeNull();
+  });
+  it("trendPaceState — สถานะจากอัตราส่วนที่คิดมาแล้ว (หัวกราฟแนวโน้ม) กฎเดียวกับ paceOf", () => {
+    expect(trendPaceState({ ratio: 1.02 })).toBe("ontrack");
+    expect(trendPaceState({ ratio: 0.9 })).toBe("warn");
+    expect(trendPaceState({ ratio: 0.6 })).toBe("bad");
+    expect(trendPaceState({ ratio: 1.08, direction: "spend" })).toBe("ontrack");     // เขตปลอดภัย ≤110%
+    expect(trendPaceState({ ratio: 1.22, direction: "spend" })).toBe("warn");        // เร็วแต่ยังไม่เกินงบ
+    expect(trendPaceState({ ratio: 1.22, direction: "spend", overTarget: true })).toBe("bad");
+    expect(trendPaceState({ ratio: null })).toBe("unknown");
   });
   it("paceBucket ใช้ป้อนตารางตัดสินใจ 2×2", () => {
     expect(paceBucket({ state: "ontrack", value: 1.2 })).toBe("fast");

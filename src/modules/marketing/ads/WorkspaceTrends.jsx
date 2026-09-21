@@ -8,6 +8,8 @@ import { SALES_TREND_KEYS, SPEND_TREND_KEYS, salesTrendValue } from './salesOver
 import { LEADS_TRACKED_SINCE, metricCoverage } from './salesFacts.js';
 import { SALES_BRAND_IDS } from './syncSources.js';
 import { ADDITIVE_TREND_KEYS, TREND_MODES, canCumulate, cumulativeSeries, targetPaceSeries } from './trendSeries.js';
+import { paceLabel, paceTone, trendPaceState } from './paceEngine.js';
+import { PaceGauge } from './PaceGauge.jsx';
 /* 8 ตัวแรกเป็นแท็บ (เส้นทางขาย: ค่าแอด → ยอดขาย → คนทัก → Lead → ได้ออเดอร์ → ยืนยันออเดอร์) · ที่เหลืออยู่ในเมนู */
 const metrics = [['spend','ค่าแอด'],['revenue','ยอดขาย'],['roas','ROAS'],['inquiry','คนทัก'],['leads','Lead'],['deposits','ได้ออเดอร์'],['orders','ยืนยันออเดอร์'],['cpl','CPL'],['cac','CAC'],['pctAds','%Ads'],['ctr','CTR'],['cpc','CPC'],['cpm','CPM'],['impressions','Impressions'],['frequency','Frequency']];
 const TABS=8;
@@ -114,11 +116,14 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
     // สะสม: พื้นจางใต้เส้นหลัก ให้เห็นว่าเป็นยอดที่พอกขึ้น (เฉพาะไม่แยกกลุ่ม ไม่งั้นพื้นซ้อนกันอ่านไม่ออก)
     return mode==='cumulative'&&!result.splitOn?{...line,fill:'origin',backgroundColor:`${d.color}1f`}:line;
   };
+  /* รื้อ 21 ก.ย. ค่ำ (อาร์ตขอ): เดิมยัดทุกอย่างบรรทัดเดียว "ช่วงเทียบ (17 ส.ค.): ฿284,771.61 · วันนั้น ฿14,453.10" อ่านยาก
+     → ชื่อเส้น + ตัวเลขหลักบรรทัดแรก · "เฉพาะวันนั้น" แยกบรรทัดย่อหน้าใต้ (Chart.js: label คืน array = หลายบรรทัดต่อเส้น) */
   const tooltipLabel=(c)=>{
     const d=c.dataset;
-    const priorDay=d.kind==='compare'&&result.priorDays[c.dataIndex]?` (${dayLabel(result.priorDays[c.dataIndex])})`:'';
-    const daily=d.daily&&d.daily[c.dataIndex]!=null?` · วันนั้น ${format(key,d.daily[c.dataIndex])}`:'';
-    return `${d.label}${priorDay}: ${format(key,c.parsed.y)}${daily}`;
+    const priorDay=d.kind==='compare'&&result.priorDays[c.dataIndex]?` ${dayLabel(result.priorDays[c.dataIndex])}`:'';
+    const main=`${d.label}${priorDay}  ${format(key,c.parsed.y)}`;
+    const daily=d.daily&&d.daily[c.dataIndex]!=null?`      เฉพาะวันนั้น ${format(key,d.daily[c.dataIndex])}`:null;
+    return daily?[main,daily]:main;
   };
   const cumulativeBlocked=chosenMode==='cumulative'&&mode!=='cumulative';
   const modeNote=mode==='cumulative'
@@ -132,11 +137,29 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
     <div className="aw-trend-controls"><div className="aw-tabs">{metrics.slice(0,TABS).map(([k,l])=><button key={k} aria-pressed={key===k} aria-selected={key===k} onClick={()=>setKey(k)}>{l}</button>)}<Dropdown className="aw-tabs-more" ariaLabel="ตัวชี้วัดอื่น" placeholder="ตัวชี้วัดอื่น" options={metrics.slice(TABS)} value={metrics.slice(TABS).some(m=>m[0]===key)?key:null} onChange={setKey} /></div>
       <div className="aw-trend-view"><div className="aw-seg" role="group" aria-label="รูปแบบกราฟ">{TREND_MODES.map(([k,l])=>{const blocked=k==='cumulative'&&!canCumulate(key);return <button key={k} type="button" aria-pressed={mode===k} disabled={blocked} title={blocked?`${label} สะสมไม่ได้`:undefined} onClick={()=>chooseMode(k)}>{l}</button>;})}</div>
       <label title={canSplit?undefined:'ยอดขายจากระบบขายไม่แยกตามแพลตฟอร์มโฆษณา'}><input type="checkbox" checked={split&&canSplit} disabled={!canSplit} onChange={e=>setSplit(e.target.checked)}/>แยก{brandId?'แพลตฟอร์ม':'แบรนด์'}</label></div></div>
-    <div className="aw-trend-total"><b>{format(key,result.current)}</b><span>{result.delta==null?'เทียบไม่ได้':`${result.delta>=0?'+':''}${fmtNum(result.delta, 2)}%`} · {v.compareLabel}</span>{result.target!=null&&<span>เป้าเดือน {format(key,result.target)} · ควรถึงวันนี้ {format(key,result.paceToday)}{result.current!=null&&result.paceToday>0?` · ทำได้ ${fmtPct(result.current/result.paceToday)} ของจังหวะ`:''}</span>}</div>
+    {/* รื้อ 21 ก.ย. ค่ำ (อาร์ตขอ): มีเป้า = ค่าจริง / เป้า ในตัวเลขใหญ่ + หน้าปัด mini + ประโยคจังหวะ — ภาษาเดียวกับ tile ทั้งหน้า */}
+    {(()=>{
+      const ratio=result.target!=null&&result.current!=null&&result.paceToday>0?result.current/result.paceToday:null;
+      const trendKind=key==='spend'?'spend':'higher';
+      const state=trendPaceState({ratio,direction:trendKind,overTarget:key==='spend'&&result.current!=null&&result.current>result.target});
+      const tone=paceTone(state);
+      return <div className="aw-trend-total">
+        <div className="aw-trend-num">
+          <b>{format(key,result.current)}{result.target!=null&&<small> / {format(key,result.target)}</small>}</b>
+          <span>{result.delta==null?'เทียบไม่ได้':`${result.delta>=0?'+':''}${fmtNum(result.delta, 2)}%`} · {v.compareLabel}</span>
+        </div>
+        {ratio!=null&&state!=='unknown'&&<>
+          <PaceGauge mini width={86} caption="" kind={trendKind} showValue={false} showState={false}
+            pace={{value:ratio,state,direction:trendKind}} title={`${label} เทียบจังหวะเป้าเดือน`}/>
+          <span className="aw-trend-pace">ควรถึงวันนี้ {format(key,result.paceToday)} · ทำได้ <b className={tone}>{fmtPct(ratio)}</b> <span className={tone}>{paceLabel(state,trendKind)}</span></span>
+        </>}
+        {result.target!=null&&ratio==null&&<span>เป้าเดือน {format(key,result.target)} · ควรถึงวันนี้ {format(key,result.paceToday)}</span>}
+      </div>;
+    })()}
     {sourceNote&&<p className="aw-key">{sourceNote}</p>}
     {result.current==null&&<p className="aw-key">{emptyNote}</p>}
     {cumulativeBlocked&&<p className="aw-key">{label} สะสมไม่ได้ (Reach นับคนซ้ำข้ามวัน รวมกันแล้วผิด) · แสดงรายวันแทน</p>}
-    <ChartBox type={chartType} height={260} ariaLabel={`${label}${mode==='cumulative'?'สะสม':'รายวัน'}`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(paint)}} options={baseOpts({plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:tooltipLabel}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{precision:COUNT_KEYS.includes(key)?0:undefined,callback:n=>tick(key,n)}}}})}/>
+    <ChartBox type={chartType} height={340} ariaLabel={`${label}${mode==='cumulative'?'สะสม':'รายวัน'}`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(paint)}} options={baseOpts({plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:tooltipLabel}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{precision:COUNT_KEYS.includes(key)?0:undefined,callback:n=>tick(key,n)}}}})}/>
     <p className="aw-key">{openNote}{modeNote}{needsTarget?' · ยังไม่ตั้งเป้าเดือนของตัวนี้ในระบบขาย จึงไม่มีเส้นเป้า':''}</p>
     <details><summary>ดูข้อมูลเป็นตาราง</summary><div className="aw-table-scroll"><table><thead><tr><th>วันที่</th>{result.datasets.map(d=><th key={d.label}>{d.label}{mode==='cumulative'&&d.kind!=='target'?' (สะสม)':''}</th>)}{mode==='cumulative'&&!result.splitOn&&<th>วันนั้น</th>}</tr></thead><tbody>{result.days.map((d,i)=><tr key={d}><th>{new Date(d).toLocaleDateString('th-TH')}</th>{result.datasets.map(s=><td key={s.label}>{format(key,s.data[i])}</td>)}{mode==='cumulative'&&!result.splitOn&&<td>{format(key,result.datasets[0].daily?.[i] ?? null)}</td>}</tr>)}</tbody></table></div></details>
   </section>;

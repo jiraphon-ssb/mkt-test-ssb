@@ -7,7 +7,7 @@ import { applySalesToBrands, applySalesToSummary, combineGoalTargets, goalTarget
 import { FUNNEL_STAGE_KEYS, funnelStagesOf, metricCoverage } from "./salesFacts.js";
 import { GOAL_FIELDS, SALES_BRAND_IDS } from "./syncSources.js";
 import { monthClock, paceOf } from "./paceEngine.js";
-import { brandAdvice, todayActions } from "./overviewActions.js";
+import { brandAdvice } from "./overviewActions.js";
 import { adsCreativeRows, adsDailySeries } from "../adsOverview.js";
 
 export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filters }) {
@@ -154,27 +154,6 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       channels: filteredById.get(brand.id)?.channels ?? [], pace2: paceSet(brand),
     }));
     const overallPace = paceSet({ revenue: summary.revenue, revTarget: summary.revTarget, spend: summary.spend, budget: summary.budget });
-    /* เป้าที่ยังไม่ตั้ง — ดูเฉพาะแบรนด์ที่มีแหล่งยอดขายแล้ว (แบรนด์ที่ยังไม่เชื่อมไม่ใช่เรื่องต้องทำวันนี้) */
-    const goalRowOf = new Map((ads.salesGoals ?? []).filter((goal) => String(goal.month).slice(0, 10) === goalMonth).map((goal) => [goal.brand_id, goal]));
-    const gaps = real ? brandRows.filter((brand) => SALES_BRAND_IDS.includes(brand.id)).map((brand) => {
-      const goal = goalRowOf.get(brand.id);
-      const missing = GOAL_FIELDS.filter(([key]) => {
-        const value = goal?.[key];
-        return !(value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)));
-      }).map(([, label]) => label);
-      return { brandId: brand.id, name: brand.name, missing };
-    }).filter((gap) => gap.missing.length) : [];
-    const creativeAlerts = real ? adsCreativeRows(scoped, range, brands)
-      .filter((row) => row.action === "Stop" || row.action === "Fix")
-      .slice(0, 6)
-      .map((row) => ({ id: row.key, name: row.creative, brand: row.brand, action: row.action, why: row.why, next: row.next, spend: row.spend, tone: row.tone }))
-      : [];
-    const actionList = todayActions({
-      brands: brandRows.map((brand) => ({ id: brand.id, name: brand.name, revPace: brand.pace2.rev, budgetPace: brand.pace2.budget })),
-      goalGaps: gaps, creatives: creativeAlerts,
-    });
-    const actions = actionList.items;
-    const actionsTotal = actionList.total;
 
     return {
       scoped,
@@ -194,8 +173,5 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       clock,
       spendThrough,
       overallPace,
-      goalGaps: gaps,
-      actions,
-      actionsTotal,
     };
 }

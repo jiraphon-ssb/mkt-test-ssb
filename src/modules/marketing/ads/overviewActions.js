@@ -38,32 +38,3 @@ export function brandAdvice({ revPace, budgetPace } = {}) {
     why: `ยอด ${pct(revPace.value)} · งบ ${pct(budgetPace.value)}${overBudget ? " (ใช้เกินงบทั้งเดือนแล้ว)" : ""}`,
   };
 }
-
-/** เรื่องที่ต้องลงมือวันนี้ — แบรนด์ก่อน แล้วเป้าที่ยังไม่ตั้ง แล้วปิดท้ายด้วยแคมเปญ/ครีเอทีฟ (อาร์ตเคาะ 21 ก.ย.)
-    brandQuota = จำนวนช่องสูงสุดที่จังหวะแบรนด์กินได้ — ถ้าไม่จำกัด แบรนด์จะกินครบทุกช่องทุกวัน
-    แล้วเป้าที่ยังไม่ตั้งกับครีเอทีฟที่ต้องแก้จะไม่มีวันโผล่เลย (เจอตอนรีวิวตัวเอง 21 ก.ย.)
-    total = จำนวนเรื่องทั้งหมดก่อนตัด ให้หน้าจอบอกได้ว่ามีอีกกี่เรื่อง */
-export function todayActions({ brands = [], goalGaps = [], creatives = [], limit = 3, brandQuota = 2 } = {}) {
-  const out = [];
-  for (const brand of brands) {
-    const advice = brandAdvice(brand);
-    if (advice.rank < 3) continue;                 // ช่อง "ตามผลใกล้ชิด" กับ "เพิ่มงบได้" ไม่ใช่เรื่องต้องทำวันนี้
-    out.push({ kind: "brand", key: `brand:${brand.id}`, brandId: brand.id, level: advice.level, rank: advice.rank,
-      title: `${brand.name} — ${advice.action}`, detail: advice.why, tone: advice.tone });
-  }
-  out.sort((a, b) => b.rank - a.rank);
-  const rest = [];
-  for (const gap of goalGaps) {
-    if (!gap?.missing?.length) continue;
-    rest.push({ kind: "goal", key: `goal:${gap.brandId}`, brandId: gap.brandId, level: "wait", rank: 0,
-      title: `${gap.name} ยังไม่ได้ตั้งเป้า ${gap.missing.length} ช่อง`, detail: `${gap.missing.length} ช่อง: ${gap.missing.join(" · ")}`, tone: "zinc" });
-  }
-  for (const item of [...creatives].sort((a, b) => (Number(b.spend) || 0) - (Number(a.spend) || 0))) {
-    rest.push({ kind: "creative", key: `creative:${item.id}`, id: item.id, level: item.action === "Stop" ? "bad" : "warn", rank: 0,
-      title: `${item.name} — ${item.action}`, detail: `${item.brand ? `${item.brand} · ` : ""}${item.why}`, tone: item.tone ?? "amber" });
-  }
-  /* แบรนด์กินได้ไม่เกินโควตา ยกเว้นไม่มีเรื่องอื่นเลยก็ให้ใช้ช่องที่เหลือได้ */
-  const head = out.slice(0, Math.max(brandQuota, limit - rest.length));
-  const all = [...head, ...rest];
-  return { items: all.slice(0, limit), total: out.length + rest.length };
-}

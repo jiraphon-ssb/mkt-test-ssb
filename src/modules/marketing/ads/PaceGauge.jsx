@@ -31,8 +31,11 @@ export function PaceGauge({ pace, kind = null, title = "จังหวะทำ
   const [tx1, ty1] = pt(HALF, R - SW / 2 - 1), [tx2, ty2] = pt(HALF, R + SW / 2 + 1);
   const pinY = CY - R - SW / 2 - 4;
 
+  /* มินิซ่อนป้ายใต้วง (0%/200%/คำบรรยาย) แล้ว — viewBox ต้องหดตาม ไม่งั้น SVG จองที่ว่างล่างไว้ 26px
+     กลายเป็นแถบตายมองไม่เห็นดันเนื้อหาข้างล่างหนี (จับได้ตอนรีวิว ui-ux-pro-max: whitespace-balance) */
+  const viewH = mini ? CY + 8 : CY + 26;
   return <div className={`pg ${tone} ${mini ? "pg--mini" : ""}`}>
-    <svg viewBox={`0 0 ${CX * 2} ${CY + 26}`} width={width} role="img"
+    <svg viewBox={`0 0 ${CX * 2} ${viewH}`} width={width} role="img"
       aria-label={`${title} ${text} ${caption} — ${label}${reason ? ` (${reason})` : ""}`}>
       <path className="pg-track left" d={arc(0, HALF, R)} strokeWidth={SW} fill="none" strokeLinecap="round" />
       <path className="pg-track right" d={arc(HALF, 1, R)} strokeWidth={SW} fill="none" strokeLinecap="round" />

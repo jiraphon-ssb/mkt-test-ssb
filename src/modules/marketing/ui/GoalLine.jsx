@@ -4,7 +4,9 @@ import { TARGET_METRICS } from "../adsTargets.js";
 import { fmtInt, fmtMoney, fmtPct, fmtNum } from "../dash/charts/theme.js";
 
 const METRIC = Object.fromEntries(TARGET_METRICS.map((m) => [m.key, m]));
-const fmtTarget = (key, v) => v == null ? "—" : key === "roas" ? `${fmtNum(v, 2)}×` : key === "pctAds" ? fmtPct(v, 1) : key === "cpl" ? fmtMoney(v) : fmtInt(v);
+/* export ให้การ์ดประสิทธิภาพใช้จัดรูป "ค่าจริง / เป้า" ในตัวเลขใหญ่ — ตัวจัดรูปเป้าต้องมีที่เดียว
+   (goalTargetText เดิมลบแล้ว 21 ก.ย. ค่ำ — เป้าย้ายขึ้นไปอยู่ในตัวเลขใหญ่ ไม่มีใครประกอบประโยคเป้าอีก) */
+export const fmtTarget = (key, v) => v == null ? "—" : key === "roas" ? `${fmtNum(v, 2)}×` : key === "pctAds" ? fmtPct(v, 1) : key === "cpl" ? fmtMoney(v) : fmtInt(v);
 const clamp01 = (x) => Math.max(0, Math.min(1, x ?? 0));
 
 export function GoalLine({ metric, goal, compact = false, targetOnly = false }) {

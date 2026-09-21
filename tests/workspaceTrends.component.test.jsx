@@ -112,6 +112,20 @@ describe("WorkspaceTrends — รูปแบบกราฟ เส้น / แ�
     expect(screen.getByText(/แต่ละจุด = ยอดรวมตั้งแต่ต้นช่วงถึงวันนั้น/)).toBeTruthy();
   });
 
+  /* หัวกราฟรื้อ 21 ก.ย. ค่ำ (อาร์ตขอ): มีเป้า = ตัวเลขใหญ่เป็น ค่าจริง / เป้า + หน้าปัด mini + ประโยคจังหวะ
+     ช่วงเทส 1–2 ก.ย. (ก.ย. มี 30 วัน) เป้า 60,000 → ควรถึงวันนี้ 60,000×2/30 = ฿4,000 · ทำได้ 30,000/4,000 = 750% */
+  it("โหมดเดือน+มีเป้า: ค่าจริง/เป้าในตัวเลขใหญ่ · หน้าปัด mini ไม่มีเลขซ้ำ · ประโยคจังหวะครบประธาน", () => {
+    render(<WorkspaceTrends v={{ ...v, monthView: true, summary: { revTarget: 60000 } }} sales={sales} />);
+    mode("สะสม");
+    fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
+    expect(total()).toBe("฿30,000.00 / ฿60,000.00");
+    const box = document.querySelector(".aw-trend-total");
+    expect(box.querySelector(".pg.pg--mini")).toBeTruthy();
+    expect(box.querySelectorAll(".pg .pg-value")).toHaveLength(0);
+    expect(box.textContent).toContain("ควรถึงวันนี้ ฿4,000.00");
+    expect(box.textContent).toContain("ทำได้ 750.00% เหนือแผน");
+  });
+
   it("สะสม ROAS: คิดใหม่จากยอดรวมถึงวันนั้น (30,000 ÷ 1,000) ไม่ใช่เอา ROAS รายวันมาบวก", () => {
     render(<WorkspaceTrends v={v} sales={sales} />);
     mode("สะสม");
