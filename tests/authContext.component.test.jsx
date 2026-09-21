@@ -25,6 +25,9 @@ vi.mock("../src/foundation/data/supabaseClient.js", () => ({
     },
   },
 }));
+/* useRealAuth ถูกคำนวณตอน import จาก VITE_AUTH_MODE — ต้อง stub ก่อน import
+   ไม่งั้นเทสผ่านเฉพาะเครื่องที่ .env ตั้ง supabase แล้วแดงบน CI (เจอจริง run 35557428719) */
+vi.stubEnv("VITE_AUTH_MODE", "supabase");
 const { AuthProvider, useAuth } = await import("../src/foundation/auth/AuthContext.jsx");
 
 afterEach(cleanup);
