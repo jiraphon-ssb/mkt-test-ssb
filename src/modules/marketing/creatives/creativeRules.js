@@ -6,15 +6,17 @@ import { fmtInt, fmtMoney, fmtNum } from "../dash/charts/theme.js";
 /* kind: cost = ค่าแอด ÷ จำนวน (count = ฟิลด์จำนวนที่หาร · ยังไม่มีผลเลยแต่ใช้เงินเกินเพดาน = ไม่ผ่าน)
    ratio / count / money = เทียบค่าตรงๆ · scale = ตัวคูณจากค่าในแถวเป็นหน่วยที่คนกรอก (CTR เก็บ 0.012 กรอก 1.2) */
 export const CREATIVE_RULE_METRICS = [
-  { key: "cpa", label: "ต้นทุนต่อการซื้อ", kind: "cost", count: "purchases", noun: "การซื้อ", unit: "money", defaultOp: "lte" },
-  { key: "cpl", label: "ต้นทุนต่อคนทัก (CPL)", kind: "cost", count: "leads", noun: "คนทัก", unit: "money", defaultOp: "lte" },
-  { key: "cpc", label: "ต้นทุนต่อคลิก (CPC)", kind: "cost", count: "clicks", noun: "คลิก", unit: "money", defaultOp: "lte" },
+  { key: "cpa", label: "ต้นทุนต่อการซื้อ (Meta)", kind: "cost", count: "purchases", noun: "การซื้อ", unit: "money", defaultOp: "lte" },
+  // ฟิลด์ leads ของตัวเชื่อม Meta ใช้ messaging_conversation_started_7d เป็นค่าเริ่มต้น
+  // จึงไม่เรียก CPL เพราะทำให้เข้าใจผิดว่าเป็น Instant Form lead
+  { key: "cpl", label: "ต้นทุนต่อการเริ่มสนทนา", kind: "cost", count: "leads", noun: "การเริ่มสนทนา", unit: "money", defaultOp: "lte" },
+  { key: "cpc", label: "ต้นทุนต่อคลิกทั้งหมด (CPC)", kind: "cost", count: "clicks", noun: "คลิก", unit: "money", defaultOp: "lte" },
   { key: "cpm", label: "ต้นทุนต่อ 1,000 การเห็น (CPM)", kind: "cost", count: "impressions", noun: "การเห็น", per: 1000, unit: "money", defaultOp: "lte" },
-  { key: "roas", label: "ROAS (Meta)", kind: "ratio", unit: "times", defaultOp: "gte" },
-  { key: "ctr", label: "CTR", kind: "ratio", unit: "pct", scale: 100, defaultOp: "gte" },
+  { key: "roas", label: "ROAS จากการซื้อ (Meta)", kind: "ratio", unit: "times", defaultOp: "gte" },
+  { key: "ctr", label: "CTR (คลิกทั้งหมด)", kind: "ratio", unit: "pct", scale: 100, defaultOp: "gte" },
   { key: "frequency", label: "ความถี่", kind: "ratio", unit: "times", defaultOp: "lte" },
   { key: "purchases", label: "จำนวนการซื้อ", kind: "count", unit: "count", defaultOp: "gte" },
-  { key: "leads", label: "จำนวนคนทัก", kind: "count", unit: "count", defaultOp: "gte" },
+  { key: "leads", label: "จำนวนการเริ่มสนทนา", kind: "count", unit: "count", defaultOp: "gte" },
   { key: "spend", label: "ค่าแอด", kind: "money", unit: "money", defaultOp: "lte" },
 ];
 const METRIC = Object.fromEntries(CREATIVE_RULE_METRICS.map((m) => [m.key, m]));
@@ -76,7 +78,20 @@ function actualOf(row, m) {
   return value == null ? null : value * (m.scale ?? 1);
 }
 
-export const ruleTitle = (rule) => rule.name || describeRule(rule);
+const GENERIC_RULE_NAMES = /^(?:คัด\s*)?(?:roas|cpl|ctr|ต้นทุนต่อทัก|ต้นทุนต่อคนทัก)$/i;
+const canonicalRuleLabel = (rule) => {
+  const metric = METRIC[rule?.metric];
+  if (!metric) return "กฎคัดครีเอทีฟ";
+  return metric.label;
+};
+
+/** ชื่อสั้นในตัวกรอง: ชื่อทั่วไปแบบเก่าจะเปลี่ยนเป็นชื่อ metric ของ Meta ที่ระบบดึงจริง */
+export const ruleTitle = (rule) => {
+  const name = String(rule?.name ?? "").trim();
+  if (!name || GENERIC_RULE_NAMES.test(name)) return canonicalRuleLabel(rule);
+  const normalized = name.replace(/\broas\b/ig, "ROAS").replace(/\bctr\b/ig, "CTR");
+  return rule?.metric === "cpl" ? normalized.replace(/\bcpl\b/ig, "ต้นทุนต่อการเริ่มสนทนา") : normalized;
+};
 
 export function describeRule(rule) {
   const m = METRIC[rule.metric];

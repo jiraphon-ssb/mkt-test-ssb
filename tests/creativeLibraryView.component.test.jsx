@@ -111,3 +111,32 @@ describe("CreativeLibraryView", () => {
     expect(shown()).toHaveLength(4);
   });
 });
+
+/* อาร์ตแจ้ง 21 ก.ย. ค่ำ: "ตั้งกฎไว้แล้ว พออยู่ในหน้าครีเอทีฟมันไม่แสดง"
+   เหตุ: ตัวกรองกฎตั้งต้นเป็น "ไม่ใช้กฎ" → การ์ดไม่มีบรรทัดผลกฎเลยจนกว่าจะไปเลือกเองจากดรอปดาวน์ */
+describe("กฎที่ตั้งไว้ต้องทำงานทันทีที่เข้าหน้า", () => {
+  const ready = [
+    { id: "r1", name: "", brandId: "all", metric: "cpa", op: "lte", value: 1000, minSpend: 500 },
+  ];
+  it("มีกฎพร้อมใช้ = การ์ดขึ้นผลกฎทันที ไม่ต้องไปเลือกจากดรอปดาวน์ก่อน", () => {
+    state.settings = { ads_control: { creativeRules: ready } };
+    view();
+    expect(document.querySelectorAll(".cl-card .cl-rule").length).toBeGreaterThan(0);
+    expect(within(card("ชิ้นแพง")).getByText("ไม่ผ่านกฎ")).toBeTruthy();   // 1,500 เกินเพดาน 1,000
+    expect(within(card("ชิ้นคุ้ม")).getByText("ผ่านกฎ")).toBeTruthy();      // 800 อยู่ในเพดาน
+    expect(document.querySelector(".cl-rule-summary")).toBeTruthy();
+  });
+  it("เลือก 'ไม่ใช้กฎ' เองแล้วต้องเคารพ ไม่เด้งกลับมาเปิดเอง", () => {
+    state.settings = { ads_control: { creativeRules: ready } };
+    view("/mkt/creatives?rule=none");
+    expect(document.querySelectorAll(".cl-card .cl-rule")).toHaveLength(0);
+  });
+});
+
+describe("%Ads บนการ์ด (อาร์ตขอ 21 ก.ย. ค่ำ)", () => {
+  it("มีรายได้ = โชว์ %Ads · ไม่มีรายได้ = ขีด ไม่ใช่ศูนย์", () => {
+    view();
+    expect(within(card("ชิ้นแพง")).getByText("%Ads")).toBeTruthy();
+    expect(within(card("ชิ้นแพง")).getByText("%Ads").nextSibling.textContent).toBe("—");   // revenue null
+  });
+});

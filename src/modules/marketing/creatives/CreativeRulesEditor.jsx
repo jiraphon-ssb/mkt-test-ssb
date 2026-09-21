@@ -40,6 +40,6 @@ export function CreativeRulesEditor({ rules, setRules, brands = [], disabled = f
           <small className={problem ? "acc-crule-incomplete" : undefined} role={problem ? "status" : undefined}>{problem ?? describeRule(preview)}</small>
         </li>;
       })}</ol>}
-    <p className="acc-rule-help">ต้นทุนต่อผล (การซื้อ · คนทัก · คลิก): ถ้ายังไม่มีผลเลยแต่ใช้เงินเกินเพดานแล้ว นับว่าไม่ผ่าน · ใช้เงินยังไม่ถึงขั้นต่ำ = ยังตัดสินไม่ได้</p>
+    <p className="acc-rule-help">ต้นทุนต่อผล (การซื้อ · การเริ่มสนทนา · คลิกทั้งหมด): ถ้ายังไม่มีผลเลยแต่ใช้เงินเกินเพดานแล้ว นับว่าไม่ผ่าน · ใช้เงินยังไม่ถึงขั้นต่ำ = ยังตัดสินไม่ได้</p>
   </section>;
 }
