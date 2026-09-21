@@ -49,7 +49,7 @@ describe("AdsControlCenter", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "ชื่อกฎ 1" }), { target: { value: "ซื้อคุ้ม" } });
     fireEvent.change(screen.getByRole("textbox", { name: "ค่าเกณฑ์ กฎ 1" }), { target: { value: "1,000" } });
     fireEvent.change(screen.getByRole("textbox", { name: "ใช้เงินขั้นต่ำ กฎ 1" }), { target: { value: "500" } });
-    expect(screen.getByText("ต้นทุนต่อการซื้อ ไม่เกิน ฿1,000.00 · เมื่อใช้เงินแล้วอย่างน้อย ฿500.00")).toBeTruthy();
+    expect(screen.getByText("ต้นทุนต่อการซื้อ (Meta) ไม่เกิน ฿1,000.00 · เมื่อใช้เงินแล้วอย่างน้อย ฿500.00")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^บันทึก/ }));
     expect(onSave.mock.calls[0][0].creativeRules).toEqual([
       expect.objectContaining({ name: "ซื้อคุ้ม", brandId: "all", metric: "cpa", op: "lte", value: 1000, minSpend: 500 }),
@@ -61,7 +61,7 @@ describe("AdsControlCenter", () => {
     render(<MemoryRouter><AdsControlCenter brands={brands} saved={saved} onSave={() => {}} toast={() => {}} /></MemoryRouter>);
     fireEvent.click(screen.getByRole("button", { name: /3 · กฎ/ }));
     fireEvent.click(screen.getByRole("button", { name: "ตัวชี้วัด กฎ 1" }));
-    fireEvent.click(screen.getByRole("option", { name: "ROAS (Meta)" }));
+    fireEvent.click(screen.getByRole("option", { name: "ROAS จากการซื้อ (Meta)" }));
     expect(screen.getByRole("button", { name: "เงื่อนไข กฎ 1" }).textContent).toMatch(/อย่างน้อย/);
     fireEvent.click(screen.getByRole("button", { name: "ลบกฎ 1" }));
     expect(screen.getByText(/ยังไม่มีกฎ/)).toBeTruthy();

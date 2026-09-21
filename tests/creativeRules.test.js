@@ -1,6 +1,6 @@
-/* กฎคัดครีเอทีฟ: ค่าแอดที่ใช้ไป เทียบกับผลที่ได้ (การซื้อ/คนทัก/คลิก ฯลฯ) ตามเกณฑ์ที่ทีมตั้ง */
+/* กฎคัดครีเอทีฟ: ค่าแอดที่ใช้ไป เทียบกับผลที่ได้ (การซื้อ/การเริ่มสนทนา/คลิก ฯลฯ) ตามเกณฑ์ที่ทีมตั้ง */
 import { describe, expect, it } from "vitest";
-import { CREATIVE_RULE_METRICS, parseRuleNumber, incompleteRules, normalizeCreativeRules, evaluateCreativeRule, evaluateCreativeRules, creativeRuleSummary, filterByRuleOutcome, describeRule } from "../src/modules/marketing/creatives/creativeRules.js";
+import { CREATIVE_RULE_METRICS, parseRuleNumber, incompleteRules, normalizeCreativeRules, evaluateCreativeRule, evaluateCreativeRules, creativeRuleSummary, filterByRuleOutcome, describeRule, ruleTitle } from "../src/modules/marketing/creatives/creativeRules.js";
 
 const row = (patch = {}) => ({ key: "a", brandId: "b_td", spend: 3000, purchases: 2, leads: 10, clicks: 300, impressions: 60000, roas: 4, ctr: 0.005, frequency: 1.8, cpa: 1500, cpl: 300, cpc: 10, ...patch });
 const rule = (patch = {}) => ({ id: "r1", name: "CPA ไม่เกิน 1,000", brandId: "all", metric: "cpa", op: "lte", value: 1000, minSpend: 0, ...patch });
@@ -43,14 +43,14 @@ describe("evaluateCreativeRule", () => {
     const r = evaluateCreativeRule(row(), rule());
     expect(r.status).toBe("fail");
     expect(r.actual).toBe(1500);
-    expect(r.text).toBe("ต้นทุนต่อการซื้อ ฿1,500.00 เกินเพดาน ฿1,000.00");
+    expect(r.text).toBe("ต้นทุนต่อการซื้อ (Meta) ฿1,500.00 เกินเพดาน ฿1,000.00");
   });
   it("อยู่ในเพดาน = ผ่าน · อย่างน้อย (gte) ใช้กับ ROAS/CTR (CTR กรอกเป็น %)", () => {
     expect(evaluateCreativeRule(row({ purchases: 4 }), rule()).status).toBe("pass");
     expect(evaluateCreativeRule(row(), rule({ metric: "roas", op: "gte", value: 3 })).status).toBe("pass");
     const ctr = evaluateCreativeRule(row(), rule({ metric: "ctr", op: "gte", value: 1 }));
     expect(ctr.status).toBe("fail");
-    expect(ctr.text).toBe("CTR 0.50% ต่ำกว่าเกณฑ์ 1.00%");
+    expect(ctr.text).toBe("CTR (คลิกทั้งหมด) 0.50% ต่ำกว่าเกณฑ์ 1.00%");
   });
   it("ใช้เงินเกินเพดานแล้วยังไม่มีการซื้อเลย = ไม่ผ่าน (ไม่ใช่ข้ามเพราะหารไม่ได้)", () => {
     const r = evaluateCreativeRule(row({ purchases: 0, cpa: null, spend: 2500 }), rule());
@@ -93,6 +93,12 @@ describe("หลายกฎ · สรุป · กรอง", () => {
     expect(filterByRuleOutcome(rows, rules, "none", "fail")).toBe(rows);
   });
   it("คำอธิบายกฎอ่านเป็นประโยค", () => {
-    expect(describeRule(rule({ minSpend: 500 }))).toBe("ต้นทุนต่อการซื้อ ไม่เกิน ฿1,000.00 · เมื่อใช้เงินแล้วอย่างน้อย ฿500.00");
+    expect(describeRule(rule({ minSpend: 500 }))).toBe("ต้นทุนต่อการซื้อ (Meta) ไม่เกิน ฿1,000.00 · เมื่อใช้เงินแล้วอย่างน้อย ฿500.00");
+  });
+  it("ชื่อกฎทั่วไปแบบเก่าแสดงชื่อ metric ที่ตรงกับข้อมูล Meta", () => {
+    expect(ruleTitle(rule({ name: "คัด roas", metric: "roas" }))).toBe("ROAS จากการซื้อ (Meta)");
+    expect(ruleTitle(rule({ name: "คัด CPL", metric: "cpl" }))).toBe("ต้นทุนต่อการเริ่มสนทนา");
+    expect(ruleTitle(rule({ name: "คัดCTR", metric: "ctr" }))).toBe("CTR (คลิกทั้งหมด)");
+    expect(ruleTitle(rule({ name: "ชิ้นชนะสำหรับโปรเดือนนี้", metric: "roas" }))).toBe("ชิ้นชนะสำหรับโปรเดือนนี้");
   });
 });
