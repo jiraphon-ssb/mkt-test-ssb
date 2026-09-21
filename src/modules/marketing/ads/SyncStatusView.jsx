@@ -414,6 +414,17 @@ export function SyncStatusView() {
   const syncAll = () => startRun(["facts", "creatives", "sales", "goals"], "all");
   const syncNow = () => startRun(["facts", "creatives"], "ads");
   const syncSales = () => startRun(["sales", "goals"], "sales");
+  /* เก็บ snapshot บัญชีแอดเดี๋ยวนี้ (หน้า บิล & กระทบยอด) — ปกติ ads-cron ทำให้ทุกชั่วโมง
+     ปุ่มนี้ไว้ตอนไม่อยากรอรอบ · โหลดสถานะใหม่หลังเสร็จเพื่อให้แถวในตารางอัปเดตทันที */
+  const snapshotNow = async () => {
+    try {
+      const { accounts } = await apiClient.ads.snapshotAccounts();
+      toast?.(`เก็บ Snapshot บัญชีแอดแล้ว ${accounts} บัญชี`, "ok");
+      reload();
+    } catch (error) {
+      toast?.(adsErrorText(error, "เก็บ Snapshot บัญชีแอดไม่สำเร็จ"), "bad");
+    }
+  };
 
   const progress = syncing ? syncing.phase === "plan" ? "กำลังวางแผนช่วงที่ต้องดึง…" : syncing.phase === "creatives" ? `กำลังดึง Creative ${syncing.done + 1}/${syncing.total} บัญชี…` : `กำลังดึงค่าแอด ${syncing.done}/${syncing.total} ช่วง…`
     : reconciling ? "กำลังตรวจยอดกับ Meta…" : salesBusy ? String(salesBusy).startsWith("backfill") ? `กำลังดึงยอดขายย้อนหลัง ${salesBusy.replace("backfill:", "")} เดือน…` : { check: "กำลังตรวจการเชื่อมต่อระบบขาย…", inventory: "กำลังสำรวจแหล่งข้อมูล…", sync: "กำลังดึงยอดขาย…" }[salesBusy] : null;
@@ -445,6 +456,9 @@ export function SyncStatusView() {
               </button>
               <button type="button" role="menuitem" onClick={syncSales} disabled={busy}>
                 <ShoppingBag size={14} aria-hidden="true" /><span><b>ดึงยอดขายเท่านั้น</b><small>ย้อน 14 วัน ทุกแบรนด์ที่เชื่อมแหล่งแล้ว</small></span>
+              </button>
+              <button type="button" role="menuitem" onClick={snapshotNow} disabled={busy}>
+                <CalendarClock size={14} aria-hidden="true" /><span><b>ดึง Snapshot บัญชีแอด</b><small>เก็บยอดค้าง · สถานะบัญชี · บัญชีนอกระบบ เดี๋ยวนี้ (ปกติเก็บเองทุกชั่วโมง)</small></span>
               </button>
               <p className="sy-menu-group" role="presentation">ระบบขาย</p>
               <button type="button" role="menuitem" onClick={backfillSales} disabled={busy}>

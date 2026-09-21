@@ -8,6 +8,7 @@ import { MemoryRouter } from "react-router-dom";
 const pending = {};
 const factArgs = [];
 /* ผลของ sales-sync รอบเดียวกันมีทั้งยอดขายและเป้า (ระบบขายพี่ทัช + ระบบ TMK) */
+let snapshotResult = { accounts: 8 };
 let salesSyncResult = { written: 42, jk: { written: 14, error: null }, goals: { written: 3, error: null }, jkGoals: { written: 2, error: null } };
 const deferred = (key) => new Promise((resolve, reject) => { pending[key] = { resolve, reject }; });
 vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
@@ -16,13 +17,15 @@ vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   businessFacts: (args) => { factArgs.push(args); return deferred("facts"); }, salesGoals: () => deferred("goals"),
   goalOverrides: () => deferred("goalOverrides"), oauthStatus: () => deferred("oauth"),
   accountSnapshots: () => deferred("snapshots"),
+  snapshotAccounts: async () => snapshotResult,
   salesSync: async () => salesSyncResult,
 } } }));
 const auth = { demo: false, user: { role: "team_lead" } };
 vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => auth }));
 vi.mock("../src/modules/marketing/ads/useAdsData.js", () => ({ loadPilotFacts: () => Promise.resolve() }));
 const brands = [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jt", name: "JUNTAKARN" }];
-vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({ toast: () => {}, data: { brands, settings: { ads_control: {
+const toastRef = { fn: () => {} };
+vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({ toast: (...a) => toastRef.fn(...a), data: { brands, settings: { ads_control: {
   sources: { meta: { syncEveryHours: 6 } },
   // ค่าเก่าใน settings: บอกว่าดึงล่าสุดเมื่อวาน (ข้อมูลขาด) — ห้ามเอามาสรุประหว่างโหลด
   mappings: { meta: { b_td: { enabled: true, accountId: "act_1", connectionId: "c1", oauthStatus: "connected", lastSuccessAt: "2026-09-16T08:07:00Z" } } },
@@ -30,7 +33,7 @@ vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({ toast: 
 const { SyncStatusView } = await import("../src/modules/marketing/ads/SyncStatusView.jsx");
 
 beforeEach(() => { auth.user = { role: "team_lead" }; factArgs.length = 0; for (const key of Object.keys(pending)) delete pending[key]; vi.useFakeTimers({ now: new Date("2026-09-17T03:00:00Z"), toFake: ["Date"] }); });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); toastRef.fn = () => {}; });
 const show = () => render(<MemoryRouter initialEntries={["/mkt/ads/sync"]}><SyncStatusView /></MemoryRouter>);
 const settle = async (key, value) => { await act(async () => { pending[key].resolve(value); }); };
 // เป้าของหน้านี้ = เป้าจากระบบขาย + ค่าที่คนแก้เอง (merge) → เทสต้องปล่อยทั้งสองก้อน
@@ -103,7 +106,7 @@ describe("SyncStatusView — แถบปุ่มสั่งงาน", () => 
     const menu = screen.getByRole("menu");
     expect([...menu.querySelectorAll(".sy-menu-group")].map((node) => node.textContent)).toEqual(["ดึงแหล่งเดียว", "ระบบขาย", "Meta"]);
     const items = within(menu).getAllByRole("menuitem");
-    expect(items).toHaveLength(6);
+    expect(items).toHaveLength(7);
     for (const item of items) expect(item.querySelector("small")?.textContent?.length).toBeGreaterThan(8);
     expect(within(menu).getByText("ดึงค่าแอด Meta เท่านั้น")).toBeTruthy();
     expect(within(menu).getByText("ดึงยอดขายเท่านั้น")).toBeTruthy();
@@ -278,5 +281,19 @@ describe("แถว Snapshot บัญชีแอด", () => {
     const row = screen.getByText("Snapshot บัญชีแอด").closest(".sy-src");
     expect(within(row).getByText("เฉพาะหัวหน้าทีม")).toBeTruthy();
     expect(pending.snapshots).toBeUndefined();
+  });
+});
+
+
+/* ปุ่ม "ดึง Snapshot บัญชีแอด" ในเมนูงานอื่น (อาร์ตขอ 22 ก.ย.: ไม่อยากรอรอบ cron) */
+describe("งานอื่น · ดึง Snapshot บัญชีแอด", () => {
+  it("กดแล้วเรียก snapshotAccounts · แจ้งจำนวนบัญชี · โหลดสถานะใหม่", async () => {
+    const toastSpy = [];
+    toastRef.fn = (msg, kind) => toastSpy.push([msg, kind]);
+    show();
+    await settle("snapshots", []);
+    fireEvent.click(screen.getByText("งานอื่น"));
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึง Snapshot บัญชีแอด/ })); });
+    expect(toastSpy.some(([msg]) => msg.includes("8"))).toBe(true);
   });
 });

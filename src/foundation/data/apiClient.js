@@ -2492,6 +2492,13 @@ const adsData = {
     return data;
   },
   /* ── บิล & กระทบยอด (spec 2026-09-22) — team_lead เท่านั้น RLS คุมอีกชั้น ── */
+  /** สั่งเก็บ snapshot เดี๋ยวนี้ (ปุ่มในหน้า Sync) — ปกติ ads-cron ทำให้ทุกชั่วโมงอยู่แล้ว */
+  async snapshotAccounts() {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("ads-snapshot", { body: {} });
+    if (error) throw await adsFunctionError(error, "SNAPSHOT_FAILED");
+    return { accounts: data?.accounts ?? 0 };
+  },
   /** snapshot บัญชีแอดทุกตัวที่ token เห็น (ads-cron เขียน) — ฐานของตัวตรวจเงินออกนอกระบบ + ยอดค้าง */
   async accountSnapshots() {
     const db = requireSupabase();
