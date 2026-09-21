@@ -55,13 +55,20 @@ function SupabaseAuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const retriedRef = useRef(false); // กันลูป retry ตอน role query ล้มซ้ำ
+  const sessionKeyRef = useRef(null); // เซสชันล่าสุดที่โหลด role ไปแล้ว — กันยิง mkt_profile ซ้ำ
 
-  async function loadFromSession(session) {
+  async function loadFromSession(session, { force = false } = {}) {
     if (!session?.user) {
+      sessionKeyRef.current = null;
       setUser(null);
       setLoading(false);
       return;
     }
+    /* getSession + INITIAL_SESSION + SIGNED_IN ยิงติดกันด้วยเซสชันเดิม → เดิมโหลด role 3 รอบตอนเปิดแอป
+       (เห็นใน network จริง 21 ก.ย. ค่ำ) — key เดิม = โหลดแล้ว ข้าม · TOKEN_REFRESHED เปลี่ยน access_token = โหลดใหม่ตามปกติ */
+    const key = `${session.user.id}:${session.access_token}`;
+    if (!force && sessionKeyRef.current === key) return;
+    sessionKeyRef.current = key;
     const [roleRes, saleRes, mktRes] = await Promise.all([
       queryUnlessMissing("user_role", () => supabase.from("user_role").select("entity, role, approve_limit").eq("user_id", session.user.id)),
       queryUnlessMissing("sale_user_role", () => supabase.from("sale_user_role").select("role, default_brand").eq("user_id", session.user.id)),
@@ -77,7 +84,7 @@ function SupabaseAuthProvider({ children }) {
       setLoading(false);
       if (!retriedRef.current) {
         retriedRef.current = true;
-        setTimeout(() => loadFromSession(session), 4000);
+        setTimeout(() => loadFromSession(session, { force: true }), 4000);   // key เดิมแต่รอบแรกล้ม — ต้องยิงซ้ำจริง
       }
       return;
     }

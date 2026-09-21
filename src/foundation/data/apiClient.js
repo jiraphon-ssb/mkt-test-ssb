@@ -11,6 +11,7 @@
 
 import { sampleCashflow, buildMonthly, consolidate } from "./sampleData.js";
 import { supabase, requireSupabase } from "./supabaseClient.js";
+import { pageOffsets } from "./paging.js";
 import { AR_MAIN_STAGES, arEligible, buildForecast, buildAging, arKpis } from "./arModel.js";
 /* เดโม marketing — วันต่อ Supabase จริง 2 บรรทัดนี้จะถูกแทนด้วย db.from/db.rpc */
 import { store as mktStore } from "../../modules/marketing/data/DataStore.js";
@@ -2458,20 +2459,22 @@ const adsData = {
     if (error) throw await adsFunctionError(error, "CONNECTIONS_SAVE_FAILED");
     return { connections: data?.connections ?? [], errors: data?.errors ?? [], disabled: data?.disabled ?? [] };
   },
-  /** ยอดรายวันระดับ ad · PostgREST ตัดที่ 1000 แถว/ครั้ง → อ่านเป็นหน้าจนหมด */
+  /** ยอดรายวันระดับ ad · PostgREST ตัดที่ 1000 แถว/ครั้ง
+      21 ก.ย. ค่ำ: เลิกอ่านทีละหน้าเรียงต่อกัน (17 หน้า ≈ 7 วิ) — หน้าแรกขอ count มาด้วย
+      แล้วยิงหน้าที่เหลือพร้อมกันทั้งหมด · ลำดับแถวคงเดิมเพราะต่อผลตามลำดับ offset */
   async facts({ from, to }) {
     const db = requireSupabase();
-    const page = 1000, rows = [];
-    for (let offset = 0; offset < 200000; offset += page) {
-      const { data, error } = await db.from("ad_daily_facts")
-        .select("connection_id,fact_date,level,campaign_id,campaign_name,ad_group_id,ad_group_name,ad_id,ad_name,spend,reach,impressions,clicks,link_clicks,leads,attributed_conversions,attributed_value,attribution_window")
-        .eq("level", "ad").gte("fact_date", from).lte("fact_date", to)
-        .order("fact_date").order("id").range(offset, offset + page - 1);
-      if (error) throw error;
-      rows.push(...(data ?? []));
-      if (!data || data.length < page) break;
-    }
-    return rows;
+    const page = 1000;
+    const query = (offset, opts = {}) => db.from("ad_daily_facts")
+      .select("connection_id,fact_date,level,campaign_id,campaign_name,ad_group_id,ad_group_name,ad_id,ad_name,spend,reach,impressions,clicks,link_clicks,leads,attributed_conversions,attributed_value,attribution_window", opts)
+      .eq("level", "ad").gte("fact_date", from).lte("fact_date", to)
+      .order("fact_date").order("id").range(offset, offset + page - 1);
+    const first = await query(0, { count: "exact" });
+    if (first.error) throw first.error;
+    const rest = await Promise.all(pageOffsets(first.count, page).map((offset) => query(offset)));
+    const failed = rest.find((r) => r.error);
+    if (failed) throw failed.error;
+    return [...(first.data ?? []), ...rest.flatMap((r) => r.data ?? [])];
   },
   /** สั่งตรวจยอด 7/30 วันกับ Meta (team_lead) — ไม่ส่ง connectionId = ทุกบัญชี */
   async reconcile(connectionId = null) {
