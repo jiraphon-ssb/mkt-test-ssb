@@ -306,9 +306,9 @@ export function AdsView() {
   const changeRange = ({ period: nextPeriod, from, to }) => setFilters({ period: nextPeriod, from, to });
 
   return <AdsWorkspace v={v} ads={ads} selected={filters.brand === "all" ? null : filters.brand} onSelect={(id) => setFilters({ brand: id ?? "all" })} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
-    {/* หน้านี้เป็นเดือนปัจจุบันเสมอ — ไม่มีตัวเลือกช่วงและตัวเทียบ (ยังอยู่ในหน้าแคมเปญ/Creative) */}
-    <span className="aw-period">เดือนนี้ · {v.rangeLabel}</span>
+    <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
     <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
     <Dropdown label="ช่องทาง" options={[["all", "ทั้งหมด"], ...v.channelList.map((item) => [item, item])]} value={channel} onChange={setChannel} />
+    <CompareControl period={period} value={compare} onChange={setCompare} />
   </>} />;
 }

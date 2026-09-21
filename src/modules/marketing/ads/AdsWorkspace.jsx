@@ -73,9 +73,103 @@ function Track({ value, expected, label, tone }) {
   return <div className="aw-track" role="img" aria-label={`${label}: ${pct(value)} · จังหวะวันนี้ ${pct(expected)}`}><i className={tone} style={{width:`${Math.max(0,Math.min(100,(value ?? 0)*100))}%`}} />{expected != null && <em style={{left:`${Math.min(100,expected*100)}%`}} />}</div>;
 }
 
+/* ช่วงที่ไม่ใช่เดือนนี้ต้องพูดด้วยภาษาของ “ช่วงที่เลือก” เท่านั้น
+   ไม่มีเป้ารายเดือน หน้าปัด pace หรือคาดปิดเดือน เพราะจะเอายอด 1/7/30 วันไปเทียบเป้าทั้งเดือนไม่ได้ */
+function RangeWorkspace({ v, ads, controls, selected, setSelected, picked, head, ChannelCard, SalePipeline }) {
+  const overview = !picked;
+  const s = v.summary;
+  const real = ads.source === 'meta_pilot';
+  const revenueLabel = v.revenueBasis === 'new' ? 'ยอดใหม่' : 'ยอดรวม';
+  const pipeline = overview ? v.overallPipeline : v.pipelines[picked.id];
+  const roas = pipeline?.items.find(x => x.key === 'roas')?.value;
+  const pctAds = head.pctAds !== undefined ? head.pctAds : share(head.spend, head.revenue);
+  const deltaText = (value) => value == null ? `เทียบ${v.compareLabel}ไม่ได้` : `${value >= 0 ? '▲' : '▼'} ${fmtNum(Math.abs(value), 2)}% เทียบ${v.compareLabel}`;
+  const deltaTone = (value, lower = false) => value == null || value === 0 ? 'zinc' : (lower ? value < 0 : value > 0) ? 'emerald' : 'rose';
+
+  return <main className="aw aw--range">
+    <section className="aw-toolbar" aria-label="ตัวกรองรายงาน">
+      <header className="aw-header"><div><h1>Overview ads</h1><p>{v.rangeLabel} · ยอดขาย ค่าแอด และประสิทธิภาพตามช่วงที่เลือก</p></div>
+        <div className="aw-header-actions"><AdsSourceControl ads={ads}/><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15}/> ตั้งค่า</Link></div></header>
+      <AdsSourceNotice ads={ads}/><div className="aw-controls">{controls}</div>
+    </section>
+
+    <div className="aw-layout">
+      <aside className="aw-brands">
+        <div className="aw-section-label">พอร์ตแบรนด์ <span>{v.brands.length}</span></div>
+        <p>{revenueLabel} · {v.rangeLabel}</p>
+        <button type="button" className={`aw-brand ${overview ? 'selected' : ''}`} aria-pressed={overview} onClick={() => setSelected(null)}>
+          <div><strong>ภาพรวมทุกแบรนด์</strong><span>↗</span></div><b>{money(s.revenue)}</b><small> {revenueLabel}ในช่วงนี้</small>
+          <small className={deltaTone(s.revChangePct)}>{deltaText(s.revChangePct)}</small>
+        </button>
+        {v.brands.map(x => <button key={x.id} type="button" className={`aw-brand ${x.id === picked?.id ? 'selected' : ''}`} aria-pressed={x.id === picked?.id} onClick={() => setSelected(x.id)}>
+          <div><BrandMark brand={x}/><strong>{x.name}</strong><span>↗</span></div>
+          <div><b>{money(x.revenue)}</b><small>{pct(x.revShare)} ของยอดรวม</small></div>
+          <small className={deltaTone(x.revChangePct)}>{deltaText(x.revChangePct)}</small>
+        </button>)}
+      </aside>
+
+      <div className="aw-content">
+        <section className="aw-hero">
+          <div className="aw-hero-top"><div className="aw-brand-title">{!overview && <BrandMark brand={head}/>}<h2>{head.name}</h2></div><span className="aw-status">ช่วงที่เลือก</span></div>
+          <div className="aw-hero-grid">
+            <div>
+              <span className="aw-eyebrow">{revenueLabel} · {v.rangeLabel}{real ? ' · จากระบบขาย' : ''}</span>
+              <div className="aw-revenue">{money(head.revenue)}</div>
+              <p className={deltaTone(head.revChangePct)}>{deltaText(head.revChangePct)}</p>
+              <dl className="aw-facts">
+                <div><dt>{revenueLabel}{v.compareLabel}</dt><dd>{money(head.prevRevenue)}</dd></div>
+                <div><dt>สัดส่วนของยอดรวม</dt><dd>{overview ? '100%' : pct(head.revShare)}</dd></div>
+              </dl>
+            </div>
+            <div className="aw-forecast">
+              <span>ค่าแอดในช่วงนี้</span><h3>{money(head.spend)}</h3>
+              <strong className={deltaTone(head.spendChangePct, true)}>{deltaText(head.spendChangePct)}</strong>
+              <small>ค่าแอด{v.compareLabel} {money(head.prevSpend)}</small>
+            </div>
+          </div>
+        </section>
+
+        <div className="aw-middle aw-range-summary">
+          <section className="aw-panel"><div className="aw-section-label">ประสิทธิภาพ <span>{v.rangeLabel}</span></div>
+            <dl className="aw-facts aw-range-facts">
+              <div><dt>ROAS</dt><dd>{roas == null ? '—' : `${fmtNum(roas, 2)}×`}</dd></div>
+              <div><dt>%Ads</dt><dd>{pct(pctAds)}</dd></div>
+              <div><dt>ยอดขาย</dt><dd>{money(head.revenue)}</dd></div>
+              <div><dt>ค่าแอด</dt><dd>{money(head.spend)}</dd></div>
+            </dl>
+            <details className="aw-formula"><summary>สูตรที่ใช้</summary><p>ROAS = ยอดขาย ÷ ค่าแอด<br/>%Ads = ค่าแอด ÷ ยอดขาย</p></details>
+          </section>
+        </div>
+
+        <section className="aw-panel aw-journey">
+          <div className="aw-section-label">จากความสนใจ สู่ยอดขาย <span>{v.rangeLabel}</span></div>
+          <SalePipeline row items={(pipeline?.items ?? []).slice(0, 4)} worstKey={pipeline?.worstKey}/>
+          {real && overview && pipeline?.excluded?.length > 0 && <p className="aw-key">ไม่รวม {pipeline.excluded.join(' · ')} ใน funnel เพราะระบบขายยังเก็บขั้นไม่ครบ</p>}
+        </section>
+
+        {overview && <section className="aw-panel" aria-labelledby="aw-range-brands-title">
+          <div className="aw-section-label" id="aw-range-brands-title">เทียบแบรนด์ <span>{v.rangeLabel}</span></div>
+          <div className="aw-table-scroll"><table className="aw-comparison aw-brandtable"><thead><tr><th>แบรนด์</th><th>{revenueLabel}</th><th>ค่าแอด</th><th>ROAS</th><th>เทียบ{v.compareLabel}</th></tr></thead>
+            <tbody>{v.brands.map(x => { const r = v.pipelines[x.id]?.items.find(i => i.key === 'roas')?.value; return <tr key={x.id} className="aw-row" onClick={() => setSelected(x.id)}>
+              <th><button type="button" onClick={(e) => { e.stopPropagation(); setSelected(x.id); }}><BrandMark brand={x}/>{x.name}</button></th>
+              <td>{money(x.revenue)}<small>{pct(x.revShare)} ของยอดรวม</small></td><td>{money(x.spend)}</td><td>{r == null ? '—' : `${fmtNum(r, 2)}×`}</td>
+              <td className={deltaTone(x.revChangePct)}>{deltaText(x.revChangePct)}</td></tr>; })}</tbody>
+          </table></div><p className="aw-key">ทุกตัวเลขคำนวณจากช่วงที่เลือก · กดแถวเพื่อดูรายละเอียดแบรนด์</p>
+        </section>}
+
+        <WorkspaceTrends v={v} brandId={overview ? null : picked.id} sales={real ? ads.sales : null}/>
+
+        {!overview && <section className="aw-panel aw-detail"><div className="aw-section-label">แพลตฟอร์ม <span>{head.channels.length}</span></div>
+          <div className="aw-channel-grid">{head.channels.length ? head.channels.map(c => <ChannelCard key={c.key} c={c} monthView={false}/>) : <p>ไม่มีแพลตฟอร์มในตัวกรองนี้</p>}</div>
+        </section>}
+      </div>
+    </div>
+  </main>;
+}
+
 /* หน้า Overview รื้อใหม่ 21 ก.ย. 69 (สเปก docs/superpowers/specs/2026-09-21-overview-redesign.md)
    ตอบ 3 คำถามตามลำดับ: ตอนนี้เป็นยังไง · ต้องระวังอะไร · ควรทำอะไรต่อ
-   หน้านี้เป็น "เดือนปัจจุบัน" เสมอ — ตัวเลือกช่วงเวลาไม่มีผลกับหน้านี้ (อาร์ตเคาะ 21 ก.ย.)
+   เดือนนี้แสดง pace/เป้า · ช่วงอื่นแสดงผลของช่วงและฐานเทียบ โดยไม่ปนเป้ารายเดือน
    กราฟมีที่เดียวคือบล็อกแนวโน้มซึ่งพับไว้ · หน้าปัดมีอันเดียวคือจังหวะยอดขาย */
 export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, settings, updateAdsControl, toast, selected: selectedProp, onSelect }) {
   const { search } = useLocation();
@@ -92,8 +186,8 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
   const targetText = (value) => value == null ? (real ? 'ยังไม่ตั้งเป้า' : '—') : money(value);
 
   const head = picked ?? (v.brands.length ? {
-    id: 'overview', name: 'ภาพรวมทุกแบรนด์', revenue: s.revenue, revTarget: s.revTarget, spend: s.spend, budget: s.budget,
-    revChangePct: s.revChangePct, pctAds: s.pctAds !== undefined ? s.pctAds : share(s.spend, s.revenue), channels: [],
+    ...s, id: 'overview', name: 'ภาพรวมทุกแบรนด์',
+    pctAds: s.pctAds !== undefined ? s.pctAds : share(s.spend, s.revenue), channels: [],
   } : null);
   const p2 = picked ? picked.pace2 : v.overallPace;
   const pipeline = overview ? v.overallPipeline : v.pipelines[picked.id];
@@ -104,6 +198,8 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
     return <AdsControlCenter brands={v.brands} saved={settings?.ads_control} onSave={updateAdsControl} toast={toast}/>;
   }
   if (!head) return <main className="aw"><section className="aw-panel">ไม่มีแบรนด์ในขอบเขตที่เลือก</section></main>;
+  if (!v.monthView) return <RangeWorkspace v={v} ads={ads} controls={controls} selected={selected} setSelected={setSelected}
+    picked={picked} head={head} ChannelCard={ChannelCard} SalePipeline={SalePipeline}/>;
 
   /* ประโยคตัดสินใจใต้การ์ดยอด — บอกว่าต้องเร่งเป็นเท่าไรต่อวัน ไม่ใช่แค่บอกว่าช้า */
   const rev = p2?.rev;

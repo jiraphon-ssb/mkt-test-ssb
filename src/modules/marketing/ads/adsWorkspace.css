@@ -49,6 +49,11 @@
 .aw-panel { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:22px; min-width:0; }
 /* งบกับประสิทธิภาพเป็นแถบเต็มความกว้างเรียงลงมา (อาร์ตเคาะ 21 ก.ย. ค่ำ) — ทุก section ของหน้าเป็นแถบเต็มเหมือนกันหมด */
 .aw-middle { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; }.aw-spend { font-size:28px; font-weight:650; margin-top:18px; font-variant-numeric:tabular-nums; }.aw-spend small { font-size:14px;color:var(--ink-soft);font-weight:400; }
+.aw--range .aw-brand>small:last-child { display:block; margin-top:10px; font-weight:650; }
+.aw--range .aw-hero .aw-forecast strong { margin-top:9px; }
+.aw--range .aw-range-facts { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.aw--range .aw-range-facts dd { font-size:20px; }
+.aw--range .aw-brandtable td:last-child { white-space:nowrap; font-weight:650; }
 .aw-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0 0; }.aw-facts dt { font-size:11px;color:var(--ink-soft);margin-bottom:4px; }.aw-facts dd { font-size:16px;font-weight:600;margin:0;font-variant-numeric:tabular-nums; }
 /* กฎ tile ยุคแถวรายการลบแล้ว (21 ก.ย. ค่ำ) — เคยทำ small ทุกตัวเป็น block (เป้าตกบรรทัด) และ align-items:center รั่วใส่ grid ใหม่ */
 .aw-efficiency p { font-size:11px;color:var(--ink-soft);line-height:1.7; }
@@ -68,6 +73,7 @@
 .aw-tabs { display:flex;gap:24px;border-bottom:1px solid var(--line);margin-bottom:20px; }.mkt-root .aw-tabs button { font:inherit;font-size:13px;min-width:24px;padding:2px 2px 12px;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent; }.mkt-root .aw-tabs button[aria-selected=true] { color:var(--ink);border-color:var(--aw-accent);font-weight:700; }.aw-tabs span { font-size:11px;margin-left:5px; }
 .aw-channel-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px; }.aw-channel-grid .ads-chan-card { margin:0; }.aw button:focus-visible,.aw a:focus-visible { outline:2px solid var(--aw-accent);outline-offset:4px; }
 @media(max-width:1100px){.aw-layout { grid-template-columns:200px minmax(0,1fr);gap:18px; }.aw-hero-grid { grid-template-columns:1fr;gap:24px; }.aw-forecast { border-left:0;border-top:1px solid #ffffff25;padding:20px 0 0; }.aw-middle { grid-template-columns:1fr; }}
+@media(max-width:900px){.aw--range .aw-range-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }}
 @media(max-width:760px){.aw { padding:16px; }.aw-header { align-items:center; }.aw-layout { grid-template-columns:1fr; }.aw-brands { position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }.aw-brands>.aw-section-label,.aw-brands>p,.aw-brands>.aw-key { grid-column:1/-1;margin:0; }.mkt-root .aw-brand { margin:0; }.aw-brand>div { flex-wrap:wrap; }.aw-hero { padding:20px; }.aw-journey .ads-pipe--row { grid-template-columns:repeat(2,minmax(0,1fr));gap:16px; }.aw-journey .ads-pipe-item:nth-child(3){border-left:0;padding-left:0;}.aw-controls { gap:8px; }.aw-date-range { order:3; width:100%; }.aw-date-range label { flex:1; }.aw-date-range input { width:100%; }.aw-filter { border-left:0; padding-left:0; }.aw-demo { margin-left:0; }}
 .aw-controls label { white-space:nowrap; flex-shrink:0; }
 .aw .ads-chan-card { border-top:1px solid var(--line); border-radius:8px; }

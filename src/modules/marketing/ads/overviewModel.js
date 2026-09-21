@@ -11,11 +11,9 @@ import { brandAdvice } from "./overviewActions.js";
 import { adsCreativeRows, adsDailySeries } from "../adsOverview.js";
 
 export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filters }) {
-  /* หน้า Overview เป็น "เดือนปัจจุบัน" เสมอ (อาร์ตเคาะ 21 ก.ย. 69) — บังคับที่โมเดล ไม่ใช่แค่ซ่อนกิ่งบนจอ
-     เคยลบแต่กิ่ง else ในคอมโพเนนต์ แล้วปล่อยให้ตัวเลือกช่วงยังเปลี่ยนข้อมูลได้
-     ผล: เลือก "7 วัน" แล้วได้ยอด 7 วันมาหารกับเป้าทั้งเดือน โดยยังติดป้ายว่า "ยอดรวมเดือนปัจจุบัน" */
-  const { compare: chosenCompare, channel, basis: revenueBasis } = filters;
-  const period = "mtd", customFrom = null, customTo = null;
+  /* เดือนนี้มีเป้า/จังหวะ/คาดการณ์รายเดือน · ช่วงอื่นคิดเฉพาะวันที่เลือกและเทียบช่วงก่อน
+     ห้ามเอายอดช่วงสั้นไปหารเป้าทั้งเดือน — AdsWorkspace แยกการนำเสนอตาม monthView */
+  const { period = "mtd", from: customFrom = null, to: customTo = null, compare: chosenCompare, channel, basis: revenueBasis } = filters;
   const compare = effectiveCompare(period, chosenCompare);
     const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
@@ -36,11 +34,12 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
        ข้อมูลจำลอง (สาธิต) ใช้เป้าจากหน้าตั้งค่าเดิมต่อ ไม่ผสมกับยอดจริง */
     const real = ads.source === "meta_pilot";
     const goalMonth = `${(monthView ? today : shownTo).slice(0, 7)}-01`;
+    const planMonth = (monthView ? today : shownTo).slice(0, 7);
     const plans = real
-      ? plansFromSalesGoals({ goals: ads.salesGoals, month: today.slice(0, 7), basis: revenueBasis })
+      ? plansFromSalesGoals({ goals: ads.salesGoals, month: planMonth, basis: revenueBasis })
       : plansFromTargets({
         targets: data.settings?.ads_control?.targets ?? {}, adBudgets: data.ad_budgets ?? [], salesTargets: data.sales_targets ?? [],
-        month: today.slice(0, 7), channelsByBrand: adChannelsByBrand(scopedAll, monthRange),
+        month: planMonth, channelsByBrand: adChannelsByBrand(scopedAll, monthView ? monthRange : range),
       });
     const metaTotals = adsByBrandChannel(scopedAll, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
     const dayRange = (r) => ({ from: isoDay(new Date(r.start)), to: isoDay(new Date(new Date(r.end).getTime() - 1)), today });
@@ -151,9 +150,9 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
     };
     const brandRows = brandTotals.map((brand) => ({
       ...brand, revShare: share(brand.revenue, summary.revenue), spendShare: share(brand.spend, summary.spend),
-      channels: filteredById.get(brand.id)?.channels ?? [], pace2: paceSet(brand),
+      channels: filteredById.get(brand.id)?.channels ?? [], pace2: monthView ? paceSet(brand) : null,
     }));
-    const overallPace = paceSet({ revenue: summary.revenue, revTarget: summary.revTarget, spend: summary.spend, budget: summary.budget });
+    const overallPace = monthView ? paceSet({ revenue: summary.revenue, revTarget: summary.revTarget, spend: summary.spend, budget: summary.budget }) : null;
 
     return {
       scoped,

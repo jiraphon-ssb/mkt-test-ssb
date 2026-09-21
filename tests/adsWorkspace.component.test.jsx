@@ -143,6 +143,33 @@ describe("มุมมองรายแบรนด์ (อาร์ตเค�
   });
 });
 
+describe("ตัวกรองช่วงวันที่บน Overview", () => {
+  const rangeModel = () => model({
+    monthView: false, rangeLabel: "15 – 21 ก.ย.", compareLabel: "ช่วงก่อนหน้า", overallPace: null,
+    summary: { ...model().summary, prevRevenue: 1600000, prevSpend: 190000, spendChangePct: 9.38 },
+    brands: brands.map((b) => ({ ...b, prevRevenue: b.revenue * .9, prevSpend: b.spend * .9, spendChangePct: 11.11, pace2: null })),
+  });
+
+  it("ใช้ภาษาของช่วงที่เลือกและไม่แสดง pace/คาดการณ์รายเดือน", () => {
+    const { container } = show(rangeModel());
+    expect(screen.getByText("15 – 21 ก.ย. · ยอดขาย ค่าแอด และประสิทธิภาพตามช่วงที่เลือก")).toBeTruthy();
+    expect(screen.getAllByText("ช่วงที่เลือก").length).toBeGreaterThan(0);
+    expect(screen.queryByText("ควรถึงวันนี้")).toBeNull();
+    expect(screen.queryByText("คาดปิดเดือน")).toBeNull();
+    expect(container.querySelectorAll(".pg")).toHaveLength(0);
+  });
+
+  it("ตารางแบรนด์เทียบช่วงก่อนหน้าและยังเปิดรายละเอียดแบรนด์ได้", () => {
+    const onSelect = vi.fn();
+    render(<MemoryRouter><AdsWorkspace v={rangeModel()} ads={ads()} controls={null} selected={null} onSelect={onSelect}
+      ChannelCard={() => null} SalePipeline={() => null} settings={{}} updateAdsControl={() => {}} toast={() => {}} /></MemoryRouter>);
+    const table = document.querySelector(".aw-brandtable");
+    expect(within(table).getByRole("columnheader", { name: "เทียบช่วงก่อนหน้า" })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("row", { name: /TEAMDEE/ })).getByText("฿1,560,880.00"));
+    expect(onSelect).toHaveBeenCalledWith("b_td");
+  });
+});
+
 describe("ตารางแบรนด์", () => {
   it("กดที่ไหนก็ได้ในแถวเพื่อเลือกแบรนด์ (คำอธิบายใต้ตารางบอกแบบนั้น)", () => {
     const onSelect = vi.fn();
