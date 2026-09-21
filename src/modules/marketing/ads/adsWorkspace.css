@@ -105,6 +105,11 @@
 .acc-header h1 { margin:0; }
 .acc-header a { display:inline-flex; align-items:center; gap:6px; padding-right:14px; border-right:1px solid var(--line); font-size:12px; color:var(--ink-soft); }
 .mkt-root .acc-save { display:inline-flex; align-items:center; gap:8px; padding:10px 15px; border-radius:8px; background:var(--accent-solid,var(--accent)); color:var(--on-accent); font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+/* dirty contract (22 ก.ย.): ปุ่ม+โน้ตขอบเขตเซฟ · จุดส้มบนแท็บที่แก้ค้าง */
+.acc-save-wrap { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+.mkt-root .acc-save:disabled { opacity:.55; cursor:default; }
+.acc-save-note { color:var(--ink-soft); font-size:10.5px; }
+.acc-dot { width:7px; height:7px; margin-left:2px; border-radius:50%; background:var(--warn); }
 .acc-tabs { position:relative; display:flex; gap:6px; margin:14px 0 18px; padding:5px; width:max-content; max-width:100%; background:var(--surface-2); border-radius:9px; }
 .mkt-root .acc-tabs button { display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:6px; color:var(--ink-soft); font:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
 .acc-goal-note { margin:-8px 0 16px; color:var(--ink-soft); font-size:12px; line-height:1.6; }

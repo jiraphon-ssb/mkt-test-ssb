@@ -135,7 +135,7 @@ const RULE_FIELDS = [
 function Rules({ rules, setRules, creativeRules, setCreativeRules, brands, isLead }) {
   return <><div className="acc-rules-layout">
     <section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">ALERT RULES</span><h2>กฎตัดสินใจและแจ้งเตือน</h2><p>ทุกกฎแสดงเหตุผลและค่าที่ใช้ตัดสิน เพื่อให้ทีมตรวจย้อนกลับได้</p></div></header>
-      <div className="acc-rule-list">{RULE_FIELDS.map(([key, label, unit, help]) => <label className="acc-rule" key={key}><span><strong>{label}</strong><small>{help}</small></span><div className="acc-input-unit"><input type="number" min="0" value={rules[key]} onChange={(e) => setRules((current) => ({ ...current, [key]: numberValue(e.target.value) }))} /><b>{unit}</b></div></label>)}</div>
+      <div className="acc-rule-list">{RULE_FIELDS.map(([key, label, unit, help]) => <label className="acc-rule" key={key}><span><strong>{label}</strong><small>{help}</small></span><div className="acc-input-unit"><input type="number" min="0" disabled={!isLead} value={rules[key]} onChange={(e) => setRules((current) => ({ ...current, [key]: numberValue(e.target.value) }))} /><b>{unit}</b></div></label>)}</div>
     </section>
     <aside className="acc-sheet acc-guardrails"><ShieldAlert size={22} /><h3>กฎที่ระบบต้องรักษา</h3><ul><li>งบรวมต้องเท่ากับผลรวมรายบัญชี</li><li>ยอดขาย เป้า และ funnel มาจากระบบขาย (อ่านอย่างเดียว)</li><li>ยอดที่ Meta เห็น (Attribution) ต้องติดป้ายว่าเป็นของ Meta</li><li>ตัวเลขที่ข้อมูลไม่ครบแสดง “—” ไม่แทนด้วยศูนย์</li><li>ทุกค่าเก็บเวลา sync และแหล่งที่มา</li></ul></aside>
   </div><CreativeRulesEditor rules={creativeRules} setRules={setCreativeRules} brands={brands} disabled={!isLead} /></>;
@@ -232,11 +232,37 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   };
   const currentConfig = { ...config, rules };
   const health = adsDataHealth(currentConfig);
+  /* dirty ต่อส่วน (22 ก.ย. — อาร์ตถามเรื่องปุ่มเซฟ): ปุ่มเดียวครอบแท็บ บัญชี+กฎ · เทียบกับค่าที่บันทึกล่าสุด
+     สะอาด = ปุ่มบอก "บันทึกแล้ว" กดไม่ได้ · แก้ค้าง = จุดบนแท็บนั้น + ถามก่อนออกจากหน้า */
+  const snap = (value) => JSON.stringify(value ?? {});
+  const baseRules = useMemo(() => ({ ...DEFAULT_RULES, reconciliationTolerance: 1, ...(initial.rules ?? {}) }), [initial]);
+  const dirtySources = snap(config.mappings) !== snap(initial.mappings) || snap(config.sources) !== snap(initial.sources);
+  const dirtyRules = snap(rules) !== snap(baseRules) || snap(normalizeCreativeRules(creativeRules)) !== snap(normalizeCreativeRules(initial.creativeRules));
+  const dirty = dirtySources || dirtyRules;
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const warn = (event) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  const confirmLeave = (event) => {
+    if (dirty && !window.confirm("มีการแก้ไขที่ยังไม่บันทึก — ออกโดยไม่บันทึกใช่ไหม")) event.preventDefault();
+  };
+  const savedAt = initial.updatedAt ? new Date(initial.updatedAt).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : null;
   const primaryTabs = [["sources",Link2,"1 · บัญชี"],["goals",Target,"2 · เป้า"],["rules",ShieldAlert,"3 · กฎ"],["reconcile",Scale,"4 · ตรวจยอด"]];
   return <main className="aw acc">
-    <header className="acc-header"><div><Link to="/mkt/ads"><ArrowLeft size={15} /> Overview ads</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div><button type="button" className="acc-save" onClick={save} disabled={linking || !isLead} aria-busy={linking} title={isLead ? undefined : "เฉพาะหัวหน้าทีมบันทึกการตั้งค่าได้"}>{linking ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} {linking ? "กำลังผูกบัญชี…" : "บันทึก"}</button></header>
+    <header className="acc-header"><div><Link to="/mkt/ads" onClick={confirmLeave}><ArrowLeft size={15} /> Overview ads</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div>
+      <div className="acc-save-wrap">
+        <button type="button" className="acc-save" onClick={save} disabled={linking || !isLead || !dirty} aria-busy={linking}
+          title={!isLead ? "เฉพาะหัวหน้าทีมบันทึกการตั้งค่าได้" : dirty ? "ครอบแท็บ บัญชี และ กฎ (แท็บเป้าบันทึกในตัวเอง)" : "ไม่มีการแก้ไขค้าง"}>
+          {linking ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} {linking ? "กำลังผูกบัญชี…" : dirty ? "บันทึก" : "บันทึกแล้ว"}</button>
+        <small className="acc-save-note">{dirty ? "มีการแก้ไขยังไม่บันทึก · ครอบแท็บ บัญชี + กฎ" : savedAt ? `บันทึกล่าสุด ${savedAt}` : "แท็บ เป้า บันทึกในตัวเอง"}</small>
+      </div></header>
     <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
-      {primaryTabs.map(([id,Icon,label]) => <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}
+      {primaryTabs.map(([id,Icon,label]) => {
+        const tabDirty = (id === "sources" && dirtySources) || (id === "rules" && dirtyRules);
+        return <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}{tabDirty && <i className="acc-dot" title="มีการแก้ไขยังไม่บันทึก" />}</button>;
+      })}
     </nav>
     <p className="acc-goal-note" role="note">เป้าหลักมาจากระบบขายเอง (หน้าเป้าหมาย · ระบบ TMK ของ JUNTAKARN) — แท็บ "เป้า" ไว้ดูว่าเดือนนี้ได้อะไรมาแล้ว ขาดอะไร และเติมเองได้ ค่าที่เติมที่นั่นชนะค่าที่ดึงมา · ภาพรวมความครบดูที่ <Link to="/mkt/ads/sync">สถานะ Sync</Link></p>
     {tab === "sources" && <Connections brands={brands} config={config} setConfig={setConfig} toast={toast} isLead={isLead} />}
