@@ -2491,6 +2491,39 @@ const adsData = {
     if (error) throw error;
     return data;
   },
+  /* ── บิล & กระทบยอด (spec 2026-09-22) — team_lead เท่านั้น RLS คุมอีกชั้น ── */
+  /** snapshot บัญชีแอดทุกตัวที่ token เห็น (ads-cron เขียน) — ฐานของตัวตรวจเงินออกนอกระบบ + ยอดค้าง */
+  async accountSnapshots() {
+    const db = requireSupabase();
+    const { data, error } = await db.from("ad_account_snapshots").select("*").order("account_name");
+    if (error) throw error;
+    return data ?? [];
+  },
+  /** ผลตรวจของเดือน (append-only — แถวใหม่สุดคือคำตัดสินปัจจุบัน) */
+  async billingReviews(monthIso) {
+    const db = requireSupabase();
+    const { data, error } = await db.from("ad_billing_reviews").select("*")
+      .eq("month", monthIso).order("created_at", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+  async addBillingReview(entry) {
+    const db = requireSupabase();
+    const { data, error } = await db.rpc("mkt_billing_review_add", { p_entry: entry });
+    if (error) throw error;
+    return data;
+  },
+  /** การตัดบัตรรายครั้ง (โครงท่อเมล — ว่างจนกว่าจะเปิดใช้) */
+  async billingCharges(monthIso) {
+    const db = requireSupabase();
+    const start = new Date(`${monthIso}T00:00:00Z`);
+    const next = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+    const { data, error } = await db.from("ad_billing_charges").select("*")
+      .gte("charge_date", monthIso).lt("charge_date", next).order("charge_date");
+    if (error) throw error;
+    return data ?? [];
+  },
+
   /** run ดึงยอดที่สำเร็จ (range_from/range_to) — ใช้หาช่องว่างวันที่ (planSyncJobs / missingDaysOf) */
   async syncCoverage() {
     const db = requireSupabase();
