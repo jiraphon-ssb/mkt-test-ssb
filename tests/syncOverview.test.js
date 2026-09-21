@@ -2,7 +2,7 @@
    กติกาหลัก: ระหว่างโหลดห้ามบอกว่า "ยังไม่มี/ยังไม่เชื่อม" (บั๊กบน production 17 ก.ย.) */
 import { describe, expect, it } from "vitest";
 import {
-  ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, nextSyncAt, salesSourceRow, syncIssues, syncVerdict,
+  ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, nextSyncAt, salesSourceRow, syncIssues, syncVerdict, snapshotSourceRow,
 } from "../src/modules/marketing/ads/syncOverview.js";
 
 const NOW = Date.parse("2026-09-17T03:00:00Z");   // 10:00 เวลาไทย
@@ -189,5 +189,44 @@ describe("historyTimeline", () => {
   it("กรองตามชนิด · ตัวกรองยอดขายรวมรอบสำรวจแหล่งของระบบขายด้วย", () => {
     expect(historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts, kind: "sales" }).map((i) => i.kind)).toEqual(["sales", "inventory"]);
     expect(historyTimeline({ ticks, syncRuns, pipelineRuns: pipes, accounts, kind: "meta" }).map((i) => i.kind)).toEqual(["meta"]);
+  });
+});
+
+/* แถว Snapshot บัญชีแอด (หน้า บิล & กระทบยอด · spec 2026-09-22) — เก็บโดย ads-cron ทุกชั่วโมง
+   RLS อ่านได้เฉพาะ team_lead → คนอื่นเห็นแถวแบบบอกตรงๆ ไม่ใช่ "รอรอบแรก" หลอกๆ */
+describe("snapshotSourceRow", () => {
+  const now = Date.parse("2026-09-22T10:00:00Z");
+  const snap = (id, over = {}) => ({ external_account_id: id, account_name: id, account_status: 1,
+    amount_spent_cents: 1000, balance_cents: 0, fetched_at: "2026-09-22T09:30:00Z", ...over });
+  it("ไม่ใช่หัวหน้าทีม = บอกว่าเฉพาะหัวหน้าทีม ไม่หลอกว่ารอรอบแรก", () => {
+    const row = snapshotSourceRow({ allowed: false, ready: true, snapshots: [], now });
+    expect(row.state).toBe("muted");
+    expect(row.stateLabel).toBe("เฉพาะหัวหน้าทีม");
+  });
+  it("ยังไม่มีข้อมูล = รอรอบแรก พร้อมบอกจังหวะเก็บ", () => {
+    const row = snapshotSourceRow({ allowed: true, ready: true, snapshots: [], now });
+    expect(row.state).toBe("waiting");
+    expect(row.stateLabel).toBe("รอรอบแรก");
+    expect(row.fresh.sub).toBe("เก็บทุกชั่วโมง · พ่วง ads-cron");
+  });
+  it("สดใน 3 ชม. = ปกติ · นับบัญชีครบ · บัญชีสถานะผิดปกติดันเป็นเตือน", () => {
+    const ok = snapshotSourceRow({ allowed: true, ready: true, now,
+      snapshots: [snap("1"), snap("2"), snap("3")] });
+    expect(ok.state).toBe("ok");
+    expect(ok.stateLabel).toBe("ปกติ");
+    expect(ok.complete.text).toBe("3 บัญชีที่ token เห็น");
+    expect(ok.complete.sub).toBeNull();
+    const warn = snapshotSourceRow({ allowed: true, ready: true, now,
+      snapshots: [snap("1"), snap("2", { account_status: 2 })] });
+    expect(warn.state).toBe("warn");
+    expect(warn.stateLabel).toBe("บัญชีสถานะผิดปกติ 1");
+    expect(warn.complete.sub).toBe("สถานะผิดปกติ 1 บัญชี — ดูในหน้า บิล & กระทบยอด");
+  });
+  it("snapshot เก่ากว่า 3 ชม. = ล่าช้า (cron ควรวิ่งทุกชั่วโมง)", () => {
+    const row = snapshotSourceRow({ allowed: true, ready: true, now,
+      snapshots: [snap("1", { fetched_at: "2026-09-22T05:00:00Z" })] });
+    expect(row.state).toBe("warn");
+    expect(row.stateLabel).toBe("ล่าช้า");
+    expect(row.hint).toContain("ads-cron");
   });
 });

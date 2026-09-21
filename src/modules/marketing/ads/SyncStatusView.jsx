@@ -4,7 +4,7 @@
    logic อยู่ใน syncOverview.js (มีเทส) · ไฟล์นี้ประกอบหน้าและสั่งงานเท่านั้น */
 import { dayLabel } from "../dash/charts/theme.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle, ArrowRight, CalendarClock, Check, CheckCircle2, ChevronDown, Clock3, Database, Download, Image as ImageIcon, Info,
   KeyRound, LoaderCircle, Radar, ReceiptText, RefreshCw, Scale, Settings2, ShoppingBag, X,
@@ -25,7 +25,7 @@ import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
 import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
 import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
-import { ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
+import { ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, snapshotSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import { newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
 import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
 import "./adsWorkspace.css";
@@ -37,7 +37,7 @@ const clock = (value) => value ? new Intl.DateTimeFormat("th-TH", { hour: "2-dig
 const TABS = [["meta", "บัญชี Meta"], ["sales", "ยอดขาย"], ["access", "สิทธิ์และคีย์"], ["history", "ประวัติ"]];
 const LEVEL = { bad: "ต้องแก้", warn: "เตือน", wait: "รอคนอื่น" };
 const STATE_ICON = { ok: CheckCircle2, bad: AlertTriangle, warn: AlertTriangle, waiting: Clock3, muted: Clock3, loading: LoaderCircle };
-const SOURCE_ICON = { meta: Database, creative: ImageIcon, sales: ReceiptText };
+const SOURCE_ICON = { meta: Database, creative: ImageIcon, sales: ReceiptText, billing: CalendarClock };
 const HISTORY_FILTERS = [["all", "ทั้งหมด"], ["meta", "Meta"], ["sales", "ยอดขาย"], ["creatives", "Creative"], ["cron", "รอบอัตโนมัติ"]];
 
 /** โหลดข้อมูลหลายชุดแยกกัน — ชุดไหนเสร็จขึ้นก่อน · โหลดซ้ำเก็บข้อมูลเดิมไว้ระหว่างรอ (ไม่กระพริบเป็นค่าว่าง) */
@@ -163,6 +163,7 @@ export function HistoryList({ items, filter, onFilter }) {
 export function SyncStatusView() {
   const { data, toast } = useApp();
   const { user, demo } = useAuth();
+  const navigate = useNavigate();
   const canSync = !demo && user?.role === "team_lead";
   const [params, setParams] = useSearchParams();
   const tab = TABS.some(([key]) => key === params.get("tab")) ? params.get("tab") : "meta";
@@ -185,6 +186,8 @@ export function SyncStatusView() {
     goals: () => apiClient.ads.salesGoals(`${today.slice(0, 7)}-01`),
     goalOverrides: () => apiClient.ads.goalOverrides({ months: [`${today.slice(0, 7)}-01`] }),
     oauth: () => apiClient.ads.oauthStatus(),
+    // RLS อ่านได้เฉพาะ team_lead — คนอื่นไม่ยิงเลย (แถวจะบอก "เฉพาะหัวหน้าทีม" ตรงๆ)
+    snapshots: !demo && user?.role === "team_lead" ? () => apiClient.ads.accountSnapshots() : null,
   });
   useEffect(() => { reload(); }, [reload, canSync, demo]);
   const ready = (...keys) => keys.every((key) => res[key]?.settled);
@@ -215,12 +218,15 @@ export function SyncStatusView() {
     meta: metaSourceRow({ accounts: metaAccounts, ready: ready("connections", "coverage", "recons"), everyHours: config.sources?.meta?.syncEveryHours ?? null, now }),
     creatives: creativeSourceRow({ runs: pipes, accounts: metaAccounts, ready: ready("pipes", "connections"), now }),
     sales: salesSourceRow({ runs: pipes, facts, ready: ready("pipes", "facts"), today, now }),
+    snapshots: snapshotSourceRow({ snapshots: res.snapshots?.data ?? [], ready: ready("snapshots"),
+      allowed: !demo && user?.role === "team_lead", now }),
   };
   // โหลดส่วนไหนไม่สำเร็จ = บอกที่แถวนั้น ไม่ปล่อยให้ดูเหมือนไม่มีข้อมูล
   const failedLoad = (keys, row) => keys.some((key) => res[key]?.error && res[key]?.data == null) ? { ...row, state: "bad", stateLabel: "โหลดสถานะไม่สำเร็จ", hint: "กดตรวจใหม่", fresh: null, complete: null } : row;
   rows.meta = failedLoad(["connections", "recons"], rows.meta);
   rows.creatives = failedLoad(["pipes"], rows.creatives);
   rows.sales = failedLoad(["pipes", "facts"], rows.sales);
+  if (rows.snapshots.state !== "muted") rows.snapshots = failedLoad(["snapshots"], rows.snapshots);
   const cron = res.ticks?.settled && !res.ticks?.error ? cronHealth(ticks) : null;
   const issues = syncIssues({
     rows, cron, now,
@@ -501,6 +507,8 @@ export function SyncStatusView() {
           // ระหว่างโหลดห้ามสรุปว่า "ยังไม่เคยดึง" — กติกาเดียวกับอีก 3 แถว (บั๊กบน production 17 ก.ย.)
           state: "loading", stateLabel: "กำลังตรวจ…", fresh: null, complete: null }} />}
         {waitingBrands.map((brand) => <SourceRow key={brand.id} row={{ key: brand.id, name: `ยอดขาย ${brand.name}`, icon: "sales", state: "waiting", stateLabel: "รอเชื่อมแหล่งข้อมูล", fresh: null, complete: null, hint: "ค่าแอด Meta ยังดึงตามปกติ" }} />)}
+        {/* snapshot บัญชีแอด (หน้า บิล & กระทบยอด) — กดแล้วไปหน้าบิลตรงๆ ไม่ใช่แท็บในหน้านี้ */}
+        <SourceRow row={rows.snapshots} onOpen={() => navigate("/mkt/ads/billing")} />
       </div>
       {unusedProviders.length > 0 && <p className="sy-note">ยังไม่ใช้: {unusedProviders.join(" · ")}</p>}
     </section>

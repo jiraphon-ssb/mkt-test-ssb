@@ -15,6 +15,7 @@ vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   syncCoverage: () => deferred("coverage"), cronTicks: () => deferred("ticks"), pipelineRuns: () => deferred("pipes"),
   businessFacts: (args) => { factArgs.push(args); return deferred("facts"); }, salesGoals: () => deferred("goals"),
   goalOverrides: () => deferred("goalOverrides"), oauthStatus: () => deferred("oauth"),
+  accountSnapshots: () => deferred("snapshots"),
   salesSync: async () => salesSyncResult,
 } } }));
 const auth = { demo: false, user: { role: "team_lead" } };
@@ -67,7 +68,7 @@ describe("SyncStatusView — โหลดเสร็จ", () => {
     await settle("pipes", [{ id: "s1", pipeline: "sales", status: "success", trigger_kind: "cron", started_at: "2026-09-17T02:07:00Z" }]);
     await settle("facts", []);
     await settleGoals([{ brand_id: "b_td", month: "2026-09-01", goal_source: "sale_goal", version: 2, sales_target: 1, ad_budget: 1, cpl: 1, roas: 1, pct_ads_new: 1, cac: 1, cpi: 1, inquiry_target: 1, leads_target: 1, deposits_target: 1, orders_target: 1 }]);
-    await settle("oauth", { authorizations: [{ id: "a1", status: "connected", expires_at: null, provider_user_name: "อาร์ต" }] });
+    await settle("oauth", { authorizations: [{ id: "a1", status: "connected", expires_at: null, provider_user_name: "อาร์ต" }] }); await settle("snapshots", [{ external_account_id: "1", account_name: "JD1", account_status: 1, fetched_at: "2026-09-17T02:40:00Z" }]);
 
     expect(screen.getByRole("status").textContent).toContain("ข้อมูลใช้ได้ · มี");
     const issues = screen.getByRole("list", { name: "เรื่องที่ควรดู" });
@@ -254,5 +255,28 @@ describe("SyncStatusView — ขั้นเป้าไม่โกหก", () 
       expect(within(timeline).getByText(/ไม่ทราบผลของขั้นเป้า/)).toBeTruthy();
       expect(within(timeline).queryByText(/ไม่ได้ดึงเป้า/)).toBeNull();
     } finally { apiClient.ads.salesSync = original; }
+  });
+});
+
+
+/* แถว Snapshot บัญชีแอด (หน้า บิล & กระทบยอด · 22 ก.ย.) — RLS เฉพาะ team_lead */
+describe("แถว Snapshot บัญชีแอด", () => {
+  it("team_lead: โหลดเสร็จเห็นจำนวนบัญชี · สถานะผิดปกติดันเป็นเตือน", async () => {
+    show();
+    expect(screen.getByText("Snapshot บัญชีแอด")).toBeTruthy();
+    await settle("snapshots", [
+      { external_account_id: "1", account_name: "JD1", account_status: 1, fetched_at: "2026-09-17T02:40:00Z" },
+      { external_account_id: "2", account_name: "Finix2", account_status: 2, fetched_at: "2026-09-17T02:40:00Z" },
+    ]);
+    const row = screen.getByText("Snapshot บัญชีแอด").closest(".sy-src");
+    expect(within(row).getByText("2 บัญชีที่ token เห็น")).toBeTruthy();
+    expect(within(row).getByText("บัญชีสถานะผิดปกติ 1")).toBeTruthy();
+  });
+  it("ไม่ใช่ team_lead: บอกตรงๆ ว่าเฉพาะหัวหน้าทีม ไม่ยิง API", () => {
+    auth.user = { role: "staff" };
+    show();
+    const row = screen.getByText("Snapshot บัญชีแอด").closest(".sy-src");
+    expect(within(row).getByText("เฉพาะหัวหน้าทีม")).toBeTruthy();
+    expect(pending.snapshots).toBeUndefined();
   });
 });

@@ -208,3 +208,26 @@ export function historyTimeline({ ticks = [], syncRuns = [], pipelineRuns = [], 
     .slice(0, limit)
     .map(({ sort, ...item }) => ({ ...item, kind: sort === "inventory" ? "inventory" : item.kind }));
 }
+
+/** Snapshot บัญชีแอดทุกตัวที่ token เห็น (หน้า บิล & กระทบยอด · spec 2026-09-22) — ads-cron เก็บทุกชั่วโมง
+    RLS อ่านได้เฉพาะ team_lead → allowed:false = บอกตรงๆ ไม่หลอกว่า "รอรอบแรก" */
+const SNAPSHOT_STALE_HOURS = 3;
+export function snapshotSourceRow({ snapshots = [], ready = true, allowed = true, now = Date.now() } = {}) {
+  const base = { key: "snapshots", name: "Snapshot บัญชีแอด", sub: "หน้า บิล & กระทบยอด", icon: "billing" };
+  if (!allowed) return { ...base, state: "muted", stateLabel: "เฉพาะหัวหน้าทีม", hint: null, fresh: null, complete: null };
+  if (!ready) return loadingRow(base);
+  const freshSub = "เก็บทุกชั่วโมง · พ่วง ads-cron";
+  if (!snapshots.length) return { ...base, state: "waiting", stateLabel: "รอรอบแรก", hint: "จะเริ่มมีข้อมูลใน ads-cron รอบถัดไป", fresh: { text: "ยังไม่มีข้อมูล", sub: freshSub }, complete: null };
+  const newest = snapshots.map((s) => s.fetched_at).filter(Boolean).sort().at(-1);
+  const stale = now - (time(newest) ?? 0) > SNAPSHOT_STALE_HOURS * HOUR;
+  const badStatus = snapshots.filter((s) => s.account_status != null && s.account_status !== 1).length;
+  // สถานะบัญชีผิดปกติ = เรื่องเงินหยุดไหล สำคัญกว่าความสด — ชนะป้ายล่าช้า
+  const state = badStatus ? "warn" : stale ? "warn" : "ok";
+  return {
+    ...base, state,
+    stateLabel: badStatus ? `บัญชีสถานะผิดปกติ ${badStatus}` : stale ? "ล่าช้า" : "ปกติ",
+    hint: badStatus ? "ดูรายบัญชีในหน้า บิล & กระทบยอด" : stale ? "เกิน 3 ชม. — ตรวจ ads-cron ในแท็บประวัติ" : null,
+    fresh: { text: ago(newest, now), sub: freshSub },
+    complete: { text: `${snapshots.length} บัญชีที่ token เห็น`, sub: badStatus ? `สถานะผิดปกติ ${badStatus} บัญชี — ดูในหน้า บิล & กระทบยอด` : null },
+  };
+}
