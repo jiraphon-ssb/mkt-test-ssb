@@ -8,18 +8,21 @@ export const MATCH_PCT = 0.005;   // |ส่วนต่าง| ≤ 0.5% = ต�
 export const MINOR_PCT = 0.02;    // ≤ 2% = ต่างเล็กน้อย (มักเป็นเรื่องวันคาบเกี่ยว/ปัดเศษบัตร)
 
 const baht = (cents) => (cents == null ? null : cents / 100);
+/* cards เก็บ account_id แบบ "act_1234" (จาก ad_connections) แต่ Graph /me/adaccounts คืนเลขล้วน
+   — normalize ที่เดียว ไม่งั้น join พลาดทั้งหน้า (บั๊กหน้าจริง 22 ก.ย.: ชื่อโชว์ act_… ยอดค้างเป็นขีดหมด) */
+const normId = (v) => String(v ?? "").replace(/^act_/, "");
 
 export function buildBillingModel({ month, cards = [], connections = [], snapshots = [], snapshotsBefore = [], reviews = [], brands = [] }) {
   const monthPrefix = String(month).slice(0, 7);
   const brandName = new Map(brands.map((b) => [b.id, b.name]));
-  const snapByAccount = new Map(snapshots.map((s) => [s.external_account_id, s]));
-  const beforeByAccount = new Map(snapshotsBefore.map((s) => [s.external_account_id, s]));
+  const snapByAccount = new Map(snapshots.map((s) => [normId(s.external_account_id), s]));
+  const beforeByAccount = new Map(snapshotsBefore.map((s) => [normId(s.external_account_id), s]));
 
   /* review ล่าสุดต่อบัญชี — append-only จึงตัดสินด้วย created_at ใหม่สุด */
   const reviewByAccount = new Map();
   for (const r of reviews) {
     const current = reviewByAccount.get(r.external_account_id);
-    if (!current || String(r.created_at) > String(current.created_at)) reviewByAccount.set(r.external_account_id, r);
+    if (!current || String(r.created_at) > String(current.created_at)) reviewByAccount.set(normId(r.external_account_id), r);
   }
 
   /* รวม spend เดือนต่อบัญชี + ต่อแคมเปญ จาก cards (fact_date ยึด prefix เดือน) */
@@ -28,17 +31,18 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
     if (!cardRow?.account_id || !String(cardRow.fact_date ?? "").startsWith(monthPrefix)) continue;
     const spend = Number(cardRow.metrics?.spend);
     if (!Number.isFinite(spend)) continue;
-    const acc = spendByAccount.get(cardRow.account_id) ?? { spend: 0, campaigns: new Map() };
+    const accountId = normId(cardRow.account_id);
+    const acc = spendByAccount.get(accountId) ?? { spend: 0, campaigns: new Map() };
     acc.spend += spend;
     const name = cardRow.campaign ?? "ไม่ระบุแคมเปญ";
     acc.campaigns.set(name, (acc.campaigns.get(name) ?? 0) + spend);
-    spendByAccount.set(cardRow.account_id, acc);
+    spendByAccount.set(accountId, acc);
   }
 
   const rows = [];
 
   for (const connection of connections) {
-    const account = connection.external_account_id;
+    const account = normId(connection.external_account_id);
     const acc = spendByAccount.get(account) ?? { spend: 0, campaigns: new Map() };
     const snap = snapByAccount.get(account) ?? null;
     const review = reviewByAccount.get(account) ?? null;
@@ -73,16 +77,16 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
   }
 
   /* บัญชีใน snapshot ที่ไม่ได้เชื่อมเข้าระบบ = เงินอาจออกโดย dashboard มองไม่เห็น */
-  const connected = new Set(connections.map((c) => c.external_account_id));
+  const connected = new Set(connections.map((c) => normId(c.external_account_id)));
   for (const snap of snapshots) {
-    if (connected.has(snap.external_account_id)) continue;
-    const before = beforeByAccount.get(snap.external_account_id);
+    if (connected.has(normId(snap.external_account_id))) continue;
+    const before = beforeByAccount.get(normId(snap.external_account_id));
     const spentDelta = before?.amount_spent_cents != null && snap.amount_spent_cents != null
       ? baht(snap.amount_spent_cents - before.amount_spent_cents)
       : null;
     rows.push({
-      external_account_id: snap.external_account_id,
-      accountName: snap.account_name || snap.external_account_id,
+      external_account_id: normId(snap.external_account_id),
+      accountName: snap.account_name || normId(snap.external_account_id),
       brandName: "",
       connected: false,
       spend: null, vat: null, gross: null, campaigns: [],
@@ -93,7 +97,7 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
       status: "offsystem",
       // ยังไม่มีรอบก่อนเทียบ = ยังสรุปไม่ได้ว่าใช้เงินเพิ่ม — แถวโผล่แบบเงียบ ไม่ตะโกน
       flag: spentDelta != null && spentDelta > 0 ? { text: "เงินออกนอกระบบ", tone: "rose" } : null,
-      review: reviewByAccount.get(snap.external_account_id) ?? null,
+      review: reviewByAccount.get(normId(snap.external_account_id)) ?? null,
     });
   }
 
@@ -109,7 +113,8 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
     vat: connectedRows.reduce((sum, r) => sum + r.vat, 0),
     gross: connectedRows.reduce((sum, r) => sum + r.gross, 0),
     statement: connectedRows.reduce((sum, r) => sum + (r.statement ?? 0), 0),
-    balance: connectedRows.reduce((sum, r) => sum + (r.balance ?? 0), 0),
+    // ยังไม่มี snapshot สักบัญชี = ไม่รู้ยอดค้าง ต้องเป็น null (โชว์ ฿0.00 = โกหก)
+    balance: connectedRows.some((r) => r.balance != null) ? connectedRows.reduce((sum, r) => sum + (r.balance ?? 0), 0) : null,
     offSystemSpendDelta,
   };
 
@@ -134,8 +139,9 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
 export function connectionsFromCards(cards = []) {
   const seen = new Map();
   for (const cardRow of cards) {
-    if (!cardRow?.account_id || seen.has(cardRow.account_id)) continue;
-    seen.set(cardRow.account_id, { external_account_id: cardRow.account_id, brand_id: cardRow.brand_id ?? "", account_name: "" });
+    const accountId = normId(cardRow.account_id);
+    if (!accountId || seen.has(accountId)) continue;
+    seen.set(accountId, { external_account_id: accountId, brand_id: cardRow.brand_id ?? "", account_name: "" });
   }
   return [...seen.values()];
 }

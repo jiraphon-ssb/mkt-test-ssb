@@ -96,12 +96,12 @@ export function BillingView({ month: initialMonth }) {
         {model.alerts.map((a) => <span key={a.key} className={`aw-flag aw-flag--${a.tone === "rose" ? "rose" : "amber"}`}>{a.text}</span>)}
       </div>}
 
-      <dl className="aw-facts">
-        <div><dt>ระบบนับได้</dt><dd>{money(model.totals.spend)}</dd></div>
-        <div><dt>VAT 7% (ค่าประมาณ)</dt><dd>{money(model.totals.vat)}</dd></div>
-        <div><dt>รวมโดยประมาณ</dt><dd>{money(model.totals.gross)}</dd></div>
-        <div><dt>ยอดค้างที่ Meta ยังไม่ตัด</dt><dd>{money(model.totals.balance)}</dd></div>
-      </dl>
+      <div className="bl-stats">
+        <div><span>ระบบนับได้ · {model.rangeLabel}</span><b>{money(model.totals.spend)}</b><small>รวม {model.rows.filter((r) => r.connected).length} บัญชีที่เชื่อม</small></div>
+        <div><span>VAT 7%</span><b>{money(model.totals.vat)}</b><small>ค่าประมาณ — ใบกำกับจริงที่ Billing hub</small></div>
+        <div><span>รวมโดยประมาณ</span><b>{money(model.totals.gross)}</b><small>ระบบนับ + VAT</small></div>
+        <div><span>ยอดค้างที่ Meta ยังไม่ตัด</span><b>{money(model.totals.balance)}</b><small>{model.totals.balance == null ? "รอ snapshot รอบแรกจาก ads-cron" : "จาก snapshot ล่าสุด"}</small></div>
+      </div>
 
       {remote.status === "loading" && <p className="aw-key">กำลังโหลดข้อมูลบิล…</p>}
       {remote.status === "error" && <p className="aw-key">โหลดข้อมูลฝั่งฐานไม่สำเร็จ — ตัวเลขระบบนับยังถูกต้อง แต่ยอดค้าง/ผลตรวจอาจไม่ขึ้น</p>}
@@ -111,16 +111,20 @@ export function BillingView({ month: initialMonth }) {
           <span>แบรนด์ · บัญชี</span><span className="num">ระบบนับ</span><span className="num">VAT ประมาณ</span>
           <span className="num">ยอดค้าง</span><span className="num">statement</span><span>ผลเทียบ</span><span>ผลตรวจ</span>
         </div>
-        {model.rows.map((row) => <div key={row.external_account_id} data-row className="bl-row-wrap">
-          <div className="bl-row" role="row">
+        {model.rows.map((row) => <div key={row.external_account_id} data-row
+          className={`bl-row-wrap${openAccount === row.external_account_id ? " is-open" : ""}`}>
+          {/* กดที่ไหนก็ได้ในแถวเพื่อกางรายละเอียด (กติกาเดียวกับตารางแบรนด์หน้า Overview) */}
+          <div className="bl-row" role="row" onClick={() => setOpenAccount(openAccount === row.external_account_id ? null : row.external_account_id)}>
             <span>
               <b>{row.brandName || row.accountName}</b>
-              <small>{row.connected ? `บัญชี ${row.accountName}` : "ยังไม่ได้เชื่อมเข้าระบบ"}</small>
+              <small>{row.connected
+                ? (row.accountName !== row.external_account_id ? `${row.accountName} · …${row.external_account_id.slice(-4)}` : `บัญชี …${row.external_account_id.slice(-4)}`)
+                : "ยังไม่ได้เชื่อมเข้าระบบ"}</small>
             </span>
             <span className="num">{money(row.spend)}</span>
             <span className="num zinc">{money(row.vat)}</span>
-            <span className="num">{money(row.balance)}</span>
-            <span className="num">{money(row.statement)}</span>
+            <span className={`num${row.balance == null ? " zinc" : ""}`}>{money(row.balance)}</span>
+            <span className={`num${row.statement == null ? " zinc" : ""}`}>{money(row.statement)}</span>
             <span>
               <span className={STATUS_TONE[row.status]}>{STATUS_TEXT[row.status]}</span>
               {row.diff != null && <small className="zinc"> {row.diff >= 0 ? "+" : "−"}{fmtMoney(Math.abs(row.diff)).slice(1) /* ตัด ฿ ซ้ำ */} ({fmtNum((row.diffPct ?? 0) * 100, 2)}%)</small>}
@@ -129,8 +133,9 @@ export function BillingView({ month: initialMonth }) {
             <span>
               {row.review
                 ? <small className="zinc">{row.review.verdict === "match" ? "ตรวจแล้ว · ตรง" : "ตรวจแล้ว · มีหมายเหตุ"}<br />{row.review.reviewer}</small>
-                : <button type="button" className="bl-verify" onClick={() => setOpenAccount(openAccount === row.external_account_id ? null : row.external_account_id)}>
-                    ตรวจแล้ว · {row.brandName || row.accountName}
+                : <button type="button" className="bl-verify" aria-label={`กรอกผลตรวจ · ${row.brandName || row.accountName}`}
+                    onClick={(e) => { e.stopPropagation(); setOpenAccount(openAccount === row.external_account_id ? null : row.external_account_id); }}>
+                    กรอกผลตรวจ
                   </button>}
             </span>
           </div>

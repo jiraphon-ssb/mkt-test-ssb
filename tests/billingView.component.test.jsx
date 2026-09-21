@@ -55,7 +55,7 @@ describe("ตารางรายเดือน", () => {
   });
   it("กดยืนยันผลตรวจ → ส่ง payload ครบผ่าน RPC และแสดงผลบันทึก", async () => {
     show();
-    fireEvent.click(await screen.findByRole("button", { name: /ตรวจแล้ว · TEAMDEE/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "กรอกผลตรวจ · TEAMDEE" }));
     fireEvent.change(screen.getByRole("textbox", { name: "ยอดตาม statement" }), { target: { value: "180,900" } });
     fireEvent.change(screen.getByRole("textbox", { name: "หมายเหตุ" }), { target: { value: "เทียบ statement แล้ว" } });
     fireEvent.click(screen.getByRole("button", { name: "บันทึกผลตรวจ" }));
@@ -83,5 +83,24 @@ describe("แท็บ บิล & กระทบยอด ใน AdsSectionTab
     tabs();
     expect(screen.queryByText("บิล & กระทบยอด")).toBeNull();
     expect(screen.getByText("ภาพรวม")).toBeTruthy();
+  });
+});
+
+
+describe("แถวกดได้ทั้งแถว (กติกาเดียวกับตารางแบรนด์)", () => {
+  it("กดที่ตัวเลขในแถวก็เปิดรายละเอียด · กดซ้ำปิด", async () => {
+    show();
+    const row = (await screen.findByText("TEAMDEE")).closest("[data-row]");
+    const cell = within(row).getByText("฿180,807.37");
+    fireEvent.click(cell);
+    expect(screen.getByText("เงินก้อนนี้ไปกับอะไร")).toBeTruthy();
+    fireEvent.click(cell);
+    expect(screen.queryByText("เงินก้อนนี้ไปกับอะไร")).toBeNull();
+  });
+  it("ชื่อบัญชีไม่โชว์ act_ ดิบ — ตัดเหลือท้าย 4 ตัวเมื่อไม่มีชื่อจาก snapshot", async () => {
+    show();
+    const row = (await screen.findByText("TEAMDEE")).closest("[data-row]");
+    expect(within(row).getByText("บัญชี …0111")).toBeTruthy();
+    expect(row.textContent).not.toContain("act_");
   });
 });

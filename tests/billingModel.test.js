@@ -1,7 +1,7 @@
 /* โมเดลหน้า บิล & กระทบยอด (spec docs/superpowers/specs/2026-09-22-billing-recon.md)
    ตัวเลขเก็บดิบ (UI จัดรูป 2 ตำแหน่งไม่ปัด) · สถานะ exception-based · fixture ใช้เลขบัญชีสมมุติ */
 import { describe, expect, it } from "vitest";
-import { MATCH_PCT, MINOR_PCT, VAT_RATE, buildBillingModel } from "../src/modules/marketing/ads/billingModel.js";
+import { MATCH_PCT, MINOR_PCT, VAT_RATE, buildBillingModel, connectionsFromCards } from "../src/modules/marketing/ads/billingModel.js";
 
 const card = (account, campaign, day, spend) => ({
   brand_id: "b_jd", account_id: account, campaign, fact_date: `2026-09-${day}`,
@@ -100,5 +100,24 @@ describe("connectionsFromCards", () => {
       { external_account_id: "111000111", brand_id: "b_jd", account_name: "" },
       { external_account_id: "222000222", brand_id: "b_td", account_name: "" },
     ]);
+  });
+});
+
+/* บั๊กจากหน้าจริง 22 ก.ย.: cards เก็บ account_id แบบ "act_1234" แต่ Graph snapshot คืนเลขล้วน
+   → join พลาดทั้งหน้า (ชื่อบัญชีโชว์ act_… ยอดค้างเป็น — หมด) — ต้อง normalize ทั้งสองฝั่ง */
+describe("normalize act_ prefix", () => {
+  it("cards act_… จับคู่ snapshot เลขล้วนได้ · ชื่อบัญชีมาจาก snapshot", () => {
+    const m = buildBillingModel({ ...base(),
+      cards: [{ ...card("act_111000111", "แคมเปญ A", "05", 1000) }],
+      connections: connectionsFromCards([{ ...card("act_111000111", "A", "05", 1) }]),
+    });
+    const jd = m.rows.find((r) => r.external_account_id === "111000111");
+    expect(jd).toBeTruthy();
+    expect(jd.accountName).toBe("JD1");          // จาก snapshot ไม่ใช่ act_…
+    expect(jd.balance).toBe(61665.83);
+  });
+  it("totals.balance = null เมื่อยังไม่มี snapshot เลย (ห้ามโชว์ ฿0.00 หลอก)", () => {
+    const m = buildBillingModel({ ...base(), snapshots: [] });
+    expect(m.totals.balance).toBeNull();
   });
 });

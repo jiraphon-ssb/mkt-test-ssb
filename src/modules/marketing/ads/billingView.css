@@ -8,13 +8,22 @@
 .bl-alerts { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
 .bl .aw-facts { margin-top:18px; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px 24px; }
 
+/* สรุปเป็นการ์ดมีขอบ (เดิม dl เปล่ากางเต็มจอ ดูโล่ง) — โทนเดียวกับ summary ของหน้าอื่น */
+.bl-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin-top:16px; }
+.bl-stats > div { display:flex; flex-direction:column; gap:5px; padding:13px 15px; border:1px solid var(--line); border-radius:11px; background:var(--bg); }
+.bl-stats span { color:var(--ink-soft); font-size:11px; }
+.bl-stats b { font-size:19px; font-variant-numeric:tabular-nums; }
+.bl-stats small { color:var(--ink-faint,var(--ink-soft)); font-size:10.5px; }
+
 .bl-table { margin-top:18px; }
-.bl-row { display:grid; grid-template-columns:minmax(0,1.3fr) 110px 110px 110px 110px minmax(0,1.4fr) 170px; gap:0 14px; align-items:center; padding:12px 0; border-top:1px solid var(--line); }
-.bl-row--head { padding:8px 0; color:var(--ink-soft); font-size:10.5px; font-weight:700; border-top:0; border-bottom:1px solid var(--line); }
+.bl-row { cursor:pointer; display:grid; grid-template-columns:minmax(0,1.3fr) 110px 110px 110px 110px minmax(0,1.4fr) 170px; gap:0 14px; align-items:center; padding:12px 0; border-top:1px solid var(--line); }
+.bl-row--head { cursor:default; padding:8px 0; color:var(--ink-soft); font-size:10.5px; font-weight:700; border-top:0; border-bottom:1px solid var(--line); }
 .bl-row > span > b { display:block; font-size:12.5px; font-weight:600; }
 .bl-row > span > small { display:block; color:var(--ink-faint,var(--ink-soft)); font-size:10.5px; }
 .bl-row .num { text-align:right; font-size:12.5px; font-variant-numeric:tabular-nums; }
 .bl-row .aw-flag { margin-left:8px; }
+.bl-row-wrap .bl-row:hover { background:color-mix(in srgb,var(--ink) 4%,transparent); margin:0 -22px; padding-left:22px; padding-right:22px; }
+.bl-row-wrap.is-open { background:color-mix(in srgb,var(--ink) 3%,transparent); margin:0 -22px; padding:0 22px; border-radius:10px; }
 .mkt-root .bl-verify { padding:6px 12px; border:1px solid var(--line); border-radius:7px; background:var(--surface-2); color:var(--ink); font:inherit; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
 
 .bl-detail { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; padding:14px 0 18px; border-top:1px dashed var(--line); }
