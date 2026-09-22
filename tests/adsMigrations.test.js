@@ -231,7 +231,8 @@ describe("0011_ad_billing", () => {
    ทุก migration ต้อง re-run ได้ — ไม่งั้นรันค้างกลางทางแล้วต้องมาไล่ลบมือ */
 describe("migration ทุกตัวต้องรันซ้ำได้ (idempotent)", () => {
   const files = ["0005_ads_data.sql", "0006_ad_creatives.sql", "0007_meta_oauth.sql",
-    "0009_mkt_settings_ads_control.sql", "0010_ads_sync_worker.sql", "0011_ad_billing.sql"];
+    "0009_mkt_settings_ads_control.sql", "0010_ads_sync_worker.sql", "0011_ad_billing.sql",
+    "0012_account_month_spend.sql"];
   for (const file of files) {
     it(`${file}: create table/index/policy มี if not exists หรือ drop ก่อน`, () => {
       const sql = read(`src/supabase/migrations/${file}`).replace(/--[^\n]*/g, "");
@@ -245,4 +246,15 @@ describe("migration ทุกตัวต้องรันซ้ำได้ (i
       }
     });
   }
+});
+
+
+describe("0012 ยอดค่าแอดรายเดือนต่อบัญชี", () => {
+  const sql = read("src/supabase/migrations/0012_account_month_spend.sql");
+  it("เพิ่มคอลัมน์ jsonb แบบรันซ้ำได้ · มีเพดานขนาด · constraint ซ้ำไม่พัง", () => {
+    expect(sql).toContain("add column if not exists month_spend jsonb not null default '{}'::jsonb");
+    expect(sql).toMatch(/jsonb_typeof\(month_spend\) = 'object'/);
+    expect(sql).toMatch(/pg_column_size\(month_spend\) < \d+/);
+    expect(sql).toContain("exception when duplicate_object then null");
+  });
 });

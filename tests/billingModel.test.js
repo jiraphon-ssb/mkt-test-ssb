@@ -61,22 +61,34 @@ describe("กระทบยอดกับ statement", () => {
 });
 
 describe("บัญชีนอกระบบ + สถานะบัญชี + alerts", () => {
-  it("snapshot ที่ไม่ได้เชื่อมและใช้เงินเพิ่ม = offsystem + alert", () => {
-    const m = build({ snapshotsBefore: [{ external_account_id: "999000999", amount_spent_cents: 0 }] });
-    const off = m.rows.find((r) => r.external_account_id === "999000999");
-    expect(off.connected).toBe(false);
-    expect(off.status).toBe("offsystem");
-    expect(off.spend).toBeNull();
-    expect(off.spentDelta).toBe(12400);
-    expect(off.flag).toEqual({ text: "เงินออกนอกระบบ", tone: "rose" });
-    expect(m.alerts.some((a) => a.key === "offsystem")).toBe(true);
-    expect(m.totals.offSystemSpendDelta).toBe(12400);
+  /* B1 22 ก.ย.: เดิมใช้ส่วนต่าง amount_spent ระหว่าง snapshot สองรอบ ซึ่งไม่มีวันมี (upsert แถวเดียว)
+     → ใช้ month_spend ที่ ads-cron ถาม Meta insights มาให้ตรงๆ ยอดเดือนจริง ไม่ใช่ประมาณ */
+  const off = (monthSpend) => ({ external_account_id: "999000999", account_name: "Finix2", account_status: 1,
+    amount_spent_cents: 1240000, balance_cents: 0, fetched_at: "2026-09-21T09:00:00Z",
+    ...(monthSpend === undefined ? {} : { month_spend: { "2026-09": monthSpend } }) });
+  it("บัญชีนอกระบบที่ใช้เงินเดือนนี้ = ยอดจริง + ป้ายแดง + alert บอกยอดรวม", () => {
+    const m = buildBillingModel({ ...base(), snapshots: [base().snapshots[0], off(1240000)] });
+    const row = m.rows.find((r) => r.external_account_id === "999000999");
+    expect(row.connected).toBe(false);
+    expect(row.status).toBe("offsystem");
+    expect(row.spend).toBe(12400);                      // สตางค์ → บาท · เป็นยอดเดือนจริง ไม่ใช่ delta
+    expect(row.vat).toBeCloseTo(12400 * VAT_RATE, 6);   // VAT คิดให้ด้วย จะได้รวมเข้ายอดภาษีซื้อได้
+    expect(row.flag).toEqual({ text: "เงินออกนอกระบบ", tone: "rose" });
+    expect(m.alerts.find((a) => a.key === "offsystem").text).toContain("฿12,400.00");
+    expect(m.totals.offSystemSpend).toBe(12400);
   });
-  it("ไม่มี delta (ไม่มีรอบก่อนเทียบ) = แถว offsystem โผล่แบบเงียบ ไม่ alert มั่ว", () => {
-    const m = build();
-    const off = m.rows.find((r) => r.external_account_id === "999000999");
-    expect(off.status).toBe("offsystem");
-    expect(off.spentDelta).toBeNull();
+  it("บัญชีนอกระบบที่เดือนนี้ไม่ได้ใช้เงิน = เงียบ ไม่มีป้าย ไม่มี alert", () => {
+    const m = buildBillingModel({ ...base(), snapshots: [base().snapshots[0], off(0)] });
+    const row = m.rows.find((r) => r.external_account_id === "999000999");
+    expect(row.spend).toBe(0);
+    expect(row.flag).toBeNull();
+    expect(m.alerts.some((a) => a.key === "offsystem")).toBe(false);
+  });
+  it("ยังไม่เคยเก็บยอดเดือนนั้น = ขีด ไม่ใช่ศูนย์ (แยก 'ไม่รู้' ออกจาก 'ไม่ได้ใช้')", () => {
+    const m = buildBillingModel({ ...base(), snapshots: [base().snapshots[0], off(undefined)] });
+    const row = m.rows.find((r) => r.external_account_id === "999000999");
+    expect(row.spend).toBeNull();
+    expect(row.flag).toBeNull();
     expect(m.alerts.some((a) => a.key === "offsystem")).toBe(false);
   });
   it("account_status ≠ 1 = ป้ายเหลืองบัญชีมีปัญหา · ปกติหมด = alerts ว่าง", () => {

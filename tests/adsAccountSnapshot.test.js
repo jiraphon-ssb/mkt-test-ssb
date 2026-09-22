@@ -1,7 +1,7 @@
 /* snapshot บัญชีแอดทุกตัวที่ token เห็น — ฐานของตัวตรวจ "เงินออกนอกระบบ" (spec 2026-09-22)
    amount_spent/balance ของ Graph เป็น minor units (สตางค์) — เก็บดิบ ห้ามหาร 100 ตรงนี้ */
 import { describe, expect, it } from "vitest";
-import { fetchAccountSnapshots, snapshotRows } from "../supabase/functions/_shared/adsAccountSnapshot.js";
+import { fetchAccountMonthSpend, fetchAccountSnapshots, monthRange, monthsToFetch, snapshotRows } from "../supabase/functions/_shared/adsAccountSnapshot.js";
 
 describe("snapshotRows", () => {
   it("แปลงบัญชีจาก Graph เป็นแถว snapshot — ตัวเลขเป็นสตางค์ตามที่ Graph ส่ง", () => {
@@ -32,5 +32,45 @@ describe("fetchAccountSnapshots", () => {
     const fetch = async (url) => ({ ok: true, status: 200, json: async () => pages[url] });
     const rows = await fetchAccountSnapshots({ fetch, token: "t", sleep: async () => {}, version: "v23.0" });
     expect(rows.map((r) => r.external_account_id)).toEqual(["1", "2"]);
+  });
+});
+
+/* ยอดเดือนระดับบัญชี — ทำให้ "เงินออกนอกระบบ" ใช้งานได้จริง (B1 · 22 ก.ย. 69)
+   เดิมออกแบบไว้เทียบ delta ของ amount_spent สะสม แต่ snapshot เก็บแถวเดียวต่อบัญชี (upsert)
+   จึงไม่มีอะไรให้เทียบ → ใช้ Meta insights ระดับบัญชีแทน ได้ยอดเดือนจริงและย้อนหลังได้ */
+describe("monthsToFetch", () => {
+  it("กลางเดือน = เดือนปัจจุบันพอ", () => {
+    expect(monthsToFetch("2026-09-20")).toEqual(["2026-09"]);
+  });
+  it("ต้นเดือน (≤5) = ดึงเดือนก่อนด้วย เพราะยอดท้ายเดือนยังขยับ", () => {
+    expect(monthsToFetch("2026-09-03")).toEqual(["2026-09", "2026-08"]);
+    expect(monthsToFetch("2026-01-01")).toEqual(["2026-01", "2025-12"]);
+  });
+  it("วันที่อ่านไม่ออก = []", () => {
+    expect(monthsToFetch("nope")).toEqual([]);
+  });
+});
+
+describe("monthRange", () => {
+  it("คืนวันแรก-วันสุดท้ายของเดือน (ก.พ. ปีอธิกสุรทิน)", () => {
+    expect(monthRange("2026-09")).toEqual({ from: "2026-09-01", to: "2026-09-30" });
+    expect(monthRange("2024-02")).toEqual({ from: "2024-02-01", to: "2024-02-29" });
+  });
+});
+
+describe("fetchAccountMonthSpend", () => {
+  it("ดึงยอดรายเดือนต่อบัญชี → map ซ้อนเดือน · บัญชีที่ยิงไม่ได้ข้ามไป ไม่ล้มทั้งชุด", async () => {
+    const calls = [];
+    const fetch = async (url) => {
+      calls.push(url);
+      if (url.includes("act_222")) throw new Error("boom");
+      return { ok: true, status: 200, json: async () => ({ data: [{ spend: "1240.50" }] }) };
+    };
+    const out = await fetchAccountMonthSpend({
+      fetch, token: "t", sleep: async () => {}, version: "v23.0",
+      accountIds: ["111", "222"], months: ["2026-09"],
+    });
+    expect(out).toEqual({ 111: { "2026-09": 124050 } });     // เก็บเป็นสตางค์เหมือนคอลัมน์อื่น
+    expect(calls.some((u) => u.includes("act_111/insights"))).toBe(true);
   });
 });

@@ -4,7 +4,8 @@
    สิทธิ์ team_lead (หรือ service role) · token ถอดรหัสฝั่ง server · เขียนตาราง ad_account_snapshots อย่างเดียว */
 import { adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
-import { fetchAccountSnapshots } from "../_shared/adsAccountSnapshot.js";
+import { todayInTimeZone } from "../_shared/metaInsights.js";
+import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch } from "../_shared/adsAccountSnapshot.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -19,9 +20,20 @@ Deno.serve(async (request) => {
     const token = await decryptToken(authorization.token_ciphertext, authorization.token_iv);
     const rows = await fetchAccountSnapshots({ fetch, token, sleep, version: graphVersion() });
     if (rows.length) {
+      // ยอดเดือนต่อบัญชี (รวมบัญชีที่ยังไม่ได้เชื่อม) — ทับเฉพาะเดือนที่ดึง ไม่ลบเดือนเก่า
+      const months = monthsToFetch(todayInTimeZone(new Date(), "Asia/Bangkok"));
+      const monthSpend = await fetchAccountMonthSpend({
+        fetch, token, sleep, version: graphVersion(),
+        accountIds: rows.map((row) => row.external_account_id), months,
+      });
+      const { data: prior } = await db.from("ad_account_snapshots").select("external_account_id,month_spend");
+      const priorById = new Map((prior ?? []).map((row) => [row.external_account_id, row.month_spend ?? {}]));
       const fetchedAt = new Date().toISOString();
       const { error } = await db.from("ad_account_snapshots")
-        .upsert(rows.map((row) => ({ ...row, fetched_at: fetchedAt })), { onConflict: "external_account_id" });
+        .upsert(rows.map((row) => ({
+          ...row, fetched_at: fetchedAt,
+          month_spend: { ...(priorById.get(row.external_account_id) ?? {}), ...(monthSpend[row.external_account_id] ?? {}) },
+        })), { onConflict: "external_account_id" });
       if (error) throw error;
     }
     return json(request, { accounts: rows.length });

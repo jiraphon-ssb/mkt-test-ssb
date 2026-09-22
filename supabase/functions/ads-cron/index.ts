@@ -6,7 +6,7 @@
 import { adminClient, corsHeaders, decryptToken, env, graphVersion, isServiceRole, json } from "../_shared/adsOAuth.ts";
 import { DEFAULT_SYNC_EVERY_HOURS, planCreativeTargets, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../_shared/adsCron.js";
 import { hourInTimeZone, todayInTimeZone } from "../_shared/metaInsights.js";
-import { fetchAccountSnapshots } from "../_shared/adsAccountSnapshot.js";
+import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch } from "../_shared/adsAccountSnapshot.js";
 
 const cronSleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -190,9 +190,21 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
       const snapToken = await decryptToken(snapAuth.token_ciphertext, snapAuth.token_iv);
       const snapshots = await fetchAccountSnapshots({ fetch, token: snapToken, sleep: cronSleep, version: graphVersion() });
       if (snapshots.length) {
+        /* ยอดเดือนต่อบัญชี — หัวใจของ "เงินออกนอกระบบ": บัญชีที่ยังไม่ได้เชื่อมไม่มีแถวใน ad_daily_facts
+           จึงต้องถาม Meta ตรงๆ · เก็บทับเฉพาะเดือนที่ดึงมา ไม่ลบเดือนเก่าในแถวเดิม */
+        const months = monthsToFetch(todayInTimeZone(new Date(now), "Asia/Bangkok"));
+        const monthSpend = await fetchAccountMonthSpend({
+          fetch, token: snapToken, sleep: cronSleep, version: graphVersion(),
+          accountIds: snapshots.map((row) => row.external_account_id), months,
+        });
+        const { data: prior } = await db.from("ad_account_snapshots").select("external_account_id,month_spend");
+        const priorById = new Map((prior ?? []).map((row) => [row.external_account_id, row.month_spend ?? {}]));
         const fetchedAt = new Date().toISOString();
         const { error: snapError } = await db.from("ad_account_snapshots")
-          .upsert(snapshots.map((row) => ({ ...row, fetched_at: fetchedAt })), { onConflict: "external_account_id" });
+          .upsert(snapshots.map((row) => ({
+            ...row, fetched_at: fetchedAt,
+            month_spend: { ...(priorById.get(row.external_account_id) ?? {}), ...(monthSpend[row.external_account_id] ?? {}) },
+          })), { onConflict: "external_account_id" });
         if (snapError) console.error("[ads-cron] snapshot upsert", snapError.message);
       }
     }

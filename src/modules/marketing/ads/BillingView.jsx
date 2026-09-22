@@ -15,6 +15,9 @@ import "./billingView.css";
 const money = (n) => (n == null ? "—" : fmtMoney(n));
 const monthIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 const shiftMonth = (iso, by) => { const d = new Date(`${iso}T00:00:00`); d.setMonth(d.getMonth() + by); return monthIso(d); };
+/* facts โหลดย้อน 200 วัน (adsFacts.factsLoadRange) — เดือนที่เก่ากว่านั้นตารางจะว่างเพราะไม่มี cards
+   ไม่ใช่เพราะไม่มีค่าแอด · ต้องบอกให้ชัด ไม่งั้นอ่านผิดว่าเดือนนั้นไม่ได้ยิงแอด */
+const FACTS_WINDOW_DAYS = 200;
 const STATUS_TEXT = { match: "ตรงกัน", minor: "ต่างเล็กน้อย", review: "ต้องตรวจ", nostatement: "ยังไม่กรอก", offsystem: "นอกระบบ" };
 const STATUS_TONE = { match: "emerald", minor: "amber", review: "rose", nostatement: "zinc", offsystem: "rose" };
 
@@ -70,6 +73,9 @@ export function BillingView({ month: initialMonth }) {
     return () => { alive = false; };
   }, [month, isLead, reloadKey]);
 
+  const thisMonth = monthIso(new Date());
+  const atLatestMonth = month >= thisMonth;
+  const outOfWindow = (Date.parse(`${thisMonth}T00:00:00`) - Date.parse(`${month}T00:00:00`)) / 86_400_000 > FACTS_WINDOW_DAYS;
   const model = useMemo(() => buildBillingModel({
     month, cards: ads.cards ?? [], connections: connectionsFromCards(ads.cards ?? []),
     snapshots: remote.snapshots, reviews: remote.reviews, brands: data.brands ?? [],
@@ -88,7 +94,9 @@ export function BillingView({ month: initialMonth }) {
         <div className="bl-month" role="group" aria-label="เลือกรอบเดือน">
           <button type="button" aria-label="เดือนก่อนหน้า" onClick={() => setMonth((m) => shiftMonth(m, -1))}>‹</button>
           <b>{model.rangeLabel}</b>
-          <button type="button" aria-label="เดือนถัดไป" onClick={() => setMonth((m) => shiftMonth(m, 1))}>›</button>
+          <button type="button" aria-label="เดือนถัดไป" disabled={atLatestMonth}
+            title={atLatestMonth ? "เดือนปัจจุบันคือรอบล่าสุด" : undefined}
+            onClick={() => setMonth((m) => shiftMonth(m, 1))}>›</button>
         </div>
       </div>
 
@@ -103,6 +111,7 @@ export function BillingView({ month: initialMonth }) {
         <div><span>ยอดค้างที่ Meta ยังไม่ตัด</span><b>{money(model.totals.balance)}</b><small>{model.totals.balance == null ? "รอ snapshot รอบแรกจาก ads-cron" : "จาก snapshot ล่าสุด"}</small></div>
       </div>
 
+      {outOfWindow && <p className="aw-key">เดือนนี้เกินช่วงข้อมูลที่ระบบเก็บไว้ ({FACTS_WINDOW_DAYS} วันล่าสุด) — ตัวเลขค่าแอดจึงไม่ขึ้น ไม่ได้แปลว่าเดือนนั้นไม่ได้ยิงแอด</p>}
       {remote.status === "loading" && <p className="aw-key">กำลังโหลดข้อมูลบิล…</p>}
       {remote.status === "error" && <p className="aw-key">โหลดข้อมูลฝั่งฐานไม่สำเร็จ — ตัวเลขระบบนับยังถูกต้อง แต่ยอดค้าง/ผลตรวจอาจไม่ขึ้น</p>}
 

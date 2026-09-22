@@ -104,3 +104,28 @@ describe("แถวกดได้ทั้งแถว (กติกาเด�
     expect(row.textContent).not.toContain("act_");
   });
 });
+
+/* B1 · 22 ก.ย.: เดือนอนาคตกดได้ไม่จำกัด และย้อนเกินหน้าต่าง facts (200 วัน) ตารางว่างโดยไม่บอกเหตุผล */
+describe("ขอบเขตเดือน", () => {
+  it("เดือนปัจจุบัน: ปุ่มเดือนถัดไปกดไม่ได้", async () => {
+    render(<MemoryRouter><BillingView month={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`} /></MemoryRouter>);
+    await screen.findByText(/บิล & กระทบยอด/);
+    expect(screen.getByRole("button", { name: "เดือนถัดไป" }).disabled).toBe(true);
+  });
+  it("ย้อนเกินหน้าต่างข้อมูล = บอกเหตุผล ไม่ปล่อยให้เข้าใจว่าไม่มีค่าแอด", async () => {
+    render(<MemoryRouter><BillingView month="2024-01-01" /></MemoryRouter>);
+    expect(await screen.findByText(/เกินช่วงข้อมูลที่ระบบเก็บไว้/)).toBeTruthy();
+  });
+});
+
+describe("บัญชีนอกระบบใช้ยอดเดือนจริง", () => {
+  it("มี month_spend = โชว์ยอด + VAT + ป้ายแดง", async () => {
+    state.snapshots = [{ external_account_id: "999000999", account_name: "Finix2", account_status: 1,
+      amount_spent_cents: 1240000, balance_cents: 0, month_spend: { "2026-09": 1240000 },
+      fetched_at: "2026-09-21T09:00:00Z" }];
+    show();
+    const row = (await screen.findByText("Finix2")).closest("[data-row]");
+    expect(within(row).getByText("฿12,400.00")).toBeTruthy();
+    expect(within(row).getByText("เงินออกนอกระบบ")).toBeTruthy();
+  });
+});

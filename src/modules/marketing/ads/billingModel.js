@@ -12,11 +12,10 @@ const baht = (cents) => (cents == null ? null : cents / 100);
    — normalize ที่เดียว ไม่งั้น join พลาดทั้งหน้า (บั๊กหน้าจริง 22 ก.ย.: ชื่อโชว์ act_… ยอดค้างเป็นขีดหมด) */
 const normId = (v) => String(v ?? "").replace(/^act_/, "");
 
-export function buildBillingModel({ month, cards = [], connections = [], snapshots = [], snapshotsBefore = [], reviews = [], brands = [] }) {
+export function buildBillingModel({ month, cards = [], connections = [], snapshots = [], reviews = [], brands = [] }) {
   const monthPrefix = String(month).slice(0, 7);
   const brandName = new Map(brands.map((b) => [b.id, b.name]));
   const snapByAccount = new Map(snapshots.map((s) => [normId(s.external_account_id), s]));
-  const beforeByAccount = new Map(snapshotsBefore.map((s) => [normId(s.external_account_id), s]));
 
   /* review ล่าสุดต่อบัญชี — append-only จึงตัดสินด้วย created_at ใหม่สุด */
   const reviewByAccount = new Map();
@@ -71,7 +70,6 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
       })).sort((a, b) => b.spend - a.spend),
       balance: baht(snap?.balance_cents),
       accountStatus,
-      spentDelta: null,                                   // มีความหมายเฉพาะบัญชีนอกระบบ
       statement, diff, diffPct, status, flag, review,
     });
   }
@@ -79,35 +77,36 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
   /* บัญชีใน snapshot ที่ไม่ได้เชื่อมเข้าระบบ = เงินอาจออกโดย dashboard มองไม่เห็น */
   const connected = new Set(connections.map((c) => normId(c.external_account_id)));
   for (const snap of snapshots) {
-    if (connected.has(normId(snap.external_account_id))) continue;
-    const before = beforeByAccount.get(normId(snap.external_account_id));
-    const spentDelta = before?.amount_spent_cents != null && snap.amount_spent_cents != null
-      ? baht(snap.amount_spent_cents - before.amount_spent_cents)
-      : null;
+    const account = normId(snap.external_account_id);
+    if (connected.has(account)) continue;
+    /* ยอดเดือนจริงจาก Meta insights (ads-cron เก็บไว้ใน month_spend) — ไม่ใช่ delta ประมาณ
+       ไม่มีคีย์เดือนนั้น = ยังไม่เคยเก็บ ต้องเป็น null ("ไม่รู้") ห้ามเป็น 0 ("ไม่ได้ใช้") */
+    const cents = snap.month_spend?.[monthPrefix];
+    const spend = cents == null ? null : baht(cents);
     rows.push({
-      external_account_id: normId(snap.external_account_id),
-      accountName: snap.account_name || normId(snap.external_account_id),
+      external_account_id: account,
+      accountName: snap.account_name || account,
       brandName: "",
       connected: false,
-      spend: null, vat: null, gross: null, campaigns: [],
+      spend,
+      vat: spend == null ? null : spend * VAT_RATE,
+      gross: spend == null ? null : spend * (1 + VAT_RATE),
+      campaigns: [],
       balance: baht(snap.balance_cents),
       accountStatus: snap.account_status ?? null,
-      spentDelta,
       statement: null, diff: null, diffPct: null,
       status: "offsystem",
-      // ยังไม่มีรอบก่อนเทียบ = ยังสรุปไม่ได้ว่าใช้เงินเพิ่ม — แถวโผล่แบบเงียบ ไม่ตะโกน
-      flag: spentDelta != null && spentDelta > 0 ? { text: "เงินออกนอกระบบ", tone: "rose" } : null,
-      review: reviewByAccount.get(normId(snap.external_account_id)) ?? null,
+      flag: spend > 0 ? { text: "เงินออกนอกระบบ", tone: "rose" } : null,
+      review: reviewByAccount.get(account) ?? null,
     });
   }
 
   /* เรียง: มีป้ายก่อน (แดงก่อนเหลือง) แล้วตามยอดมาก→น้อย */
   const severity = (r) => (r.flag?.tone === "rose" ? 0 : r.flag?.tone === "amber" ? 1 : 2);
-  rows.sort((a, b) => severity(a) - severity(b) || (b.spend ?? b.spentDelta ?? 0) - (a.spend ?? a.spentDelta ?? 0));
+  rows.sort((a, b) => severity(a) - severity(b) || (b.spend ?? 0) - (a.spend ?? 0));
 
   const connectedRows = rows.filter((r) => r.connected);
-  const offSystemSpendDelta = rows.filter((r) => !r.connected && r.spentDelta != null && r.spentDelta > 0)
-    .reduce((sum, r) => sum + r.spentDelta, 0);
+  const offSystemSpend = rows.filter((r) => !r.connected && r.spend > 0).reduce((sum, r) => sum + r.spend, 0);
   const totals = {
     spend: connectedRows.reduce((sum, r) => sum + r.spend, 0),
     vat: connectedRows.reduce((sum, r) => sum + r.vat, 0),
@@ -115,14 +114,14 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
     statement: connectedRows.reduce((sum, r) => sum + (r.statement ?? 0), 0),
     // ยังไม่มี snapshot สักบัญชี = ไม่รู้ยอดค้าง ต้องเป็น null (โชว์ ฿0.00 = โกหก)
     balance: connectedRows.some((r) => r.balance != null) ? connectedRows.reduce((sum, r) => sum + (r.balance ?? 0), 0) : null,
-    offSystemSpendDelta,
+    offSystemSpend,
   };
 
   /* alerts — exception-based: เดือนเรียบร้อย = [] */
   const alerts = [];
   const offAccounts = rows.filter((r) => !r.connected && r.flag);
   if (offAccounts.length) alerts.push({ key: "offsystem", tone: "rose",
-    text: `เงินออกนอกระบบ ≈ ฿${offSystemSpendDelta.toFixed(2)} — ${offAccounts.map((r) => r.accountName).join(" · ")} ยังไม่ได้เชื่อม` });
+    text: `เงินออกนอกระบบ ฿${offSystemSpend.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — ${offAccounts.map((r) => r.accountName).join(" · ")} ยังไม่ได้เชื่อมเข้าระบบ` });
   const reviewCount = rows.filter((r) => r.status === "review").length;
   if (reviewCount) alerts.push({ key: "review", tone: "rose", text: `ส่วนต่างเกินเกณฑ์ ${reviewCount} บัญชี` });
   const badStatus = rows.filter((r) => r.accountStatus != null && r.accountStatus !== 1);
