@@ -40,6 +40,20 @@ jobs:
       - name: build
         run: npm run build
 
+      # Edge Function ไม่ผ่าน lint/test/build ของ npm เลย — ก่อน 22 ก.ย. 69 CI ไม่เคยตรวจฝั่งนี้
+      # (ตรวจครั้งแรกเจอ type error จริงใน 8 จาก 12 ตัว) · config อยู่ที่ supabase/functions/deno.json
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: typecheck Edge Functions
+        run: |
+          fail=0
+          for f in supabase/functions/*/index.ts; do
+            deno check --config supabase/functions/deno.json "$f" || fail=1
+          done
+          exit $fail
+
       # กันความผิดพลาดที่เคยเกิดจริง: แพตช์ชั่วคราวตอนตรวจหน้าจอหลุดขึ้น main
       - name: ห้ามมีแพตช์ชั่วคราวค้างในโค้ด
         run: |

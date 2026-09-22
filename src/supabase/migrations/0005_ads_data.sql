@@ -61,7 +61,7 @@ language sql stable security invoker set search_path = '' as $$
   );
 $$;
 
-create table ad_connections (
+create table if not exists ad_connections (
   id uuid primary key default gen_random_uuid(),
   provider text not null check (provider in ('meta','google','tiktok','shopee')),
   brand_id text not null references mkt_brand(id) on delete no action deferrable initially deferred,
@@ -79,7 +79,7 @@ create table ad_connections (
   unique(provider, external_account_id)
 );
 
-create table ad_sync_runs (
+create table if not exists ad_sync_runs (
   id uuid primary key default gen_random_uuid(),
   connection_id uuid not null references ad_connections(id) on delete cascade,
   mode text not null check (mode in ('incremental','backfill','reconcile')),
@@ -94,7 +94,7 @@ create table ad_sync_runs (
   finished_at timestamptz
 );
 
-create table ad_daily_facts (
+create table if not exists ad_daily_facts (
   id uuid primary key default gen_random_uuid(),
   connection_id uuid not null references ad_connections(id) on delete cascade,
   fact_date date not null,
@@ -118,10 +118,10 @@ create table ad_daily_facts (
   unique(connection_id, fact_date, level, campaign_id, ad_group_id, ad_id)
 );
 
-create index ad_daily_facts_date_idx on ad_daily_facts(fact_date);
-create index ad_daily_facts_connection_idx on ad_daily_facts(connection_id, fact_date);
+create index if not exists ad_daily_facts_date_idx on ad_daily_facts(fact_date);
+create index if not exists ad_daily_facts_connection_idx on ad_daily_facts(connection_id, fact_date);
 
-create table business_daily_facts (
+create table if not exists business_daily_facts (
   id uuid primary key default gen_random_uuid(),
   brand_id text not null references mkt_brand(id) on delete no action deferrable initially deferred,
   fact_date date not null,
@@ -139,7 +139,7 @@ create table business_daily_facts (
   unique(source, external_record_id)
 );
 
-create table ad_targets (
+create table if not exists ad_targets (
   id uuid primary key default gen_random_uuid(),
   brand_id text not null references mkt_brand(id) on delete no action deferrable initially deferred,
   target_month date not null check (target_month = date_trunc('month', target_month)::date),
@@ -153,7 +153,7 @@ create table ad_targets (
   unique(brand_id, target_month)
 );
 
-create table ad_rules (
+create table if not exists ad_rules (
   id uuid primary key default gen_random_uuid(),
   brand_id text references mkt_brand(id) on delete no action deferrable initially deferred,
   rule_key text not null,
@@ -165,16 +165,16 @@ create table ad_rules (
   updated_at timestamptz not null default now()
 );
 
-create unique index ad_rules_scope_key_uidx
+create unique index if not exists ad_rules_scope_key_uidx
   on ad_rules(coalesce(brand_id, ''), rule_key);
 
 -- index คอลัมน์ FK ทุกตัว (Postgres ไม่สร้างให้เอง — JOIN/CASCADE จะ seq scan) ตาม supabase-postgres-best-practices
-create index ad_connections_brand_idx on ad_connections(brand_id);
-create index ad_sync_runs_connection_idx on ad_sync_runs(connection_id, started_at desc);
-create index business_daily_facts_brand_date_idx on business_daily_facts(brand_id, fact_date);
-create index ad_rules_brand_idx on ad_rules(brand_id);
-create index ad_targets_updated_by_idx on ad_targets(updated_by);
-create index ad_rules_updated_by_idx on ad_rules(updated_by);
+create index if not exists ad_connections_brand_idx on ad_connections(brand_id);
+create index if not exists ad_sync_runs_connection_idx on ad_sync_runs(connection_id, started_at desc);
+create index if not exists business_daily_facts_brand_date_idx on business_daily_facts(brand_id, fact_date);
+create index if not exists ad_rules_brand_idx on ad_rules(brand_id);
+create index if not exists ad_targets_updated_by_idx on ad_targets(updated_by);
+create index if not exists ad_rules_updated_by_idx on ad_rules(updated_by);
 
 create trigger ad_connections_touch before update on ad_connections
   for each row execute function touch_updated_at();
@@ -186,14 +186,23 @@ alter table business_daily_facts enable row level security;
 alter table ad_targets enable row level security;
 alter table ad_rules enable row level security;
 
+drop policy if exists ads_connections_read on ad_connections;
 create policy ads_connections_read on ad_connections for select to authenticated using (true);
+drop policy if exists ads_connections_admin on ad_connections;
 create policy ads_connections_admin on ad_connections for all to authenticated using (mkt_is_team_lead()) with check (mkt_is_team_lead());
+drop policy if exists ads_sync_read on ad_sync_runs;
 create policy ads_sync_read on ad_sync_runs for select to authenticated using (true);
+drop policy if exists ads_facts_read on ad_daily_facts;
 create policy ads_facts_read on ad_daily_facts for select to authenticated using (true);
+drop policy if exists business_facts_read on business_daily_facts;
 create policy business_facts_read on business_daily_facts for select to authenticated using (true);
+drop policy if exists ads_targets_read on ad_targets;
 create policy ads_targets_read on ad_targets for select to authenticated using (true);
+drop policy if exists ads_targets_admin on ad_targets;
 create policy ads_targets_admin on ad_targets for all to authenticated using (mkt_is_team_lead()) with check (mkt_is_team_lead());
+drop policy if exists ads_rules_read on ad_rules;
 create policy ads_rules_read on ad_rules for select to authenticated using (true);
+drop policy if exists ads_rules_admin on ad_rules;
 create policy ads_rules_admin on ad_rules for all to authenticated using (mkt_is_team_lead()) with check (mkt_is_team_lead());
 
 -- ad_daily_facts, business_daily_facts and ad_sync_runs are written by service-role

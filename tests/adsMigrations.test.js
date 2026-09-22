@@ -206,7 +206,7 @@ describe("0011_ad_billing", () => {
   const sql = read("src/supabase/migrations/0011_ad_billing.sql");
   it("สามตารางเปิด RLS และจำกัด team_lead", () => {
     for (const t of ["ad_account_snapshots", "ad_billing_reviews", "ad_billing_charges"]) {
-      expect(sql).toContain(`create table ${t}`);
+      expect(sql).toContain(`create table if not exists ${t}`);
       expect(sql).toContain(`alter table ${t} enable row level security`);
     }
     expect(sql.match(/mkt_is_team_lead\(\)/g).length).toBeGreaterThanOrEqual(4);
@@ -225,4 +225,24 @@ describe("0011_ad_billing", () => {
     const body = sql.slice(sql.indexOf("create or replace function mkt_billing_review_add"));   // เฉพาะตัว RPC — revoke/คอมเมนต์ข้างบนมีคำว่า update โดยชอบ
     expect(body.replace(/--[^\n]*/g, "")).not.toMatch(/\b(update|delete)\s/i);
   });
+});
+
+/* กันพลาดรอบหน้า (22 ก.ย.): 0011 รันซ้ำแล้วพัง "relation already exists" เพราะไม่มี if not exists
+   ทุก migration ต้อง re-run ได้ — ไม่งั้นรันค้างกลางทางแล้วต้องมาไล่ลบมือ */
+describe("migration ทุกตัวต้องรันซ้ำได้ (idempotent)", () => {
+  const files = ["0005_ads_data.sql", "0006_ad_creatives.sql", "0007_meta_oauth.sql",
+    "0009_mkt_settings_ads_control.sql", "0010_ads_sync_worker.sql", "0011_ad_billing.sql"];
+  for (const file of files) {
+    it(`${file}: create table/index/policy มี if not exists หรือ drop ก่อน`, () => {
+      const sql = read(`src/supabase/migrations/${file}`).replace(/--[^\n]*/g, "");
+      for (const m of sql.matchAll(/create (table|index|unique index)\s+(?!if not exists)([a-z_]+)/gi)) {
+        expect.fail(`${file}: "create ${m[1]} ${m[2]}" ไม่มี if not exists`);
+      }
+      // policy ไม่มี if not exists ใน Postgres — ต้อง drop policy if exists ก่อนทุกตัว
+      const policies = [...sql.matchAll(/create policy (\w+) on (\w+)/g)];
+      for (const [, name, table] of policies) {
+        expect(sql, `${file}: policy ${name} ต้องมี drop policy if exists ก่อน`).toContain(`drop policy if exists ${name} on ${table}`);
+      }
+    });
+  }
 });

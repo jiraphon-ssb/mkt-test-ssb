@@ -131,7 +131,7 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
     // ปัญหาระดับบัญชี (token หมดอายุ/บัญชีถูกปิด) → ข้ามเฉพาะบัญชีนั้นในรอบนี้
     // ห้าม break ทั้งรอบ ไม่งั้นบัญชีเดียวที่พังจะลากบัญชีที่ดีหยุดตามไปด้วยทุกชั่วโมง
     if (stopped.has(job.connectionId)) continue;
-    const result = { ...job, ...(await call("ads-sync", job)) };
+    const result: JobResult = { ...job, ...(await call("ads-sync", job)) };
     sync.push(result);
     if (!result.ok && ["META_TOKEN_INVALID", "AUTHORIZATION_NOT_READY", "CONNECTION_NOT_READY", "META_RATE_LIMIT"].includes(String(result.code))) {
       stopped.add(job.connectionId);

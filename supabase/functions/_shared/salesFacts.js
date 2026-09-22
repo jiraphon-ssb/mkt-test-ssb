@@ -43,6 +43,7 @@ export function factWindows(from, to, size = 3) {
     นิยามตาม kind ของพี่ทัช: inq คนทัก · lead ลีด · won ได้ออเดอร์(เริ่มออกแบบ) · book ยืนยันออเดอร์ = ยอดขาย
     · pay เงินเข้าสุทธิ · canc ยกเลิก · lost/nosale ไม่เก็บ (หลุดแทบไม่มีคนกด · งานไม่ใช่ยอดขายไม่เกี่ยวกับแอด)
     ยอดขายไม่หักยกเลิก — sale_goal_period ของพี่ทัชวัดเป้าจาก book ล้วน ถ้าหักเองเลขจะไม่ตรงหน้าเป้า */
+/** @param {any[]} facts @param {{from?:string, to?:string, brands?:string[]}} [opts] */
 export function factsToDailyRows(facts = [], { from, to, brands = SALES_SOURCE_BRANDS } = {}) {
   const grid = new Map();
   for (const { from: start, to: end } of factWindows(from, to, 3650)) {

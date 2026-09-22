@@ -4,7 +4,7 @@
 
 -- snapshot บัญชีแอดทุกตัวที่ token OAuth เห็น (รวมที่ยังไม่ได้เชื่อมเข้าระบบ) — ads-cron เขียนรอบละครั้ง
 -- amount_spent/balance ของ Graph เป็น minor units (สตางค์) สะสมตลอดชีพ — เก็บดิบ แปลงตอนแสดงผล
-create table ad_account_snapshots (
+create table if not exists ad_account_snapshots (
   external_account_id text primary key,
   account_name text not null default '',
   currency text not null default 'THB',
@@ -15,7 +15,7 @@ create table ad_account_snapshots (
 );
 
 -- ผลตรวจของคน + ยอด statement ที่บัญชีกรอก (ไม่บังคับ) — แถวใหม่เสมอ ห้ามแก้/ลบ (หลักฐานตรวจสอบย้อนหลัง)
-create table ad_billing_reviews (
+create table if not exists ad_billing_reviews (
   id uuid primary key default gen_random_uuid(),
   month date not null,
   external_account_id text not null,
@@ -25,10 +25,10 @@ create table ad_billing_reviews (
   reviewer text not null,
   created_at timestamptz not null default now()
 );
-create index ad_billing_reviews_month_idx on ad_billing_reviews(month, external_account_id, created_at desc);
+create index if not exists ad_billing_reviews_month_idx on ad_billing_reviews(month, external_account_id, created_at desc);
 
 -- โครงท่อเมลใบเสร็จ (เตรียมไว้เฉยๆ ตาม spec หัวข้อ 0) — ว่างจนกว่าจะเปิดใช้ · parser เขียนเมื่อมีตัวอย่างเมลจริง
-create table ad_billing_charges (
+create table if not exists ad_billing_charges (
   id uuid primary key default gen_random_uuid(),
   source text not null default 'email',
   charge_date date,
@@ -45,8 +45,11 @@ alter table ad_billing_charges enable row level security;
 
 -- อ่านได้เฉพาะ team_lead · ไม่มี insert policy ฝั่ง client (snapshot/charges เขียนโดย service role ของ edge function
 -- · reviews เขียนผ่าน RPC ข้างล่างเท่านั้น)
+drop policy if exists snap_read on ad_account_snapshots;
 create policy snap_read on ad_account_snapshots for select to authenticated using (mkt_is_team_lead());
+drop policy if exists reviews_read on ad_billing_reviews;
 create policy reviews_read on ad_billing_reviews for select to authenticated using (mkt_is_team_lead());
+drop policy if exists charges_read on ad_billing_charges;
 create policy charges_read on ad_billing_charges for select to authenticated using (mkt_is_team_lead());
 
 -- append-only จริงระดับสิทธิ์: ต่อให้มีบั๊ก client ก็แก้/ลบแถวเดิมไม่ได้

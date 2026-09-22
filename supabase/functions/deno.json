@@ -1,0 +1,10 @@
+{
+  "_comment": "typecheck ของ Edge Function (CI รัน deno check ทุกตัว) — เปิด 22 ก.ย. 69 หลังพบว่า CI ไม่เคยตรวจฝั่งนี้เลย แล้ว ads-snapshot ที่ deploy ไปมี type error จริง",
+  "_why_not_strict": "strict เต็มให้ 35 error เดิมที่เป็น implicit-any / possibly-null (ไม่ใช่บั๊ก) — ปิดสองตัวนั้นไว้เพื่อให้ CI จับของที่พังจริง: เรียกตัวแปรที่ไม่มี · import ผิด · พิมพ์ชื่อ property ผิด · ส่ง argument ผิดชนิด",
+  "compilerOptions": {
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "lib": ["deno.window", "dom", "esnext"]
+  }
+}

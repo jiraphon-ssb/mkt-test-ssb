@@ -29,6 +29,7 @@ export function cronDue(lastSuccessAt, now, everyHours = DEFAULT_SYNC_EVERY_HOUR
 
 const entryRuns = (runs) => runs.map((r) => ({ ...r, connection_id: r.connection_id ?? r.connectionId }));
 
+/** @param {{connections?:any[], runs?:any[], now?:any, todayOf?:Function, syncEveryHours?:number, maxPerConnection?:number, maxJobs?:number, staleMinutes?:number}} [opts] */
 export function planCronJobs({
   connections = [], runs = [], now, todayOf, syncEveryHours = DEFAULT_SYNC_EVERY_HOURS,
   maxPerConnection = 1, maxJobs = 4, staleMinutes = STALE_RUN_MINUTES,
@@ -75,6 +76,7 @@ export const RECONCILE_MAX_TRIES = 3;    // ต่อบัญชีต่อว
 
 /** บัญชีที่ควรตรวจยอดในรอบนี้: ข้อมูลครบ · สายพอตามเวลาบัญชี · วันนี้ยังไม่ผ่าน และยังอยู่ในโควตา/พ้นช่วงพักแล้ว
     ผลตรวจที่ไม่ผ่านถูกบันทึกเป็น status partial — ถ้านับแค่ success ว่า "ตรวจแล้ว" บัญชีที่ยอดไม่ตรงจะถูกตรวจซ้ำทุกชั่วโมง */
+/** @param {{connections?:any[], runs?:any[], now?:any, todayOf?:Function, hourOf?:Function, afterHour?:number, max?:number, retryHours?:number, maxTries?:number}} [opts] */
 export function planReconcileTargets({
   connections = [], runs = [], now, todayOf, hourOf, afterHour = RECONCILE_AFTER_HOUR, max = 4,
   retryHours = RECONCILE_RETRY_HOURS, maxTries = RECONCILE_MAX_TRIES,
@@ -103,6 +105,7 @@ export const CREATIVE_EVERY_HOURS = 24;  // รูป/ข้อความเ�
 
 /** บัญชีที่ควรรีเฟรช creative ในรอบนี้ — refreshedAt = เวลาที่รีเฟรชล่าสุดของแต่ละบัญชี (media_refreshed_at ล่าสุด)
     ค้างนานสุดได้ก่อน · ทำทีละบัญชีต่อรอบ เพราะ ads-creatives ใช้เวลาได้ถึง 90 วินาที */
+/** @param {{connections?:any[], refreshedAt?:Record<string,any>, now?:any, everyHours?:number, max?:number}} [opts] */
 export function planCreativeTargets({
   connections = [], refreshedAt = {}, now, everyHours = CREATIVE_EVERY_HOURS, max = 1,
 } = {}) {
@@ -136,6 +139,7 @@ export const SALES_MAX_TRIES = 4;   // ลองใหม่ได้ถ้า�
 /** ถึงเวลาดึงยอดขายจริงหรือยัง — วันละครั้ง หลังเวลาที่ระบบขายปิดยอดของเมื่อวานแล้ว
     lastAt = เวลาที่ดึง "สำเร็จ" ครั้งล่าสุด (เก็บใน ad_cron_ticks.detail) · tries = จำนวนครั้งที่ลองไปแล้ววันนี้
     ที่ต้องแยกสำเร็จ/ล้มเหลว: ถ้านับการลองที่ล้มเหลวว่าทำแล้ว วันที่ระบบขายล่มจะไม่มีใครดึงยอดวันนั้นอีกเลย */
+/** @param {{lastAt?:any, now?:any, hour?:number, today?:string, afterHour?:number, tries?:number, maxTries?:number}} [opts] */
 export function salesDue({ lastAt = null, now, hour = 0, today, afterHour = RECONCILE_AFTER_HOUR, tries = 0, maxTries = SALES_MAX_TRIES } = {}) {
   if (!Number.isFinite(time(now)) || hour < afterHour) return false;
   if (Number(tries) >= maxTries) return false;
