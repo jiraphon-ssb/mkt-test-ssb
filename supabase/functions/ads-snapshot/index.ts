@@ -2,10 +2,10 @@
    (spec docs/superpowers/specs/2026-09-22-billing-recon.md — ปกติ ads-cron เก็บทุกชั่วโมงอยู่แล้ว
    ปุ่มนี้มีไว้ตอนไม่อยากรอรอบ เช่น เพิ่งเปิดหน้า บิล & กระทบยอด ครั้งแรก)
    สิทธิ์ team_lead (หรือ service role) · token ถอดรหัสฝั่ง server · เขียนตาราง ad_account_snapshots อย่างเดียว */
-import { adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
+import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersion, isServiceRole, json, requireTeamLead } from "../_shared/adsOAuth.ts";
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { todayInTimeZone } from "../_shared/metaInsights.js";
-import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch } from "../_shared/adsAccountSnapshot.js";
+import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch, pickSnapshotAuthorization } from "../_shared/adsAccountSnapshot.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -14,8 +14,10 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
   try {
     const { db } = isServiceRole(request) ? { db: adminClient() } : await requireTeamLead(request);
-    const { data: authorization } = await db.from("ad_provider_authorizations")
-      .select("token_ciphertext,token_iv").eq("status", "connected").limit(1).maybeSingle();
+    // token ที่ใช้ได้จริงเท่านั้น (เชื่อมอยู่ · ไม่หมดอายุ · เจ้าของยัง active) — เกณฑ์เดียวกับ ads-reconcile
+    const { data: auths } = await db.from("ad_provider_authorizations")
+      .select("id,user_id,status,expires_at,token_ciphertext,token_iv");
+    const authorization = pickSnapshotAuthorization(auths ?? [], { activeUsers: await activeMemberUserIds(db) });
     if (!authorization) return json(request, { error: "AUTHORIZATION_NOT_READY" }, 409);
     const token = await decryptToken(authorization.token_ciphertext, authorization.token_iv);
     const rows = await fetchAccountSnapshots({ fetch, token, sleep, version: graphVersion() });

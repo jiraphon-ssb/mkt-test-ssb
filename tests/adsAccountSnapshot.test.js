@@ -1,7 +1,7 @@
 /* snapshot บัญชีแอดทุกตัวที่ token เห็น — ฐานของตัวตรวจ "เงินออกนอกระบบ" (spec 2026-09-22)
    amount_spent/balance ของ Graph เป็น minor units (สตางค์) — เก็บดิบ ห้ามหาร 100 ตรงนี้ */
 import { describe, expect, it } from "vitest";
-import { fetchAccountMonthSpend, fetchAccountSnapshots, monthRange, monthsToFetch, snapshotRows } from "../supabase/functions/_shared/adsAccountSnapshot.js";
+import { fetchAccountMonthSpend, fetchAccountSnapshots, monthRange, monthsToFetch, pickSnapshotAuthorization, snapshotRows } from "../supabase/functions/_shared/adsAccountSnapshot.js";
 
 describe("snapshotRows", () => {
   it("แปลงบัญชีจาก Graph เป็นแถว snapshot — ตัวเลขเป็นสตางค์ตามที่ Graph ส่ง", () => {
@@ -72,5 +72,32 @@ describe("fetchAccountMonthSpend", () => {
     });
     expect(out).toEqual({ 111: { "2026-09": 124050 } });     // เก็บเป็นสตางค์เหมือนคอลัมน์อื่น
     expect(calls.some((u) => u.includes("act_111/insights"))).toBe(true);
+  });
+});
+
+/* เลือก token ที่ใช้เก็บ snapshot (B2 · 22 ก.ย. 69)
+   เดิม ads-cron หยิบ .limit(1) มาใช้ดิบๆ — ถ้าตัวแรกหมดอายุหรือเจ้าของออกจากทีมแล้ว
+   snapshot จะล้มเงียบทุกชั่วโมง ทั้งที่ token ตัวอื่นในทีมยังใช้ได้
+   (ads-reconcile ตรวจ 3 ชั้นนี้อยู่แล้ว — ทำให้เท่ากัน) */
+describe("pickSnapshotAuthorization", () => {
+  const active = new Set(["u1", "u2"]);
+  const now = Date.parse("2026-09-22T10:00:00Z");
+  const auth = (id, over = {}) => ({ id, user_id: "u1", status: "connected", expires_at: null,
+    token_ciphertext: "c", token_iv: "iv", ...over });
+  it("ข้ามตัวที่ไม่ connected · หมดอายุ · เจ้าของไม่ active แล้วเลือกตัวที่ใช้ได้", () => {
+    const picked = pickSnapshotAuthorization([
+      auth("a1", { status: "expired" }),
+      auth("a2", { expires_at: "2026-09-01T00:00:00Z" }),
+      auth("a3", { user_id: "gone" }),
+      auth("a4"),
+    ], { activeUsers: active, now });
+    expect(picked?.id).toBe("a4");
+  });
+  it("ไม่มีตัวไหนใช้ได้ = null (ผู้เรียกไปตอบ AUTHORIZATION_NOT_READY)", () => {
+    expect(pickSnapshotAuthorization([auth("a1", { status: "expired" })], { activeUsers: active, now })).toBeNull();
+    expect(pickSnapshotAuthorization([], { activeUsers: active, now })).toBeNull();
+  });
+  it("token ที่ยังไม่หมดอายุในอนาคต = ใช้ได้", () => {
+    expect(pickSnapshotAuthorization([auth("a1", { expires_at: "2026-12-01T00:00:00Z" })], { activeUsers: active, now })?.id).toBe("a1");
   });
 });

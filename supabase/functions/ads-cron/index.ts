@@ -3,10 +3,10 @@
    (ยกเว้นงาน snapshot บัญชี — เบาพอที่จะทำในนี้ตรงๆ: 1 request/รอบ ไม่คุ้มแตกเป็น function ใหม่ · spec 2026-09-22)
    ทำทีละน้อยต่อรอบ (ดึง ≤4 ก้อน · ตรวจยอด ≤4 บัญชี) เพราะ Edge Function มีเพดานเวลา — ที่เหลือรอบหน้าค่อยทำ
    ทุกรอบบันทึกลง ad_cron_ticks แม้ไม่มีอะไรต้องทำ เพื่อให้ตอบได้ว่าระบบยังวิ่งอยู่จริง */
-import { adminClient, corsHeaders, decryptToken, env, graphVersion, isServiceRole, json } from "../_shared/adsOAuth.ts";
+import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, env, graphVersion, isServiceRole, json } from "../_shared/adsOAuth.ts";
 import { DEFAULT_SYNC_EVERY_HOURS, planCreativeTargets, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../_shared/adsCron.js";
 import { hourInTimeZone, todayInTimeZone } from "../_shared/metaInsights.js";
-import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch } from "../_shared/adsAccountSnapshot.js";
+import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch, pickSnapshotAuthorization } from "../_shared/adsAccountSnapshot.js";
 
 const cronSleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -182,10 +182,13 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
   for (const connectionId of creativeTargets) creatives.push({ connectionId, ...(await call("ads-creatives", { connectionId })) });
 
   /* snapshot บัญชีแอดทุกตัวที่ token เห็น (หน้า บิล & กระทบยอด — spec 2026-09-22)
-     ใช้ authorization ที่ active ตัวแรกพอ (ทุก token เห็นชุดบัญชีเดียวกันของทีม) · ล้มห้ามล้มรอบ sync */
+     เลือก token ที่ใช้ได้จริงด้วยเกณฑ์เดียวกับ ads-reconcile (เชื่อมอยู่ · ไม่หมดอายุ · เจ้าของยัง active)
+     — เดิมกรองด้วย status "active" ซึ่งไม่มีจริงในฐาน (ค่าจริงคือ "connected") snapshot จึงไม่เคยทำงาน
+     ในรอบ cron เลยสักครั้ง และเงียบสนิทเพราะ snapAuth เป็น null ก็แค่ข้ามไป · ล้มห้ามล้มรอบ sync */
   try {
-    const { data: snapAuth } = await db.from("ad_provider_authorizations")
-      .select("token_ciphertext,token_iv").eq("status", "active").limit(1).maybeSingle();
+    const { data: snapAuths } = await db.from("ad_provider_authorizations")
+      .select("id,user_id,status,expires_at,token_ciphertext,token_iv");
+    const snapAuth = pickSnapshotAuthorization(snapAuths ?? [], { activeUsers: await activeMemberUserIds(db), now: Date.parse(now) });
     if (snapAuth) {
       const snapToken = await decryptToken(snapAuth.token_ciphertext, snapAuth.token_iv);
       const snapshots = await fetchAccountSnapshots({ fetch, token: snapToken, sleep: cronSleep, version: graphVersion() });

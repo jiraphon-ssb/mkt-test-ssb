@@ -66,3 +66,16 @@ export async function fetchAccountMonthSpend({ fetch, token, sleep, version, acc
   }
   return out;
 }
+
+/** เลือก authorization ที่ใช้เก็บ snapshot ได้จริง — เกณฑ์เดียวกับ ads-reconcile (B2 · 22 ก.ย. 69)
+    เดิมหยิบตัวแรกดิบๆ: ตัวที่หมดอายุ/เจ้าของออกจากทีมแล้ว ทำให้ snapshot ล้มเงียบทุกชั่วโมง
+    ทั้งที่ token ตัวอื่นในทีมยังใช้ได้ */
+export function pickSnapshotAuthorization(authorizations = [], { activeUsers = new Set(), now = Date.now() } = {}) {
+  for (const auth of authorizations) {
+    if (!auth || auth.status !== "connected") continue;
+    if (!activeUsers.has(auth.user_id)) continue;
+    if (auth.expires_at && Date.parse(auth.expires_at) <= now) continue;
+    return auth;
+  }
+  return null;
+}

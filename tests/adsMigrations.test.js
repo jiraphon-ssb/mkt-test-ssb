@@ -232,7 +232,7 @@ describe("0011_ad_billing", () => {
 describe("migration ทุกตัวต้องรันซ้ำได้ (idempotent)", () => {
   const files = ["0005_ads_data.sql", "0006_ad_creatives.sql", "0007_meta_oauth.sql",
     "0009_mkt_settings_ads_control.sql", "0010_ads_sync_worker.sql", "0011_ad_billing.sql",
-    "0012_account_month_spend.sql"];
+    "0012_account_month_spend.sql", "0013_billing_grants.sql"];
   for (const file of files) {
     it(`${file}: create table/index/policy มี if not exists หรือ drop ก่อน`, () => {
       const sql = read(`src/supabase/migrations/${file}`).replace(/--[^\n]*/g, "");
@@ -256,5 +256,23 @@ describe("0012 ยอดค่าแอดรายเดือนต่อบ�
     expect(sql).toMatch(/jsonb_typeof\(month_spend\) = 'object'/);
     expect(sql).toMatch(/pg_column_size\(month_spend\) < \d+/);
     expect(sql).toContain("exception when duplicate_object then null");
+  });
+});
+
+/* 0013 ปิดสิทธิ์เขียนตารางบิลให้แน่นตาม pattern 0010 (B2 · 22 ก.ย. 69)
+   ตรวจฐานจริงแล้วพบว่า 0011 revoke แค่ update/delete → anon/authenticated ยังมี INSERT + TRUNCATE
+   TRUNCATE ไม่อยู่ใต้ RLS เลย (RLS คุมแค่ select/insert/update/delete) = ล้างหลักฐาน append-only ได้ */
+describe("0013 ปิดสิทธิ์เขียนตารางบิล", () => {
+  const sql = read("src/supabase/migrations/0013_billing_grants.sql");
+  it("revoke insert·update·delete·truncate ครบทั้งสามตาราง", () => {
+    for (const t of ["ad_account_snapshots", "ad_billing_reviews", "ad_billing_charges"]) {
+      expect(sql, t).toMatch(new RegExp(`revoke insert, update, delete, truncate on public\\.${t}\\s+from anon, authenticated`));
+    }
+  });
+  it("ยังอ่านได้ (RLS team_lead คุมอยู่) — ห้าม revoke select", () => {
+    expect(sql).not.toMatch(/revoke[^;]*select[^;]*on public\.ad_billing_reviews/i);
+  });
+  it("RPC ยังเขียนได้ เพราะเป็น security definer ของเจ้าของตาราง — ระบุไว้ในคอมเมนต์", () => {
+    expect(sql).toMatch(/security definer/i);
   });
 });

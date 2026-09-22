@@ -129,3 +129,25 @@ describe("บัญชีนอกระบบใช้ยอดเดือน�
     expect(within(row).getByText("เงินออกนอกระบบ")).toBeTruthy();
   });
 });
+
+/* B2 · 22 ก.ย.: กดบันทึกด้วยฟอร์มเปล่าได้ record "ตรวจแล้ว · ตรง" ถาวร ลบไม่ได้
+   หลักฐานตรวจสอบที่ไม่มีอะไรยืนยันว่าตรวจอะไร — ต้องกรอกอย่างน้อยหนึ่งอย่าง */
+describe("ฟอร์มผลตรวจต้องมีเนื้อหา", () => {
+  it("ฟอร์มเปล่า = ปุ่มกดไม่ได้ + บอกว่าต้องกรอกอะไร", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "กรอกผลตรวจ · TEAMDEE" }));
+    const save = screen.getByRole("button", { name: "บันทึกผลตรวจ" });
+    expect(save.disabled).toBe(true);
+    expect(screen.getByText(/กรอกยอด statement หรือหมายเหตุ/)).toBeTruthy();
+    expect(calls.addReview).toHaveLength(0);
+  });
+  it("กรอกหมายเหตุอย่างเดียวก็บันทึกได้ (ตรวจแล้วตรง ไม่มีตัวเลขให้กรอก)", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "กรอกผลตรวจ · TEAMDEE" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "หมายเหตุ" }), { target: { value: "เทียบ statement แล้วตรง" } });
+    expect(screen.getByRole("button", { name: "บันทึกผลตรวจ" }).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "บันทึกผลตรวจ" }));
+    await waitFor(() => expect(calls.addReview).toHaveLength(1));
+    expect(calls.addReview[0].verdict).toBe("noted");
+  });
+});

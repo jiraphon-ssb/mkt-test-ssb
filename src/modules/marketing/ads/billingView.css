@@ -35,6 +35,7 @@
 .mkt-root .bl-confirm input { height:34px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; font-size:12.5px; }
 .mkt-root .bl-confirm button { width:fit-content; padding:9px 16px; border:1px solid color-mix(in srgb,var(--ok) 45%,var(--line)); border-radius:8px; background:color-mix(in srgb,var(--ok) 13%,transparent); color:var(--ok-text); font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
 .bl-error { margin:0; color:var(--bad-text); font-size:11.5px; }
+.bl-hint { margin:0; color:var(--ink-soft); font-size:11.5px; }
 .bl-charges { margin-top:18px; padding-top:14px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:6px; font-size:12px; }
 .bl-charges > div { display:grid; grid-template-columns:110px auto minmax(0,1fr); gap:12px; }
 

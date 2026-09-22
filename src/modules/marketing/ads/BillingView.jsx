@@ -26,6 +26,9 @@ function ConfirmForm({ row, month, onSaved }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  /* ฟอร์มเปล่ากดบันทึกได้ = ได้หลักฐาน "ตรวจแล้ว · ตรง" ที่ไม่มีอะไรยืนยันว่าตรวจอะไร
+     และลบไม่ได้เพราะ append-only — ต้องกรอกอย่างน้อยหนึ่งอย่างก่อน (B2 22 ก.ย.) */
+  const empty = statementText.trim() === "" && note.trim() === "";
   const save = async () => {
     const statement = parseRuleNumber(statementText);
     if (Number.isNaN(statement)) { setError("ยอด statement ต้องเป็นตัวเลข เช่น 180,900"); return; }
@@ -49,7 +52,8 @@ function ConfirmForm({ row, month, onSaved }) {
       <input type="text" aria-label="หมายเหตุ" placeholder="เช่น เทียบ statement แล้ว"
         value={note} onChange={(e) => setNote(e.target.value)} /></label>
     {error && <p className="bl-error" role="alert">{error}</p>}
-    <button type="button" disabled={saving} onClick={save}>บันทึกผลตรวจ</button>
+    {empty && <p className="bl-hint">กรอกยอด statement หรือหมายเหตุอย่างน้อยหนึ่งอย่างก่อนบันทึก</p>}
+    <button type="button" disabled={saving || empty} onClick={save}>บันทึกผลตรวจ</button>
   </div>;
 }
 
