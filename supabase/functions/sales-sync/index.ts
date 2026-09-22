@@ -14,7 +14,7 @@ import { jkFactsUrl, jkGoalUrl, jkWindows } from "../_shared/jkBridge.js";
 import { jkGoalExtraColumns, jkGoalRows } from "../_shared/jkGoals.js";
 import {
   PAGE_LIMIT, describeSalesKey, describeSalesUrl, doorState, factsProbeUrl, goalProbeUrl,
-  goalsUrl, monthsToSync, probeVerdict, summarizeFacts, summarizeGoals, targetsUrl,
+  goalsUrl, monthsToSync, probeVerdict, salesLookbackFrom, summarizeFacts, summarizeGoals, targetsUrl,
 } from "../_shared/salesBridge.js";
 import { todayInTimeZone } from "../_shared/metaInsights.js";
 import {
@@ -169,9 +169,11 @@ Deno.serve(async (request) => {
 
   const today = todayInTimeZone(new Date(), "Asia/Bangkok");
   const to = typeof body?.to === "string" && ISO.test(body.to) ? body.to : today;
-  const span = Math.min(MAX_DAYS, Math.max(1, Number(body?.days) || LOOKBACK_DAYS));
+  /* ช่วงเริ่มต้น: ครอบตั้งแต่ต้นเดือนเสมอ (ไม่ใช่ 14 วันตายตัว) — ยอดวันที่ 1-2 ที่ทีมขายแก้
+     กลางเดือนต้องถูกดึงมาทับ ไม่งั้นตัวเลขเดือนนั้นค้างผิดเงียบๆ (แก้ 22 ก.ย. 69) */
+  const askedDays = Number(body?.days) > 0 ? Math.min(MAX_DAYS, Number(body.days)) : null;
   const from = typeof body?.from === "string" && ISO.test(body.from) ? body.from
-    : day(new Date(Date.parse(`${to}T00:00:00Z`) - (span - 1) * 86_400_000));
+    : (salesLookbackFrom({ to, days: askedDays, minDays: LOOKBACK_DAYS }) ?? to);
   if (from > to) return json(request, { error: "SALES_RANGE_INVALID" }, 400);
   const rangeDays = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
   if (!Number.isFinite(rangeDays) || rangeDays > (trigger === "manual" ? MANUAL_MAX_DAYS : MAX_DAYS)) {

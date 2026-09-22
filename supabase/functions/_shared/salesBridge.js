@@ -171,3 +171,19 @@ export function monthsToSync(today) {
   const pad = (value) => String(value).padStart(2, "0");
   return [`${prevYear}-${pad(prevMonth)}-01`, `${year}-${pad(month)}-01`];
 }
+
+/* วันเริ่มต้นของช่วงดึงยอดขาย — ต้องครอบ "ตั้งแต่ต้นเดือนของวันสุดท้าย" เสมอ (22 ก.ย. 69)
+   เดิมตายตัว 14 วัน: ทีมขายแก้ยอดวันที่ 1-2 หลังผ่านไปครึ่งเดือน ระบบไม่เห็นการแก้นั้นอีกเลย
+   → ตัวเลขเดือนนั้นค้างผิดถาวรแบบเงียบ จนกว่าจะมีคนสังเกตแล้วสั่ง backfill มือ
+   ต้นเดือนยังย้อนอย่างน้อย MIN วัน เพราะท้ายเดือนก่อนก็ยังถูกแก้อยู่ในช่วงสัปดาห์แรก
+   days ที่ส่งมาเอง (backfill มือ) ชนะเสมอ */
+export const SALES_MIN_LOOKBACK_DAYS = 14;
+/** @param {{to?:string, days?:number|null, minDays?:number}} [opts] @returns {string|null} */
+export function salesLookbackFrom({ to, days = null, minDays = SALES_MIN_LOOKBACK_DAYS } = {}) {
+  const end = Date.parse(`${to}T00:00:00Z`);
+  if (!Number.isFinite(end)) return null;
+  const asked = Number(days);
+  const dayOfMonth = new Date(end).getUTCDate();
+  const span = Number.isFinite(asked) && asked > 0 ? Math.floor(asked) : Math.max(minDays, dayOfMonth);
+  return new Date(end - (span - 1) * 86_400_000).toISOString().slice(0, 10);
+}

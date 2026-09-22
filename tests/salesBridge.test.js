@@ -1,7 +1,7 @@
 /* ตรวจค่าที่ใช้ต่อระบบขาย — บอกได้ว่าใส่ URL/KEY ถูกไหมโดยไม่ต้องเห็นค่าจริง
    ของจริงที่เจอ: sales-sync ตอบ read:0 ได้ทั้งตอนใส่ถูกแต่ประตูยังไม่เปิด และตอนใส่ URL ผิด (404 เหมือนกัน) แยกไม่ออก */
 import { describe, it, expect } from "vitest";
-import { describeSalesKey, describeSalesUrl, doorState, projectRef, FACT_COLUMNS, factsProbeUrl, goalProbeUrl, summarizeFacts, summarizeGoals, probeVerdict, goalsUrl, targetsUrl, monthsToSync, PAGE_LIMIT } from "../supabase/functions/_shared/salesBridge.js";
+import { describeSalesKey, describeSalesUrl, doorState, projectRef, FACT_COLUMNS, factsProbeUrl, goalProbeUrl, summarizeFacts, summarizeGoals, probeVerdict, goalsUrl, targetsUrl, monthsToSync, PAGE_LIMIT, salesLookbackFrom } from "../supabase/functions/_shared/salesBridge.js";
 
 const jwt = (claims) => ["e30", Buffer.from(JSON.stringify(claims)).toString("base64url"), "sig"].join(".");
 const OWN = "https://lzvftqhffqefqupwulus.supabase.co";
@@ -200,5 +200,29 @@ describe("monthsToSync — เป้าเดือนก่อนกับเ�
 describe("PAGE_LIMIT", () => {
   it("เท่ากับเพดานแถวต่อคำขอของ PostgREST บน Supabase — ได้ครบเพดานพอดี = อาจถูกตัด ต้องแบ่งก้อนใหม่", () => {
     expect(PAGE_LIMIT).toBe(1000);
+  });
+});
+
+/* ยอดขายย้อนหลังต้องครอบ "ตั้งแต่ต้นเดือน" เสมอ (22 ก.ย. 69)
+   เดิมตายตัว 14 วัน → ทีมขายแก้ยอดวันที่ 1-2 หลังผ่านไปครึ่งเดือน ระบบไม่มีวันเห็นการแก้นั้นเลย
+   ตัวเลขเดือนนั้นค้างผิดถาวรจนกว่าจะสั่ง backfill มือ — เงียบและหายาก */
+describe("salesLookbackFrom", () => {
+  it("กลางเดือน: ย้อนถึงวันที่ 1 ของเดือนนั้น ไม่ใช่แค่ 14 วัน", () => {
+    expect(salesLookbackFrom({ to: "2026-09-25" })).toBe("2026-09-01");
+    expect(salesLookbackFrom({ to: "2026-09-30" })).toBe("2026-09-01");
+  });
+  it("ต้นเดือน: ยังย้อนอย่างน้อย 14 วัน (คร่อมไปท้ายเดือนก่อน ซึ่งยังถูกแก้อยู่)", () => {
+    expect(salesLookbackFrom({ to: "2026-09-03" })).toBe("2026-08-21");
+    expect(salesLookbackFrom({ to: "2026-09-14" })).toBe("2026-09-01");
+  });
+  it("สั่งจำนวนวันเองชนะเสมอ (backfill มือ)", () => {
+    expect(salesLookbackFrom({ to: "2026-09-25", days: 3 })).toBe("2026-09-23");
+    expect(salesLookbackFrom({ to: "2026-09-03", days: 90 })).toBe("2026-06-06");
+  });
+  it("ข้ามปี: 3 ม.ค. ย้อน 14 วันไปธันวาคมปีก่อนได้ถูก", () => {
+    expect(salesLookbackFrom({ to: "2026-01-03" })).toBe("2025-12-21");
+  });
+  it("วันที่อ่านไม่ออก = null (ผู้เรียกไปจัดการต่อ ไม่เดาเอง)", () => {
+    expect(salesLookbackFrom({ to: "oops" })).toBeNull();
   });
 });
