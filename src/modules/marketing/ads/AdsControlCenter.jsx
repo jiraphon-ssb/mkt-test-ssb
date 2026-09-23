@@ -7,7 +7,7 @@ import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { BrandMark } from "./BrandMark.jsx";
 import { Dropdown } from "../ui/Dropdown.jsx";
 import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, metaResultLabel, validateAdsConnection } from "./adsConnectorContract.js";
-import { adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
+import { DAILY_MISSING_HOURS, DAILY_STALE_HOURS, adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
 import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
 import { applyConnectionResult, applyReconciliation, enabledMetaMappings, latestReconcileByConnection, needsPostScopeReconnect } from "./adsConnectionSync.js";
 import { adsErrorText } from "./adsSyncMessages.js";
@@ -22,9 +22,10 @@ const SOURCE_DETAILS = {
   shopee: "Spend · Orders · GMV",
 };
 
+/* ดึงวันละครั้งตี 5 — ต่ำกว่า 26/50 ชม. ไม่มีผล (adsDataHealth ยกเป็นขั้นต่ำ) */
 const DEFAULT_RULES = {
-  staleHours: 6,
-  missingDataHours: 12,
+  staleHours: DAILY_STALE_HOURS,
+  missingDataHours: DAILY_MISSING_HOURS,
 };
 
 const numberValue = (value) => Math.max(0, Number(value) || 0);
@@ -96,7 +97,7 @@ function Connections({ brands, config, setConfig, toast, isLead }) {
       </div> : <div className="acc-callout"><CircleAlert size={17} /><span>ยังไม่เปิดเชื่อมต่อแพลตฟอร์มนี้ · บันทึก mapping เตรียมไว้ได้</span></div>}
       {sourceId === "meta" && !oauth.loading && needsPostScopeReconnect(oauth.authorizations) && <div className="acc-callout acc-callout--action" role="status"><CircleAlert size={17} /><span><b>เชื่อม Meta ใหม่อีกครั้งเพื่อแสดงภาพโฆษณาจริง</b> · โฆษณาแบบบูสต์โพสต์เพจต้องใช้สิทธิ์อ่านเพจ (อ่านอย่างเดียว) ตอนนี้การ์ดจึงเป็นรูปโปรไฟล์เพจ · ตอนเชื่อม ให้กดยืนยันสิทธิ์เพจทุกเพจที่ยิงแอด และยืนยัน Business ที่เป็นเจ้าของเพจด้วย (เพจใต้ Business Manager ไม่โผล่ถ้าไม่ยืนยัน)</span><button type="button" className="acc-oauth-connect" onClick={connectMeta}><Link2 size={14} /> เชื่อมใหม่</button></div>}
       <details className="acc-source-options"><summary>ตัวเลือกการดึงข้อมูล</summary><div className="acc-source-config">
-        <label><span>ดึงทุก</span><Dropdown className="dd--block" ariaLabel="ดึงทุก" options={[["1", "1 ชั่วโมง"], ["3", "3 ชั่วโมง"], ["6", "6 ชั่วโมง"]]} value={String(sourceConfig.syncEveryHours)} onChange={(value) => updateSource({ syncEveryHours: Number(value) })} /></label>
+        <div className="acc-source-fixed"><span>ดึงอัตโนมัติ</span><b>วันละครั้ง · ตี 5</b><small>เวลาไทย · กดดึงเองได้ที่หน้า Sync</small></div>
         <label><span>ย้อนหลัง</span><Dropdown className="dd--block" ariaLabel="ย้อนหลัง" options={[["30", "30 วัน"], ["90", "90 วัน"], ["180", "180 วัน"]]} value={String(sourceConfig.backfillDays)} onChange={(value) => updateSource({ backfillDays: Number(value) })} /></label>
         <label><span>Attribution</span><Dropdown className="dd--block" ariaLabel="Attribution" options={[["platform_default", "ตามแพลตฟอร์ม"], ["7d_click_1d_view", "7d click / 1d view"], ["1d_click", "1d click"]]} value={sourceConfig.attribution} onChange={(value) => updateSource({ attribution: value })} /></label>
         <label><span>ผลลัพธ์ที่ใช้วัด</span><Dropdown className="dd--block" ariaLabel="ผลลัพธ์ที่ใช้วัด" options={source.leadEvents.map((event) => [event, source.id === "meta" ? metaResultLabel(event) : event])} value={sourceConfig.leadEvent ?? source.leadEvents[0]} onChange={(value) => updateSource({ leadEvent: value })} /></label>
@@ -127,15 +128,15 @@ function HealthSummary({ config }) {
 /* เฉพาะกฎที่โค้ดใช้จริง: ล่าช้า/ขาดหาย (adsDataHealth) · ผลต่างยอด (ads-reconcile)
    pace · เพดานเกินงบ · ROAS ต่ำต่อเนื่อง เคยมีช่องแต่ไม่มีโค้ดไหนอ่าน — ถอดออก 17 ก.ย. (ค่าเดิมใน settings ยังอยู่ ไม่กระทบ) */
 const RULE_FIELDS = [
-  ["staleHours", "ข้อมูลเริ่มล่าช้า", "ชม.", "แสดงสถานะข้อมูลล่าช้าเมื่อยังไม่มีการ sync ใหม่"],
-  ["missingDataHours", "ข้อมูลขาดหาย", "ชม.", "ยกระดับเป็นข้อมูลขาดเมื่อเลยเวลานี้"],
+  ["staleHours", "ข้อมูลเริ่มล่าช้า", "ชม.", `แสดงสถานะข้อมูลล่าช้าเมื่อยังไม่มีการ sync ใหม่ · ขั้นต่ำ ${DAILY_STALE_HOURS} ชม. เพราะดึงวันละครั้ง`, DAILY_STALE_HOURS],
+  ["missingDataHours", "ข้อมูลขาดหาย", "ชม.", `ยกระดับเป็นข้อมูลขาดเมื่อเลยเวลานี้ · ขั้นต่ำ ${DAILY_MISSING_HOURS} ชม.`, DAILY_MISSING_HOURS],
   ["reconciliationTolerance", "ผลต่างยอดที่ยอมรับ", "%", "ยอดค่าแอดจากระบบกับแพลตฟอร์มต้องต่างกันไม่เกินค่านี้"],
 ];
 
 function Rules({ rules, setRules, creativeRules, setCreativeRules, brands, isLead }) {
   return <><div className="acc-rules-layout">
     <section className="acc-sheet"><header className="acc-sheet-head"><div><span className="acc-kicker">ALERT RULES</span><h2>กฎตัดสินใจและแจ้งเตือน</h2><p>ทุกกฎแสดงเหตุผลและค่าที่ใช้ตัดสิน เพื่อให้ทีมตรวจย้อนกลับได้</p></div></header>
-      <div className="acc-rule-list">{RULE_FIELDS.map(([key, label, unit, help]) => <label className="acc-rule" key={key}><span><strong>{label}</strong><small>{help}</small></span><div className="acc-input-unit"><input type="number" min="0" disabled={!isLead} value={rules[key]} onChange={(e) => setRules((current) => ({ ...current, [key]: numberValue(e.target.value) }))} /><b>{unit}</b></div></label>)}</div>
+      <div className="acc-rule-list">{RULE_FIELDS.map(([key, label, unit, help, floor = 0]) => <label className="acc-rule" key={key}><span><strong>{label}</strong><small>{help}</small></span><div className="acc-input-unit"><input type="number" min={floor} disabled={!isLead} value={Math.max(floor, Number(rules[key]) || 0)} onChange={(e) => setRules((current) => ({ ...current, [key]: numberValue(e.target.value) }))} /><b>{unit}</b></div></label>)}</div>
     </section>
     <aside className="acc-sheet acc-guardrails"><ShieldAlert size={22} /><h3>กฎที่ระบบต้องรักษา</h3><ul><li>งบรวมต้องเท่ากับผลรวมรายบัญชี</li><li>ยอดขาย เป้า และ funnel มาจากระบบขาย (อ่านอย่างเดียว)</li><li>ยอดที่ Meta เห็น (Attribution) ต้องติดป้ายว่าเป็นของ Meta</li><li>ตัวเลขที่ข้อมูลไม่ครบแสดง “—” ไม่แทนด้วยศูนย์</li><li>ทุกค่าเก็บเวลา sync และแหล่งที่มา</li></ul></aside>
   </div><CreativeRulesEditor rules={creativeRules} setRules={setCreativeRules} brands={brands} disabled={!isLead} /></>;

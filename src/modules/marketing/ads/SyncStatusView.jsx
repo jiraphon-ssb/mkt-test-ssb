@@ -33,6 +33,8 @@ import "./syncStatus.css";
 
 const when = (value) => value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
 const clock = (value) => value ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
+/** รอบถัดไปมักเป็นตี 5 พรุ่งนี้ — บอกวันด้วย ไม่งั้น "05:00" อ่านเป็นเมื่อเช้าได้ */
+const nextClock = (value, now) => value && todayInTimeZone(new Date(value), TZ) !== todayInTimeZone(new Date(now), TZ) ? `พรุ่งนี้ ${clock(value)}` : clock(value);
 
 const TABS = [["meta", "บัญชี Meta"], ["sales", "ยอดขาย"], ["access", "สิทธิ์และคีย์"], ["history", "ประวัติ"]];
 const LEVEL = { bad: "ต้องแก้", warn: "เตือน", wait: "รอคนอื่น" };
@@ -139,7 +141,7 @@ export function HistoryList({ items, filter, onFilter }) {
   }
   return <div className="sy-history" ref={top}>
     <div className="sy-filter" role="group" aria-label="กรองประวัติ">{HISTORY_FILTERS.map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => onFilter(key)}>{label}</button>)}</div>
-    <p className="sy-note">ตัวตั้งเวลาเรียกทุกชั่วโมงนาทีที่ 7 · ตรวจยอดและดึงยอดขายวันละครั้งหลัง 9 โมง · รอบที่ไม่มีงานไม่แสดง{oldest ? ` · แสดงตั้งแต่ ${new Intl.DateTimeFormat("th-TH", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" }).format(new Date(oldest))} (ระบบเก็บไว้ 90 วัน)` : ""}</p>
+    <p className="sy-note">ดึงอัตโนมัติวันละครั้งตอนตี 5 (รอบ 05:10–05:50 เก็บงานที่ค้าง) · ทุกแหล่งดึงวันละครั้ง · รอบที่ไม่มีงานไม่แสดง{oldest ? ` · แสดงตั้งแต่ ${new Intl.DateTimeFormat("th-TH", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" }).format(new Date(oldest))} (ระบบเก็บไว้ 90 วัน)` : ""}</p>
     {items.length ? <>
       {groups.map((group) => <section className="sy-day" key={group.key}>
         <h4>{group.at ? dayHead(group.at) : "ไม่ทราบวัน"}</h4>
@@ -215,7 +217,7 @@ export function SyncStatusView() {
   const now = Date.now();
 
   const rows = {
-    meta: metaSourceRow({ accounts: metaAccounts, ready: ready("connections", "coverage", "recons"), everyHours: config.sources?.meta?.syncEveryHours ?? null, now }),
+    meta: metaSourceRow({ accounts: metaAccounts, ready: ready("connections", "coverage", "recons"), now }),
     creatives: creativeSourceRow({ runs: pipes, accounts: metaAccounts, ready: ready("pipes", "connections"), now }),
     sales: salesSourceRow({ runs: pipes, facts, ready: ready("pipes", "facts"), today, now }),
     snapshots: snapshotSourceRow({ snapshots: res.snapshots?.data ?? [], ready: ready("snapshots"),
@@ -414,7 +416,7 @@ export function SyncStatusView() {
   const syncAll = () => startRun(["facts", "creatives", "sales", "goals"], "all");
   const syncNow = () => startRun(["facts", "creatives"], "ads");
   const syncSales = () => startRun(["sales", "goals"], "sales");
-  /* เก็บ snapshot บัญชีแอดเดี๋ยวนี้ (หน้า บิล & กระทบยอด) — ปกติ ads-cron ทำให้ทุกชั่วโมง
+  /* เก็บ snapshot บัญชีแอดเดี๋ยวนี้ (หน้า บิล & กระทบยอด) — ปกติ ads-cron ทำให้วันละครั้งตี 5
      ปุ่มนี้ไว้ตอนไม่อยากรอรอบ · โหลดสถานะใหม่หลังเสร็จเพื่อให้แถวในตารางอัปเดตทันที */
   const snapshotNow = async () => {
     try {
@@ -458,7 +460,7 @@ export function SyncStatusView() {
                 <ShoppingBag size={14} aria-hidden="true" /><span><b>ดึงยอดขายเท่านั้น</b><small>ย้อน 14 วัน ทุกแบรนด์ที่เชื่อมแหล่งแล้ว</small></span>
               </button>
               <button type="button" role="menuitem" onClick={snapshotNow} disabled={busy}>
-                <CalendarClock size={14} aria-hidden="true" /><span><b>ดึง Snapshot บัญชีแอด</b><small>เก็บยอดค้าง · สถานะบัญชี · บัญชีนอกระบบ เดี๋ยวนี้ (ปกติเก็บเองทุกชั่วโมง)</small></span>
+                <CalendarClock size={14} aria-hidden="true" /><span><b>ดึง Snapshot บัญชีแอด</b><small>เก็บยอดค้าง · สถานะบัญชี · บัญชีนอกระบบ เดี๋ยวนี้ (ปกติเก็บเองทุกเช้าตี 5)</small></span>
               </button>
               <p className="sy-menu-group" role="presentation">ระบบขาย</p>
               <button type="button" role="menuitem" onClick={backfillSales} disabled={busy}>
@@ -483,7 +485,7 @@ export function SyncStatusView() {
         <VerdictIcon size={22} aria-hidden="true" className={verdict.state === "loading" ? "spin" : undefined} />
         <div>
           <strong>{verdict.title}</strong>
-          <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${clock(lastData)} (${ago(lastData, now)})` : "—"} · ดึงค่าแอดรอบถัดไปราว {clock(nextSyncAt(oldestMetaSync, config.sources?.meta?.syncEveryHours ?? 6, now))}</>}</span>
+          <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${clock(lastData)} (${ago(lastData, now)})` : "—"} · ดึงค่าแอดรอบถัดไป {nextClock(nextSyncAt(oldestMetaSync, now), now)}</>}</span>
         </div>
       </div>
       <SyncTimeline rows={stepRows(run)} headline={runHeadline(run)} onHide={runEnded(run) ? () => setRun(null) : null} />

@@ -145,6 +145,8 @@
 .acc-source-options .acc-source-config { margin:0; border:0; border-top:1px solid var(--line); border-radius:0 0 9px 9px; }
 .acc-source-config { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:0 0 18px; padding:12px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
 .acc-source-config label { min-width:0; }.acc-source-config label>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }.acc-source-config select { width:100%; height:34px; padding:0 8px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font:inherit; font-size:12px; }
+/* ช่องเวลาดึงแบบตายตัว (วันละครั้งตี 5) — วางในกริดเดียวกับ dropdown ข้างๆ ให้ความสูงตรงกัน */
+.acc-source-fixed { min-width:0; display:flex; flex-direction:column; }.acc-source-fixed>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }.acc-source-fixed>b { display:flex; align-items:center; height:34px; padding:0 10px; border:1px dashed var(--line); border-radius:6px; color:var(--ink); font-size:12px; font-weight:600; }.acc-source-fixed>small { margin-top:4px; color:var(--ink-soft); font-size:10.5px; }
 .acc-mapping-head,.acc-mapping-row { display:grid; grid-template-columns:minmax(150px,1fr) minmax(190px,1.4fr) minmax(145px,.8fr) minmax(168px,.78fr); gap:14px; align-items:center; }
 .acc-mapping-head { padding:0 10px 8px; color:var(--ink-soft); font-size:11px; }
 .acc-mapping-row { padding:12px 10px; border-top:1px solid var(--line); }

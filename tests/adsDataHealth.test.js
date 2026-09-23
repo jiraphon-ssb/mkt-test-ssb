@@ -14,7 +14,18 @@ describe("adsDataHealth", () => {
     const now = new Date("2026-09-14T12:00:00Z");
     const connected = (lastSuccessAt) => mapping({ connectionId: "c1", oauthStatus: "connected", lastSuccessAt, reconciliation: { status: "passed" } });
     expect(adsDataHealth({ mappings: { meta: { b1: connected("2026-09-14T10:00:00Z") } } }, now).state).toBe("healthy");
-    expect(adsDataHealth({ mappings: { meta: { b1: connected("2026-09-14T04:00:00Z") } } }, now).state).toBe("stale");
+    expect(adsDataHealth({ mappings: { meta: { b1: connected("2026-09-13T08:00:00Z") } } }, now).state).toBe("stale");
+  });
+
+  /* 23 ก.ย.: ดึงวันละครั้งตี 5 — ข้อมูลอายุ ~24 ชม. คือปกติ ค่าเดิม 6/12 ชม. สมัยดึงทุกชั่วโมงจะขึ้นแดงทั้งวัน */
+  it("ดึงวันละครั้ง: ค่าล่าช้า/ขาดในตั้งค่าที่ต่ำกว่า 26/50 ชม. ถูกยกเป็นขั้นต่ำ", () => {
+    const now = new Date("2026-09-14T15:00:00Z");   // 22:00 ไทย · ดึงล่าสุดตี 5 เมื่อเช้า = 17 ชม.
+    const connected = (lastSuccessAt) => mapping({ connectionId: "c1", oauthStatus: "connected", lastSuccessAt, reconciliation: { status: "passed" } });
+    const rules = { staleHours: 6, missingDataHours: 12 };
+    expect(adsDataHealth({ rules, mappings: { meta: { b1: connected("2026-09-13T22:05:00Z") } } }, now).state).toBe("healthy");
+    expect(adsDataHealth({ rules, mappings: { meta: { b1: connected("2026-09-13T10:00:00Z") } } }, now).state).toBe("stale");     // 29 ชม. = พลาดรอบเช้า
+    expect(adsDataHealth({ rules, mappings: { meta: { b1: connected("2026-09-12T10:00:00Z") } } }, now).state).toBe("missing");   // 53 ชม.
+    expect(adsDataHealth({ rules: { staleHours: 40, missingDataHours: 80 }, mappings: { meta: { b1: connected("2026-09-13T10:00:00Z") } } }, now).state).toBe("healthy");
   });
 
   it("ไม่ขึ้นพร้อมใช้เมื่อข้อมูลสดแต่ยังไม่ตรวจยอด", () => {
@@ -118,11 +129,12 @@ describe("normalizeCronTicks — ประวัติตัวดึงอั�
 
 describe("cronHealth — สรุปว่าตัวดึงอัตโนมัติยังวิ่งอยู่ไหม", () => {
   const now = Date.parse("2026-09-16T04:30:00Z");
-  it("มีรอบภายใน 2 ชั่วโมง = ปกติ", () => {
+  it("รอบเช้าตี 5 เมื่อวาน (ภายใน 26 ชม.) = ปกติ — ดึงวันละครั้ง ช่วงกลางวันเงียบเป็นเรื่องปกติ", () => {
     expect(cronHealth([{ startedAt: "2026-09-16T04:07:00Z", status: "success" }], now)).toMatchObject({ state: "healthy", label: "ทำงานปกติ" });
+    expect(cronHealth([{ startedAt: "2026-09-15T22:50:00Z", status: "success" }], now).state).toBe("healthy");
   });
-  it("เงียบเกิน 2 ชั่วโมง = ผิดปกติ · ยังไม่เคยวิ่งเลย = ยังไม่เริ่ม", () => {
-    expect(cronHealth([{ startedAt: "2026-09-16T01:00:00Z", status: "success" }], now).state).toBe("stale");
+  it("เงียบเกิน 26 ชม. (พลาดรอบเช้า) = ผิดปกติ · ยังไม่เคยวิ่งเลย = ยังไม่เริ่ม", () => {
+    expect(cronHealth([{ startedAt: "2026-09-15T01:00:00Z", status: "success" }], now).state).toBe("stale");
     expect(cronHealth([], now).state).toBe("idle");
   });
   it("รอบล่าสุดพัง = ต้องแก้ แม้เวลาจะสด", () => {

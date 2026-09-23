@@ -1,11 +1,14 @@
-/* ads-cron — pg_cron ยิงเข้ามาทุกชั่วโมง แล้วสั่งดึง/ตรวจยอดเท่าที่ถึงคิวในรอบนั้น
+/* ads-cron — pg_cron ยิงเข้ามาช่วงเช้า 05:00–05:50 ไทย ทุก 10 นาที (dailySchedule.js) แล้วสั่งดึง/ตรวจยอดเท่าที่ถึงคิว
+   ทุกแหล่ง (Meta · ยอดขาย SSB/TMK · creative · snapshot) ดึงวันละครั้งตามวันที่ไทย — รอบ 05:10 เป็นต้นไปเก็บตกงานที่ค้าง
+   รอบที่ไม่มีงานเหลือ อ่านแค่ฐานข้อมูลเรา ไม่ยิงออกไปหา Meta / ระบบขาย (23 ก.ย.: ลดภาระเครื่องต้นทาง)
    สิทธิ์: service role เท่านั้น · งาน sync/reconcile ไม่แตะ token เอง ปล่อยให้ ads-sync / ads-reconcile ถอดรหัสตามเดิม
    (ยกเว้นงาน snapshot บัญชี — เบาพอที่จะทำในนี้ตรงๆ: 1 request/รอบ ไม่คุ้มแตกเป็น function ใหม่ · spec 2026-09-22)
    ทำทีละน้อยต่อรอบ (ดึง ≤4 ก้อน · ตรวจยอด ≤4 บัญชี) เพราะ Edge Function มีเพดานเวลา — ที่เหลือรอบหน้าค่อยทำ
    ทุกรอบบันทึกลง ad_cron_ticks แม้ไม่มีอะไรต้องทำ เพื่อให้ตอบได้ว่าระบบยังวิ่งอยู่จริง */
 import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, env, graphVersion, isServiceRole, json } from "../_shared/adsOAuth.ts";
-import { DEFAULT_SYNC_EVERY_HOURS, planCreativeTargets, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../_shared/adsCron.js";
+import { planCreativeTargets, planCronJobs, planReconcileTargets, salesDue, summarizeTick, tokenWarning } from "../_shared/adsCron.js";
 import { hourInTimeZone, todayInTimeZone } from "../_shared/metaInsights.js";
+import { DAILY_TZ, doneToday } from "../_shared/dailySchedule.js";
 import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch, pickSnapshotAuthorization } from "../_shared/adsAccountSnapshot.js";
 
 const cronSleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -48,7 +51,7 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
 
   const finish = async (patch: Record<string, unknown>) => {
     if (tickId) await db.from("ad_cron_ticks").update({ finished_at: new Date().toISOString(), ...patch }).eq("id", tickId);
-    // เก็บประวัติ 90 วันพอ — ticks โตวันละ 24 แถว · data_pipeline_runs (ยอดขาย/creative/สำรวจ) ไม่กี่แถวต่อวัน
+    // เก็บประวัติ 90 วันพอ — ticks โตวันละ 6 แถว (รอบเช้า) · data_pipeline_runs (ยอดขาย/creative/สำรวจ) ไม่กี่แถวต่อวัน
     const keepSince = new Date(Date.now() - KEEP_TICK_DAYS * 86_400_000).toISOString();
     await db.from("ad_cron_ticks").delete().lt("started_at", keepSince);
     await db.from("data_pipeline_runs").delete().lt("started_at", keepSince);
@@ -71,12 +74,11 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
     return { data: rows, error: null };
   };
 
-  const [connectionsResult, runsResult, settingsResult] = await Promise.all([
+  const [connectionsResult, runsResult] = await Promise.all([
     db.from("ad_connections").select("id,status,timezone,config,authorization_id,last_success_at").eq("provider", "meta"),
     loadRuns(),
-    db.from("mkt_settings").select("ads_control").eq("id", 1).maybeSingle(),
   ]);
-  const loadError = connectionsResult.error ?? runsResult.error ?? settingsResult.error;
+  const loadError = connectionsResult.error ?? runsResult.error;
   if (loadError) {
     console.error("[ads-cron] load", loadError.message);
     await finish({ status: "failed", error_code: "CRON_LOAD_FAILED" });
@@ -85,8 +87,8 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
 
   const connections = connectionsResult.data ?? [];
   const runs = runsResult.data ?? [];
-  const meta = (settingsResult.data?.ads_control as { sources?: Record<string, { syncEveryHours?: number }> } | null)?.sources?.meta;
-  const syncEveryHours = Number(meta?.syncEveryHours) || DEFAULT_SYNC_EVERY_HOURS;
+  // ค่า "ดึงทุก X ชม." ในหน้าตั้งค่าเลิกใช้แล้ว (ค่าเก่าใน mkt_settings ยังอยู่แต่ไม่มีใครอ่าน) — บันทึก 24 ลงประวัติรอบ
+  const syncEveryHours = 24;
   const todayOf = (timezone: string) => todayInTimeZone(new Date(now), timezone);
   const hourOf = (timezone: string) => hourInTimeZone(new Date(now), timezone);
 
@@ -124,7 +126,7 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
       .eq("id", connection.id);
   }
 
-  const jobs = planCronJobs({ connections, runs, now, syncEveryHours, maxJobs: MAX_SYNC_JOBS, todayOf });
+  const jobs = planCronJobs({ connections, runs, now, maxJobs: MAX_SYNC_JOBS, todayOf });
   const sync: JobResult[] = [];
   const stopped = new Set<string>();
   for (const job of jobs) {
@@ -144,9 +146,9 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
   const reconcile: JobResult[] = [];
   for (const connectionId of targets) reconcile.push({ connectionId, ...(await call("ads-reconcile", { connectionId })) });
 
-  /* ยอดขายจริงจากระบบขาย — วันละครั้ง หลัง 9 โมงตามเวลาไทย (ใช้รอบก่อนหน้าจาก ad_cron_ticks เป็นตัวจำ)
+  /* ยอดขายจริงจากระบบขาย — วันละครั้ง ตี 5 ตามเวลาไทย (ใช้รอบก่อนหน้าจาก ad_cron_ticks เป็นตัวจำ)
      นับเฉพาะรอบที่ "สำเร็จ" ว่าทำแล้ว — ไม่งั้นวันที่ระบบขายล่ม ยอดของวันนั้นจะไม่มีใครดึงอีกเลย
-     จำนวนครั้งที่ลองวันนี้ใช้จำกัดการยิงซ้ำ ไม่ให้ระบบขายที่ล่มยาวโดนยิงทุกชั่วโมง
+     จำนวนครั้งที่ลองวันนี้ใช้จำกัดการยิงซ้ำ (≤2 ครั้ง/วัน) ไม่ให้ระบบขายที่ล่มโดนยิงทุกรอบเก็บตก
      อ่านประวัติ 3 วันแล้วคัดในโค้ด ไม่พึ่ง json filter ของ PostgREST — ถ้า syntax เพี้ยนมันจะคืนว่างเงียบๆ
      แล้วกลายเป็นยิงทุกชั่วโมงโดยไม่มีใครรู้ */
   const { data: salesTicks } = await db.from("ad_cron_ticks")
@@ -185,7 +187,12 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
      เลือก token ที่ใช้ได้จริงด้วยเกณฑ์เดียวกับ ads-reconcile (เชื่อมอยู่ · ไม่หมดอายุ · เจ้าของยัง active)
      — เดิมกรองด้วย status "active" ซึ่งไม่มีจริงในฐาน (ค่าจริงคือ "connected") snapshot จึงไม่เคยทำงาน
      ในรอบ cron เลยสักครั้ง และเงียบสนิทเพราะ snapAuth เป็น null ก็แค่ข้ามไป · ล้มห้ามล้มรอบ sync */
-  try {
+  /* วันละครั้งเหมือนแหล่งอื่น — เดิมยิง /me/adaccounts + insights ทุกบัญชีทุกชั่วโมง
+     ปุ่ม "ดึง Snapshot บัญชีแอด" ในหน้า Sync (ads-snapshot) ยังสั่งเก็บเดี๋ยวนี้ได้เหมือนเดิม */
+  const { data: newestSnap } = await db.from("ad_account_snapshots").select("fetched_at")
+    .order("fetched_at", { ascending: false }).limit(1).maybeSingle();
+  const snapshotDue = !doneToday(newestSnap?.fetched_at ?? null, todayOf(DAILY_TZ), DAILY_TZ);
+  if (snapshotDue) try {
     const { data: snapAuths } = await db.from("ad_provider_authorizations")
       .select("id,user_id,status,expires_at,token_ciphertext,token_iv");
     const snapAuth = pickSnapshotAuthorization(snapAuths ?? [], { activeUsers: await activeMemberUserIds(db), now: Date.parse(now) });

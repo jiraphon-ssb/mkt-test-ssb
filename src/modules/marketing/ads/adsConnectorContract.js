@@ -43,7 +43,6 @@ export const DEFAULT_SOURCE_CONFIG = {
   currency: "THB",
   timezone: "Asia/Bangkok",
   attribution: "platform_default",
-  syncEveryHours: 1,
   backfillDays: 90,
 };
 

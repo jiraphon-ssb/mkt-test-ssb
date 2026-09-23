@@ -20,6 +20,17 @@ const reportStatus = (row, tolerance) => {
   });
 };
 
+/* ดึงวันละครั้งตี 5 (23 ก.ย.) → ข้อมูลอายุ ~24 ชม. คือปกติ
+   ค่าในหน้าตั้งค่าที่ต่ำกว่านี้ (เช่นค่าเดิม 6/12 ชม. สมัยดึงทุกชั่วโมง) ถูกยกเป็นขั้นต่ำ ไม่งั้นขึ้นแดงเกือบทั้งวัน */
+export const DAILY_STALE_HOURS = 26;
+export const DAILY_MISSING_HOURS = 50;
+export function freshnessLimits(rules = {}) {
+  return {
+    staleAfter: Math.max(DAILY_STALE_HOURS, Number(rules?.staleHours) || 0),
+    missingAfter: Math.max(DAILY_MISSING_HOURS, Number(rules?.missingDataHours) || 0),
+  };
+}
+
 export function sourceHealth(source, config = {}, rules = {}, now = new Date()) {
   const sourceDefaults = { ...DEFAULT_SOURCE_CONFIG, ...(config.sources?.[source.id] ?? {}) };
   const mappings = Object.values(config.mappings?.[source.id] ?? {}).filter((row) => row?.enabled).map((row) => ({ ...sourceDefaults, ...row }));
@@ -30,8 +41,7 @@ export function sourceHealth(source, config = {}, rules = {}, now = new Date()) 
   const gaps = connected.filter((row) => Number(row.missingDays) > 0 || row.coverageStatus === "incomplete");
   const latest = connected.map((row) => validDate(row.lastSuccessAt)).filter(Boolean).sort((a, b) => b - a)[0] ?? null;
   const ageHours = latest ? Math.max(0, (new Date(now).getTime() - latest.getTime()) / HOURS) : null;
-  const missingAfter = Number(rules.missingDataHours ?? 12);
-  const staleAfter = Number(rules.staleHours ?? 6);
+  const { staleAfter, missingAfter } = freshnessLimits(rules);
   let state = "mock", label = "ข้อมูลจำลอง", detail = "ยังไม่ได้เชื่อมบัญชีจริง";
   if (configured.length && !connected.length) { state = "waiting"; label = "รอเชื่อมบัญชี"; detail = `${configured.length} mapping พร้อม · ยังไม่มี OAuth`; }
   if (connected.length) { state = "missing"; label = "ยังไม่มีข้อมูล"; detail = "เชื่อมแล้ว แต่ยังไม่เคย sync สำเร็จ"; }
@@ -94,7 +104,7 @@ export function syncAccountRows(config = {}, brands = [], now = new Date()) {
       if (connected) { state = "missing"; label = "รอ Sync ครั้งแรก"; }
       if (connected && row.syncStatus === "backfill") { state = "syncing"; label = "กำลังดึงย้อนหลัง"; }
       else if (connected && row.syncStatus === "syncing") { state = "syncing"; label = "กำลัง Sync"; }
-      else if (connected && lastSuccess) { state = ageHours > Number(config.rules?.missingDataHours ?? 12) ? "missing" : ageHours > Number(config.rules?.staleHours ?? 6) ? "stale" : "healthy"; label = state === "healthy" ? "ข้อมูลล่าสุดปกติ" : state === "stale" ? "ข้อมูลล่าช้า" : "ข้อมูลขาด"; }
+      else if (connected && lastSuccess) { const { staleAfter, missingAfter } = freshnessLimits(config.rules); state = ageHours > missingAfter ? "missing" : ageHours > staleAfter ? "stale" : "healthy"; label = state === "healthy" ? "ข้อมูลล่าสุดปกติ" : state === "stale" ? "ข้อมูลล่าช้า" : "ข้อมูลขาด"; }
       if (connected && (Number(row.missingDays) > 0 || row.coverageStatus === "incomplete")) { state = "missing"; label = "ช่วงวันที่ไม่ครบ"; }
       if (connected && row.lastErrorCode) { state = "error"; label = "Sync ไม่สำเร็จ"; }
       return {
@@ -126,8 +136,8 @@ export function normalizeSyncRuns(runs = []) {
 }
 
 /* ── ประวัติตัวดึงอัตโนมัติ (ad_cron_ticks) ── */
-const CRON_STALE_MS = 2 * 3_600_000;
-const STUCK_TICK_MS = 10 * 60_000;   // Edge Function ถูกตัดก่อน 10 นาทีเสมอ — ค้างเกินนี้คือ crash   // cron ตั้งไว้ทุกชั่วโมง เงียบเกิน 2 ชั่วโมง = มีอะไรผิด
+const CRON_STALE_MS = 26 * 3_600_000;   // cron วิ่งแค่ช่วงเช้า 05:00–05:50 — เงียบเกิน 26 ชม. = พลาดรอบเช้าไปแล้ว
+const STUCK_TICK_MS = 10 * 60_000;      // Edge Function ถูกตัดก่อน 10 นาทีเสมอ — ค้างเกินนี้คือ crash
 
 const TICK_CODE = /^[A-Z0-9_]{1,64}$/;
 /* งานอื่นในรอบ cron (ยอดขาย · สำรวจแหล่ง · creative) — ไม่ได้ทำในรอบนั้น = null ไม่ใช่ 0 · หมายเหตุเก็บเฉพาะรหัส */

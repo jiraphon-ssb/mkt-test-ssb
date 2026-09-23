@@ -15,10 +15,10 @@ describe("metaSourceRow", () => {
     expect(metaSourceRow({ accounts: [acc({ state: "missing" })], ready: false, now: NOW }).state).toBe("loading");
   });
   it("ครบ 4 บัญชี ปกติ = ok · บอกความสดจากบัญชีที่ดึงล่าสุด · ตรวจยอดผ่าน x/y", () => {
-    const row = metaSourceRow({ accounts: [acc(), acc({ key: "b", reconciliation: { ready: false } })], ready: true, everyHours: 6, now: NOW });
+    const row = metaSourceRow({ accounts: [acc(), acc({ key: "b", reconciliation: { ready: false } })], ready: true, now: NOW });
     expect(row).toMatchObject({ state: "ok", stateLabel: "ปกติ", sub: "2 บัญชี" });
     expect(row.fresh.text).toBe("4 ชม. 54 นาทีก่อน");
-    expect(row.fresh.sub).toBe("ดึงทุก 6 ชม.");
+    expect(row.fresh.sub).toBe("ดึงวันละครั้ง · ตี 5");
     expect(row.complete).toEqual({ text: "ไม่มีวันขาด", sub: "ตรวจยอดผ่าน 1/2" });
   });
   it("บัญชีไหนพัง = ทั้งแถว bad และบอกจำนวน · ขาดวัน = บอกรวมกี่วัน", () => {
@@ -59,6 +59,7 @@ describe("salesSourceRow", () => {
     const row = salesSourceRow({ runs: [run("sales")], facts, ready: true, today: "2026-09-17", now: NOW });
     expect(row).toMatchObject({ state: "ok", stateLabel: "ปกติ" });
     expect(row.fresh.text).toBe("53 นาทีก่อน");
+    expect(row.fresh.sub).toBe("ดึงวันละครั้ง · ตี 5");
     expect(row.complete.text).toBe("คนทักทีมกรอก 2/3 วัน");
     const withToday = [...facts, { brand_id: "b_td", fact_date: "2026-09-17", inquiry_filled: false }];
     expect(salesSourceRow({ runs: [run("sales")], facts: withToday, ready: true, today: "2026-09-17", now: NOW }).complete.text).toBe("คนทักทีมกรอก 2/3 วัน");
@@ -143,21 +144,21 @@ describe("syncVerdict", () => {
   });
 });
 
-describe("nextCronAt", () => {
-  it("รอบถัดไป = นาทีที่ 7 ของชั่วโมงถัดไป (หรือชั่วโมงนี้ถ้ายังไม่ถึง)", () => {
-    expect(nextCronAt(Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-17T03:07:00.000Z");
-    expect(nextCronAt(Date.parse("2026-09-17T03:08:00Z"))).toBe("2026-09-17T04:07:00.000Z");
+describe("nextCronAt — รอบถัดไปของตัวตั้งเวลา (ช่วงเช้า 05:00–05:50 ไทย)", () => {
+  it("กลางวัน = ตี 5 พรุ่งนี้ · ในช่วงเช้า = รอบเก็บตกถัดไป", () => {
+    expect(nextCronAt(Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-17T22:00:00.000Z");
+    expect(nextCronAt(Date.parse("2026-09-17T22:08:00Z"))).toBe("2026-09-17T22:10:00.000Z");
   });
 });
 
 describe("nextSyncAt — ดึงค่าแอดรอบถัดไปจริง (ไม่ใช่ tick ที่ไม่มีงาน)", () => {
-  it("ดึงล่าสุด 11:21 (04:21 UTC) ทุก 6 ชม. = ถึงรอบตั้งแต่ 10:11 UTC → tick 11:07 UTC (18:07 ไทย) · ผ่อนผัน 10 นาทีเหมือน cron", () => {
-    expect(nextSyncAt("2026-09-17T04:21:34Z", 6, Date.parse("2026-09-17T05:00:00Z"))).toBe("2026-09-17T11:07:00.000Z");
-    expect(nextSyncAt("2026-09-16T22:07:30Z", 6, Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-17T04:07:00.000Z");
+  it("ดึงไปแล้วเช้านี้ = ตี 5 พรุ่งนี้ แม้ตอนนี้ยังอยู่ในช่วงเก็บตก", () => {
+    expect(nextSyncAt("2026-09-16T22:03:00Z", Date.parse("2026-09-16T22:15:00Z"))).toBe("2026-09-17T22:00:00.000Z");
+    expect(nextSyncAt("2026-09-16T22:07:30Z", Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-17T22:00:00.000Z");
   });
-  it("เลยกำหนดแล้ว = tick ถัดไป · ไม่เคยดึง = tick ถัดไป", () => {
-    expect(nextSyncAt("2026-09-16T00:00:00Z", 6, Date.parse("2026-09-17T03:20:00Z"))).toBe("2026-09-17T04:07:00.000Z");
-    expect(nextSyncAt(null, 6, Date.parse("2026-09-17T03:20:00Z"))).toBe("2026-09-17T04:07:00.000Z");
+  it("วันนี้ยังไม่ได้ดึง: ในช่วงเช้า = รอบเก็บตกถัดไป · ไม่เคยดึง = รอบถัดไป", () => {
+    expect(nextSyncAt("2026-09-15T22:03:00Z", Date.parse("2026-09-16T22:15:00Z"))).toBe("2026-09-16T22:20:00.000Z");
+    expect(nextSyncAt(null, Date.parse("2026-09-17T03:20:00Z"))).toBe("2026-09-17T22:00:00.000Z");
   });
 });
 
@@ -192,7 +193,7 @@ describe("historyTimeline", () => {
   });
 });
 
-/* แถว Snapshot บัญชีแอด (หน้า บิล & กระทบยอด · spec 2026-09-22) — เก็บโดย ads-cron ทุกชั่วโมง
+/* แถว Snapshot บัญชีแอด (หน้า บิล & กระทบยอด · spec 2026-09-22) — เก็บโดย ads-cron วันละครั้งตี 5
    RLS อ่านได้เฉพาะ team_lead → คนอื่นเห็นแถวแบบบอกตรงๆ ไม่ใช่ "รอรอบแรก" หลอกๆ */
 describe("snapshotSourceRow", () => {
   const now = Date.parse("2026-09-22T10:00:00Z");
@@ -207,9 +208,9 @@ describe("snapshotSourceRow", () => {
     const row = snapshotSourceRow({ allowed: true, ready: true, snapshots: [], now });
     expect(row.state).toBe("waiting");
     expect(row.stateLabel).toBe("รอรอบแรก");
-    expect(row.fresh.sub).toBe("เก็บทุกชั่วโมง · พ่วง ads-cron");
+    expect(row.fresh.sub).toBe("เก็บวันละครั้ง · ตี 5");
   });
-  it("สดใน 3 ชม. = ปกติ · นับบัญชีครบ · บัญชีสถานะผิดปกติดันเป็นเตือน", () => {
+  it("สดใน 26 ชม. = ปกติ · นับบัญชีครบ · บัญชีสถานะผิดปกติดันเป็นเตือน", () => {
     const ok = snapshotSourceRow({ allowed: true, ready: true, now,
       snapshots: [snap("1"), snap("2"), snap("3")] });
     expect(ok.state).toBe("ok");
@@ -222,9 +223,10 @@ describe("snapshotSourceRow", () => {
     expect(warn.stateLabel).toBe("บัญชีสถานะผิดปกติ 1");
     expect(warn.complete.sub).toBe("สถานะผิดปกติ 1 บัญชี — ดูในหน้า บิล & กระทบยอด");
   });
-  it("snapshot เก่ากว่า 3 ชม. = ล่าช้า (cron ควรวิ่งทุกชั่วโมง)", () => {
+  it("เก็บตี 5 เมื่อเช้า (12 ชม.) = ยังปกติ · เก่ากว่า 26 ชม. = ล่าช้า (พลาดรอบเช้า)", () => {
+    expect(snapshotSourceRow({ allowed: true, ready: true, now, snapshots: [snap("1", { fetched_at: "2026-09-21T22:05:00Z" })] }).state).toBe("ok");
     const row = snapshotSourceRow({ allowed: true, ready: true, now,
-      snapshots: [snap("1", { fetched_at: "2026-09-22T05:00:00Z" })] });
+      snapshots: [snap("1", { fetched_at: "2026-09-21T05:00:00Z" })] });
     expect(row.state).toBe("warn");
     expect(row.stateLabel).toBe("ล่าช้า");
     expect(row.hint).toContain("ads-cron");

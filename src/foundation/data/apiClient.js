@@ -2492,7 +2492,7 @@ const adsData = {
     return data;
   },
   /* ── บิล & กระทบยอด (spec 2026-09-22) — team_lead เท่านั้น RLS คุมอีกชั้น ── */
-  /** สั่งเก็บ snapshot เดี๋ยวนี้ (ปุ่มในหน้า Sync) — ปกติ ads-cron ทำให้ทุกชั่วโมงอยู่แล้ว */
+  /** สั่งเก็บ snapshot เดี๋ยวนี้ (ปุ่มในหน้า Sync) — ปกติ ads-cron ทำให้วันละครั้งตี 5 อยู่แล้ว */
   async snapshotAccounts() {
     const db = requireSupabase();
     const { data, error } = await db.functions.invoke("ads-snapshot", { body: {} });

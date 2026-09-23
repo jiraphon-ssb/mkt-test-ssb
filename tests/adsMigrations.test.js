@@ -276,3 +276,14 @@ describe("0013 ปิดสิทธิ์เขียนตารางบิ�
     expect(sql).toMatch(/security definer/i);
   });
 });
+
+/* 23 ก.ย.: ดึงวันละครั้งตี 5 — ตาราง pg_cron ต้องตรงกับที่ ads-cron ใช้ตัดสิน ไม่งั้นรอบเช้าไม่มีใครยิง */
+describe("20260923090000_ads_cron_daily — ตาราง pg_cron วันละครั้ง", () => {
+  const sql = read("supabase/migrations/20260923090000_ads_cron_daily.sql");
+  it("ใช้นิพจน์เดียวกับ DAILY_CRON_EXPR และถอด job เดิมก่อน (รันซ้ำได้)", async () => {
+    const { DAILY_CRON_EXPR } = await import("../supabase/functions/_shared/dailySchedule.js");
+    expect(sql).toContain(`cron.schedule('ads-sync-tick', '${DAILY_CRON_EXPR}'`);
+    expect(sql.indexOf("cron.unschedule('ads-sync-tick')")).toBeLessThan(sql.indexOf("cron.schedule("));
+    expect(sql).not.toMatch(/'7 \* \* \* \*'\s*,/);
+  });
+});
