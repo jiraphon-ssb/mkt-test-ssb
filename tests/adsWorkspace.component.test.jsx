@@ -76,7 +76,7 @@ describe("หน้าปัดจังหวะ (อาร์ตเคาะ 2
     expect(container.querySelectorAll(".aw-brands .pg")).toHaveLength(0);
     const td = cards.find((card) => card.textContent.includes("TEAMDEE"));
     expect(td.querySelectorAll(".aw-track")).toHaveLength(1);
-    expect(td.textContent).toContain("ยอด");
+    expect(td.textContent).toContain("จังหวะ");
     expect(td.textContent).toContain("63.70%");
     expect(td.textContent).toContain("ช้ากว่าแผน");
     expect(td.textContent).not.toContain("ค่าแอด");                    // งบตามแผน = ไม่ต้องพูด
@@ -181,5 +181,49 @@ describe("ตารางแบรนด์", () => {
     expect(within(row).getByText(/181\.07% เกินงบ/)).toBeTruthy();
     fireEvent.click(within(row).getByText("฿264,519.00"));      // กดที่ช่องยอด ไม่ใช่ชื่อแบรนด์
     expect(onSelect).toHaveBeenCalledWith("b_ta");
+  });
+});
+
+/* 25 ก.ย. (รีวิว UX ข้อ 2–4): เปอร์เซ็นต์สองตัวต้องบอกว่าเทียบกับอะไร · งบใช้ช้าห้ามเรียก "ตามแผน" · "ควรทำ" ห้ามเหมือนกันทุกแถว */
+describe("ป้ายเปอร์เซ็นต์และคำแนะนำ", () => {
+  const slowSpender = brand("b_jd", "JK Design", 20789, 100000, 3000, 20000);   // งบ 21.42% ของที่ควรใช้ (ตัดไม่ปัด)
+  const v = () => model({ brands: [...brands, slowSpender], pipelines: { b_td: { items: [] }, b_ta: { items: [] }, b_jd: { items: [] } } });
+
+  it("การ์ดแบรนด์: % ของเป้าเดือนของแบรนด์นั้น (เดิมเขียน 'ของเป้ารวม' ทั้งที่ไม่ใช่เป้ารวม) · บรรทัดจังหวะขึ้นต้นด้วย 'จังหวะ'", () => {
+    const { container } = show(v());
+    const card = [...container.querySelectorAll(".aw-brand")].find((b) => b.textContent.includes("TEAMDEE"));
+    expect(card.textContent).toContain("44.59% ของเป้าเดือน");            // 1,560,880 ÷ 3,500,000
+    expect(card.textContent).not.toContain("ของเป้ารวม");
+    expect(card.querySelector(".aw-brand-line").textContent).toMatch(/^จังหวะ 63\.70% · ช้ากว่าแผน$/);
+  });
+  it("หัวการ์ด: 'ของเป้าทั้งเดือน' กับ 'ของที่ควรได้ถึงวันนี้' — คนละตัวหาร อ่านแล้วไม่สับสน", () => {
+    const { container } = show(v());
+    const hero = container.querySelector(".aw-hero");
+    expect(hero.textContent).toContain("ของเป้าทั้งเดือน");
+    expect(hero.textContent).toContain("ของที่ควรได้ถึงวันนี้");
+  });
+  it("งบที่ใช้ช้ากว่าแผนชัดเจน = 'ใช้ช้ากว่าแผน' ไม่ใช่ 'ตามแผน' · คำแนะนำไม่ซ้ำกันทุกแถว", () => {
+    const { container } = show(v());
+    const row = [...container.querySelectorAll("tr")].find((r) => r.textContent.includes("JK Design"));
+    expect(row.textContent).toContain("21.42% ใช้ช้ากว่าแผน");
+    expect(row.textContent).not.toContain("ตามแผน ");
+    const advice = [...container.querySelectorAll("tbody tr")].map((r) => r.lastElementChild?.textContent);
+    expect(new Set(advice).size).toBeGreaterThan(1);
+  });
+});
+
+describe("รีวิว UX 25 ก.ย. ข้อ 10 และ 16", () => {
+  it("ROAS/%Ads ที่ยังไม่ตั้งเป้า = 'ยังไม่ตั้งเป้า' ไม่ใช่ 'ทำได้ — ยังตัดสินใจไม่ได้'", () => {
+    const { container } = show(model());
+    const eff = container.querySelector(".aw-efficiency");
+    expect(eff.textContent).not.toContain("ยังตัดสินใจไม่ได้");
+    expect(eff.textContent).toContain("ยังไม่ตั้งเป้า");
+  });
+  it("ตารางแบรนด์: ทุกช่องมี data-label ให้จอมือถือแสดงเป็นการ์ดได้ (ชื่อหัวคอลัมน์ตรงกับ thead)", () => {
+    const { container } = show(model());
+    const heads = [...container.querySelectorAll(".aw-brandtable thead th")].slice(1).map((th) => th.textContent);
+    for (const row of container.querySelectorAll(".aw-brandtable tbody tr")) {
+      expect([...row.querySelectorAll("td")].map((td) => td.dataset.label)).toEqual(heads);
+    }
   });
 });

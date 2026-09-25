@@ -16,6 +16,9 @@ import { filterCreativeLibrary, creativeLibrarySummary, formatBreakdown, FORMAT_
 import { creativeRuleSummary, describeRule, evaluateCreativeRules, filterByRuleOutcome, normalizeCreativeRules, ruleTitle } from "./creativeRules.js";
 import { CreativePreview } from "./CreativePreview.jsx";
 import { CreativeMedia } from "./CreativeMedia.jsx";
+import { CreativeTable } from "./CreativeTable.jsx";
+import { CreativeDetail } from "./CreativeDetail.jsx";
+import { campaignStatusOf } from "./creativeStatus.js";
 import { postLinksOf } from "../ads/metaCreativeContract.js";
 import { Pagination } from "../ui/Pagination.jsx";
 import { scrollToList } from "../ui/pagination.js";
@@ -74,6 +77,8 @@ const CREATIVE_FILTERS = {
   /* "auto" = ยังไม่ได้เลือกเอง → มีกฎพร้อมใช้ก็เปิดใช้ทุกกฎทันที (อาร์ตแจ้ง 21 ก.ย. ค่ำ:
      ตั้งกฎไว้แล้วเข้าหน้านี้กลับไม่แสดงอะไรเลย เพราะตั้งต้นเป็น "ไม่ใช้กฎ") · เลือก "ไม่ใช้กฎ" เองยังเคารพ */
   rule: { default: "auto" }, outcome: { default: "all", allowed: ["all", "fail", "pass", "pending"] },
+  // ตาราง = ค่าเริ่ม (25 ก.ย. อาร์ตขอ — ไล่ดู/เทียบหลายสิบชิ้นเร็วกว่า) · การ์ด = ดูภาพใหญ่ทีละชิ้น
+  view: { default: "table", allowed: ["table", "cards"] },
 };
 
 export function CreativeLibraryView() {
@@ -81,7 +86,7 @@ export function CreativeLibraryView() {
   const ads = useAdsData();
   const today = isoDay(new Date());
   const [filters, setFilters] = useReportFilters(CREATIVE_FILTERS);
-  const { period, from, to, brand, platform, format, state, sort, q: query, rule: ruleId, outcome } = filters;
+  const { period, from, to, brand, platform, format, state, sort, q: query, rule: ruleId, outcome, view } = filters;
   const setFormat = (next) => setFilters({ format: next });
   const setBrand = (next) => setFilters({ brand: next });
   const setPlatform = (next) => setFilters({ platform: next });
@@ -113,21 +118,36 @@ export function CreativeLibraryView() {
   }, [data, ads.cards, inBrandScope, brandFilter, period, from, to, brand, platform, format, state, sort, query, rules, activeRule, outcome]);
   const chosen = selected.map((key) => v.all.find((row) => row.key === key)).filter(Boolean);
   const [previewRow, setPreviewRow] = useState(null);
+  const [openRow, setOpenRow] = useState(null);
+  /* สถานะแคมเปญของแต่ละชิ้น — สรุปจากโฆษณาทุกชิ้นในแคมเปญเดียวกัน (ชิ้นเดียวอยู่หลายแคมเปญ: มีแคมเปญเปิด = เปิด) */
+  const campaignStatusFor = useMemo(() => {
+    const byCampaign = new Map();
+    for (const row of v.all) for (const name of row.campaigns ?? []) byCampaign.set(name, [...(byCampaign.get(name) ?? []), row]);
+    const cache = new Map([...byCampaign].map(([name, rows]) => [name, campaignStatusOf(rows)]));
+    return (row) => {
+      const list = (row.campaigns ?? []).map((name) => cache.get(name)).filter(Boolean);
+      return list.find((s) => s.on === true) ?? list.find((s) => s.key === "paused") ?? list[0] ?? null;
+    };
+  }, [v.all]);
   const listTop = useRef(null);
   /* แบ่งหน้า: ตัวกรอง/การเรียง/ช่วงวัน/แหล่งข้อมูลเปลี่ยน → กลับหน้า 1 · ตัวเลขสรุปด้านบนนับทุกหน้า · ที่เลือกเทียบคงอยู่ข้ามหน้า */
   const pager = usePagination(v.rows, { storageKey: "ssb.creatives.pageSize", sizes: PAGE_SIZES, defaultSize: 12, resetKey: `${period}|${from}|${to}|${brand}|${platform}|${state}|${sort}|${query}|${activeRule}|${outcome}|${ads.source}` });
   const toggle = (key) => setSelected((current) => current.includes(key) ? current.filter((item) => item !== key) : current.length >= 4 ? (toast?.("เทียบได้สูงสุด 4 ชิ้น", "bad"), current) : [...current, key]);
   const fromShown = isoDay(new Date(v.range.start));
   const toShown = isoDay(new Date(new Date(v.range.end).getTime() - 1));
+  const moreActive = [platform !== "all", format !== "all", state !== "all", activeRule !== "none"].filter(Boolean).length;
   return <main className="aw cl">
-    <section className="cl-command"><header><div><h1>Creative Library</h1><p>ดูชิ้นงานที่ทำเงิน ชิ้นที่เริ่มล้า และเลือกมาเทียบกัน</p></div><div className="cl-head-actions"><AdsSourceControl ads={ads} /><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div></header><AdsSourceNotice ads={ads} />
+    <section className="cl-command"><header><div><h1>คลัง Creative</h1><p>ดูชิ้นงานที่ทำเงิน ชิ้นที่เริ่มล้า และเลือกมาเทียบกัน</p></div><div className="cl-head-actions"><AdsSourceControl ads={ads} /><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15} /> ตั้งค่า</Link></div></header><AdsSourceNotice ads={ads} />
       <div className="cl-filters"><DateRangePicker period={period} from={fromShown} to={toShown} max={today} onChange={({ period: nextPeriod, from: nextFrom, to: nextTo }) => setFilters({ period: nextPeriod, from: nextFrom, to: nextTo })} />
-        <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((item) => [item.id, item.name])]} value={v.brandSel} onChange={setBrand} /><Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.platforms.map((item) => [item, item])]} value={platform} onChange={setPlatform} /><Dropdown label="รูปแบบ" options={[["all", "ทุกรูปแบบ"], ...Object.entries(FORMAT_LABELS)]} value={format} onChange={setFormat} /><Dropdown label="สถานะ" options={[["all", "ทั้งหมด"], ["fatigue", "เริ่มล้า"], ["ready", "มีสื่อแล้ว"], ["waiting", "รอสื่อ"]]} value={state} onChange={setState} /><Dropdown label="กฎ" options={[["none", "ไม่ใช้กฎ"], ...(rules.length > 1 ? [["all", "ทุกกฎ"]] : []), ...rules.map((rule) => [rule.id, ruleTitle(rule)])]} value={activeRule} onChange={(next) => setFilters(next === "none" ? { rule: next, outcome: "all" } : { rule: next })} />{activeRule !== "none" && <Dropdown label="ผล" options={[["all", "ทั้งหมด"], ["fail", "ไม่ผ่าน"], ["pass", "ผ่าน"], ["pending", "ยังตัดสินไม่ได้"]]} value={outcome} onChange={setOutcome} />}<Dropdown label="เรียง" options={[["spend", "ค่าแอดสูงสุด"], ["purchases", "การซื้อสูงสุด"], ["cpa", "ต้นทุนต่อการซื้อต่ำสุด"], ["roas", "ROAS จากการซื้อสูงสุด"], ["cpl", "ต้นทุนต่อผลลัพธ์ Meta ต่ำสุด"], ["ctr", "CTR (คลิกทั้งหมด) สูงสุด"], ["frequency", "ความถี่เฉลี่ยรายวันสูงสุด"]]} value={sort} onChange={setSort} /><label className="cl-search ads-search"><Search size={14} aria-hidden="true" /><input type="search" aria-label="ค้นหาครีเอทีฟ" placeholder="ค้นหาชิ้นงานหรือแคมเปญ" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+        <Dropdown label="แบรนด์" options={[["all", "ทุกแบรนด์"], ...v.brands.map((item) => [item.id, item.name])]} value={v.brandSel} onChange={setBrand} /><Dropdown label="เรียง" options={[["spend", "ค่าแอดสูงสุด"], ["purchases", "การซื้อสูงสุด"], ["cpa", "ต้นทุนต่อการซื้อต่ำสุด"], ["roas", "ROAS จากการซื้อสูงสุด"], ["cpl", "ต้นทุนต่อผลลัพธ์ Meta ต่ำสุด"], ["ctr", "CTR (คลิกทั้งหมด) สูงสุด"], ["frequency", "ความถี่เฉลี่ยรายวันสูงสุด"]]} value={sort} onChange={setSort} /><label className="cl-search ads-search"><Search size={14} aria-hidden="true" /><input type="search" aria-label="ค้นหาครีเอทีฟ" placeholder="ค้นหาชิ้นงานหรือแคมเปญ" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+        {/* ตัวกรองรองพับไว้ (รีวิว UX 25 ก.ย.: เดิม 7 ตัว + ช่องค้นหาอัดแถวเดียว) · มีตัวไหนใช้อยู่ = กางไว้และนับให้เห็น */}
+        <details className="cl-more" open={moreActive > 0 || undefined}><summary>ตัวกรอง{moreActive ? ` · ${moreActive}` : ""}</summary><div className="cl-more-body"><Dropdown label="ช่องทาง" options={[["all", "ทุกช่องทาง"], ...v.platforms.map((item) => [item, item])]} value={platform} onChange={setPlatform} /><Dropdown label="รูปแบบ" options={[["all", "ทุกรูปแบบ"], ...Object.entries(FORMAT_LABELS)]} value={format} onChange={setFormat} /><Dropdown label="สถานะ" options={[["all", "ทั้งหมด"], ["fatigue", "เริ่มล้า"], ["ready", "มีสื่อแล้ว"], ["waiting", "รอสื่อ"]]} value={state} onChange={setState} /><Dropdown label="กฎ" options={[["none", "ไม่ใช้กฎ"], ...(rules.length > 1 ? [["all", "ทุกกฎ"]] : []), ...rules.map((rule) => [rule.id, ruleTitle(rule)])]} value={activeRule} onChange={(next) => setFilters(next === "none" ? { rule: next, outcome: "all" } : { rule: next })} />{activeRule !== "none" && <Dropdown label="ผล" options={[["all", "ทั้งหมด"], ["fail", "ไม่ผ่าน"], ["pass", "ผ่าน"], ["pending", "ยังตัดสินไม่ได้"]]} value={outcome} onChange={setOutcome} />}</div></details>
       </div>
     </section>
     <RuleCatalog configuredRules={configuredRules} activeRule={activeRule} onSelect={(next) => setFilters({ rule: next, outcome: "all" })} />
     {v.ruleSummary && <section className="cl-rule-summary" aria-label="ผลตามกฎ"><button type="button" aria-pressed={outcome === "fail"} className="fail" onClick={() => setOutcome(outcome === "fail" ? "all" : "fail")}><span>ไม่ผ่าน</span><b>{v.ruleSummary.fail}</b><small>ค่าแอด {fmtMoney(v.ruleSummary.failSpend)}</small></button><button type="button" aria-pressed={outcome === "pass"} className="pass" onClick={() => setOutcome(outcome === "pass" ? "all" : "pass")}><span>ผ่าน</span><b>{v.ruleSummary.pass}</b></button><button type="button" aria-pressed={outcome === "pending"} onClick={() => setOutcome(outcome === "pending" ? "all" : "pending")}><span>ยังตัดสินไม่ได้</span><b>{v.ruleSummary.pending + v.ruleSummary.nodata}</b><small>{v.ruleSummary.nodata ? `ไม่มีข้อมูล ${v.ruleSummary.nodata}` : "ใช้เงินยังไม่ถึงเกณฑ์"}</small></button>{v.ruleSummary.na > 0 && <div><span>ไม่เข้าข่ายกฎ</span><b>{v.ruleSummary.na}</b><small>กฎของแบรนด์อื่น</small></div>}<Link to="/mkt/ads?panel=settings&tab=rules">แก้กฎ</Link></section>}
-    {v.formats.length > 0 && <section className="cl-formats" aria-labelledby="cl-formats-h"><h2 id="cl-formats-h">เทียบตามรูปแบบชิ้นงาน</h2>
+    {/* รูปแบบเดียว = ไม่มีอะไรให้เทียบ (รีวิว UX 25 ก.ย.: เดิมโชว์ "ไม่ระบุ 100%" แถวเดียว) · กำลังกรองรูปแบบอยู่ยังโชว์ ให้กดยกเลิกได้ */}
+    {(v.formats.length > 1 || format !== "all") && <section className="cl-formats" aria-labelledby="cl-formats-h"><h2 id="cl-formats-h">เทียบตามรูปแบบชิ้นงาน</h2>
       <div className="aw-table-scroll"><table><thead><tr><th>รูปแบบ</th><th>ชิ้น</th><th>ค่าแอด</th><th>สัดส่วน</th><th>ต่อผลลัพธ์ Meta</th><th>การซื้อ</th><th>ต่อการซื้อ</th><th>CTR (ทั้งหมด)</th><th>เริ่มล้า</th></tr></thead>
         <tbody>{v.formats.map((f) => { const bestCpl = f.cpl != null && f.cpl === Math.min(...v.formats.filter((x) => x.cpl != null && x.count >= 3).map((x) => x.cpl)); const bestCpa = f.cpa != null && f.cpa === Math.min(...v.formats.filter((x) => x.cpa != null && x.count >= 3).map((x) => x.cpa)); return <tr key={f.format} className={format === f.format ? "is-selected" : ""}>
           <th><button type="button" aria-pressed={format === f.format} onClick={() => setFormat(format === f.format ? "all" : f.format)}>{f.label}</button></th>
@@ -139,9 +159,17 @@ export function CreativeLibraryView() {
     <section className="cl-summary"><div><span>ชิ้นงานในช่วงนี้</span><b>{v.summary.count}</b></div><div><span>ค่าแอดรวม</span><b>{metric(v.summary.spend, "money")}</b></div><div><span>การซื้อ (Meta)</span><b>{metric(v.summary.purchases, "count")}</b></div><div><span>มีภาพ/วิดีโอแล้ว</span><b>{v.summary.withMedia}</b></div><div className={v.summary.tired ? "warn" : ""}><span>เริ่มล้า</span><b>{v.summary.tired}</b></div></section>
     <CompareTray rows={chosen} onRemove={(key) => setSelected((current) => current.filter((item) => item !== key))} onClear={() => setSelected([])} />
     <div ref={listTop} className="cl-list-top" />
-    {v.rows.length ? <><section className="cl-grid">{pager.pageItems.map((row) => <CreativeCard key={row.key} row={row} checked={selected.includes(row.key)} onToggle={() => toggle(row.key)} onPreview={ads.canPreview ? setPreviewRow : undefined} ruleResult={evaluateCreativeRules(row, rules, activeRule)} />)}</section>
+    {v.rows.length ? <><div className="cl-view-switch" role="group" aria-label="รูปแบบรายการ">
+        <button type="button" aria-pressed={view === "table"} onClick={() => setFilters({ view: "table" })}>ตาราง</button>
+        <button type="button" aria-pressed={view === "cards"} onClick={() => setFilters({ view: "cards" })}>การ์ด</button>
+      </div>
+      {view === "table" ? <section className="cl-table-wrap aw-panel"><CreativeTable context="library" rows={pager.pageItems} onOpen={setOpenRow} campaignStatus={campaignStatusFor}
+        selection={{ isChecked: (key) => selected.includes(key), toggle }}
+        renderExtra={activeRule === "none" ? null : (row) => { const r = evaluateCreativeRules(row, rules, activeRule); return r ? <span className={`cl-rule-inline cl-rule--${r.status}`}>{RULE_TEXT[r.status]}</span> : null; }} /></section>
+      : <section className="cl-grid">{pager.pageItems.map((row) => <CreativeCard key={row.key} row={row} checked={selected.includes(row.key)} onToggle={() => toggle(row.key)} onPreview={ads.canPreview ? setPreviewRow : undefined} ruleResult={evaluateCreativeRules(row, rules, activeRule)} />)}</section>}
       <Pagination pager={pager} sizes={PAGE_SIZES} unit="ชิ้นงาน" label="แบ่งหน้า Creative" onChange={() => scrollToList(listTop)} /></>
       : <section className="cl-empty"><ImageIcon size={28} /><strong>ไม่พบชิ้นงานในช่วงนี้</strong><span>ลองเปลี่ยนช่วงเวลาหรือล้างตัวกรอง</span></section>}
     {previewRow && <CreativePreview row={previewRow} onClose={() => setPreviewRow(null)} />}
+    {openRow && <CreativeDetail row={openRow} campaignStatus={campaignStatusFor(openRow)} canPreview={ads.canPreview} onClose={() => setOpenRow(null)} />}
   </main>;
 }

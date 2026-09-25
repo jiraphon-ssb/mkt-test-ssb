@@ -70,7 +70,7 @@ export function CampaignsView() {
     </section>
 
     {/* โหมด Meta Pilot: สถานะข้อมูลอยู่ในแถบแหล่งข้อมูลแล้ว · กล่องนี้อ่านจาก settings (ข้อมูลจำลอง) จะขัดกัน — สุขภาพจากฐานจริงทำในรอบถัดไป */}
-    {ads.source === "mock" && <section className={`cp-health cp-health--${v.dataHealth.state}`} aria-label="สุขภาพข้อมูล"><div><i /><span><strong>{v.dataHealth.label}</strong><small>{v.dataHealth.detail}</small></span></div><div className="cp-health-sources">{v.dataHealth.sources.filter((source) => source.configured || source.provider === "meta").map((source) => <span key={source.provider}>{source.name} · {source.label}</span>)}</div><Link to="/mkt/ads/sync">ดูสถานะ Sync</Link></section>}
+    {/* แถบ "สุขภาพข้อมูล" ตอนเป็นข้อมูลจำลองถูกถอด (รีวิว UX 25 ก.ย.) — ซ้ำกับป้าย "ข้อมูลตัวอย่าง" บนหัวหน้า และหน้าอื่นไม่มี */}
 
     <CampaignsTable rows={v.rows} compareLabel={v.compareLabel} scopeEmpty={v.scopeEmpty} revenueLabel={revenueBasis === "new" ? "ยอดใหม่" : "ยอดรวม"} goalTargets={v.goalTargets} targetPeriod={v.targetPeriod} salesSummary={v.salesSummary} renderDetail={(row) => <CampaignDetail row={row} compareLabel={v.compareLabel} canPreview={ads.canPreview} />} />
   </main>;

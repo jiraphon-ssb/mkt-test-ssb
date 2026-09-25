@@ -252,14 +252,14 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const savedAt = initial.updatedAt ? new Date(initial.updatedAt).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : null;
   const primaryTabs = [["sources",Link2,"1 · บัญชี"],["goals",Target,"2 · เป้า"],["rules",ShieldAlert,"3 · กฎ"],["reconcile",Scale,"4 · ตรวจยอด"]];
   return <main className="aw acc">
-    <header className="acc-header"><div><Link to="/mkt/ads" onClick={confirmLeave}><ArrowLeft size={15} /> Overview ads</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div>
+    <header className="acc-header"><div><Link to="/mkt/ads" onClick={confirmLeave}><ArrowLeft size={15} /> ภาพรวมโฆษณา</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div>
       <div className="acc-save-wrap">
         <button type="button" className="acc-save" onClick={save} disabled={linking || !isLead || !dirty} aria-busy={linking}
           title={!isLead ? "เฉพาะหัวหน้าทีมบันทึกการตั้งค่าได้" : dirty ? "ครอบแท็บ บัญชี และ กฎ (แท็บเป้าบันทึกในตัวเอง)" : "ไม่มีการแก้ไขค้าง"}>
           {linking ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} {linking ? "กำลังผูกบัญชี…" : dirty ? "บันทึก" : "บันทึกแล้ว"}</button>
         <small className="acc-save-note">{dirty ? "มีการแก้ไขยังไม่บันทึก · ครอบแท็บ บัญชี + กฎ" : savedAt ? `บันทึกล่าสุด ${savedAt}` : "แท็บ เป้า บันทึกในตัวเอง"}</small>
       </div></header>
-    <nav className="acc-tabs" aria-label="หมวดการตั้งค่า Overview ads">
+    <nav className="acc-tabs" aria-label="หมวดการตั้งค่าภาพรวมโฆษณา">
       {primaryTabs.map(([id,Icon,label]) => {
         const tabDirty = (id === "sources" && dirtySources) || (id === "rules" && dirtyRules);
         return <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}{tabDirty && <i className="acc-dot" title="มีการแก้ไขยังไม่บันทึก" />}</button>;

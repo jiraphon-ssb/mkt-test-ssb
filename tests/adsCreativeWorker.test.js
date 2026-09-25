@@ -5,7 +5,7 @@ import { creativeAssetFromRow, factsToAdCards } from "../src/modules/marketing/a
 import { creativeAssetOf } from "../src/modules/marketing/ads/metaCreativeContract.js";
 
 const graphAd = (id, patch = {}) => ({
-  id, name: `Ad ${id}`, campaign_id: "c1", adset_id: "s1", updated_time: "2026-09-14T10:00:00+0000",
+  id, name: `Ad ${id}`, effective_status: "ACTIVE", campaign_id: "c1", adset_id: "s1", updated_time: "2026-09-14T10:00:00+0000",
   creative: {
     id: `cr${id}`, name: "Sofa hero", thumbnail_url: "https://scontent.xx.fbcdn.net/t.jpg", image_url: "https://scontent.xx.fbcdn.net/i.jpg",
     object_story_spec: { link_data: { message: "โซฟาลด 30%", name: "Sofa Sale", link: "https://teamdee.co/sale", call_to_action: { type: "LEARN_MORE" } } },
@@ -31,6 +31,13 @@ describe("creativeRowFromAd → creativeAssetFromRow", () => {
     });
     expect(row.media_assets[0]).toMatchObject({ type: "image", thumbnailUrl: "https://scontent.xx.fbcdn.net/i.jpg" });   // ภาพเต็มของโฆษณาก่อนภาพย่อ creative
     expect(Object.keys(row.source_spec)).toEqual(["object_type"]);
+  });
+  it("เก็บสถานะเปิด/ปิดของโฆษณา · แปลงเป็น asset.status ให้หน้าจอ · ค่าแปลก/ยาวเกินไม่เก็บ", () => {
+    const row = creativeRowFromAd(graphAd("11", { effective_status: "CAMPAIGN_PAUSED" }), "conn-1");
+    expect(row.effective_status).toBe("CAMPAIGN_PAUSED");
+    expect(creativeAssetFromRow(row).status).toBe("CAMPAIGN_PAUSED");
+    expect(creativeRowFromAd(graphAd("12", { effective_status: undefined }), "conn-1").effective_status).toBeNull();
+    expect(creativeRowFromAd(graphAd("13", { effective_status: "x".repeat(80) }), "conn-1").effective_status).toBeNull();
   });
   it("ad ที่ไม่มี creative (ถูกลบ) = null", () => {
     expect(creativeRowFromAd({ id: "11" }, "conn-1")).toBeNull();
@@ -63,7 +70,8 @@ describe("buildAccountAdsUrl (?ids= เลิกรองรับใน Graph v
     expect(url.origin + url.pathname).toBe("https://graph.facebook.com/v26.0/act_9/ads");
     expect(url.searchParams.has("ids")).toBe(false);
     const fields = url.searchParams.get("fields");
-    expect(fields).toMatch(/^id,name,campaign_id,adset_id,updated_time,creative\.thumbnail_width\(600\)\.thumbnail_height\(600\)\{/);
+    // effective_status มากับคำขอเดิม (ไม่เพิ่มจำนวนครั้งที่ยิง Meta) — ตารางครีเอทีฟบอกเปิด/ปิด (25 ก.ย.)
+    expect(fields).toMatch(/^id,name,effective_status,campaign_id,adset_id,updated_time,creative\.thumbnail_width\(600\)\.thumbnail_height\(600\)\{/);
     expect(fields).toContain("thumbnail_url");
     expect(fields).toContain("object_story_spec");          // ภาพปกวิดีโอ/ภาพลิงก์จริงอยู่ในสเปก (ไม่งั้นได้รูปโปรไฟล์เพจ)
     expect(url.searchParams.get("limit")).toBe("50");

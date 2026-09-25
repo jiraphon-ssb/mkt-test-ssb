@@ -436,8 +436,8 @@ export function adsFunnel(cards, range, prev = null) {
   const defs = [
     ["inquiries", "คนทัก", "เริ่มสนทนาจากโฆษณา"],
     ["qualified", "Lead", "ผ่านการคัดกรอง"],
-    ["deposits", "มัดจำ", "มีรายการชำระแล้ว"],
-    ["closed", "ออเดอร์ปิดแล้ว", "ยืนยันและชำระมัดจำแล้ว"],
+    ["deposits", "ได้ออเดอร์", "มีรายการชำระแล้ว"],
+    ["closed", "ยืนยันออเดอร์", "ยืนยันและชำระมัดจำแล้ว"],
   ];
   const stages = defs.map(([key, label, hint], i) => ({
     key, label, hint, value: now.values[i],

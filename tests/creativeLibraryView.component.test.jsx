@@ -20,8 +20,11 @@ vi.mock("../src/modules/marketing/ads/AdsSourceControl.jsx", () => ({ AdsSourceC
 vi.mock("../src/modules/marketing/creatives/CreativeMedia.jsx", () => ({ CreativeMedia: () => null }));
 const { CreativeLibraryView } = await import("../src/modules/marketing/creatives/CreativeLibraryView.jsx");
 
-afterEach(() => { cleanup(); state.settings = {}; sessionStorage.clear(); });
-const view = (url = "/mkt/creatives") => render(<MemoryRouter initialEntries={[url]}><CreativeLibraryView /></MemoryRouter>);
+afterEach(() => { cleanup(); state.settings = {}; sessionStorage.clear(); if (cards.length > 4) cards.length = 4; });
+/* เทสชุดเดิมคุมมุมมองการ์ด — ตั้งแต่ 25 ก.ย. ค่าเริ่มเป็นตาราง จึงเปิดโหมดการ์ดให้เองถ้าลิงก์ไม่ได้ระบุ */
+const withView = (url) => (/[?&]view=/.test(url) ? url : `${url}${url.includes("?") ? "&" : "?"}view=cards`);
+const view = (url = "/mkt/creatives") => render(<MemoryRouter initialEntries={[withView(url)]}><CreativeLibraryView /></MemoryRouter>);
+const tableView = (url = "/mkt/creatives") => render(<MemoryRouter initialEntries={[url]}><CreativeLibraryView /></MemoryRouter>);
 const card = (name) => screen.getByText(name).closest("article");
 const shown = () => [...document.querySelectorAll(".cl-card strong")].map((el) => el.textContent);
 
@@ -100,7 +103,13 @@ describe("CreativeLibraryView", () => {
     view();
     expect(document.querySelector(".drp-trigger").textContent).toContain("7 วันล่าสุด");
   });
+  /* รีวิว UX 25 ก.ย. ข้อ 12: มีรูปแบบเดียว ("ไม่ระบุ 100%") ตารางเทียบไม่มีอะไรให้เทียบ → ไม่แสดง */
+  it("มีรูปแบบเดียว = ไม่แสดงตารางเทียบรูปแบบ", () => {
+    view();
+    expect(screen.queryByRole("region", { name: "เทียบตามรูปแบบชิ้นงาน" })).toBeNull();
+  });
   it("เทียบตามรูปแบบชิ้นงาน: ชื่อไม่มีคำนำหน้า = ไม่ระบุ · กดชื่อรูปแบบแล้วกรองและใส่ในลิงก์", () => {
+    cards.push(ad("v", "VDO รีวิวลูกค้า", { spend: 100, purchases: 0 }));
     view();
     const table = within(screen.getByRole("region", { name: "เทียบตามรูปแบบชิ้นงาน" }));
     const row = table.getByRole("button", { name: "ไม่ระบุ" }).closest("tr");
@@ -138,5 +147,22 @@ describe("%Ads บนการ์ด (อาร์ตขอ 21 ก.ย. ค่�
     view();
     expect(within(card("ชิ้นแพง")).getByText("%Ads")).toBeTruthy();
     expect(within(card("ชิ้นแพง")).getByText("%Ads").nextSibling.textContent).toBe("—");   // revenue null
+  });
+});
+
+/* 25 ก.ย.: ตารางครีเอทีฟกลางเป็นค่าเริ่มของหน้าคลัง · สลับเป็นการ์ดได้ · คลิกแถว = ดูเต็ม */
+describe("มุมมองตาราง (ค่าเริ่ม)", () => {
+  it("เปิดหน้ามาเป็นตาราง หนึ่งแถวต่อชิ้น · สลับเป็นการ์ดได้", () => {
+    tableView();
+    expect(screen.getByRole("button", { name: "ตาราง" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getAllByRole("row").length).toBeGreaterThan(4);
+    expect(document.querySelector(".cl-card")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "การ์ด" }));
+    expect(document.querySelector(".cl-card")).toBeTruthy();
+  });
+  it("คลิกแถว = หน้าต่างดูเต็มของชิ้นนั้น", () => {
+    tableView();
+    fireEvent.click(screen.getByText("ชิ้นแพง").closest("tr"));
+    expect(screen.getByRole("dialog", { name: "ชิ้นแพง" })).toBeTruthy();
   });
 });

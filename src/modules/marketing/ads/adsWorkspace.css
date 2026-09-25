@@ -3,7 +3,8 @@
 .aw-header { display:flex; justify-content:space-between; align-items:center; gap:18px; margin:0; padding:11px 14px; border:0; background:transparent; }
 .aw-header-actions { display:flex; align-items:center; gap:18px; }
 .aw-settings-link { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); }
-.aw-eyebrow { font-size:11px; font-weight:700; letter-spacing:.12em; color:var(--ink-soft); }
+/* ไม่ยืดช่องไฟ — หัวข้อเป็นภาษาไทย ยืดแล้วสระ/วรรณยุกต์แยกจากพยัญชนะ อ่านยาก (รีวิว UX 25 ก.ย.) */
+.aw-eyebrow { font-size:11.5px; font-weight:700; letter-spacing:0; color:var(--ink-soft); }
 .aw h1 { font-size:clamp(18px,1.7vw,24px); margin:0; letter-spacing:-.035em; }
 .aw-header p { color:var(--ink-soft); margin:0; }
 .aw a { color:var(--ink); font-weight:600; text-decoration:none; white-space:nowrap; }
@@ -133,7 +134,7 @@
 .acc-state.ready { color:color-mix(in srgb,var(--accent-text) 55%,var(--ink)); background:var(--accent-soft); font-weight:700; }
 .acc-sheet { min-width:0; padding:22px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
 .acc-sheet-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; padding-bottom:18px; border-bottom:1px solid var(--line); }
-.acc-kicker { color:var(--ink-soft); font-size:11px; letter-spacing:.14em; font-weight:800; }.acc-sheet-head h2 { margin:5px 0; font-size:21px; }.acc-sheet-head p { margin:0; color:var(--ink-soft); font-size:12px; }
+.acc-kicker { color:var(--ink-soft); font-size:11.5px; letter-spacing:0; font-weight:800; }.acc-sheet-head h2 { margin:5px 0; font-size:21px; }.acc-sheet-head p { margin:0; color:var(--ink-soft); font-size:12px; }
 .acc-sheet-head a { display:inline-flex; gap:6px; align-items:center; min-height:24px; font-size:12px; color:var(--accent-text); }
 .acc-callout { display:flex; align-items:flex-start; gap:9px; margin:16px 0; padding:11px 12px; border:1px solid color-mix(in srgb,var(--warn) 30%,var(--line)); border-radius:8px; color:var(--warn-text); background:var(--warn-soft); font-size:12px; line-height:1.55; }.acc-callout svg { flex-shrink:0; }
 .acc-oauth { display:flex; align-items:center; gap:10px; margin:16px 0; padding:12px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }.acc-oauth.connected { border-color:var(--accent-line); background:var(--accent-soft); }.acc-oauth-icon { display:grid; place-items:center; width:32px; height:32px; flex:none; border-radius:8px; background:var(--surface); color:var(--accent-text); }.acc-oauth-copy { display:grid; gap:2px; min-width:0; }.acc-oauth-copy strong { font-size:13px; }.acc-oauth-copy small { color:var(--ink-soft); font-size:11px; }.mkt-root .acc-oauth-connect,.mkt-root .acc-oauth-disconnect { display:inline-flex; align-items:center; gap:6px; min-height:34px; margin-left:auto; padding:0 12px; border-radius:7px; font:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }.mkt-root .acc-oauth-connect { background:var(--accent-solid,var(--accent)); color:var(--on-accent); }.mkt-root .acc-oauth-disconnect { border:1px solid var(--line); background:var(--surface); color:var(--ink-soft); }
@@ -146,7 +147,7 @@
 .acc-source-config { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:0 0 18px; padding:12px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
 .acc-source-config label { min-width:0; }.acc-source-config label>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }.acc-source-config select { width:100%; height:34px; padding:0 8px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font:inherit; font-size:12px; }
 /* ช่องเวลาดึงแบบตายตัว (วันละครั้งตี 5) — วางในกริดเดียวกับ dropdown ข้างๆ ให้ความสูงตรงกัน */
-.acc-source-fixed { min-width:0; display:flex; flex-direction:column; }.acc-source-fixed>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }.acc-source-fixed>b { display:flex; align-items:center; height:34px; padding:0 10px; border:1px dashed var(--line); border-radius:6px; color:var(--ink); font-size:12px; font-weight:600; }.acc-source-fixed>small { margin-top:4px; color:var(--ink-soft); font-size:10.5px; }
+.acc-source-fixed { min-width:0; display:flex; flex-direction:column; }.acc-source-fixed>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }.acc-source-fixed>b { display:flex; align-items:center; height:32px; box-sizing:border-box; padding:0 10px; border:1px dashed var(--line); border-radius:6px; color:var(--ink); font-size:12px; font-weight:600; }.acc-source-fixed>small { margin-top:4px; color:var(--ink-soft); font-size:10.5px; }
 .acc-mapping-head,.acc-mapping-row { display:grid; grid-template-columns:minmax(150px,1fr) minmax(190px,1.4fr) minmax(145px,.8fr) minmax(168px,.78fr); gap:14px; align-items:center; }
 .acc-mapping-head { padding:0 10px 8px; color:var(--ink-soft); font-size:11px; }
 .acc-mapping-row { padding:12px 10px; border-top:1px solid var(--line); }
@@ -268,7 +269,9 @@
    ไม่ใช่ผังการ์ดครึ่งจอเดิมที่ช่องข้อมูล 2 คอลัมน์ถ่างกันเป็นเมตรและหน้าปัดลอยเดียวดายขวาสุด */
 .aw-hero .aw-facts, .aw-middle .aw-facts, .ads-chan-card .aw-facts { grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px 24px; margin-top:18px; }
 .aw-hero-grid > .aw-hero-side, .aw-card-grid > .pg, .aw-card-grid > .aw-hero-side { border-left:1px solid var(--line); padding-left:32px; margin-left:16px; }
-@media (max-width:900px){ .aw-hero-grid > .aw-hero-side, .aw-card-grid > .pg, .aw-card-grid > .aw-hero-side { border-left:0; padding-left:0; margin-left:0; } }
+/* หัวการ์ดยุบเป็นคอลัมน์เดียวที่ ≤1100 — เส้นแบ่งต้องเปลี่ยนเป็นแนวนอนพร้อมกัน (เดิมหายที่ 900 → จอ 1024 มีเส้นตั้งลอย) */
+@media (max-width:1100px){ .aw-hero-grid > .aw-hero-side { border-left:0; margin-left:0; padding:20px 0 0; border-top:1px solid var(--line); } }
+@media (max-width:900px){ .aw-card-grid > .pg, .aw-card-grid > .aw-hero-side { border-left:0; padding-left:0; margin-left:0; } }
 /* คอลัมน์ pace ของ hero: หน้าปัดบน ประโยคตัดสินใจล่าง — ทุกอย่างเรื่องจังหวะอยู่ที่เดียว */
 .aw-hero-side { display:grid; justify-items:center; gap:12px; }
 /* ประโยคตัดสินใจใต้การ์ดยอด — บรรทัดเดียว บอกทั้งช่องว่างและสิ่งที่ต้องทำต่อวัน */
@@ -381,3 +384,23 @@
   display:grid; gap:5px; padding:10px 12px; border:1px solid var(--line); border-radius:10px;
   background:var(--surface); box-shadow:0 10px 26px rgb(0 0 0 / .45); font-size:11.5px; line-height:1.6; color:var(--ink-soft); text-align:left; }
 .ui-info-box[data-align="end"] { left:auto; right:-8px; }
+
+/* ── รีวิว UX 25 ก.ย. ข้อ 5 + 16 (มือถือ) ──
+   ข้อ 5: รางเลือกแบรนด์เดิมเรียง 2 คอลัมน์สูงเกือบเต็มจอ ดันตัวเลขหลักลงไป → แถบเลื่อนแนวนอนแถวเดียว
+   ข้อ 16: ตารางแบรนด์เลื่อนข้างกว้าง ~3 เท่าจอ → ทุกแถวเป็นการ์ด หัวคอลัมน์มาจาก data-label */
+@media (max-width:760px){
+  .aw-brands { display:flex; grid-template-columns:none; gap:8px; overflow-x:auto; scroll-snap-type:x proximity; padding-bottom:4px; }
+  .aw-brands>.aw-section-label { flex:0 0 100%; display:none; }
+  .aw-brands>p, .aw-brands>.aw-key { display:none; }
+  .mkt-root .aw-brands .aw-brand { flex:0 0 172px; scroll-snap-align:start; }
+  .aw-brands .aw-brand>div:first-child { flex-wrap:nowrap; }
+  .aw-brands .aw-brand>div:first-child strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .aw-brandtable thead { display:none; }
+  .aw-table-scroll:has(.aw-brandtable) { overflow:visible; }
+  .aw-brandtable, .aw-brandtable tbody { display:block; width:100%; min-width:0; }
+  .aw-brandtable tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 14px; padding:12px 0; border-top:1px solid var(--line); }
+  .aw-brandtable tr > th { grid-column:1/-1; text-align:left; }
+  .aw-brandtable tr > td { display:flex; flex-direction:column; gap:3px; padding:0; border:0; text-align:left; min-width:0; }
+  .aw-brandtable tr > td::before { content:attr(data-label); color:var(--ink-soft); font-size:11px; }
+  .aw-brandtable tr > td:last-child { grid-column:1/-1; }
+}

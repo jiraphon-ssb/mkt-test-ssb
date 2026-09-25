@@ -125,6 +125,10 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
     const daily=d.daily&&d.daily[c.dataIndex]!=null?`      เฉพาะวันนั้น ${format(key,d.daily[c.dataIndex])}`:null;
     return daily?[main,daily]:main;
   };
+  /* คำอธิบายเส้นเป็น "เส้น" ตามรูปจริง (ประ/ทึบ) — ค่าเริ่มของ Chart.js วาดเป็นกล่องทึบ เส้นประกลายเป็นก้อนเทาเบลอ
+     จอแคบ: ป้ายวันที่ใต้กราฟ 12 ป้ายชนกัน → เหลือ 5 (รีวิว UX 25 ก.ย.) */
+  const legendLabels={usePointStyle:true,pointStyle:'line',boxWidth:28};
+  const narrow=typeof window!=='undefined'&&window.matchMedia?.('(max-width: 640px)').matches;
   const cumulativeBlocked=chosenMode==='cumulative'&&mode!=='cumulative';
   const modeNote=mode==='cumulative'
     ?(additive?'แต่ละจุด = ยอดรวมตั้งแต่ต้นช่วงถึงวันนั้น':`แต่ละจุด = ${label} คิดจากยอดรวมตั้งแต่ต้นช่วงถึงวันนั้น (ไม่ใช่เอาค่ารายวันมาบวกกัน)`)+(result.splitOn?'':' · เส้นเทาประ = ช่วงเทียบสะสมแบบเดียวกัน')+(result.target!=null?' · เส้นเหลืองประ = เป้าเดือนเฉลี่ยตามวัน':'')
@@ -159,8 +163,10 @@ export function WorkspaceTrends({v,brandId,sales=null}) {
     {sourceNote&&<p className="aw-key">{sourceNote}</p>}
     {result.current==null&&<p className="aw-key">{emptyNote}</p>}
     {cumulativeBlocked&&<p className="aw-key">{label} สะสมไม่ได้ (Reach นับคนซ้ำข้ามวัน รวมกันแล้วผิด) · แสดงรายวันแทน</p>}
-    <ChartBox type={chartType} height={340} ariaLabel={`${label}${mode==='cumulative'?'สะสม':'รายวัน'}`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(paint)}} options={baseOpts({plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:tooltipLabel}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{precision:COUNT_KEYS.includes(key)?0:undefined,callback:n=>tick(key,n)}}}})}/>
-    <p className="aw-key">{openNote}{modeNote}{needsTarget?' · ยังไม่ตั้งเป้าเดือนของตัวนี้ในระบบขาย จึงไม่มีเส้นเป้า':''}</p>
+    <ChartBox type={chartType} height={340} ariaLabel={`${label}${mode==='cumulative'?'สะสม':'รายวัน'}`} data={{labels:result.days.map(dayLabel),datasets:result.datasets.map(paint)}} options={baseOpts({plugins:{legend:{display:true,position:'bottom',labels:legendLabels},tooltip:{callbacks:{label:tooltipLabel}}},scales:{x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:narrow?5:12}},y:{beginAtZero:true,ticks:{precision:COUNT_KEYS.includes(key)?0:undefined,callback:n=>tick(key,n)}}}})}/>
+    {needsTarget&&<p className="aw-key">ยังไม่ตั้งเป้าเดือนของตัวนี้ในระบบขาย จึงไม่มีเส้นเป้า</p>}
+    {/* วิธีอ่านกราฟพับไว้ (รีวิว UX 25 ก.ย.: เดิมเป็นย่อหน้ายาวใต้กราฟทุกครั้ง ขัดกติกา "ไม่ใส่คำอธิบายเทคนิคซ้ำ") */}
+    <details className="aw-formula"><summary>อ่านกราฟนี้อย่างไร</summary><p>{openNote}{modeNote}</p></details>
     <details><summary>ดูข้อมูลเป็นตาราง</summary><div className="aw-table-scroll"><table><thead><tr><th>วันที่</th>{result.datasets.map(d=><th key={d.label}>{d.label}{mode==='cumulative'&&d.kind!=='target'?' (สะสม)':''}</th>)}{mode==='cumulative'&&!result.splitOn&&<th>วันนั้น</th>}</tr></thead><tbody>{result.days.map((d,i)=><tr key={d}><th>{new Date(d).toLocaleDateString('th-TH')}</th>{result.datasets.map(s=><td key={s.label}>{format(key,s.data[i])}</td>)}{mode==='cumulative'&&!result.splitOn&&<td>{format(key,result.datasets[0].daily?.[i] ?? null)}</td>}</tr>)}</tbody></table></div></details>
   </section>;
 }

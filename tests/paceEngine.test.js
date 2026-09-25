@@ -50,7 +50,18 @@ describe("paceOf — งบ (เร็วเกินไม่ดี แต่�
   it("ใช้เร็วกว่าแผนแต่ยังไม่เกินงบ = เตือน ไม่ใช่แดง", () => {
     expect(paceOf({ actual: 800, target: 1000, clock, direction: "spend" }).state).toBe("warn");   // 114%
     expect(paceOf({ actual: 700, target: 1000, clock, direction: "spend" }).state).toBe("ontrack");
-    expect(paceOf({ actual: 500, target: 1000, clock, direction: "spend" }).state).toBe("ontrack"); // ใช้ช้า = ไม่ใช่ปัญหาในตัวเอง
+  });
+  /* 25 ก.ย.: งบใช้ไป 30% ของที่ควรใช้ แต่ป้ายบอก "ตามแผน" (t around) — ใช้ช้าไม่ใช่ความผิด แต่ห้ามเรียกว่าตามแผน */
+  it("ใช้ช้ากว่าแผนชัดเจน (<85%) = สถานะแยก 'ใช้ช้ากว่าแผน' สีกลาง ไม่มีป้ายเตือน", () => {
+    const p = paceOf({ actual: 500, target: 1000, clock, direction: "spend" });   // 71.43% ของที่ควรใช้
+    expect(p.state).toBe("under");
+    expect(paceLabel(p.state, "spend")).toBe("ใช้ช้ากว่าแผน");
+    expect(paceTone(p.state)).toBe("zinc");
+    expect(paceFlag(p.state, "spend")).toBeNull();
+  });
+  it("85%–110% = ตามแผน · ขอบ 85% พอดียังนับว่าตามแผน", () => {
+    expect(paceOf({ actual: 595, target: 1000, clock, direction: "spend" }).state).toBe("ontrack");  // 85.00%
+    expect(paceOf({ actual: 590, target: 1000, clock, direction: "spend" }).state).toBe("under");    // 84.29%
   });
 });
 
@@ -100,11 +111,16 @@ describe("ป้ายและโทนสี", () => {
     expect(trendPaceState({ ratio: 1.08, direction: "spend" })).toBe("ontrack");     // เขตปลอดภัย ≤110%
     expect(trendPaceState({ ratio: 1.22, direction: "spend" })).toBe("warn");        // เร็วแต่ยังไม่เกินงบ
     expect(trendPaceState({ ratio: 1.22, direction: "spend", overTarget: true })).toBe("bad");
+    expect(trendPaceState({ ratio: 0.6, direction: "spend" })).toBe("under");         // ใช้ช้า ≠ ตามแผน
     expect(trendPaceState({ ratio: null })).toBe("unknown");
   });
-  it("paceBucket ใช้ป้อนตารางตัดสินใจ 2×2", () => {
+  it("paceBucket ใช้ป้อนตารางตัดสินใจ — ยอด 2 ช่อง (เร็ว/ช้า) · งบ 3 ช่อง (เร็ว/ตามแผน/ช้า)", () => {
     expect(paceBucket({ state: "ontrack", value: 1.2 })).toBe("fast");
     expect(paceBucket({ state: "warn", value: 0.9 })).toBe("slow");
+    expect(paceBucket({ direction: "spend", state: "under", value: 0.3 })).toBe("slow");
+    expect(paceBucket({ direction: "spend", state: "ontrack", value: 1.03 })).toBe("onplan");
+    expect(paceBucket({ direction: "spend", state: "warn", value: 1.2 })).toBe("fast");
+    expect(paceBucket({ direction: "spend", state: "bad", value: 1.8 })).toBe("fast");
     expect(paceBucket({ state: "unknown" })).toBeNull();
   });
 });

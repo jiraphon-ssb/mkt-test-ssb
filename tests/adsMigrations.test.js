@@ -287,3 +287,13 @@ describe("20260923090000_ads_cron_daily — ตาราง pg_cron วันล
     expect(sql).not.toMatch(/'7 \* \* \* \*'\s*,/);
   });
 });
+
+/* 25 ก.ย.: ตารางครีเอทีฟบอกเปิด/ปิด — คอลัมน์ต้องรับเฉพาะค่ารูปแบบ Meta และรันซ้ำได้ */
+describe("0014_ad_creative_status", () => {
+  const sql = read("src/supabase/migrations/0014_ad_creative_status.sql");
+  it("เพิ่มคอลัมน์แบบรันซ้ำได้ · constraint ซ้ำไม่พัง · รูปแบบตรงกับที่ worker กรอง", () => {
+    expect(sql).toMatch(/add column if not exists effective_status text/);
+    expect(sql).toMatch(/exception when duplicate_object then null/);
+    expect(sql).toContain("^[A-Z_]{1,40}$");
+  });
+});

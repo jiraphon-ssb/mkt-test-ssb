@@ -16,7 +16,7 @@ describe("AdsControlCenter", () => {
      เป้าหลักยังมาจากระบบขาย/ระบบ TMK · แท็บนี้ไว้ดูว่าได้อะไรมาแล้ว ขาดอะไร แล้วเติมทับได้ */
   it("มีแท็บเป้า · บอกว่าเป้าหลักมาจากระบบขายพร้อมลิงก์ไปสถานะ Sync", () => {
     render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} /></MemoryRouter>);
-    const tabs = screen.getByRole("navigation", { name: "หมวดการตั้งค่า Overview ads" });
+    const tabs = screen.getByRole("navigation", { name: "หมวดการตั้งค่าภาพรวมโฆษณา" });
     expect(tabs.textContent).toMatch(/1 · บัญชี.*2 · เป้า.*3 · กฎ.*4 · ตรวจยอด/);
     expect(screen.getByRole("note").textContent).toMatch(/มาจากระบบขายเอง/);
     expect(screen.getByRole("note").textContent).toMatch(/ชนะค่าที่ดึงมา/);
@@ -121,7 +121,7 @@ describe("ปุ่มบันทึกรู้จักการแก้ค�
     fireEvent.click(screen.getByRole("button", { name: /3 · กฎ/ }));
     fireEvent.change([...document.querySelectorAll(".acc-rule input")][0], { target: { value: "9" } });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    fireEvent.click(screen.getByRole("link", { name: /Overview ads/ }));
+    fireEvent.click(screen.getByRole("link", { name: /ภาพรวมโฆษณา/ }));
     expect(confirm).toHaveBeenCalledOnce();
     confirm.mockRestore();
   });

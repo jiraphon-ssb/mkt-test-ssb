@@ -15,8 +15,9 @@ export const TARGET_METRICS = [
   { key: "cpl", label: "CPL", kind: "ratio", better: "lower", setting: "cpl" },
   { key: "inquiries", label: "คนทัก", kind: "count", better: "higher", setting: "inquiries" },
   { key: "qualified", label: "Lead", kind: "count", better: "higher", setting: "qualified" },
-  { key: "deposits", label: "มัดจำ", kind: "count", better: "higher", setting: "deposits" },
-  { key: "closed", label: "ออเดอร์ปิดแล้ว", kind: "count", better: "higher", setting: "closed" },
+  // ชื่อเดียวกับ funnel ข้อมูลจริง แท็บกราฟ และหน้าตั้งเป้า (รีวิว UX 25 ก.ย.: เดิม "มัดจำ / ออเดอร์ปิดแล้ว" ชื่อไม่ตรงกัน)
+  { key: "deposits", label: "ได้ออเดอร์", kind: "count", better: "higher", setting: "deposits" },
+  { key: "closed", label: "ยืนยันออเดอร์", kind: "count", better: "higher", setting: "closed" },
 ];
 const METRIC_BY_KEY = Object.fromEntries(TARGET_METRICS.map((m) => [m.key, m]));
 

@@ -20,7 +20,7 @@ const HALF = 1 / GAUGE_MAX;                       // ตำแหน่ง 100% 
 
 /** kind = ชุดคำที่ใช้ · higher (จังหวะรายเดือน) · spend (งบ) · rate_higher (ROAS) · rate_lower (%Ads · CPL · CAC)
     ไม่ใส่ = เดาจาก direction ของ pace ที่ส่งมา */
-export function PaceGauge({ pace, kind = null, title = "จังหวะทำยอด", caption = "ของที่ควรได้วันนี้", width = 200, mini = false, label: sideLabel = null, showValue = true, showState = true }) {
+export function PaceGauge({ pace, kind = null, title = "จังหวะทำยอด", caption = "ของที่ควรได้ถึงวันนี้", width = 200, mini = false, label: sideLabel = null, showValue = true, showState = true }) {
   const state = pace?.state ?? "unknown";
   const tone = paceTone(state);
   const direction = kind ?? pace?.direction ?? "higher";

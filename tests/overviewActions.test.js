@@ -10,7 +10,7 @@ const of = (rev, revTarget, spend, budget) => ({
   budgetPace: paceOf({ actual: spend, target: budget, clock, direction: "spend" }),
 });
 
-describe("brandAdvice — ตาราง 2×2", () => {
+describe("brandAdvice — ตารางตัดสินใจ (ยอด 2 × งบ 3)", () => {
   it("ผลช้า × งบเร็ว = เรื่องด่วนที่สุด (t around ของจริง)", () => {
     const a = brandAdvice(of(264519, 600000, 57038.53, 45000));
     expect(a).toMatchObject({ key: "slow_fast", action: "ตรวจแคมเปญ/ครีเอทีฟทันที", tone: "rose", overBudget: true });
@@ -24,8 +24,20 @@ describe("brandAdvice — ตาราง 2×2", () => {
     expect(a.overBudget).toBe(true);
     expect(a.rank).toBe(4);            // เกินงบดันอันดับขึ้นจากเดิม 2
   });
-  it("ผลช้า × งบตามแผน = ตรวจปริมาณงาน (TEAMDEE ของจริง)", () => {
-    expect(brandAdvice(of(1560880, 3500000, 150788.55, 210000))).toMatchObject({ key: "slow_slow", rank: 3, tone: "amber" });
+  /* 25 ก.ย.: เดิมงบ "ตามแผน" ถูกนับเป็น "ช้า" → ยอดช้าทุกแบรนด์ได้คำแนะนำ "ตรวจ delivery" เหมือนกันหมดทั้งตาราง
+     แต่ถ้าเงินออกตามแผน delivery ไม่ใช่ปัญหา — ต้องไปดูที่แอดกับการปิดขาย */
+  it("ผลช้า × งบตามแผน = เงินออกแต่ยอดไม่มา → ตรวจแอดและการปิดขาย (TEAMDEE ของจริง)", () => {
+    expect(brandAdvice(of(1560880, 3500000, 150788.55, 210000))).toMatchObject({ key: "slow_onplan", action: "ตรวจแอดและการปิดขาย", rank: 3, tone: "amber" });
+  });
+  it("ผลช้า × งบใช้ช้า = เงินไม่ออก → ตรวจ delivery", () => {
+    expect(brandAdvice(of(500, 1000, 200, 1000))).toMatchObject({ key: "slow_slow", action: "ตรวจ delivery และปริมาณงาน", tone: "amber" });
+  });
+  it("ผลเร็ว × งบตามแผน = ไม่มีอะไรต้องทำ (เงียบ ไม่แย่งความสนใจ)", () => {
+    expect(brandAdvice(of(900, 1000, 700, 1000))).toMatchObject({ key: "fast_onplan", action: "ไปต่อตามแผน", tone: "zinc", rank: 0 });
+  });
+  it("แบรนด์ยอดช้าเหมือนกันแต่งบต่างกัน ต้องได้คำแนะนำต่างกัน (เดิมขึ้นข้อความเดียวทั้งตาราง)", () => {
+    const actions = new Set([of(500, 1000, 700, 1000), of(500, 1000, 200, 1000), of(500, 1000, 900, 1000)].map((x) => brandAdvice(x).action));
+    expect(actions.size).toBe(3);
   });
   it("ผลเร็ว × งบช้า = โอกาสเพิ่มงบ", () => {
     expect(brandAdvice(of(900, 1000, 300, 1000))).toMatchObject({ key: "fast_slow", action: "มีโอกาสเพิ่มงบ", tone: "emerald", rank: 1 });

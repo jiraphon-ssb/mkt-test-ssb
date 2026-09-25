@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { StatusDot } from "../creatives/CreativeTable.jsx";
+import { campaignDeliveryOf } from "../creatives/creativeStatus.js";
 import { SAVED_VIEWS, applyView, campaignTotals, sortCampaigns } from "../adsCampaigns.js";
 import { PlatformIcon, platformMeta } from "../ads/PlatformIcon.jsx";
 import { ChartBox } from "../dash/charts/ChartBox.jsx";
@@ -10,7 +12,6 @@ import { GoalLine } from "../ui/GoalLine.jsx";
 import { goalsFor } from "../adsTargets.js";
 
 const fmtRoas = (x) => (x == null ? "—" : `${fmtNum(x, 2)}x`);
-const STATUS = { active: "กำลังรัน", paused: "พักอยู่", unknown: "ไม่ระบุสถานะ" };
 const SORTS = [
   ["spend", "desc", "ค่าแอดมากสุด"], ["spend", "asc", "ค่าแอดน้อยสุด"],
   ["leads", "desc", "ผลลัพธ์มากสุด"], ["cpl", "asc", "CPL ต่ำสุด"],
@@ -116,7 +117,7 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
   const focus = [
     { key: "scale", label: "เพิ่มงบได้", hint: "ผลงานผ่านเกณฑ์", tone: "ok" },
     { key: "gate", label: "งบติดขัด", hint: "ผลดีแต่งบไม่พอ", tone: "warn" },
-    { key: "fix", label: "ผลเริ่มตก", hint: "ควรตรวจงาน", tone: "bad" },
+    { key: "fix", label: "ต้องตรวจแก้", hint: "ผลเริ่มตก", tone: "bad" },
     { key: "wait", label: "รอข้อมูล", hint: "ยังสรุปไม่ได้", tone: "muted" },
   ];
 
@@ -151,7 +152,7 @@ export function CampaignsTable({ rows, compareLabel, renderDetail, scopeEmpty, r
         const meta = platformMeta(row.platform);
         return <article key={row.key} className={`cp-campaign ${open ? "open" : ""}`} style={{ "--platform": meta.color }}>
           <div className="cp-campaign-row">
-            <div className="cp-campaign-name"><PlatformIcon channel={row.platform} size={18} /><div><h3>{row.name}</h3><p>{row.brand} · {row.platform} · {row.objective ?? "ไม่ระบุเป้าหมาย"} · {STATUS[row.status]}</p></div></div>
+            <div className="cp-campaign-name"><PlatformIcon channel={row.platform} size={18} /><div><h3>{row.name}</h3><p>{row.brand} · {row.platform} · {row.objective ?? "ไม่ระบุเป้าหมาย"} · <StatusDot status={campaignDeliveryOf(row)} /></p></div></div>
             <div className="cp-metric" data-label="ค่าแอด"><b className="mono">{fmtMoney(row.spend)}</b><small>{row.spendShare != null ? `${fmtPct(row.spendShare, 0)} ของรายการ` : "—"}</small><Delta row={row} compareLabel={compareLabel} /></div>
             <div className="cp-metric" data-label="ผลลัพธ์"><b className="mono">{fmtInt(row.leads)}</b><small>CPL {row.cpl != null ? fmtMoney(row.cpl) : "—"}</small></div>
             <div className="cp-metric cp-efficiency" data-label="ประสิทธิภาพ"><b className="mono">{fmtRoas(row.roas)}</b><small>CTR {row.ctr != null ? fmtPct(row.ctr, 2) : "—"} · ความถี่ {row.frequency != null ? `${fmtNum(row.frequency, 2)}x` : "—"}</small></div>

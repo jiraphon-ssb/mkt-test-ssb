@@ -683,7 +683,7 @@ describe("Sale pipeline แนวนอน", () => {
   const prevShot = shot("p1", { spend: 1000, leads: 5, revenue: 2000, measured_at: "2026-07-15T09:00:00.000Z" });
   it("4 ขั้นขาย + ROAS + %Ads พร้อมค่าช่วงก่อนไว้บอกดีขึ้น/แย่ลง", () => {
     const p = adsSalePipeline([shot("a1"), prevShot], RANGE, PREV);
-    expect(p.items.map((i) => i.label)).toEqual(["คนทัก", "Lead", "มัดจำ", "ออเดอร์ปิดแล้ว", "ROAS", "%Ads"]);
+    expect(p.items.map((i) => i.label)).toEqual(["คนทัก", "Lead", "ได้ออเดอร์", "ยืนยันออเดอร์", "ROAS", "%Ads"]);
     const roas = p.items.find((i) => i.key === "roas");
     expect(roas.value).toBe(4);
     expect(roas.before).toBe(2);         // ช่วงก่อน 2000/1000

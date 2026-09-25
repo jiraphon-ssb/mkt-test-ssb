@@ -4,7 +4,6 @@ import { adChannelsByBrand, adsChannelList, filterByChannel, revenueBasisCards }
 import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
 import { compareRange, effectiveCompare, isoDay, periodRange } from "../adsScope.js";
 import { combineTargets, normalizeTargets, periodForTargets, plansFromTargets } from "../adsTargets.js";
-import { adsDataHealth } from "../ads/adsDataHealth.js";
 import { campaignSalesSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals } from "../ads/salesOverview.js";
 import { SALES_BRAND_IDS } from "../ads/syncSources.js";
 
@@ -55,7 +54,6 @@ export function buildCampaignsModel({ data, ads, inBrandScope, brandFilter, filt
     const decisionTargets = (brandId) => real ? (targets[brandId]?.cpl != null ? { cpl: targets[brandId].cpl } : null) : targets[brandId] ?? null;
     const rows = withSpendShare(filtered).map((r) => ({ ...r, decision: campaignDecision(r, decisionTargets(r.brandId), undefined, { roasFromMeta: !real }) }));
     const brandSums = campaignsByBrand(all);
-    const dataHealth = adsDataHealth(data.settings?.ads_control ?? {});
     return {
       rows, brands, selectedBrand, byBrand: brandSums.byBrand,
       /* เป้า: แบรนด์ที่เลือก หรือรวมทุกแบรนด์ในขอบเขต — ตัวเลขจริงเทียบใน CampaignsTable (ตามมุมมองที่กรองอยู่) */
@@ -71,6 +69,5 @@ export function buildCampaignsModel({ data, ads, inBrandScope, brandFilter, filt
       channelList: adsChannelList(scopedAll), scopeEmpty: all.length === 0, range,
       statuses: [...new Set(all.map((r) => r.status))], objectives: [...new Set(all.map((r) => r.objective ?? "unknown"))],
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
-      dataHealth,
     };
 }

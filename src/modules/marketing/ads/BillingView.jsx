@@ -80,10 +80,14 @@ export function BillingView({ month: initialMonth }) {
   const thisMonth = monthIso(new Date());
   const atLatestMonth = month >= thisMonth;
   const outOfWindow = (Date.parse(`${thisMonth}T00:00:00`) - Date.parse(`${month}T00:00:00`)) / 86_400_000 > FACTS_WINDOW_DAYS;
+  /* ค่าแอดมาจาก useAdsData — ยังโหลด/โหลดไม่สำเร็จ/เป็นข้อมูลจำลอง = "ไม่รู้" ต้องขึ้น — ไม่ใช่ ฿0.00
+     (รีวิว UX 25 ก.ย.: เดิมโหลดพังแล้วการ์ดขึ้น ฿0.00 คนอ่านเข้าใจว่าเดือนนี้ไม่มีค่าแอด) */
+  const spendState = ads.source !== "meta_pilot" ? "mock" : ads.pilot?.status === "ready" ? "ready" : ads.pilot?.status === "error" ? "error" : "loading";
+  const spendKnown = spendState === "ready";
   const model = useMemo(() => buildBillingModel({
-    month, cards: ads.cards ?? [], connections: connectionsFromCards(ads.cards ?? []),
-    snapshots: remote.snapshots, reviews: remote.reviews, brands: data.brands ?? [],
-  }), [month, ads.cards, remote, data.brands]);
+    month, cards: spendKnown ? ads.cards ?? [] : [], connections: connectionsFromCards(spendKnown ? ads.cards ?? [] : []),
+    snapshots: remote.snapshots, reviews: remote.reviews, brands: data.brands ?? [], spendKnown,
+  }), [month, ads.cards, remote, data.brands, spendKnown]);
 
   /* การเงินบริษัท — จำกัดตามข้อเคาะ 22 ก.ย. · RLS ฝั่งฐานปิดข้อมูลอยู่แล้ว หน้านี้แค่ไม่หลอกให้กดต่อ */
   if (!isLead) return <main className="aw bl"><section className="aw-panel"><p>หน้านี้เปิดให้เฉพาะหัวหน้าทีม (team_lead)</p></section></main>;
@@ -109,15 +113,24 @@ export function BillingView({ month: initialMonth }) {
       </div>}
 
       <div className="bl-stats">
-        <div><span>ระบบนับได้ · {model.rangeLabel}</span><b>{money(model.totals.spend)}</b><small>รวม {model.rows.filter((r) => r.connected).length} บัญชีที่เชื่อม</small></div>
+        <div><span>ระบบนับได้ · {model.rangeLabel}</span><b>{money(model.totals.spend)}</b><small>{spendKnown ? `รวม ${model.rows.filter((r) => r.connected).length} บัญชีที่เชื่อม` : "ยังไม่มีตัวเลข"}</small></div>
         <div><span>VAT 7%</span><b>{money(model.totals.vat)}</b><small>ค่าประมาณ — ใบกำกับจริงที่ Billing hub</small></div>
         <div><span>รวมโดยประมาณ</span><b>{money(model.totals.gross)}</b><small>ระบบนับ + VAT</small></div>
-        <div><span>ยอดค้างที่ Meta ยังไม่ตัด</span><b>{money(model.totals.balance)}</b><small>{model.totals.balance == null ? "รอ snapshot รอบแรกจาก ads-cron" : "จาก snapshot ล่าสุด"}</small></div>
+        <div><span>ยอดค้างที่ Meta ยังไม่ตัด</span><b>{money(model.totals.balance)}</b><small>{remote.status === "error" ? "โหลดไม่สำเร็จ" : model.totals.balance == null ? "รอ snapshot รอบแรกจาก ads-cron" : "จาก snapshot ล่าสุด"}</small></div>
       </div>
 
       {outOfWindow && <p className="aw-key">เดือนนี้เกินช่วงข้อมูลที่ระบบเก็บไว้ ({FACTS_WINDOW_DAYS} วันล่าสุด) — ตัวเลขค่าแอดจึงไม่ขึ้น ไม่ได้แปลว่าเดือนนั้นไม่ได้ยิงแอด</p>}
+      {spendState === "error" && <div className="bl-alert" role="alert">
+        <span><b>โหลดค่าแอดไม่สำเร็จ</b> — ตัวเลขจึงยังไม่แสดง ไม่ได้แปลว่าเดือนนี้ไม่มีค่าแอด</span>
+        <button type="button" onClick={() => ads.reload?.()}>ลองใหม่</button>
+      </div>}
+      {spendState === "loading" && <p className="aw-key">กำลังโหลดค่าแอด…</p>}
+      {spendState === "mock" && <p className="bl-notice" role="status">หน้าหลักกำลังแสดงข้อมูลจำลอง — หน้าบิลไม่เอาตัวเลขจำลองมากระทบยอด สลับเป็นข้อมูลจริงก่อนจึงจะเห็นตัวเลข</p>}
       {remote.status === "loading" && <p className="aw-key">กำลังโหลดข้อมูลบิล…</p>}
-      {remote.status === "error" && <p className="aw-key">โหลดข้อมูลฝั่งฐานไม่สำเร็จ — ตัวเลขระบบนับยังถูกต้อง แต่ยอดค้าง/ผลตรวจอาจไม่ขึ้น</p>}
+      {remote.status === "error" && <div className="bl-alert" role="alert">
+        <span><b>ยอดค้างและผลตรวจโหลดไม่สำเร็จ</b>{spendKnown ? " — ตัวเลขระบบนับยังถูกต้อง" : ""}</span>
+        <button type="button" onClick={() => setReloadKey((k) => k + 1)}>ลองใหม่</button>
+      </div>}
 
       <div className="bl-table" role="table" aria-label="กระทบยอดรายบัญชี">
         <div className="bl-row bl-row--head" role="row">

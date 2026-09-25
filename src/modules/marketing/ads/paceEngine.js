@@ -27,12 +27,19 @@ export function monthClock(today) {
    spend : งบ — "เร็วกว่าแผน" ยังไม่ใช่ความผิดในตัวเอง ต้องดูคู่กับผลลัพธ์ (ตารางตัดสินใจ 2×2)
            แต่ "ใช้เกินงบทั้งเดือนไปแล้ว" = แดง ระดับเดียวกับยอดช้า (อาร์ตเคาะ 21 ก.ย. 69) */
 const SPEND_WARN = 1.1;
+/* ใช้ช้ากว่าแผนชัดเจน — ไม่ใช่ความผิด (ไม่มีป้ายเตือน สีกลาง) แต่ห้ามเรียก "ตามแผน"
+   เดิมทุกอย่างที่ ≤110% เป็น "ตามแผน" → งบใช้ไป 30% ของที่ควรใช้ก็ขึ้นว่าตามแผน (รีวิว UX 25 ก.ย.)
+   ขอบล่าง 85% สมมาตรกับเกณฑ์เตือนฝั่งยอด */
+const SPEND_UNDER = 0.85;
+
+function spendState(value, overTarget) {
+  if (overTarget) return "bad";
+  if (value > SPEND_WARN) return "warn";
+  return value < SPEND_UNDER ? "under" : "ontrack";
+}
 
 function stateOf(value, direction, overTarget) {
-  if (direction === "spend") {
-    if (overTarget) return "bad";
-    return value <= SPEND_WARN ? "ontrack" : "warn";
-  }
+  if (direction === "spend") return spendState(value, overTarget);
   if (value >= 1) return "ontrack";
   return value >= 0.85 ? "warn" : "bad";
 }
@@ -95,13 +102,13 @@ export function thresholdOf(actual, target, { direction = "higher" } = {}) {
 
 const LABEL = {
   higher: { ontrack: "เหนือแผน", warn: "ใกล้เป้า", bad: "ช้ากว่าแผน", unknown: "ยังตัดสินใจไม่ได้" },
-  spend: { ontrack: "ตามแผน", warn: "ใช้เร็วกว่าแผน", bad: "เกินงบ", unknown: "ยังตัดสินใจไม่ได้" },
+  spend: { ontrack: "ตามแผน", under: "ใช้ช้ากว่าแผน", warn: "ใช้เร็วกว่าแผน", bad: "เกินงบ", unknown: "ยังตัดสินใจไม่ได้" },
   rate_higher: { ontrack: "ถึงเป้า", warn: "ใกล้เป้า", bad: "ต่ำกว่าเป้า", unknown: "ยังตัดสินใจไม่ได้" },
   rate_lower: { ontrack: "อยู่ในเป้า", warn: "เกินเป้าเล็กน้อย", bad: "เกินเป้า", unknown: "ยังตัดสินใจไม่ได้" },
 };
 export const paceLabel = (state, direction = "higher") => (LABEL[direction] ?? LABEL.higher)[state] ?? LABEL.higher.unknown;
 
-const TONE = { ontrack: "emerald", warn: "amber", bad: "rose", unknown: "zinc" };
+const TONE = { ontrack: "emerald", under: "zinc", warn: "amber", bad: "rose", unknown: "zinc" };
 export const paceTone = (state) => TONE[state] ?? "zinc";
 
 /* ป้ายมุมการ์ด (ตระกูลเดียวกับ "หล่นแรงสุด" ของ funnel — อาร์ตขอ 21 ก.ย. ค่ำ)
@@ -111,7 +118,7 @@ export const paceTone = (state) => TONE[state] ?? "zinc";
     เกณฑ์ต้องตรงกับ paceOf: ยอด ≥100% ตามแผน ≥85% เตือน · งบเขตปลอดภัย ≤110% และเกินงบจริงเท่านั้นที่แดง */
 export function trendPaceState({ ratio, direction = "higher", overTarget = false }) {
   if (ratio == null || !Number.isFinite(ratio)) return "unknown";
-  if (direction === "spend") return overTarget ? "bad" : ratio <= 1.1 ? "ontrack" : "warn";
+  if (direction === "spend") return spendState(ratio, overTarget);
   return ratio >= 1 ? "ontrack" : ratio >= 0.85 ? "warn" : "bad";
 }
 
@@ -120,13 +127,14 @@ export const paceFlag = (state, kind = "higher") =>
   state === "bad" ? { text: FLAG_BAD[kind] ?? FLAG_BAD.higher, tone: "rose" }
   : state === "warn" ? { text: "เฝ้าระวัง", tone: "amber" } : null;
 
-/** ป้อนตารางตัดสินใจ 2×2 — เร็ว/ช้า เทียบกับจังหวะที่ควรเป็น · ตัดสินไม่ได้ = null (ห้ามเดาเป็นช้า)
+/** ป้อนตารางตัดสินใจ — ยอด: fast/slow · งบ: fast/onplan/slow · ตัดสินไม่ได้ = null (ห้ามเดาเป็นช้า)
+    (25 ก.ย.: เดิมงบมีแค่ 2 ช่อง "ตามแผน" ถูกนับเป็น "ช้า" → ยอดช้าทุกแบรนด์ได้ "ตรวจ delivery" เหมือนกันหมด)
     ฝั่งงบต้องมี "เขตปลอดภัย" ไม่ใช่ตัดที่ 100% เป๊ะ — ใช้เกินแผน 2.57% (TEAMDEE 21 ก.ย.) คือตามแผน
     ถ้าตัดที่ 100% แบรนด์ปกติจะเด้งขึ้นช่อง "ตรวจแคมเปญทันที" ทุกวัน จนคนเลิกเชื่อรายการเตือน
     จึงใช้สถานะของ pace (งบ: ≤110% = ตามแผน) แทนการเทียบค่าดิบ */
 export function paceBucket(pace) {
   if (!pace || pace.state === "unknown" || pace.value == null) return null;
-  if (pace.direction === "spend") return pace.state === "ontrack" ? "slow" : "fast";
+  if (pace.direction === "spend") return pace.state === "under" ? "slow" : pace.state === "ontrack" ? "onplan" : "fast";
   return pace.value >= 1 ? "fast" : "slow";
 }
 

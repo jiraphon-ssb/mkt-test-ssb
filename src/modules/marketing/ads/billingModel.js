@@ -12,7 +12,8 @@ const baht = (cents) => (cents == null ? null : cents / 100);
    — normalize ที่เดียว ไม่งั้น join พลาดทั้งหน้า (บั๊กหน้าจริง 22 ก.ย.: ชื่อโชว์ act_… ยอดค้างเป็นขีดหมด) */
 const normId = (v) => String(v ?? "").replace(/^act_/, "");
 
-export function buildBillingModel({ month, cards = [], connections = [], snapshots = [], reviews = [], brands = [] }) {
+/** spendKnown:false = ค่าแอดยังไม่รู้ (โหลดไม่สำเร็จ · ยังโหลด · ข้อมูลจำลอง) → ยอดรวมเป็น null ไม่ใช่ 0 */
+export function buildBillingModel({ month, cards = [], connections = [], snapshots = [], reviews = [], brands = [], spendKnown = true }) {
   const monthPrefix = String(month).slice(0, 7);
   const brandName = new Map(brands.map((b) => [b.id, b.name]));
   const snapByAccount = new Map(snapshots.map((s) => [normId(s.external_account_id), s]));
@@ -107,10 +108,11 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
 
   const connectedRows = rows.filter((r) => r.connected);
   const offSystemSpend = rows.filter((r) => !r.connected && r.spend > 0).reduce((sum, r) => sum + r.spend, 0);
+  const sumOf = (key) => (spendKnown ? connectedRows.reduce((sum, r) => sum + r[key], 0) : null);
   const totals = {
-    spend: connectedRows.reduce((sum, r) => sum + r.spend, 0),
-    vat: connectedRows.reduce((sum, r) => sum + r.vat, 0),
-    gross: connectedRows.reduce((sum, r) => sum + r.gross, 0),
+    spend: sumOf("spend"),
+    vat: sumOf("vat"),
+    gross: sumOf("gross"),
     statement: connectedRows.reduce((sum, r) => sum + (r.statement ?? 0), 0),
     // ยังไม่มี snapshot สักบัญชี = ไม่รู้ยอดค้าง ต้องเป็น null (โชว์ ฿0.00 = โกหก)
     balance: connectedRows.some((r) => r.balance != null) ? connectedRows.reduce((sum, r) => sum + (r.balance ?? 0), 0) : null,

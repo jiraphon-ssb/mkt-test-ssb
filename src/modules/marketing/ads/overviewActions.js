@@ -5,16 +5,21 @@ import { paceBucket, paceReason } from "./paceEngine.js";
 
 const pct = (value) => (value == null ? "—" : `${fmtNum(value * 100, 2)}%`);
 
-/* ตาราง 2×2 · ผลลัพธ์ (ยอดขาย) × งบ
-     ช้า × เร็ว  = จ่ายเงินเร็วแต่ไม่ได้ของ — ด่วนที่สุด
-     เร็ว × เร็ว = ได้ของแต่จ่ายเร็ว — ตามใกล้ชิด ยังไม่ต้องแตะ
-     ช้า × ช้า   = เงินไม่ออก ของก็ไม่มา — มักเป็นเรื่อง delivery/ปริมาณงาน ไม่ใช่คุณภาพแอด
-     เร็ว × ช้า  = ได้ของโดยยังใช้เงินไม่ถึงแผน — โอกาสเติมงบ
+/* ตาราง ผลลัพธ์ (ยอดขาย: เร็ว/ช้า) × งบ (เร็ว/ตามแผน/ช้า)
+     ช้า × เร็ว      = จ่ายเงินเร็วแต่ไม่ได้ของ — ด่วนที่สุด
+     ช้า × ตามแผน   = เงินออกตามแผนแต่ยอดไม่มา — ปัญหาอยู่ที่แอด/การปิดขาย ไม่ใช่ delivery
+     ช้า × ช้า       = เงินไม่ออก ของก็ไม่มา — มักเป็นเรื่อง delivery/ปริมาณงาน ไม่ใช่คุณภาพแอด
+     เร็ว × เร็ว     = ได้ของแต่จ่ายเร็ว — ตามใกล้ชิด ยังไม่ต้องแตะ
+     เร็ว × ตามแผน  = ดีทั้งคู่ — ไม่มีอะไรต้องทำ (สีกลาง ไม่แย่งความสนใจ)
+     เร็ว × ช้า      = ได้ของโดยยังใช้เงินไม่ถึงแผน — โอกาสเติมงบ
+   25 ก.ย.: เดิมงบมี 2 ช่อง "ตามแผน" ถูกนับเป็น "ช้า" → คอลัมน์ "ควรทำ" ขึ้น "ตรวจ delivery" ทุกแถว
    "ใช้เกินงบทั้งเดือนไปแล้ว" ดันอันดับขึ้นเสมอ (อาร์ตเคาะ 21 ก.ย. 69 ว่าแดงระดับเดียวกับยอดช้า) */
 const MATRIX = {
   slow_fast: { action: "ตรวจแคมเปญ/ครีเอทีฟทันที", tone: "rose", rank: 5, level: "bad" },
+  slow_onplan: { action: "ตรวจแอดและการปิดขาย", tone: "amber", rank: 3, level: "warn" },
   slow_slow: { action: "ตรวจ delivery และปริมาณงาน", tone: "amber", rank: 3, level: "warn" },
   fast_fast: { action: "ตามผลใกล้ชิด", tone: "amber", rank: 2, level: "warn" },
+  fast_onplan: { action: "ไปต่อตามแผน", tone: "zinc", rank: 0, level: "wait" },
   fast_slow: { action: "มีโอกาสเพิ่มงบ", tone: "emerald", rank: 1, level: "wait" },
 };
 
@@ -25,7 +30,7 @@ export function brandAdvice({ revPace, budgetPace } = {}) {
     return { key: "unknown", action: "ยังตัดสินใจไม่ได้", tone: "zinc", rank: 0, level: "wait",
       why: missing.length ? [...new Set(missing)].join(" · ") : "ข้อมูลไม่ครบ", overBudget: Boolean(budgetPace?.overTarget) };
   }
-  const key = `${result === "fast" ? "fast" : "slow"}_${budget === "fast" ? "fast" : "slow"}`;
+  const key = `${result === "fast" ? "fast" : "slow"}_${budget}`;
   const base = MATRIX[key];
   const overBudget = Boolean(budgetPace?.overTarget);
   return {

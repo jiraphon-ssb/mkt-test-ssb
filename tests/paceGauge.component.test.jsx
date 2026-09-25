@@ -14,14 +14,14 @@ describe("PaceGauge", () => {
   it("ของจริง 21 ก.ย. — ตัวเลขตัดทศนิยมไม่ปัด · มีคำกำกับ ไม่ใช่มีแต่สี", () => {
     render(<PaceGauge pace={paceOf({ actual: 2997302, target: 5780000, clock })} />);
     expect(screen.getByText("74.08%")).toBeTruthy();
-    expect(screen.getByText("ของที่ควรได้วันนี้")).toBeTruthy();
+    expect(screen.getByText("ของที่ควรได้ถึงวันนี้")).toBeTruthy();
     expect(screen.getByText("ช้ากว่าแผน")).toBeTruthy();
     expect(screen.getByText("ตามแผน")).toBeTruthy();        // หมุดอ้างอิง 100% ต้องมีเสมอ
   });
   it("อ่านออกด้วยเครื่องอ่านหน้าจอเป็นประโยคเต็ม", () => {
     const svg = gauge({ pace: paceOf({ actual: 2997302, target: 5780000, clock }) });
     expect(svg.getAttribute("role")).toBe("img");
-    expect(svg.getAttribute("aria-label")).toBe("จังหวะทำยอด 74.08% ของที่ควรได้วันนี้ — ช้ากว่าแผน");
+    expect(svg.getAttribute("aria-label")).toBe("จังหวะทำยอด 74.08% ของที่ควรได้ถึงวันนี้ — ช้ากว่าแผน");
   });
   it("ปลายส่วนโค้งตัดตรง — ปลายมนจะล้ำหมุด 100% ทำให้อ่านผิด", () => {
     const svg = gauge({ pace: paceOf({ actual: 700, target: 1000, clock }) });

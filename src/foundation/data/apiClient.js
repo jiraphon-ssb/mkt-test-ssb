@@ -2564,7 +2564,7 @@ const adsData = {
     const rows = [];
     for (let offset = 0; offset < 20000; offset += 1000) {
       const { data, error } = await db.from("ad_creatives")
-        .select("connection_id,provider,external_creative_id,external_ad_id,name,format,primary_text,headline,description,call_to_action,destination_url,permalink_url,preview_url,effective_story_id,instagram_media_id,media_assets,source_updated_at")
+        .select("connection_id,provider,external_creative_id,external_ad_id,name,format,primary_text,headline,description,call_to_action,destination_url,permalink_url,preview_url,effective_story_id,instagram_media_id,media_assets,source_updated_at,effective_status,media_refreshed_at")
         .order("external_ad_id").range(offset, offset + 999);
       if (error) throw error;
       rows.push(...(data ?? []));

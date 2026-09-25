@@ -15,7 +15,7 @@ export function CreativeRulesEditor({ rules, setRules, brands = [], disabled = f
   const remove = (id) => setRules((current) => current.filter((rule) => rule.id !== id));
   const brandOptions = [["all", "ทุกแบรนด์"], ...brands.map((b) => [b.id, b.name])];
   return <section className="acc-sheet acc-creative-rules">
-    <header className="acc-sheet-head"><div><span className="acc-kicker">CREATIVE RULES</span><h2>กฎคัดครีเอทีฟ</h2><p>ตั้งเกณฑ์ว่าค่าแอดที่ใช้ไปคุ้มกับผลหรือไม่ แล้วใช้กรองในหน้า Creative Library · ตัวเลขเป็นของ Meta (การซื้อและ ROAS ตาม attribution ของ Meta)</p></div>
+    <header className="acc-sheet-head"><div><span className="acc-kicker">CREATIVE RULES</span><h2>กฎคัดครีเอทีฟ</h2><p>ตั้งเกณฑ์ว่าค่าแอดที่ใช้ไปคุ้มกับผลหรือไม่ แล้วใช้กรองในหน้าคลัง Creative · ตัวเลขเป็นของ Meta (การซื้อและ ROAS ตาม attribution ของ Meta)</p></div>
       <button type="button" className="acc-rule-add" onClick={add} disabled={disabled || rules.length >= MAX_CREATIVE_RULES}><Plus size={14} /> เพิ่มกฎ</button></header>
     {rules.length === 0
       ? <p className="acc-rule-empty">ยังไม่มีกฎ · ตัวอย่าง: ต้นทุนต่อการซื้อไม่เกิน ฿1,000 เมื่อใช้เงินแล้วอย่างน้อย ฿500 · CTR อย่างน้อย 1% · ความถี่เฉลี่ยรายวันไม่เกิน 3×</p>

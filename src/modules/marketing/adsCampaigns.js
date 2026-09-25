@@ -120,14 +120,16 @@ export function campaignDecision(row, targets = null, rules = ACTION_RULES, { ro
   return tagOf("watch", base.why, base.next);
 }
 
+/* ชื่อตัวกรองชุดเดียวกับการ์ด "วันนี้ต้องดู" ด้านบน (รีวิว UX 25 ก.ย.: เดิมการ์ดเขียน "เพิ่มงบได้ 12" แต่ชิปเขียน "ควรสเกล 12"
+   กลุ่มเดียวกันสองชื่อ คนอ่านนึกว่าเป็นคนละเรื่อง) */
 export const SAVED_VIEWS = [
   { key: "all",           label: "ทั้งหมด",        test: () => true },
-  { key: "scale",         label: "ควรสเกล",        test: (r) => r.decision.tag === "scale" },
+  { key: "scale",         label: "เพิ่มงบได้",      test: (r) => r.decision.tag === "scale" },
   { key: "fix",           label: "ต้องตรวจแก้",    test: (r) => r.decision.tag === "fix" },
   { key: "spendNoResult", label: "ใช้เงินไม่มีผล",  test: (r) => r.decision.tag === "stop" && r.leads === 0 },
   { key: "fatigue",       label: "เสี่ยงล้า",       test: (r) => (r.creatives ?? []).some((c) => c.fatigue) },
   { key: "wait",          label: "รอข้อมูล",       test: (r) => r.decision.tag === "wait" },
-  { key: "gate",          label: "ติด Gate",       test: (r) => r.decision.tag === "gate" },
+  { key: "gate",          label: "งบติดขัด",       test: (r) => r.decision.tag === "gate" },
 ];
 export const applyView = (rows, key) => rows.filter(SAVED_VIEWS.find((v) => v.key === key)?.test ?? (() => true));
 

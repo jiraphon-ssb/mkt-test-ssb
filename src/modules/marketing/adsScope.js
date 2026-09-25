@@ -62,10 +62,13 @@ export function monthGrid(year, month) {
   return weeks;
 }
 
-/** ป้ายช่วงวันแบบสั้น: "1 – 14 ก.ย. 2026" · ข้ามเดือน "28 ส.ค. – 14 ก.ย. 2026" · ข้ามปีใส่ปีทั้งคู่ · วันเดียวโชว์วันเดียว */
+/** ปี พ.ศ. — ทั้งหน้าใช้ พ.ศ. (กราฟ · หน้าบิล · วันที่ในการ์ด) เดิมตัวเลือกช่วงวันใช้ ค.ศ. ตัวเดียว (รีวิว UX 25 ก.ย.) */
+export const thaiYear = (gregorianYear) => gregorianYear + 543;
+
+/** ป้ายช่วงวันแบบสั้น: "1 – 14 ก.ย. 2569" · ข้ามเดือน "28 ส.ค. – 14 ก.ย. 2569" · ข้ามปีใส่ปีทั้งคู่ · วันเดียวโชว์วันเดียว */
 export function rangeLabel(from, to) {
   const a = dayOf(from), b = dayOf(to);
-  const d = (x) => x.getDate(), m = (x) => MONTHS_TH[x.getMonth()], y = (x) => x.getFullYear();
+  const d = (x) => x.getDate(), m = (x) => MONTHS_TH[x.getMonth()], y = (x) => thaiYear(x.getFullYear());
   if (from === to) return `${d(a)} ${m(a)} ${y(a)}`;
   if (y(a) !== y(b)) return `${d(a)} ${m(a)} ${y(a)} – ${d(b)} ${m(b)} ${y(b)}`;
   if (a.getMonth() !== b.getMonth()) return `${d(a)} ${m(a)} – ${d(b)} ${m(b)} ${y(b)}`;

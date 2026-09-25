@@ -47,7 +47,9 @@ function Metric({ name, sub, value, goal, metric, empty, item }) {
     </div>
     {/* สองประโยคเต็ม มีประธานครบ (direct-labeling) — เป้าย้ายขึ้นตัวเลขใหญ่แล้ว บรรทัดนี้ไม่พูดซ้ำ */}
     {empty ? <small className="aw-key">{empty}</small> : <div className="aw-metric-foot">
-      <span><span className="zinc">ทำได้ </span><b className={tone}>{pace(goal?.pct)}</b> <span className={tone}>{paceLabel(goal?.paceState, kind)}</span></span>
+      {/* ไม่มีเป้า = พูดตรงๆ (รีวิว UX 25 ก.ย.: เดิมขึ้น "ทำได้ — ยังตัดสินใจไม่ได้" อ่านไม่รู้เรื่อง) */}
+      {goal?.pct == null ? <span className="zinc">ยังไม่ตั้งเป้า</span>
+        : <span><span className="zinc">ทำได้ </span><b className={tone}>{pace(goal?.pct)}</b> <span className={tone}>{paceLabel(goal?.paceState, kind)}</span></span>}
       <span className={d == null || good == null ? 'ads-muted' : good ? 'ads-good' : 'ads-over'}>
         {d == null ? 'เทียบเดือนก่อนไม่ได้' : `เทียบเดือนก่อน ${d >= 0 ? '▲' : '▼'} ${fmtNum(Math.abs(d), 2)}%${good == null ? '' : good ? ' ดีขึ้น' : ' แย่ลง'}`}
       </span>
@@ -63,7 +65,8 @@ function BrandStatus({ pace2 }) {
   const revTone = paceTone(rev?.state);
   const alert = budget && budget.state !== 'unknown' && budget.state !== 'ontrack';
   return <>
-    <small className={`aw-brand-line ${revTone}`}>ยอด <b>{pace(rev?.value)}</b> {paceLabel(rev?.state)}</small>
+    {/* "จังหวะ" = เทียบกับที่ควรได้ถึงวันนี้ — คนละตัวหารกับ "% ของเป้าเดือน" ข้างบน (รีวิว UX 25 ก.ย.: เดิมขึ้นต้น "ยอด" อ่านปนกัน) */}
+    <small className={`aw-brand-line ${revTone}`}>จังหวะ <b>{pace(rev?.value)}</b> · {paceLabel(rev?.state)}</small>
     {alert && <small className={`aw-brand-line ${paceTone(budget.state)}`}>ค่าแอด {paceLabel(budget.state, 'spend')} · <b>{pace(budget.value)}</b></small>}
   </>;
 }
@@ -88,7 +91,7 @@ function RangeWorkspace({ v, ads, controls, selected, setSelected, picked, head,
 
   return <main className="aw aw--range">
     <section className="aw-toolbar" aria-label="ตัวกรองรายงาน">
-      <header className="aw-header"><div><h1>Overview ads</h1><p>{v.rangeLabel} · ยอดขาย ค่าแอด และประสิทธิภาพตามช่วงที่เลือก</p></div>
+      <header className="aw-header"><div><h1>ภาพรวมโฆษณา</h1><p>{v.rangeLabel} · ยอดขาย ค่าแอด และประสิทธิภาพตามช่วงที่เลือก</p></div>
         <div className="aw-header-actions"><AdsSourceControl ads={ads}/><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15}/> ตั้งค่า</Link></div></header>
       <AdsSourceNotice ads={ads}/><div className="aw-controls">{controls}</div>
     </section>
@@ -152,8 +155,8 @@ function RangeWorkspace({ v, ads, controls, selected, setSelected, picked, head,
           <div className="aw-table-scroll"><table className="aw-comparison aw-brandtable"><thead><tr><th>แบรนด์</th><th>{revenueLabel}</th><th>ค่าแอด</th><th>ROAS</th><th>เทียบ{v.compareLabel}</th></tr></thead>
             <tbody>{v.brands.map(x => { const r = v.pipelines[x.id]?.items.find(i => i.key === 'roas')?.value; return <tr key={x.id} className="aw-row" onClick={() => setSelected(x.id)}>
               <th><button type="button" onClick={(e) => { e.stopPropagation(); setSelected(x.id); }}><BrandMark brand={x}/>{x.name}</button></th>
-              <td>{money(x.revenue)}<small>{pct(x.revShare)} ของยอดรวม</small></td><td>{money(x.spend)}</td><td>{r == null ? '—' : `${fmtNum(r, 2)}×`}</td>
-              <td className={deltaTone(x.revChangePct)}>{deltaText(x.revChangePct)}</td></tr>; })}</tbody>
+              <td data-label={revenueLabel}>{money(x.revenue)}<small>{pct(x.revShare)} ของยอดรวม</small></td><td data-label="ค่าแอด">{money(x.spend)}</td><td data-label="ROAS">{r == null ? '—' : `${fmtNum(r, 2)}×`}</td>
+              <td data-label={`เทียบ${v.compareLabel}`} className={deltaTone(x.revChangePct)}>{deltaText(x.revChangePct)}</td></tr>; })}</tbody>
           </table></div><p className="aw-key">ทุกตัวเลขคำนวณจากช่วงที่เลือก · กดแถวเพื่อดูรายละเอียดแบรนด์</p>
         </section>}
 
@@ -212,7 +215,7 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
 
   return <main className="aw">
     <section className="aw-toolbar" aria-label="ตัวกรองรายงาน">
-      <header className="aw-header"><div><h1>Overview ads</h1><p>เดือนปัจจุบัน · ยอดขาย งบ และประสิทธิภาพรวมทุกแบรนด์</p></div>
+      <header className="aw-header"><div><h1>ภาพรวมโฆษณา</h1><p>เดือนปัจจุบัน · ยอดขาย งบ และประสิทธิภาพรวมทุกแบรนด์</p></div>
         <div className="aw-header-actions"><AdsSourceControl ads={ads}/><Link className="aw-settings-link" to="/mkt/ads?panel=settings"><Settings2 size={15}/> ตั้งค่า</Link></div></header>
       <AdsSourceNotice ads={ads}/><div className="aw-controls">{controls}</div>
     </section>
@@ -230,7 +233,8 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
         </button>
         {v.brands.map(x => <button key={x.id} type="button" className={`aw-brand ${x.id === picked?.id ? 'selected' : ''}`} aria-pressed={x.id === picked?.id} onClick={() => setSelected(x.id)}>
           <div><BrandMark brand={x}/><strong>{x.name}</strong><span>↗</span></div>
-          <div><b>{money(x.revenue)}</b><small>{pace(share(x.revenue, x.revTarget))} ของเป้ารวม</small></div>
+          {/* % ของเป้าเดือน "ของแบรนด์นั้น" — เดิมเขียน "ของเป้ารวม" ทั้งที่ตัวหารคือเป้าแบรนด์ (ยอดใหม่ยังเทียบเป้ารวมของแบรนด์ เหมือนหัวการ์ด) */}
+          <div><b>{money(x.revenue)}</b><small>{pace(share(x.revenue, x.revTarget))} ของเป้า{revenueLabel === 'ยอดใหม่' ? 'รวม' : 'เดือน'}</small></div>
           {noSales(x) ? <small className="zinc">{noSales(x)}</small> : <>
             <Track value={share(x.revenue, x.revTarget)} expected={v.clock?.elapsed} label={x.name} tone={paceTone(x.pace2?.rev?.state)}/>
             <BrandStatus pace2={x.pace2}/>
@@ -250,7 +254,7 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
               <div className="aw-revenue">{money(head.revenue)}{head.revTarget != null && <small> / {money(head.revTarget)}</small>}</div>
               <p>{noSales(head) ? <b>{noSales(head)}</b>
                 : head.revTarget == null ? 'ยังไม่ตั้งเป้าเดือนนี้'
-                : <>ทำได้ <b>{pace(share(head.revenue, head.revTarget))}</b> ของเป้า{revenueLabel === 'ยอดใหม่' ? 'รวม' : 'เดือน'}</>}</p>
+                : <>ทำได้ <b>{pace(share(head.revenue, head.revTarget))}</b> ของเป้า{revenueLabel === 'ยอดใหม่' ? 'รวม' : 'ทั้งเดือน'}</>}</p>
               <Track value={share(head.revenue, head.revTarget)} expected={v.clock?.elapsed} tone={paceTone(rev?.state)} label="ยอดขายเทียบเป้า"/>
               <dl className="aw-facts">
                 <div><dt>ควรถึงวันนี้</dt><dd>{money(rev?.expectedToDate)}</dd></div>
@@ -301,7 +305,7 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
                 <div><dt>เหลือเวลา</dt><dd>{v.clock?.daysLeft == null ? '—' : `${v.clock.daysLeft} วัน`}</dd></div>
               </dl>
             </div>
-            <PaceGauge pace={p2?.budget} kind="spend" title="จังหวะใช้งบ" caption="ของงบที่ควรใช้วันนี้" width={GAUGE_W}/>
+            <PaceGauge pace={p2?.budget} kind="spend" title="จังหวะใช้งบ" caption="ของงบที่ควรใช้ถึงวันนี้" width={GAUGE_W}/>
           </div>
           {p2?.budget?.reason === 'stale' && <p className="aw-key">ค่าแอดมีถึง {v.spendThrough} — ยังตัดสินจังหวะงบไม่ได้</p>}
         </section>
@@ -320,22 +324,22 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
           <thead><tr><th>แบรนด์</th><th>{revenueLabel} / เป้า</th><th>จังหวะยอด</th><th>จังหวะงบ</th><th>ROAS</th><th>คาดปิดเดือน</th><th>ควรทำ</th></tr></thead>
           <tbody>
             <tr className={`aw-row ${overview ? 'selected' : ''}`} onClick={() => setSelected(null)}><th><button type="button" onClick={(e) => { e.stopPropagation(); setSelected(null); }}>ภาพรวมทุกแบรนด์</button></th>
-              <td>{money(s.revenue)}<small> / {targetText(s.revTarget)}</small></td>
-              <td><Track value={share(s.revenue, s.revTarget)} expected={v.clock?.elapsed} label="จังหวะยอด" tone={paceTone(v.overallPace?.rev?.state)}/><span className={paceTone(v.overallPace?.rev?.state)}>{pace(v.overallPace?.rev?.value)} {paceLabel(v.overallPace?.rev?.state)}</span></td>
-              <td><Track value={share(s.spend, s.budget)} expected={v.clock?.elapsed} label="จังหวะงบ" tone={paceTone(v.overallPace?.budget?.state)}/><span className={paceTone(v.overallPace?.budget?.state)}>{pace(v.overallPace?.budget?.value)} {paceLabel(v.overallPace?.budget?.state, 'spend')}</span></td>
-              <td>{(() => { const r = v.overallPipeline?.items.find(i => i.key === 'roas')?.value; return r == null ? '—' : `${fmtNum(r, 2)}×`; })()}</td>
-              <td>{money(v.overallPace?.rev?.forecast)}</td>
-              <td className={v.overallPace?.advice?.tone}>{v.overallPace?.advice?.action}{v.overallPace?.advice?.overBudget && <small> · เกินงบแล้ว</small>}</td></tr>
+              <td data-label={`${revenueLabel} / เป้า`}>{money(s.revenue)}<small> / {targetText(s.revTarget)}</small></td>
+              <td data-label="จังหวะยอด"><Track value={share(s.revenue, s.revTarget)} expected={v.clock?.elapsed} label="จังหวะยอด" tone={paceTone(v.overallPace?.rev?.state)}/><span className={paceTone(v.overallPace?.rev?.state)}>{pace(v.overallPace?.rev?.value)} {paceLabel(v.overallPace?.rev?.state)}</span></td>
+              <td data-label="จังหวะงบ"><Track value={share(s.spend, s.budget)} expected={v.clock?.elapsed} label="จังหวะงบ" tone={paceTone(v.overallPace?.budget?.state)}/><span className={paceTone(v.overallPace?.budget?.state)}>{pace(v.overallPace?.budget?.value)} {paceLabel(v.overallPace?.budget?.state, 'spend')}</span></td>
+              <td data-label="ROAS">{(() => { const r = v.overallPipeline?.items.find(i => i.key === 'roas')?.value; return r == null ? '—' : `${fmtNum(r, 2)}×`; })()}</td>
+              <td data-label="คาดปิดเดือน">{money(v.overallPace?.rev?.forecast)}</td>
+              <td data-label="ควรทำ" className={v.overallPace?.advice?.tone}>{v.overallPace?.advice?.action}{v.overallPace?.advice?.overBudget && <small> · เกินงบแล้ว</small>}</td></tr>
             {v.brands.map(x => { const r = v.pipelines[x.id]?.items.find(i => i.key === 'roas')?.value; const a = x.pace2?.advice; return (
               /* ทั้งแถวกดได้ตามที่คำอธิบายใต้ตารางบอก — ปุ่มที่ชื่อยังอยู่เพื่อให้ไล่ด้วยคีย์บอร์ดได้ */
               <tr key={x.id} className={`aw-row ${x.id === picked?.id ? 'selected' : ''}`} onClick={() => setSelected(x.id)}>
                 <th><button type="button" onClick={(e) => { e.stopPropagation(); setSelected(x.id); }}><BrandMark brand={x}/>{x.name}</button></th>
-                <td>{money(x.revenue)}<small> / {targetText(x.revTarget)}</small></td>
-                <td><Track value={share(x.revenue, x.revTarget)} expected={v.clock?.elapsed} label="จังหวะยอด" tone={paceTone(x.pace2?.rev?.state)}/><span className={paceTone(x.pace2?.rev?.state)}>{pace(x.pace2?.rev?.value)} {paceLabel(x.pace2?.rev?.state)}</span></td>
-                <td><Track value={share(x.spend, x.budget)} expected={v.clock?.elapsed} label="จังหวะงบ" tone={paceTone(x.pace2?.budget?.state)}/><span className={paceTone(x.pace2?.budget?.state)}>{pace(x.pace2?.budget?.value)} {paceLabel(x.pace2?.budget?.state, 'spend')}</span></td>
-                <td>{r == null ? '—' : `${fmtNum(r, 2)}×`}</td>
-                <td>{money(x.pace2?.rev?.forecast)}</td>
-                <td className={a?.tone}>{noSales(x) ?? <>{a?.action}{a?.overBudget && <small> · เกินงบแล้ว</small>}</>}</td>
+                <td data-label={`${revenueLabel} / เป้า`}>{money(x.revenue)}<small> / {targetText(x.revTarget)}</small></td>
+                <td data-label="จังหวะยอด"><Track value={share(x.revenue, x.revTarget)} expected={v.clock?.elapsed} label="จังหวะยอด" tone={paceTone(x.pace2?.rev?.state)}/><span className={paceTone(x.pace2?.rev?.state)}>{pace(x.pace2?.rev?.value)} {paceLabel(x.pace2?.rev?.state)}</span></td>
+                <td data-label="จังหวะงบ"><Track value={share(x.spend, x.budget)} expected={v.clock?.elapsed} label="จังหวะงบ" tone={paceTone(x.pace2?.budget?.state)}/><span className={paceTone(x.pace2?.budget?.state)}>{pace(x.pace2?.budget?.value)} {paceLabel(x.pace2?.budget?.state, 'spend')}</span></td>
+                <td data-label="ROAS">{r == null ? '—' : `${fmtNum(r, 2)}×`}</td>
+                <td data-label="คาดปิดเดือน">{money(x.pace2?.rev?.forecast)}</td>
+                <td data-label="ควรทำ" className={a?.tone}>{noSales(x) ?? <>{a?.action}{a?.overBudget && <small> · เกินงบแล้ว</small>}</>}</td>
               </tr>); })}
           </tbody>
         </table></div>

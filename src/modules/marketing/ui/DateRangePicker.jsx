@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { PERIOD_PRESETS, periodRange, isoDay, monthGrid, rangeLabel, daysInclusive, MONTHS_TH_FULL, WEEKDAYS_TH } from "../adsScope.js";
+import { PERIOD_PRESETS, periodRange, isoDay, monthGrid, rangeLabel, daysInclusive, MONTHS_TH_FULL, WEEKDAYS_TH, thaiYear } from "../adsScope.js";
 import "./dateRangePicker.css";
 
 /* DateRangePicker — ปุ่มเดียวเปิด popover: ซ้าย = ช่วงสำเร็จรูป (radio) · ขวา = ปฏิทิน 2 เดือน เลือกช่วงเอง (คลิกวันแรก → วันสุดท้าย)
@@ -57,7 +57,7 @@ export function DateRangePicker({ period, from, to, onChange, max = isoDay(new D
           {months.map((mo, i) => <div className="drp-month" key={`${mo.y}-${mo.m}`}>
             <header>
               {i === 0 ? <button type="button" className="drp-nav" aria-label="เดือนก่อนหน้า" onClick={() => setView((v) => addMonths(v, -1))}><ChevronLeft size={16} /></button> : <span className="drp-nav-spacer" />}
-              <strong>{MONTHS_TH_FULL[mo.m]} {mo.y}</strong>
+              <strong>{MONTHS_TH_FULL[mo.m]} {thaiYear(mo.y)}</strong>
               {i === 1 ? <button type="button" className="drp-nav" aria-label="เดือนถัดไป" disabled={!canNext} onClick={() => setView((v) => addMonths(v, 1))}><ChevronRight size={16} /></button> : <span className="drp-nav-spacer" />}
             </header>
             <div className="drp-grid" role="grid" onMouseLeave={() => setHover(null)}>

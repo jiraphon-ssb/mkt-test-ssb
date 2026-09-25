@@ -109,7 +109,7 @@ export default function NotificationBell() {
       <button
         ref={btnRef}
         onClick={toggle}
-        className={`relative ${open ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+        className={`relative grid h-8 w-8 place-items-center rounded-md hover:bg-zinc-500/10 ${open ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
         aria-label="แจ้งเตือน"
         title="แจ้งเตือน"
       >

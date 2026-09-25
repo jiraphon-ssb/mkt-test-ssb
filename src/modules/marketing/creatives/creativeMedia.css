@@ -49,3 +49,6 @@
   .mkt-root .cl-media-img, .mkt-root .cl-media-hint, .mkt-root .cl-media-play, .mkt-root .cl-media-nav, .mkt-root .cl-media-dots, .mkt-root .cl-media-dots i { transition:none; }
   .mkt-root .cl-media:has(.cl-media-open:hover) .cl-media-play { transform:translate(-50%,-50%); }
 }
+
+/* ไม่มีภาพ = ไม่จองพื้นที่เท่ารูปจริง (รีวิว UX 25 ก.ย.: การ์ดว่างสูงเต็มสี่เหลี่ยมจัตุรัส ดันตัวเลขลงไปครึ่งการ์ด) */
+.mkt-root .cl-media--none { aspect-ratio:2/1; }

@@ -15,5 +15,5 @@ const LEAD_TABS = [["/mkt/ads/billing", "บิล & กระทบยอด", 
 export function AdsSectionTabs() {
   const { user } = useAuth();
   const tabs = user?.role === "team_lead" ? [...TABS, ...LEAD_TABS] : TABS;
-  return <div className="ads-section-tabs-wrap"><nav className="ads-section-tabs" aria-label="ส่วนของ Overview ads">{tabs.map(([to, label, Icon]) => <NavLink key={to} to={to} end><Icon size={15} /><span>{label}</span></NavLink>)}</nav></div>;
+  return <div className="ads-section-tabs-wrap"><nav className="ads-section-tabs" aria-label="ส่วนของภาพรวมโฆษณา">{tabs.map(([to, label, Icon]) => <NavLink key={to} to={to} end><Icon size={15} /><span>{label}</span></NavLink>)}</nav></div>;
 }

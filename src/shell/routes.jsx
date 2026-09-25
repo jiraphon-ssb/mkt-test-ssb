@@ -178,7 +178,7 @@ const MARKETING_GROUPS = [
     id: "mkt_main",
     items: [
       {
-        id: "mkt_ads", path: "/mkt/ads", label: "Overview ads", icon: Megaphone,
+        id: "mkt_ads", path: "/mkt/ads", label: "ภาพรวมโฆษณา", icon: Megaphone,
         perm: "marketing.dash.view", status: "live", view: "ads",
         purpose: "ค่าแอด · CPL · สัดส่วนรายช่องทาง · แบรนด์ × ช่องทาง · กรวย Reach → Engagement → Leads",
       },
@@ -188,7 +188,7 @@ const MARKETING_GROUPS = [
         purpose: "แคมเปญทุกแบรนด์×แพลตฟอร์ม · จังหวะงบระดับแคมเปญ · ป้ายสเกล/ตรวจแก้/หยุด · ครีเอทีฟล้า",
       },
       {
-        id: "mkt_creatives", path: "/mkt/creatives", label: "Creative Library", icon: Images,
+        id: "mkt_creatives", path: "/mkt/creatives", label: "คลัง Creative", icon: Images,
         perm: "marketing.dash.view", status: "live", view: "creatives", sidebar: false,
         purpose: "รวมชิ้นงานโฆษณา · ดูผลลัพธ์ · ตรวจความล้า · เปรียบเทียบครีเอทีฟ",
       },

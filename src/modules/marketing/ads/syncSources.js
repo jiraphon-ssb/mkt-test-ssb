@@ -111,7 +111,7 @@ export function coverageMatrix(facts = [], { brandIds = [], from, to, today = nu
 }
 
 export const GOAL_FIELDS = [
-  ["sales_target", "เป้ายอดขาย"], ["sales_new_target", "ยอดลูกค้าใหม่"], ["orders_target", "ออเดอร์"], ["deposits_target", "มัดจำ"], ["leads_target", "ลีด"], ["inquiry_target", "คนทัก"],
+  ["sales_target", "เป้ายอดขาย"], ["sales_new_target", "ยอดลูกค้าใหม่"], ["orders_target", "ยืนยันออเดอร์"], ["deposits_target", "ได้ออเดอร์"], ["leads_target", "ลีด"], ["inquiry_target", "คนทัก"],
   ["ad_budget", "งบแอด"], ["cpl", "CPL"], ["roas", "ROAS"], ["pct_ads_new", "%Ads"], ["cac", "CAC"], ["cpi", "ต้นทุนต่อทัก"],
 ];
 

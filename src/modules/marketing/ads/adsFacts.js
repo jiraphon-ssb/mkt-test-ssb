@@ -49,6 +49,8 @@ export function creativeAssetFromRow(row) {
     storyId: row.effective_story_id ?? null,
     instagramMediaId: row.instagram_media_id ?? null,
     sourceUpdatedAt: row.source_updated_at ?? null,
+    status: row.effective_status ?? null,             // เปิด/ปิดของโฆษณา ณ รอบรีเฟรชครีเอทีฟล่าสุด (creativeStatus.js)
+    statusAt: row.media_refreshed_at ?? null,
   };
 }
 

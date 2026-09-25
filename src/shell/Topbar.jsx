@@ -34,8 +34,9 @@ export default function Topbar({ onMenu }) {
 
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <ContextSwitcher />
+        {/* พื้นที่กด 32px (เดิมเท่าไอคอน 18px ต่ำกว่าเกณฑ์ 24px — รีวิว UX 25 ก.ย.) */}
         <button
-          className="text-zinc-400 hover:text-zinc-200"
+          className="grid h-8 w-8 place-items-center rounded-md text-zinc-400 hover:bg-zinc-500/10 hover:text-zinc-200"
           onClick={toggle}
           aria-label={theme === "dark" ? "สลับเป็นธีมสว่าง" : "สลับเป็นธีมมืด"}
           title={theme === "dark" ? "ธีมสว่าง" : "ธีมมืด"}

@@ -28,6 +28,7 @@ import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, la
 import { ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, snapshotSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import { newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
 import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
+import { isSupabaseConfigured } from "../../../foundation/data/supabaseClient.js";
 import "./adsWorkspace.css";
 import "./syncStatus.css";
 
@@ -440,6 +441,15 @@ export function SyncStatusView() {
     return target ? <button type="button" onClick={() => setTab(target)}>ดูรายละเอียด</button> : null;
   };
   const VerdictIcon = { ok: CheckCircle2, bad: AlertTriangle, warn: Info, loading: LoaderCircle }[verdict.state];
+
+  /* โหมดเดโมที่ไม่ได้ต่อฐานข้อมูล: ทุกแหล่งโหลดไม่ได้อยู่แล้ว — บอกตรงๆ ครั้งเดียว ไม่ขึ้น "ต้องแก้ 3 เรื่อง" สีแดง
+     (รีวิว UX 25 ก.ย.: คนเปิดเดโมเห็นแดงทั้งหน้านึกว่าระบบพัง) */
+  if (demo && !isSupabaseConfigured) return <main className="aw sy">
+    <section className="sy-top" aria-label="สรุปสถานะข้อมูล">
+      <header className="sy-head"><div><h1>สถานะ Sync</h1><p>ข้อมูลแต่ละแหล่งมาครบ สด และเชื่อถือได้ไหม</p></div></header>
+      <div className="sy-verdict loading" role="status"><Database size={22} aria-hidden="true" /><div><strong>โหมดตัวอย่าง — ยังไม่ได้ต่อฐานข้อมูล</strong><span>หน้านี้แสดงสถานะการดึงข้อมูลจริงเท่านั้น ตัวเลขในหน้าอื่นตอนนี้เป็นข้อมูลจำลอง</span></div></div>
+    </section>
+  </main>;
 
   return <main className="aw sy">
     <section className="sy-top" aria-label="สรุปสถานะข้อมูล">

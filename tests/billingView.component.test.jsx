@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const state = { role: "team_lead", snapshots: [], reviews: [], charges: [] };
-const calls = { addReview: [] };
+const state = { role: "team_lead", snapshots: [], reviews: [], charges: [], adsSource: "meta_pilot", adsStatus: "ready", remoteFails: false };
+const calls = { addReview: [], reload: 0 };
 const day = "2026-09-05";
 const card = (account, brand, campaign, spend) => ({ brand_id: brand, account_id: account, campaign,
   fact_date: day, metrics: { spend, measured_at: `${day}T12:00:00Z` } });
@@ -13,18 +13,18 @@ const card = (account, brand, campaign, spend) => ({ brand_id: brand, account_id
 vi.mock("../src/modules/marketing/useMkt.jsx", () => ({ useApp: () => ({
   data: { brands: [{ id: "b_td", name: "TEAMDEE" }, { id: "b_jd", name: "JK Design" }] } }) }));
 vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => ({ user: { role: state.role, name: "อาร์ต" } }) }));
-vi.mock("../src/modules/marketing/ads/useAdsData.js", () => ({ useAdsData: () => ({ source: "meta_pilot",
-  cards: [card("111000111", "b_td", "ทีมดี-โปโล", 150807.37), card("111000111", "b_td", "Message-ทัก", 30000)],
-  pilot: { status: "ready" } }) }));
+vi.mock("../src/modules/marketing/ads/useAdsData.js", () => ({ useAdsData: () => ({ source: state.adsSource,
+  cards: state.adsStatus === "ready" ? [card("111000111", "b_td", "ทีมดี-โปโล", 150807.37), card("111000111", "b_td", "Message-ทัก", 30000)] : [],
+  pilot: { status: state.adsStatus }, reload: () => { calls.reload += 1; } }) }));
 vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
-  accountSnapshots: async () => state.snapshots,
+  accountSnapshots: async () => { if (state.remoteFails) throw new Error("x"); return state.snapshots; },
   billingReviews: async () => state.reviews,
   billingCharges: async () => state.charges,
   addBillingReview: async (entry) => { calls.addReview.push(entry); return "id-1"; },
 } } }));
 const { BillingView } = await import("../src/modules/marketing/ads/BillingView.jsx");
 
-afterEach(() => { cleanup(); state.role = "team_lead"; state.snapshots = []; state.reviews = []; state.charges = []; calls.addReview = []; });
+afterEach(() => { cleanup(); Object.assign(state, { role: "team_lead", snapshots: [], reviews: [], charges: [], adsSource: "meta_pilot", adsStatus: "ready", remoteFails: false }); calls.addReview = []; calls.reload = 0; });
 const show = () => render(<MemoryRouter><BillingView month="2026-09-01" /></MemoryRouter>);
 
 describe("สิทธิ์", () => {
@@ -149,5 +149,47 @@ describe("ฟอร์มผลตรวจต้องมีเนื้อห�
     fireEvent.click(screen.getByRole("button", { name: "บันทึกผลตรวจ" }));
     await waitFor(() => expect(calls.addReview).toHaveLength(1));
     expect(calls.addReview[0].verdict).toBe("noted");
+  });
+});
+
+/* รีวิว UX 25 ก.ย. ข้อ 1: โหลดค่าแอดไม่สำเร็จแต่การ์ดขึ้น ฿0.00 — ขัดกฎ "ข้อมูลไม่ครบ = — ไม่แทนด้วยศูนย์"
+   คนอ่านจะเข้าใจว่าเดือนนี้ไม่มีค่าแอด · ข้อความ error เดิมเป็นตัวเล็กสีเทาใต้การ์ด */
+describe("โหลดไม่สำเร็จต้องไม่โชว์ศูนย์", () => {
+  const statValues = () => [...document.querySelectorAll(".bl-stats b")].map((b) => b.textContent);
+  it("ค่าแอดโหลดไม่สำเร็จ = การ์ดเป็น — ทั้งหมด + แจ้งเตือนชัด + ปุ่มลองใหม่", async () => {
+    state.adsStatus = "error";
+    show();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/โหลดค่าแอดไม่สำเร็จ/);
+    expect(statValues().slice(0, 3)).toEqual(["—", "—", "—"]);
+    expect(document.body.textContent).not.toContain("฿0.00");
+    fireEvent.click(within(alert).getByRole("button", { name: "ลองใหม่" }));
+    expect(calls.reload).toBe(1);
+  });
+  it("กำลังโหลด = — ไม่ใช่ ฿0.00", async () => {
+    state.adsStatus = "loading";
+    show();
+    await screen.findByText(/กำลังโหลดค่าแอด/);
+    expect(statValues().slice(0, 3)).toEqual(["—", "—", "—"]);
+  });
+  it("ข้อมูลจำลอง = ไม่เอามาทำบิล บอกตรงๆ", async () => {
+    state.adsSource = "mock";
+    show();
+    expect(await screen.findByText(/ข้อมูลจำลอง/)).toBeTruthy();
+    expect(statValues().slice(0, 3)).toEqual(["—", "—", "—"]);
+  });
+  it("ทั้งค่าแอดยังไม่รู้และฝั่งฐานพัง = ไม่อ้างว่า 'ตัวเลขระบบนับยังถูกต้อง' (ไม่มีตัวเลขให้ถูก)", async () => {
+    state.adsSource = "mock"; state.remoteFails = true;
+    show();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toContain("ยังถูกต้อง");
+  });
+  it("ข้อมูลฝั่งฐาน (ยอดค้าง/ผลตรวจ) โหลดไม่สำเร็จ = แจ้งเตือนชัด + ลองใหม่ · ตัวเลขระบบนับยังขึ้น", async () => {
+    state.remoteFails = true;
+    show();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/ยอดค้างและผลตรวจโหลดไม่สำเร็จ/);
+    expect(within(alert).getByRole("button", { name: "ลองใหม่" })).toBeTruthy();
+    expect(statValues()[0]).toBe("฿180,807.37");
   });
 });

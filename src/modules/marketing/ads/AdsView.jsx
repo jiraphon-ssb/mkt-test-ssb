@@ -70,13 +70,15 @@ export function SalePipeline({ items, worstKey = null, row = false, title = true
                   pace={{ value: paceValue, state: goal.paceState, direction: goal.kind ?? "higher" }} />}
               </div>
               <div className="aw-metric-foot">
+                {/* ขั้นที่ไม่มีค่าเลย = ประโยคเดียว (รีวิว UX 25 ก.ย.: เดิมไล่ "ยังไม่ตั้งเป้า · เทียบเดือนก่อนไม่ได้" ซ้ำทุกกล่อง) */}
+                {it.value == null ? <span className="zinc">ยังไม่มีข้อมูล</span> : <>
                 {goal?.state === "set"
                   ? <span className={goal.tone}>จังหวะ <b>{fmtNum((paceValue ?? 0) * 100, 2)}%</b> {goal.text}</span>
                   : <span className="zinc">{goal?.state === "nodata" ? "ยังไม่มีข้อมูล" : "ยังไม่ตั้งเป้า"}</span>}
                 {/* ดีขึ้น/แย่ลงเทียบเดือนก่อน (อาร์ตขอ 21 ก.ย. ค่ำ) — ฐานเล็ก/เทียบไม่ได้ = สีจาง ไม่ตะโกน */}
                 <span className={d == null || tiny || good == null ? "ads-muted" : good ? "ads-good" : "ads-over"}>
                   {d == null ? "เทียบเดือนก่อนไม่ได้" : `เทียบเดือนก่อน ${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}%${good == null ? "" : good ? " ดีขึ้น" : " แย่ลง"}${tiny ? " · ฐานเล็ก" : ""}`}
-                </span>
+                </span></>}
               </div>
             </div>
           );
@@ -230,7 +232,7 @@ export function ChannelCard({ c, monthView = true }) {    // export ให้เ
 
           {ratio != null && state !== "unknown" && (
             <div className="aw-hero-side">
-              <PaceGauge width={178} kind="spend" title="จังหวะใช้งบ" caption="ของงบที่ควรใช้วันนี้"
+              <PaceGauge width={178} kind="spend" title="จังหวะใช้งบ" caption="ของงบที่ควรใช้ถึงวันนี้"
                 pace={{ value: ratio, state, direction: "spend" }}/>
             </div>
           )}

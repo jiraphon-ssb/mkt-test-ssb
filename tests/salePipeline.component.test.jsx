@@ -47,3 +47,13 @@ describe("SalePipeline โหมด gauge", () => {
     expect(screen.getByText("หล่นแรงสุด")).toBeTruthy();      // คอขวดต้องเห็นโดยไม่ต้องเปิดไอคอน
   });
 });
+
+/* รีวิว UX 25 ก.ย. ข้อ 10: ขั้นที่ไม่มีข้อมูลเลยขึ้น "— / ยังไม่ตั้งเป้า / เทียบเดือนก่อนไม่ได้" ซ้ำทุกกล่อง
+   ไม่มีค่า = พูดประโยคเดียวพอ ไม่ต้องไล่บอกว่าเทียบอะไรไม่ได้บ้าง */
+describe("ขั้นที่ยังไม่มีข้อมูล", () => {
+  it("ค่าเป็น null = ขึ้น 'ยังไม่มีข้อมูล' บรรทัดเดียว ไม่มี 'ยังไม่ตั้งเป้า' หรือ 'เทียบเดือนก่อนไม่ได้'", () => {
+    render(<SalePipeline row gauge items={[{ key: "deposits", label: "ได้ออเดอร์", value: null, before: null, fmt: "int" }]} goals={{}} />);
+    const foot = document.querySelector(".aw-metric-foot");
+    expect(foot.textContent).toBe("ยังไม่มีข้อมูล");
+  });
+});

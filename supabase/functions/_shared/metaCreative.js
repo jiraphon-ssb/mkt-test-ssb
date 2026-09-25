@@ -136,7 +136,8 @@ export function buildAccountAdsUrl({ version, accountId, limit = 50, largeThumbn
   const url = new URL(`https://graph.facebook.com/${version}/${accountId}/ads`);
   const creative = largeThumbnails ? "creative.thumbnail_width(600).thumbnail_height(600)" : "creative";
   const creativeFields = withSpecs ? `${META_CREATIVE_LIGHT_FIELDS},${SPEC_FIELDS}` : META_CREATIVE_LIGHT_FIELDS;
-  url.searchParams.set("fields", `id,name,campaign_id,adset_id,updated_time,${creative}{${creativeFields}}`);
+  // effective_status = เปิด/ปิดของโฆษณา (ตารางครีเอทีฟ 25 ก.ย.) — มากับคำขอเดิม ไม่เพิ่มจำนวนครั้งที่ยิง
+  url.searchParams.set("fields", `id,name,effective_status,campaign_id,adset_id,updated_time,${creative}{${creativeFields}}`);
   url.searchParams.set("limit", String(Math.max(1, Math.min(100, Math.floor(limit)))));
   if (includeArchived) url.searchParams.set("effective_status", JSON.stringify(AD_STATUSES));   // ad ที่มีค่าแอดแต่ถูกเก็บแล้ว
   if (after) url.searchParams.set("after", String(after));
@@ -160,6 +161,8 @@ export function creativeRowFromAd(ad, connectionId, now = new Date().toISOString
     external_ad_id: String(ad.id),
     campaign_id: String(ad.campaign_id ?? ""),
     ad_group_id: String(ad.adset_id ?? ""),
+    // ค่าจาก Meta เป็นคำตัวใหญ่สั้นๆ (ACTIVE/PAUSED/…) — อย่างอื่นไม่เก็บ กันข้อมูลแปลกเข้าตาราง
+    effective_status: /^[A-Z_]{1,40}$/.test(String(ad.effective_status ?? "")) ? ad.effective_status : null,
     name: String(n.name ?? "").slice(0, 500),
     format: FORMATS.has(n.format) ? n.format : "unknown",
     primary_text: n.copy.primaryText ?? null,

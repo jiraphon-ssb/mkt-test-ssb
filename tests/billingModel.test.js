@@ -133,3 +133,10 @@ describe("normalize act_ prefix", () => {
     expect(m.totals.balance).toBeNull();
   });
 });
+
+describe("ค่าแอดยังไม่รู้ (โหลดไม่สำเร็จ/ยังโหลด/ข้อมูลจำลอง)", () => {
+  it("spendKnown:false = ยอดระบบนับ · VAT · รวม เป็น null ไม่ใช่ 0", () => {
+    const m = buildBillingModel({ month: "2026-09-01", cards: [], spendKnown: false });
+    expect(m.totals).toMatchObject({ spend: null, vat: null, gross: null });
+  });
+});
