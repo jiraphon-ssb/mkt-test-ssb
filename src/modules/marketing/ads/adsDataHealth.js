@@ -20,7 +20,7 @@ const reportStatus = (row, tolerance) => {
   });
 };
 
-/* ดึงวันละครั้งตี 5 (23 ก.ย.) → ข้อมูลอายุ ~24 ชม. คือปกติ
+/* ดึงวันละครั้ง 09:00 (23 ก.ย.) → ข้อมูลอายุ ~24 ชม. คือปกติ
    ค่าในหน้าตั้งค่าที่ต่ำกว่านี้ (เช่นค่าเดิม 6/12 ชม. สมัยดึงทุกชั่วโมง) ถูกยกเป็นขั้นต่ำ ไม่งั้นขึ้นแดงเกือบทั้งวัน */
 export const DAILY_STALE_HOURS = 26;
 export const DAILY_MISSING_HOURS = 50;
@@ -43,7 +43,7 @@ export function sourceHealth(source, config = {}, rules = {}, now = new Date()) 
   const ageHours = latest ? Math.max(0, (new Date(now).getTime() - latest.getTime()) / HOURS) : null;
   const { staleAfter, missingAfter } = freshnessLimits(rules);
   let state = "mock", label = "ข้อมูลจำลอง", detail = "ยังไม่ได้เชื่อมบัญชีจริง";
-  if (configured.length && !connected.length) { state = "waiting"; label = "รอเชื่อมบัญชี"; detail = `${configured.length} mapping พร้อม · ยังไม่มี OAuth`; }
+  if (configured.length && !connected.length) { state = "waiting"; label = "รอเชื่อมบัญชี"; detail = `จับคู่แบรนด์แล้ว ${configured.length} บัญชี · ยังไม่เชื่อม Meta`; }
   if (connected.length) { state = "missing"; label = "ยังไม่มีข้อมูล"; detail = "เชื่อมแล้ว แต่ยังไม่เคย sync สำเร็จ"; }
   if (syncing.length) { state = "syncing"; label = "กำลังดึงข้อมูล"; detail = syncing.some((row) => row.syncStatus === "backfill") ? "กำลังดึงข้อมูลย้อนหลัง" : "กำลังอัปเดตข้อมูลล่าสุด"; }
   if (latest) { state = ageHours > missingAfter ? "missing" : ageHours > staleAfter ? "stale" : "healthy"; label = state === "healthy" ? "ข้อมูลปกติ" : state === "stale" ? "ข้อมูลล่าช้า" : "ข้อมูลขาด"; detail = `อัปเดตล่าสุด ${agoHours(ageHours)}`; }
@@ -136,7 +136,7 @@ export function normalizeSyncRuns(runs = []) {
 }
 
 /* ── ประวัติตัวดึงอัตโนมัติ (ad_cron_ticks) ── */
-const CRON_STALE_MS = 26 * 3_600_000;   // cron วิ่งแค่ช่วงเช้า 05:00–05:50 — เงียบเกิน 26 ชม. = พลาดรอบเช้าไปแล้ว
+const CRON_STALE_MS = 26 * 3_600_000;   // cron วิ่งแค่ช่วงเช้า 09:00–09:50 — เงียบเกิน 26 ชม. = พลาดรอบเช้าไปแล้ว
 const STUCK_TICK_MS = 10 * 60_000;      // Edge Function ถูกตัดก่อน 10 นาทีเสมอ — ค้างเกินนี้คือ crash
 
 const TICK_CODE = /^[A-Z0-9_]{1,64}$/;

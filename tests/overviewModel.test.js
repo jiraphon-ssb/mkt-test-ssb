@@ -59,6 +59,14 @@ describe("funnel ภาพรวมกับแบรนด์ที่ระบ
   };
   const v = buildOverviewModel(realArgs);
   const stage = (key) => v.overallPipeline.items.find((item) => item.key === key);
+  /* 26 ก.ย. (สเปก overview-cash): model ส่งเงินจริงให้กล่อง — TMK ไม่รวม · ข้อมูลตัวอย่างไม่มีกล่อง */
+  it("เงินจริง: รายแบรนด์ + รวมเฉพาะแบรนด์ที่มีเงินเข้า · TMK อยู่ใน excluded", () => {
+    const withCash = buildOverviewModel({ ...realArgs, ads: { ...realArgs.ads, sales: sales.map((f) => (f.brand_id === "b_td" ? { ...f, cash_received: 450000, deposits: 200, deposit_value: 300000 } : f)) } });
+    expect(withCash.cash.byBrand.b_td).toMatchObject({ tracked: true, cash: 450000, gap: -50000 });
+    expect(withCash.cash.byBrand.b_jt.tracked).toBe(false);
+    expect(withCash.cash.overall).toMatchObject({ cash: 450000, excluded: ["JUNTAKARN"] });
+    expect(buildOverviewModel({ ...realArgs, ads: { ...realArgs.ads, source: "mock" } }).cash).toBeNull();
+  });
 
   it("คนทักและ Lead ภาพรวมนับเฉพาะแบรนด์ที่เก็บครบทุกขั้น (%Lead ไม่ถูกเจือจาง)", () => {
     expect(stage("inquiries").value).toBe(1000);
@@ -197,4 +205,98 @@ describe("ฐานของเป้าภาพรวมตรงกับฐ�
     expect(v.goals.overall.inquiries?.monthTarget).toBe(2000);
     expect(v.goals.overall.qualified?.monthTarget).toBe(600);
   });
+});
+
+/* อาร์ตเคาะ 27 ก.ย. (ทดสอบแบบผู้ใช้จริง): ยอดขายและค่าแอดดึงตี 5 มีถึงเมื่อวาน แต่ "ควรถึงวันนี้" คิด 27/30
+   → "ช้ากว่าแผน" รวมยอดที่ยังเก็บไม่ได้ ~1 วัน · คาดสิ้นเดือนของค่าแอดต่ำกว่าจริง → จังหวะคิดถึงวันสุดท้ายที่ข้อมูลครบ (เมื่อวาน) */
+import { vi } from "vitest";
+describe("จังหวะคิดถึงเมื่อวาน (วันที่ข้อมูลครบ)", () => {
+  it("27 ก.ย. = นับ 26 วัน · เหลือ 4 วัน (27–30) · บอกวันที่ใช้คิด", () => {
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-09-27T10:00:00+07:00"));
+    const v = buildOverviewModel(args({ period: "mtd" }));
+    vi.useRealTimers();
+    expect(v.clock).toMatchObject({ daysElapsed: 26, daysLeft: 4 });
+    expect(v.asOf).toBe("2026-09-26");
+  });
+  it("วันที่ 1 ของเดือน = ยังไม่มีวันไหนครบ → ยังไม่ตัดสินจังหวะ", () => {
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-01T10:00:00+07:00"));
+    const v = buildOverviewModel(args({ period: "mtd" }));
+    vi.useRealTimers();
+    expect(v.clock.elapsed).toBe(0);
+    expect(v.clock.daysLeft).toBe(31);
+  });
+});
+
+/* ตรวจรอบ 27 ก.ย. ดึก: เลยเที่ยงคืน (28 ก.ย. 00:30) ข้อมูลจริงยังถึง 26 → จังหวะคิดถึง 26 ไม่ใช่ 27 */
+describe("ข้อมูลจริง: จังหวะคิดถึงวันที่มีข้อมูล", () => {
+  const card = (day) => ({ id: `c${day}`, track: "project", status: "measured", brand_id: "b_td", archived: true, campaign: "C", creative: "A",
+    brief: { channels: ["Facebook"], publish_at: null }, metrics: { spend: 1000, leads: 4, measured_at: `2026-09-${day}T09:00:00.000Z` } });
+  it("28 ก.ย. 00:30 ข้อมูลถึง 26 = asOf 26 · ส่ง dataThrough ออกมา", () => {
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-09-28T00:30:00+07:00"));
+    const v = buildOverviewModel({ ...args({ period: "mtd" }), ads: { ...ads, source: "meta_pilot", cards: [card(25), card(26)] } });
+    vi.useRealTimers();
+    expect(v.dataThrough).toBe("2026-09-26");
+    expect(v.asOf).toBe("2026-09-26");
+  });
+  it("ข้อมูลตัวอย่าง = เมื่อวานตามเดิม (ไม่มีรอบดึง)", () => {
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-09-28T00:30:00+07:00"));
+    const v = buildOverviewModel({ ...args({ period: "mtd" }), ads: { ...ads, cards: [card(25)] } });
+    vi.useRealTimers();
+    expect(v.asOf).toBe("2026-09-27");
+  });
+});
+
+/* ตรวจรอบ 28 ก.ย.: ช่วง "ล่าสุด/นี้" ต้องจบที่วันที่มีข้อมูล และช่วงเทียบตรงวัน */
+describe("ข้อมูลจริง: ช่วงล่าสุดจบที่วันที่มีข้อมูล", () => {
+  const card = (day) => ({ id: `c${day}`, track: "project", status: "measured", brand_id: "b_td", archived: true, campaign: "C", creative: "A",
+    brief: { channels: ["Facebook"], publish_at: null }, metrics: { spend: 1000, leads: 4, measured_at: `2026-09-${day}T09:00:00.000Z` } });
+  const at = (filters) => {
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-09-28T00:30:00+07:00"));
+    const v = buildOverviewModel({ ...args(filters), ads: { ...ads, source: "meta_pilot", cards: [card(25), card(26)] } });
+    vi.useRealTimers();
+    return v;
+  };
+  const day = (d) => new Date(d).toLocaleDateString("sv-SE");
+  it("7 วันล่าสุด = 20–26 ก.ย. เทียบ 13–19 ก.ย.", () => {
+    const v = at({ period: "7d", compare: "previous" });
+    expect(v.rangeLabel).toBe("20 – 26 ก.ย. 2569");
+    expect(day(v.before.start)).toBe("2026-09-13");
+    expect(day(new Date(v.before.end) - 1)).toBe("2026-09-19");
+  });
+  it("เดือนนี้ = 1–26 ก.ย. เทียบ 1–26 ส.ค.", () => {
+    const v = at({ period: "mtd" });
+    expect(v.rangeLabel).toBe("1 – 26 ก.ย. 2569");
+    expect(day(v.before.start)).toBe("2026-08-01");
+    expect(day(new Date(v.before.end) - 1)).toBe("2026-08-26");
+  });
+  it("สัปดาห์นี้วันจันทร์ก่อนข้อมูลเข้า = ป้ายเป็นวันเริ่ม ไม่กลับหัว", () => {
+    expect(at({ period: "wtd" }).rangeLabel).toBe("28 ก.ย. 2569");
+  });
+});
+
+/* รีวิวโค้ด 28 ก.ย.: ช่วงว่าง ("สัปดาห์นี้" วันจันทร์) — ป้ายเป็นวันเริ่มได้ แต่ข้อมูลต้องว่าง ไม่ใช่อ่านข้อมูลครึ่งวันของวันนี้ */
+describe("ช่วงว่างไม่รั่วไปดึงข้อมูล", () => {
+  const card = (day) => ({ id: `c${day}`, track: "project", status: "measured", brand_id: "b_td", archived: true, campaign: "C", creative: "A",
+    brief: { channels: ["Facebook"], publish_at: null }, metrics: { spend: 1000, leads: 4, measured_at: `2026-09-${day}T09:00:00.000Z` } });
+  it("สัปดาห์นี้วันจันทร์ (ข้อมูลถึงอาทิตย์) = ยอดขายและ funnel ไม่นับแถวของวันจันทร์", () => {
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-09-28T10:00:00+07:00"));
+    const sales = [{ brand_id: "b_td", source: "crm", fact_date: "2026-09-28", gross_revenue: 5000, revenue_new: 5000, inquiries: 7, inquiry_filled: true, qualified_leads: 2, deposits: 1, orders: 1, orders_new: 1 }];
+    const v = buildOverviewModel({ ...args({ period: "wtd" }), ads: { ...ads, source: "meta_pilot", cards: [card(26), card(27)], sales, salesGoals: [] } });
+    vi.useRealTimers();
+    expect(v.rangeLabel).toBe("28 ก.ย. 2569");
+    const inquiries = v.overallPipeline?.items?.find((item) => item.key === "inquiries")?.value ?? null;
+    expect(inquiries === null || inquiries === 0).toBe(true);
+    expect(v.summary.revenue === null || v.summary.revenue === 0).toBe(true);
+  });
+});
+
+/* รีวิวโค้ด 28 ก.ย.: เมื่อวานทุกบัญชีหยุด (฿0) แต่รอบดึงเช้านี้สำเร็จ → ข้อมูลครบถึงเมื่อวาน ไม่ใช่วันล่าสุดที่มีค่าแอด */
+it("dataThrough มาจากรอบดึงสำเร็จล่าสุด ไม่ใช่วันล่าสุดที่ใช้เงิน", () => {
+  const card = (day) => ({ id: `c${day}`, track: "project", status: "measured", brand_id: "b_td", archived: true, campaign: "C", creative: "A",
+    brief: { channels: ["Facebook"], publish_at: null }, metrics: { spend: 1000, leads: 4, measured_at: `2026-09-${day}T09:00:00.000Z` } });
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-09-28T10:00:00+07:00"));
+  const v = buildOverviewModel({ ...args({ period: "mtd" }), ads: { ...ads, source: "meta_pilot", cards: [card(24), card(25)], pilot: { status: "ready", summary: { lastSuccessAt: "2026-09-27T22:20:00Z" } } } });
+  vi.useRealTimers();
+  expect(v.dataThrough).toBe("2026-09-27");
+  expect(v.asOf).toBe("2026-09-27");
 });

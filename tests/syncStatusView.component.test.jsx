@@ -266,19 +266,19 @@ describe("SyncStatusView — ขั้นเป้าไม่โกหก", () 
 describe("แถว Snapshot บัญชีแอด", () => {
   it("team_lead: โหลดเสร็จเห็นจำนวนบัญชี · สถานะผิดปกติดันเป็นเตือน", async () => {
     show();
-    expect(screen.getByText("Snapshot บัญชีแอด")).toBeTruthy();
+    expect(screen.getByText("ยอดค้างบัญชีแอด")).toBeTruthy();
     await settle("snapshots", [
       { external_account_id: "1", account_name: "JD1", account_status: 1, fetched_at: "2026-09-17T02:40:00Z" },
       { external_account_id: "2", account_name: "Finix2", account_status: 2, fetched_at: "2026-09-17T02:40:00Z" },
     ]);
-    const row = screen.getByText("Snapshot บัญชีแอด").closest(".sy-src");
-    expect(within(row).getByText("2 บัญชีที่ token เห็น")).toBeTruthy();
+    const row = screen.getByText("ยอดค้างบัญชีแอด").closest(".sy-src");
+    expect(within(row).getByText("2 บัญชีที่เข้าถึงได้")).toBeTruthy();
     expect(within(row).getByText("บัญชีสถานะผิดปกติ 1")).toBeTruthy();
   });
   it("ไม่ใช่ team_lead: บอกตรงๆ ว่าเฉพาะหัวหน้าทีม ไม่ยิง API", () => {
     auth.user = { role: "staff" };
     show();
-    const row = screen.getByText("Snapshot บัญชีแอด").closest(".sy-src");
+    const row = screen.getByText("ยอดค้างบัญชีแอด").closest(".sy-src");
     expect(within(row).getByText("เฉพาะหัวหน้าทีม")).toBeTruthy();
     expect(pending.snapshots).toBeUndefined();
   });
@@ -293,7 +293,22 @@ describe("งานอื่น · ดึง Snapshot บัญชีแอด",
     show();
     await settle("snapshots", []);
     fireEvent.click(screen.getByText("งานอื่น"));
-    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึง Snapshot บัญชีแอด/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึงยอดค้างบัญชีแอด/ })); });
     expect(toastSpy.some(([msg]) => msg.includes("8"))).toBe(true);
+  });
+});
+
+/* ทดสอบละเอียดรอบ 2 (27 ก.ย.) — จำลองโหลดพังบนหน้าจริง: หัวหน้าขึ้น "ข้อมูลล่าสุด 13:38 (6 วันก่อน)" จากค่าเก่าใน settings
+   และ JUNTAKARN ขึ้น "รอเชื่อมแหล่งข้อมูล · ยังไม่เคยดึง" ทั้งที่เชื่อมอยู่ — โหลดไม่ได้ ≠ ไม่มี */
+describe("SyncStatusView — โหลดพังทั้งหน้า", () => {
+  it("ไม่เอาเวลาเก่าใน settings มาบอกว่าข้อมูลล่าสุดเมื่อไร · JUNTAKARN บอกว่าโหลดไม่สำเร็จ", async () => {
+    show();
+    for (const key of ["connections", "recons", "coverage", "pipes", "facts"]) await act(async () => { pending[key].reject(new Error("boom")); });
+    const heads = screen.getAllByText(/^ข้อมูลล่าสุด/).map((el) => el.textContent);
+    expect(heads.some((t) => /ข้อมูลล่าสุด —/.test(t))).toBe(true);
+    expect(document.body.textContent).not.toMatch(/ข้อมูลล่าสุด \d/);
+    const jk = screen.getByText("ยอดขาย JUNTAKARN").closest('[role="row"]');
+    expect(within(jk).getByText("โหลดสถานะไม่สำเร็จ")).toBeTruthy();
+    expect(jk.textContent).not.toMatch(/รอเชื่อมแหล่งข้อมูล|ยังไม่เคยดึง/);
   });
 });

@@ -80,10 +80,15 @@ export function plansFromSalesGoals({ goals = [], month, basis = "total" } = {})
 /** ยอดจริงรายแบรนด์ในช่วงวัน (from–to รวมหัวท้าย) — แบรนด์ที่ไม่มีแถวเลย = ไม่มีคีย์ */
 export function salesFactsByBrand(facts = [], { from, to, today = null } = {}) {
   const out = new Map();
+  /* วันนี้และเมื่อวานที่ทีมยังไม่กรอก ไม่นับเป็นวันขาด — วันนี้ยังไม่จบ · ทีมกรอกของเมื่อวานตอนเช้า
+     (รีวิวโค้ด 28 ก.ย.: เกณฑ์เดียวกับหน้าสถานะ Sync · เดิมหน้าภาพรวมขึ้น "ทีมกรอก 26/27" ขณะหน้า Sync ขึ้นครบ) */
+  const [ty, tm, td] = String(today ?? "").split("-").map(Number);
+  const grace = Number.isFinite(td) ? new Date(Date.UTC(ty, tm - 1, td - 1)).toISOString().slice(0, 10) : null;
+  const pending = (day) => grace != null && day >= grace;
   for (const fact of facts ?? []) {
     const day = fact?.fact_date;
     if (!fact?.brand_id || !ISO.test(String(day ?? "")) || (from && day < from) || (to && day > to)) continue;
-    const s = out.get(fact.brand_id) ?? { revenue: 0, revenueNew: 0, orders: 0, ordersNew: 0, leads: 0, leadsNew: 0, inquiries: 0, inquiryFilledDays: 0, days: 0, deposits: 0, depositValue: 0, cash: 0, cancelled: 0 };
+    const s = out.get(fact.brand_id) ?? { revenue: 0, revenueNew: 0, orders: 0, ordersNew: 0, leads: 0, leadsNew: 0, inquiries: 0, inquiryFilledDays: 0, days: 0, deposits: 0, depositValue: 0, cash: 0, cancelled: 0, cancelledValue: 0, refunds: 0, cashTracked: false };
     s.revenue += num(fact.gross_revenue) ?? 0;
     s.revenueNew += num(fact.revenue_new) ?? 0;
     s.orders += num(fact.orders) ?? 0;
@@ -93,12 +98,24 @@ export function salesFactsByBrand(facts = [], { from, to, today = null } = {}) {
     s.inquiries += num(fact.inquiries) ?? 0;
     if (fact.inquiry_filled === true) s.inquiryFilledDays += 1;
     if (day < LEADS_TRACKED_SINCE) s.leadsBeforeTracked = true;
-    // วันนี้ยังไม่จบ ทีมยังไม่กรอก = ไม่นับเป็นวัน (ตัวหาร "ทีมกรอก x/y วัน")
-    if (fact.inquiry_filled === true || day !== today) s.days += 1;
+    // ยังไม่ถึงเวลากรอก (วันนี้/เมื่อวาน) และยังไม่กรอก = ไม่นับเป็นวัน (ตัวหาร "ทีมกรอก x/y วัน")
+    if (fact.inquiry_filled === true || !pending(day)) s.days += 1;
     s.deposits += num(fact.deposits) ?? 0;
     s.depositValue += num(fact.deposit_value) ?? 0;
     s.cash += num(fact.cash_received) ?? 0;
+    /* วันที่ระบบขายไม่ได้กรอกเงินเข้า = ไม่รู้ ไม่ใช่ ฿0 (อาร์ตเคาะ 27 ก.ย.): นับวันที่กรอก + ยอดขายของวันเดียวกันไว้เทียบ */
+    if (fact.source !== "tmk") {
+      if (fact.cash_received != null) {
+        s.cashDays = (s.cashDays ?? 0) + 1; s.cashDaysTotal = (s.cashDaysTotal ?? 0) + 1;
+        s.cashRevenue = (s.cashRevenue ?? 0) + (num(fact.gross_revenue) ?? 0);
+      } else if (!pending(day)) s.cashDaysTotal = (s.cashDaysTotal ?? 0) + 1;   // ยังไม่ถึงเวลากรอก (วันนี้/เมื่อวาน) = ไม่นับเป็นวันที่ขาด
+    }
     s.cancelled += num(fact.cancelled) ?? 0;
+    s.cancelledValue += num(fact.cancelled_value) ?? 0;
+    s.refunds += num(fact.refunds) ?? 0;
+    // ระบบ TMK ไม่มีเงินเข้า/มัดจำ (ส่งมาเป็น 0) — มีแถวจากระบบอื่นเมื่อไหร่ถึงถือว่ารู้เงินเข้า (สเปก 2026-09-26)
+    // ช่องเงินเข้าว่าง = ไม่รู้ ไม่ใช่ ฿0 (ชุด A ข้อ 7) — ต้องมีค่าจริงจากระบบที่ไม่ใช่ TMK
+    if (fact.source !== "tmk" && fact.cash_received != null) s.cashTracked = true;
     out.set(fact.brand_id, s);
   }
   // Lead ช่วงที่มีวันก่อนระบบขายเก็บจริง = ไม่รู้ (ยอดจาก sheet ที่ย้ายเข้ามาไม่ตรงวัน)
@@ -300,4 +317,43 @@ export function salesTrendValue({ sales = [], key, brandIds = [], spend = null, 
       return filled.length ? filled.reduce((n, row) => n + row.inquiries, 0) : null;
     }
   }
+}
+
+/* ---------- เงินจริง (สเปก 2026-09-26 overview-cash) ----------
+   เงินเข้า · มัดจำ · ยกเลิก/คืนเงิน จากระบบขาย เทียบยอดขาย (ยอดรวม) และค่าแอด
+   แบรนด์ที่ระบบขายไม่มีเงินเข้า (TMK) = null ไม่ใช่ 0 · ยอดรวมนับเฉพาะแบรนด์ที่รู้เงินเข้า (ค่าแอดก็นับเฉพาะแบรนด์นั้น ให้เทียบกันได้) */
+function cashRow(s, spend) {
+  const tracked = Boolean(s?.cashTracked);
+  const cash = tracked ? s.cash : null;
+  // เทียบกับยอดขายของวันที่กรอกเงินเข้าเท่านั้น (ไม่มีข้อมูลวัน = ใช้ยอดทั้งหมดตามเดิม)
+  const revenue = s?.cashRevenue ?? s?.revenue ?? null;
+  return {
+    tracked, spend: spend ?? null, revenue,
+    cash, deposits: tracked ? s.deposits : null, depositValue: tracked ? s.depositValue : null,
+    gap: tracked && revenue != null ? s.cash - revenue : null,
+    cashDays: tracked ? s.cashDays ?? null : null, cashDaysTotal: tracked ? s.cashDaysTotal ?? null : null,
+    cashPerSpend: tracked && spend > 0 ? s.cash / spend : null,
+    cancelled: s?.cancelled ?? 0, cancelledValue: s?.cancelledValue ?? 0, refunds: s?.refunds ?? 0,
+  };
+}
+
+/** sales = Map จาก salesFactsByBrand · brands = [{ id, name, spend }] → { byBrand, overall (null เมื่อไม่มีแบรนด์ไหนรู้เงินเข้า) } */
+export function cashSummary({ sales = new Map(), brands = [] } = {}) {
+  const byBrand = {};
+  const total = { cashTracked: true, revenue: 0, cash: 0, deposits: 0, depositValue: 0, cancelled: 0, cancelledValue: 0, refunds: 0 };
+  let spend = 0, any = false;
+  const excluded = [];
+  const partial = [];   // แบรนด์ที่กรอกเงินเข้าไม่ครบทุกวันในช่วง — กล่องต้องบอก
+  for (const b of brands) {
+    const s = sales.get(b.id);
+    if (!s) continue;
+    byBrand[b.id] = cashRow(s, b.spend);
+    total.cancelled += s.cancelled ?? 0; total.cancelledValue += s.cancelledValue ?? 0; total.refunds += s.refunds ?? 0;
+    if (!s.cashTracked) { excluded.push(b.name); continue; }
+    any = true;
+    if (s.cashDays != null && s.cashDaysTotal != null && s.cashDays < s.cashDaysTotal) partial.push({ name: b.name, days: s.cashDays, total: s.cashDaysTotal });
+    total.revenue += s.cashRevenue ?? s.revenue ?? 0; total.cash += s.cash; total.deposits += s.deposits; total.depositValue += s.depositValue;
+    spend += b.spend ?? 0;
+  }
+  return { byBrand, overall: any ? { ...cashRow(total, spend), excluded, partial } : null };
 }

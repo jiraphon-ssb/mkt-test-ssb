@@ -33,14 +33,15 @@ describe("WorkspaceTrends — ข้อมูลจริง", () => {
     render(<WorkspaceTrends v={v} sales={sales} />);
     fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
     expect(total()).toBe("฿30,000.00");
-    expect(screen.getByText("จากระบบขาย · รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย")).toBeTruthy();
+    // ที่มาของกราฟอยู่ใน "อ่านกราฟนี้อย่างไร" ที่พับไว้ ไม่ขึ้นใต้หัวกราฟทุกครั้ง (สเปก 2026-09-26)
+    expect(screen.getByText("จากระบบขาย · รวมเฉพาะแบรนด์ที่มีแหล่งยอดขาย").closest("details")).toBeTruthy();
   });
 
   it("ROAS หารด้วยค่าแอดของแบรนด์ที่มียอดเท่านั้น (30,000 ÷ 1,000) · CPL = ค่าแอด ÷ Lead ระบบขาย", () => {
     render(<WorkspaceTrends v={v} sales={sales} />);
     fireEvent.click(screen.getByRole("button", { name: "ROAS" }));
     expect(total()).toBe("30.00×");
-    fireEvent.click(screen.getByRole("button", { name: "CPL" }));
+    fireEvent.click(screen.getByRole("button", { name: "ค่าแอดต่อ Lead" }));
     expect(total()).toBe("฿200.00");
   });
 
@@ -126,6 +127,16 @@ describe("WorkspaceTrends — รูปแบบกราฟ เส้น / แ�
     expect(box.textContent).toContain("ทำได้ 750.00% เหนือแผน");
   });
 
+  /* จังหวะคิดถึงวันสุดท้ายที่ข้อมูลครบ (asOf = 1 ก.ย.) → ควรถึง 60,000×1/30 = ฿2,000 · ป้ายบอกวันที่ ไม่ใช่ "วันนี้" */
+  it("มี asOf: เส้นจังหวะอ่านค่าที่วัน asOf และป้ายบอกวันที่", () => {
+    render(<WorkspaceTrends v={{ ...v, monthView: true, asOf: "2026-09-01", summary: { revTarget: 60000 } }} sales={sales} asOfText="1 ก.ย." />);
+    mode("สะสม");
+    fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
+    const box = document.querySelector(".aw-trend-total");
+    expect(box.textContent).toContain("ควรถึง 1 ก.ย. ฿2,000.00");
+    expect(box.textContent).not.toContain("วันนี้");
+  });
+
   it("สะสม ROAS: คิดใหม่จากยอดรวมถึงวันนั้น (30,000 ÷ 1,000) ไม่ใช่เอา ROAS รายวันมาบวก", () => {
     render(<WorkspaceTrends v={v} sales={sales} />);
     mode("สะสม");
@@ -133,14 +144,14 @@ describe("WorkspaceTrends — รูปแบบกราฟ เส้น / แ�
     expect(series("ช่วงนี้")).toEqual([20, 30]);
   });
 
-  it("Frequency สะสมไม่ได้: ปุ่มสะสมกดไม่ได้และกราฟกลับเป็นรายวัน", () => {
+  it("ความถี่สะสมไม่ได้: ปุ่มสะสมกดไม่ได้และกราฟกลับเป็นรายวัน", () => {
     render(<WorkspaceTrends v={v} sales={sales} />);
     mode("สะสม");
     fireEvent.click(screen.getByRole("button", { name: "ตัวชี้วัดอื่น" }));
-    fireEvent.click(screen.getByRole("option", { name: "Frequency" }));
+    fireEvent.click(screen.getByRole("option", { name: "ความถี่" }));
     expect(screen.getByRole("button", { name: "สะสม" }).disabled).toBe(true);
     expect(chart.last.type).toBe("line");
-    expect(screen.getByText(/Frequency สะสมไม่ได้/)).toBeTruthy();
+    expect(screen.getByText(/ความถี่ สะสมไม่ได้/)).toBeTruthy();
   });
 
   it("สะสม + เดือนนี้ + มีเป้า: มีเส้นเป้าตามจังหวะ (เป้าเดือน × วันที่ ÷ วันในเดือน)", () => {
@@ -159,4 +170,64 @@ describe("WorkspaceTrends — รูปแบบกราฟ เส้น / แ�
     expect(total()).toBe("—");
     expect(screen.getByText("Lead มีข้อมูลตั้งแต่ 1 ก.ย. (ก่อนหน้านั้นกรอกใน sheet) · เลือกช่วงตั้งแต่ 1 ก.ย. เพื่อดูยอดรวม")).toBeTruthy();
   });
+});
+
+/* ตรวจรอบ 28 ก.ย.: กล่อง funnel ขึ้นคนทัก 3,894 (ไม่รวม JUNTAKARN) แต่กราฟขึ้น 6,544 หารเป้าชุดเดียวกัน → 176.99% แทน 105.32%
+   → แท็บขั้น funnel ในภาพรวมนับเฉพาะแบรนด์ชุดเดียวกับกล่อง funnel (v.funnelBrandIds) และบอกว่าไม่รวมแบรนด์ไหน */
+describe("WorkspaceTrends — ขั้น funnel ใช้ชุดแบรนด์เดียวกับกล่อง funnel", () => {
+  const jt = [{ brand_id: "b_jt", fact_date: "2026-09-01", gross_revenue: 9000, revenue_new: 9000, inquiries: 30, inquiry_filled: true, qualified_leads: null, deposits: null, orders: 5, orders_new: 5 }];
+  const vF = { ...v, funnelBrandIds: ["b_td"], funnelExcluded: ["JUNTAKARN"] };
+  it("คนทัก / ยืนยันออเดอร์ / ค่าแอดต่อ Lead ไม่รวม JUNTAKARN · ยอดขายยังรวม", () => {
+    render(<WorkspaceTrends v={vF} sales={[...sales, ...jt]} />);
+    fireEvent.click(screen.getByRole("button", { name: "คนทัก" }));
+    expect(total()).toBe("12");
+    expect(screen.getByText("ไม่รวม JUNTAKARN")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "ยืนยันออเดอร์" }));
+    expect(total()).toBe("3");
+    fireEvent.click(screen.getByRole("button", { name: "ค่าแอดต่อ Lead" }));
+    expect(total()).toBe("฿200.00");            // ค่าแอด TEAMDEE 1,000 ÷ Lead 5 — ไม่เอาค่าแอด JUNTAKARN มาหาร
+    fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
+    expect(total()).toBe("฿39,000.00");
+    expect(screen.queryByText("ไม่รวม JUNTAKARN")).toBeNull();
+  });
+});
+
+/* ตรวจรอบ 28 ก.ย.: แท็บค่าแอดขึ้น "ควรถึง … · ทำได้ 121.15% เกินงบ" — "ทำได้" กับการใช้เงินเกิน อ่านเหมือนผลงานดี */
+it("แท็บค่าแอด (มีงบ): ประโยคจังหวะใช้คำของเงิน — ควรใช้ถึง · ใช้ไป · ไม่มีคำว่า ทำได้", () => {
+  render(<WorkspaceTrends v={{ ...v, monthView: true, summary: { budget: 6000 } }} sales={sales} />);
+  fireEvent.click(screen.getByRole("button", { name: "สะสม" }));
+  fireEvent.click(screen.getByRole("button", { name: "ค่าแอด" }));
+  const box = document.querySelector(".aw-trend-total");
+  expect(box.textContent).toContain("ควรใช้ถึงวันนี้");
+  expect(box.textContent).toContain("ใช้ไป");
+  expect(box.textContent).not.toContain("ทำได้");
+});
+
+/* ตรวจรอบ 28 ก.ย. เช้า: หน้า JUNTAKARN แท็บ Lead ขึ้น "0" และได้ออเดอร์ขึ้นข้อความซ้อนสองข้อ ("ยังไม่มีข้อมูลในช่วงนี้" + "ยังไม่ตั้งเป้า")
+   ระบบ TMK ไม่เก็บขั้น Lead/ได้ออเดอร์เลย → "—" + บอกว่าระบบนี้ไม่เก็บขั้นนี้ ไม่มีข้อความเป้า (กติกาเดียวกับกล่อง funnel) */
+it("แบรนด์ที่ระบบต้นทางไม่เก็บขั้นนั้น (JUNTAKARN: Lead · ได้ออเดอร์) = — + เหตุผลเดียว ไม่ใช่ 0", () => {
+  const jt = [{ brand_id: "b_jt", fact_date: "2026-09-01", source: "tmk", gross_revenue: 9000, revenue_new: 9000, inquiries: 30, inquiry_filled: true, qualified_leads: 0, deposits: 0, orders: 5, orders_new: 5 }];
+  render(<WorkspaceTrends v={{ ...v, monthView: true, summary: {}, goals: { byBrand: { b_jt: {} } } }} brandId="b_jt" sales={jt} />);
+  mode("สะสม");
+  for (const tab of ["Lead", "ได้ออเดอร์", "ค่าแอดต่อ Lead"]) {
+    fireEvent.click(screen.getByRole("button", { name: tab }));
+    expect(total()).toBe("—");
+    const notes = [...document.querySelectorAll(".aw-key")].map((el) => el.textContent);
+    expect(notes).toContain("JUNTAKARN ใช้ระบบ TMK ซึ่งไม่เก็บขั้นนี้");
+    expect(notes.some((t) => t.includes("ยังไม่ตั้งเป้า"))).toBe(false);
+  }
+  fireEvent.click(screen.getByRole("button", { name: "คนทัก" }));
+  expect(total()).toBe("30");
+});
+
+/* รีวิวโค้ด 28 ก.ย.: ช่วงที่เริ่มก่อนวันแรกที่มีค่าแอด — กล่องเตือนบอกว่าไม่แสดง ROAS/%Ads แต่กราฟยังคิดจากค่าแอดไม่ครบ */
+it("spendFrom (ค่าแอดเริ่มกลางช่วง) = แท็บที่หารด้วยค่าแอด ขึ้น — พร้อมเหตุผล · ยอดขายยังแสดง", () => {
+  render(<WorkspaceTrends v={v} sales={sales} spendFrom="2026-09-02" />);
+  for (const tab of ["ROAS", "ค่าแอดต่อ Lead"]) {
+    fireEvent.click(screen.getByRole("button", { name: tab }));
+    expect(total()).toBe("—");
+    expect(screen.getByText("ค่าแอดมีตั้งแต่ 2 ก.ย. — ช่วงนี้หารด้วยค่าแอดไม่ครบ จึงไม่แสดง")).toBeTruthy();
+  }
+  fireEvent.click(screen.getByRole("button", { name: "ยอดขาย" }));
+  expect(total()).toBe("฿30,000.00");
 });

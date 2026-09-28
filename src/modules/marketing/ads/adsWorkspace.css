@@ -39,12 +39,14 @@
 .aw-brand-title { display:flex; align-items:center; gap:12px; }.aw-brand-title h2 { font-size:22px; margin:0; }
 .aw-status { font-size:11px; border:1px solid color-mix(in srgb,var(--aw-accent) 36%,var(--line)); border-radius:30px; padding:5px 12px; color:var(--accent-text)!important; background:var(--accent-soft); }
 .aw-hero-grid { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:24px; align-items:center; }.aw-hero .aw-eyebrow { color:var(--ink-soft); }
-.aw-revenue { font-size:clamp(32px,4.3vw,60px); font-weight:650; letter-spacing:-.045em; line-height:1.25; font-variant-numeric:tabular-nums; margin-top:10px; }
-.aw-revenue small { font-size:clamp(15px,1.3vw,20px); font-weight:400; color:var(--ink-soft); letter-spacing:-.01em; white-space:nowrap; }
+.aw-revenue { font-size:clamp(28px,4.3vw,60px); font-weight:650; letter-spacing:-.045em; line-height:1.25; font-variant-numeric:tabular-nums; margin-top:10px; }
+.aw-revenue small { font-size:clamp(15px,1.3vw,20px); font-weight:400; color:var(--ink-soft); letter-spacing:-.01em; white-space:nowrap; display:inline-block; }   /* ทั้งก้อน "/ เป้า" ขึ้นบรรทัดใหม่ได้บนจอเล็ก — เดิมติดกับตัวเลขใหญ่จนหน้าล้น 39px ที่ 320 (ทดสอบละเอียดรอบ 2) */
 .aw-hero p { font-size:12px; color:var(--ink-soft); }
 .aw-track { display:block!important; position:relative; height:7px; background:var(--line); border-radius:9px; margin:14px 0!important; overflow:visible; }
 .aw-track i { display:block; height:100%; border-radius:9px; background:var(--aw-accent); }.aw-track i.rose { background:var(--bad); }.aw-track i.amber { background:var(--warn); }.aw-track i.emerald { background:var(--ok); }.aw-track i.zinc { background:var(--ink-soft); }.aw-track em { position:absolute; top:-4px; width:2px; height:15px; background:var(--ink-soft); }
 .aw-hero .aw-track { background:var(--line); }.aw-hero .aw-track i { background:var(--aw-accent); }.aw-hero .aw-track em { background:var(--ink); }
+/* สีแถบใน hero ต้องตามสถานะ — กฎบรรทัดบนบังคับเขียวทับ .rose จนแถบเขียวข้างป้าย "ต้องเร่ง" (ทดสอบแบบผู้ใช้จริง 27 ก.ย.) */
+.aw-hero .aw-track i.rose { background:var(--bad); }.aw-hero .aw-track i.amber { background:var(--warn); }.aw-hero .aw-track i.emerald { background:var(--ok); }.aw-hero .aw-track i.zinc { background:var(--ink-soft); }
 .aw-forecast { border-left:1px solid var(--line); padding-left:32px; display:flex; flex-direction:column; justify-content:center; }.aw-forecast>span { font-size:12px;color:var(--ink-soft); }.aw-forecast h3 { font-size:30px; margin:8px 0 0; letter-spacing:-.03em; }.aw-forecast strong { font-size:14px; }.aw-forecast small { color:var(--ink-soft); font-size:11px; margin-top:16px; }
 .aw .rose { color:var(--bad-text); }.aw .emerald { color:var(--ok-text); }.aw .amber { color:var(--warn-text); }
 .aw-panel { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:22px; min-width:0; }
@@ -75,7 +77,7 @@
 .aw-channel-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px; }.aw-channel-grid .ads-chan-card { margin:0; }.aw button:focus-visible,.aw a:focus-visible { outline:2px solid var(--aw-accent);outline-offset:4px; }
 @media(max-width:1100px){.aw-layout { grid-template-columns:200px minmax(0,1fr);gap:18px; }.aw-hero-grid { grid-template-columns:1fr;gap:24px; }.aw-forecast { border-left:0;border-top:1px solid #ffffff25;padding:20px 0 0; }.aw-middle { grid-template-columns:1fr; }}
 @media(max-width:900px){.aw--range .aw-range-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }}
-@media(max-width:760px){.aw { padding:16px; }.aw-header { align-items:center; }.aw-layout { grid-template-columns:1fr; }.aw-brands { position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }.aw-brands>.aw-section-label,.aw-brands>p,.aw-brands>.aw-key { grid-column:1/-1;margin:0; }.mkt-root .aw-brand { margin:0; }.aw-brand>div { flex-wrap:wrap; }.aw-hero { padding:20px; }.aw-journey .ads-pipe--row { grid-template-columns:repeat(2,minmax(0,1fr));gap:16px; }.aw-journey .ads-pipe-item:nth-child(3){border-left:0;padding-left:0;}.aw-controls { gap:8px; }.aw-date-range { order:3; width:100%; }.aw-date-range label { flex:1; }.aw-date-range input { width:100%; }.aw-filter { border-left:0; padding-left:0; }.aw-demo { margin-left:0; }}
+@media(max-width:760px){.aw { padding:16px; }.aw-header { align-items:center; }.aw-layout { grid-template-columns:1fr; }.aw-brands { position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }.aw-brands>.aw-section-label,.aw-brands>p,.aw-brands>.aw-key { grid-column:1/-1;margin:0; }.mkt-root .aw-brand { margin:0; }.aw-brand>div { flex-wrap:wrap; }.aw-hero { padding:20px; }.aw-journey .ads-pipe--row { gap:16px; }/* จำนวนคอลัมน์ให้ @container ด้านบนตัดสิน — เดิมบังคับ 2 คอลัมน์ทับกฎ 1 คอลัมน์ จอ 320 การ์ดล้น (ทดสอบละเอียดรอบ 2) */.aw-journey .ads-pipe-item:nth-child(3){border-left:0;padding-left:0;}.aw-controls { gap:8px; }.aw-date-range { order:3; width:100%; }.aw-date-range label { flex:1; }.aw-date-range input { width:100%; }.aw-filter { border-left:0; padding-left:0; }.aw-demo { margin-left:0; }}
 .aw-controls label { white-space:nowrap; flex-shrink:0; }
 .aw .ads-chan-card { border-top:1px solid var(--line); border-radius:8px; }
 .aw .ads-chan-verdict,.aw .ads-chan-support { line-height:1.7; }
@@ -146,7 +148,7 @@
 .acc-source-options .acc-source-config { margin:0; border:0; border-top:1px solid var(--line); border-radius:0 0 9px 9px; }
 .acc-source-config { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:0 0 18px; padding:12px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
 .acc-source-config label { min-width:0; }.acc-source-config label>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }.acc-source-config select { width:100%; height:34px; padding:0 8px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font:inherit; font-size:12px; }
-/* ช่องเวลาดึงแบบตายตัว (วันละครั้งตี 5) — วางในกริดเดียวกับ dropdown ข้างๆ ให้ความสูงตรงกัน */
+/* ช่องเวลาดึงแบบตายตัว (วันละครั้ง 09:00) — วางในกริดเดียวกับ dropdown ข้างๆ ให้ความสูงตรงกัน */
 .acc-source-fixed { min-width:0; display:flex; flex-direction:column; }.acc-source-fixed>span { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:11px; }.acc-source-fixed>b { display:flex; align-items:center; height:32px; box-sizing:border-box; padding:0 10px; border:1px dashed var(--line); border-radius:6px; color:var(--ink); font-size:12px; font-weight:600; }.acc-source-fixed>small { margin-top:4px; color:var(--ink-soft); font-size:10.5px; }
 .acc-mapping-head,.acc-mapping-row { display:grid; grid-template-columns:minmax(150px,1fr) minmax(190px,1.4fr) minmax(145px,.8fr) minmax(168px,.78fr); gap:14px; align-items:center; }
 .acc-mapping-head { padding:0 10px 8px; color:var(--ink-soft); font-size:11px; }
@@ -155,7 +157,7 @@
 .acc-mapping-row label>span { display:none; }.acc-mapping-row input,.acc-mapping-row select,.acc-rule input,.acc-target-card input { width:100%; min-width:0; padding:8px 9px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); font:inherit; font-size:12px; }
 .acc-locale { display:grid; grid-template-columns:1.35fr .65fr; gap:6px; }.acc-connection-state { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; }
 .acc-connection-state .acc-state { white-space:nowrap; }   /* ป้ายสถานะขึ้นบรรทัดเดียว ไม่หักคำกลางคำไทย */.acc-connection-state small { font-size:11px; }.acc-connection-state small.ok { color:var(--ok-text); }.acc-connection-state small.bad { color:var(--bad-text); }
-/* ช่องติ๊ก "เตรียมดึง" — พื้นที่กดเดิม 15px เล็กกว่าเกณฑ์ 24px ของ WCAG 2.2 */
+/* ช่องติ๊ก "ดึงข้อมูลบัญชีนี้" — พื้นที่กดเดิม 15px เล็กกว่าเกณฑ์ 24px ของ WCAG 2.2 */
 .acc-enable { display:flex; align-items:center; gap:8px; min-height:24px; color:var(--ink-soft); font-size:12px; cursor:pointer; }
 .acc-enable input { width:18px; height:18px; margin:3px; accent-color:var(--accent); cursor:pointer; }
 .acc-mapping-row .acc-enable>span { display:inline; }
@@ -404,3 +406,38 @@
   .aw-brandtable tr > td::before { content:attr(data-label); color:var(--ink-soft); font-size:11px; }
   .aw-brandtable tr > td:last-child { grid-column:1/-1; }
 }
+
+/* กล่องเงินจริง (26 ก.ย.) */
+.aw-cash .aw-chip { margin-left:8px; padding:2px 8px; border:1px solid var(--line); border-radius:99px; color:var(--ink-soft); font-size:11px; font-weight:600; }
+.aw-cash-gap { margin:6px 0 0; color:var(--ink-soft); font-size:13px; }
+.aw-cash-gap.amber { color:var(--warn-text,var(--ink)); font-weight:600; }
+.aw-cash-none { margin:14px 0 0; color:var(--ink-soft); font-size:13px; }
+.aw-cash-cancel { margin:14px 0 0; padding-top:10px; border-top:1px solid var(--line); color:var(--ink-soft); font-size:12.5px; }
+
+/* สูตรและที่มา (เชิงอรรถทั้งหน้า) · ป้ายสั้นไม่รวม · สถานะโหลด (26 ก.ย.) */
+.aw-eyebrow .aw-chip, .aw-section-label .aw-chip { margin-left:8px; padding:2px 8px; border:1px solid var(--line); border-radius:99px; color:var(--ink-soft); font-size:11px; font-weight:600; letter-spacing:0; text-transform:none; }
+.aw-notes { margin-top:4px; }
+.aw-notes > summary { width:fit-content; color:var(--ink-soft); font-size:12px; font-weight:650; cursor:pointer; }
+.aw-notes ul { margin:8px 0 0; padding:12px 14px 12px 30px; border:1px solid var(--line); border-radius:10px; color:var(--ink-soft); font-size:12px; line-height:1.7; }
+.aw-loading { display:grid; gap:18px; margin-top:18px; }
+.aw-loading i { display:block; height:180px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(90deg,var(--surface) 0%,var(--surface-2) 50%,var(--surface) 100%); background-size:200% 100%; animation:aw-shimmer 1.4s ease-in-out infinite; }
+.aw-loading i:first-child { height:260px; }
+@keyframes aw-shimmer { from { background-position:100% 0; } to { background-position:-100% 0; } }
+@media (prefers-reduced-motion:reduce) { .aw-loading i { animation:none; } }
+
+.aw-load-failed { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px 16px; margin-top:18px; padding:16px 18px; border:1px solid color-mix(in srgb,var(--bad) 35%,var(--line)); border-radius:14px; color:var(--ink-soft); font-size:13px; }
+.aw-load-failed p { margin:0; } .aw-load-failed b { color:var(--bad-text); }
+.aw-load-failed button { min-height:34px; padding:0 14px; border:1px solid var(--line); border-radius:99px; background:var(--surface); color:var(--ink); font:inherit; font-size:12.5px; font-weight:650; cursor:pointer; }
+.aw-through { margin:10px 0 0; color:var(--ink-soft); font-size:11.5px; }   /* ค่าแอดมีถึงวันไหน — ข้อเท็จจริงของข้อมูล ไม่ใช่เชิงอรรถ (ทดสอบแบบผู้ใช้จริง 27 ก.ย.) */
+/* คอลัมน์ "ควรทำ" ตัดบรรทัดได้ — ข้อความยาว ("ตรวจแคมเปญ/ครีเอทีฟทันที · เกินงบแล้ว") ดันตารางกว้าง 1060 ในกล่อง 1008 ที่จอ 1440
+   คอลัมน์สุดท้ายเลยหลุดขอบต้องเลื่อนข้างถึงเห็น (ทดสอบแบบผู้ใช้จริง 27 ก.ย.) */
+.aw-brandtable td:last-child, .aw-brandtable td:last-child span { white-space:normal; }
+.aw-brandtable td:last-child { min-width:150px; }
+/* บรรทัดสรุปผู้บริหาร (27 ก.ย.) — ประโยคเดียวบนสุด ตัวเลขเน้นด้วยน้ำหนัก+สี ปุ่มชื่อแบรนด์ดูเป็นลิงก์ */
+.aw-digest { margin:0 0 14px; padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); font-size:14px; line-height:1.55; }
+.aw-digest button { padding:0; border:0; background:none; color:var(--ink); font:inherit; font-weight:700; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.aw-digest button:focus-visible { outline:2px solid var(--accent, currentColor); outline-offset:2px; border-radius:3px; }
+.acc-health-link { text-decoration:none; } .acc-health-link:hover .acc-health-pill, .acc-health-link:focus-visible .acc-health-pill { text-decoration:underline; text-underline-offset:3px; }
+/* ช่วงเริ่มก่อนวันแรกที่มีค่าแอด — สไตล์อยู่ในไฟล์ของหน้านี้เอง (รีวิวโค้ด 28 ก.ย.: เดิมยืมคลาสของหน้าบิล
+   ซึ่งโหลดแยก ถ้ายังไม่เคยเปิดหน้าบิล กล่องเตือนนี้ขึ้นเป็นย่อหน้าเปล่า) · เป็นคำเตือน (ข้อมูลไม่ครบ) ไม่ใช่ความผิดพลาด */
+.aw-partial-spend { margin:0 0 14px; padding:10px 14px; border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line)); border-radius:10px; background:color-mix(in srgb,var(--warn) 8%,transparent); color:var(--warn-text,var(--ink)); font-size:12.5px; line-height:1.5; }

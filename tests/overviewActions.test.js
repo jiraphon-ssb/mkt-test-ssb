@@ -1,7 +1,7 @@
 /* ตารางตัดสินใจ 2×2 + รายการ "สิ่งที่ต้องทำวันนี้" (สเปก 2026-09-21 หัวข้อ 5 และ 7)
    กติกา: ช่องไหนตัดสินไม่ได้ ห้ามเดาเป็นช้า · เรียงตามผลกระทบ ไม่ใช่ตามชื่อแบรนด์ */
 import { describe, expect, it } from "vitest";
-import { brandAdvice } from "../src/modules/marketing/ads/overviewActions.js";
+import { brandAdvice, byUrgency, overviewDigest } from "../src/modules/marketing/ads/overviewActions.js";
 import { monthClock, paceOf } from "../src/modules/marketing/ads/paceEngine.js";
 
 const clock = monthClock("2026-09-21");
@@ -46,5 +46,43 @@ describe("brandAdvice — ตารางตัดสินใจ (ยอด 2 �
     const a = brandAdvice(of(900, null, 300, 1000));
     expect(a).toMatchObject({ key: "unknown", tone: "zinc", rank: 0 });
     expect(a.why).toContain("ยังไม่ตั้งเป้าเดือนนี้");
+  });
+});
+
+/* ทดสอบแบบใช้งานจริง 27 ก.ย. (อาร์ต "แก้เลยตามนี้"): ผู้บริหารเปิดมาต้องรู้ใน 1 บรรทัดว่าเดือนนี้เป็นยังไง และเรื่องไหนก่อน
+   ตารางแบรนด์เรียงตามความด่วน (ชื่อแบรนด์ไม่ได้บอกว่าต้องดูใครก่อน) */
+describe("เรียงแบรนด์ตามความด่วน + บรรทัดสรุป", () => {
+  const brand = (id, rev, revTarget, spend, budget) => {
+    const p = of(rev, revTarget, spend, budget);
+    return { id, name: id.toUpperCase(), pace2: { rev: p.revPace, budget: p.budgetPace, advice: brandAdvice(p) } };
+  };
+  const a = brand("a", 700, 1000, 700, 1000);    // ตามแผนทั้งคู่
+  const b = brand("b", 300, 1000, 1200, 1000);   // ยอดช้า + เกินงบแล้ว = ด่วนสุด
+  const c = brand("c", 500, 1000, 700, 1000);    // ยอดช้า งบตามแผน
+  const d = brand("d", 900, null, 300, 1000);    // ยังไม่ตั้งเป้า = ตัดสินไม่ได้ ไว้ท้าย
+  const c2 = brand("c2", 400, 1000, 700, 1000);  // ช่องเดียวกับ c แต่ขาดมากกว่า → มาก่อน c
+  it("byUrgency: อันดับจากตารางตัดสินใจ · อันดับเท่ากันเอาที่ขาดจากแผนมากกว่าก่อน · ตัดสินไม่ได้ไว้ท้าย · ไม่แก้ลำดับเดิม", () => {
+    const list = [a, d, c, b, c2];
+    expect(byUrgency(list).map((x) => x.id)).toEqual(["b", "c2", "c", "a", "d"]);
+    expect(list.map((x) => x.id)).toEqual(["a", "d", "c", "b", "c2"]);
+  });
+  it("overviewDigest: คาดขาดเป้าเท่าไร · เกินงบกี่แบรนด์ · เรื่องแรกคือแบรนด์ที่ด่วนสุด", () => {
+    const overall = { rev: paceOf({ actual: 2100, target: 4000, clock }) };   // คาดปิด 2,100 × 30 ÷ 21 = 3,000
+    const g = overviewDigest({ overallPace: overall, brands: [a, b, c, d] });
+    expect(g.shortfall).toBeCloseTo(1000, 6);
+    expect(g.overBudget).toBe(1);
+    expect(g.companyOver).toBe(false);   // ไม่ได้ส่งจังหวะงบรวมมา = ไม่รู้ ไม่ใช่เกิน
+    expect(g.first).toMatchObject({ id: "b", name: "B", action: "ตรวจแคมเปญ/ครีเอทีฟทันที" });
+    // ตรวจรอบ 27 ก.ย. ดึก: งบรวมเกินแล้วต้องบอก — เดิมขึ้นแค่ "เกินงบ 2 แบรนด์" อ่านเหมือนปัญหาเฉพาะบางแบรนด์
+    const over = { ...overall, budget: paceOf({ actual: 1300, target: 1000, clock, direction: "spend" }) };
+    expect(overviewDigest({ overallPace: over, brands: [a, b] }).companyOver).toBe(true);
+  });
+  it("ทุกแบรนด์ปกติ = ไม่มีเรื่องแรก · คาดเกินเป้า = shortfall ติดลบ · ยังไม่ตั้งเป้ารวม = ไม่มีตัวเลขคาด", () => {
+    const g = overviewDigest({ overallPace: { rev: paceOf({ actual: 3500, target: 4000, clock }) }, brands: [a, d] });
+    expect(g.first).toBeNull();
+    expect(g.overBudget).toBe(0);
+    expect(g.shortfall).toBeLessThan(0);
+    expect(overviewDigest({ overallPace: { rev: paceOf({ actual: 3500, target: null, clock }) }, brands: [a] }).shortfall).toBeNull();
+    expect(overviewDigest({ overallPace: null, brands: [a] })).toBeNull();
   });
 });

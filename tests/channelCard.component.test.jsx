@@ -2,7 +2,7 @@
 /* การ์ดแพลตฟอร์ม (Meta Ads ฯลฯ) รื้อ 21 ก.ย. ค่ำ — ต้องพูดภาษาเดียวกับการ์ดอื่นทั้งหน้า:
    ตัวเลขใหญ่ = ค่าจริง / งบ · หน้าปัด mini ไม่มีเลขซ้ำ · facts แถวเดียวกัน · ป้ายมุมเฉพาะเมื่อมีเรื่อง */
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ChannelCard } from "../src/modules/marketing/ads/AdsView.jsx";
 
 afterEach(cleanup);
@@ -54,4 +54,22 @@ describe("การ์ดแพลตฟอร์มโหมดเดือน"
     const { container } = render(<ChannelCard c={over} />);
     expect(container.querySelector(".aw-flag").textContent).toBe("ต้องคุมงบ");
   });
+});
+
+/* บั๊ก 26 ก.ย.: เส้น CPL ในรายละเอียดอ้างตัวแปร st ที่ไม่มีอยู่ → กด "ดูรายละเอียด" แล้วหน้าพัง */
+describe("การ์ดแพลตฟอร์ม — กดดูรายละเอียด", () => {
+  it("กางรายละเอียดได้ ไม่พัง และเห็นเส้น CPL ในเดือน", () => {
+    render(<ChannelCard c={{ ...c, cplSeries: [90, 95, 96.55] }} />);
+    fireEvent.click(screen.getByRole("button", { name: /ดูรายละเอียด/ }));
+    expect(screen.getByText("CPL ในเดือน")).toBeTruthy();
+  });
+});
+
+/* ทดสอบแบบผู้ใช้จริง: หน้าเดียวมี %Ads สองค่า — "%Ads ต่อยอดลูกค้าใหม่ 24.38%" กับการ์ดนี้ "%Ads (Meta) 130.82%"
+   ข้อมูลจริง Meta แทบไม่เห็นยอดขาย (ทักแชท) → %Ads (Meta) ไม่มีความหมาย ห้ามขึ้นคู่กับ %Ads จริง */
+it("ข้อมูลจริง: การ์ดแพลตฟอร์มไม่ขึ้น %Ads (Meta) · ข้อมูลจำลองยังขึ้น", () => {
+  const { container } = render(<ChannelCard c={c} real />);
+  expect(container.textContent).not.toContain("%Ads");
+  cleanup();
+  expect(render(<ChannelCard c={c} />).container.textContent).toContain("%Ads (Meta)");
 });

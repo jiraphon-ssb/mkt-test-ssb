@@ -1,8 +1,10 @@
 /* ตัวเลขทั้งหน้าแคมเปญจากข้อมูล + ตัวกรอง — logic ล้วน (แยกจาก component ให้เทสได้) */
 import { analyticsCards } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsChannelList, filterByChannel, revenueBasisCards } from "../adsOverview.js";
-import { campaignRows, campaignDecision, campaignsByBrand, withSpendShare } from "../adsCampaigns.js";
-import { compareRange, effectiveCompare, isoDay, periodRange } from "../adsScope.js";
+import { audienceRows, campaignKeyOf, campaignRows, campaignDecision, campaignsByBrand, latestSpendDay, withSpendShare } from "../adsCampaigns.js";
+import { brandCplIndex } from "../adsOverview.js";
+import { campaignDeliveryOf, statusSnapshotNote } from "../creatives/creativeStatus.js";
+import { compareRange, dataCutoff, effectiveCompare, isoDay, periodRange, syncedThrough } from "../adsScope.js";
 import { combineTargets, normalizeTargets, periodForTargets, plansFromTargets } from "../adsTargets.js";
 import { campaignSalesSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals } from "../ads/salesOverview.js";
 import { SALES_BRAND_IDS } from "../ads/syncSources.js";
@@ -17,18 +19,28 @@ function realGoalTargets(brands, selectedBrand, salesTargets, salesGoals, goalMo
   })));
 }
 
-/** filters = ตัวกรองรายงาน (useReportFilters) รวมตัวกรองเฉพาะหน้า status · objective · budget · q (ไม่ส่ง = ทั้งหมด) */
+/** ค่าที่ตัวกรองสถานะใช้ — "ไม่มีโฆษณาเปิด" (idle) นับเป็นปิดอยู่ เดิมแถวขึ้นจุดปิดแต่ตัวกรอง "ปิดอยู่" หาไม่เจอ (ทดสอบละเอียด 27 ก.ย.) */
+export const deliveryFilterKey = (row) => { const key = campaignDeliveryOf(row).key; return key === "idle" ? "paused" : key; };
+
+/** filters = ตัวกรองรายงาน (useReportFilters) รวมตัวกรองเฉพาะหน้า status · q (ไม่ส่ง = ทั้งหมด)
+    สถานะ = ตัวอ่านเดียวกับที่ขึ้นในแถว (โฆษณาใน Meta → ท้ายชื่อ) · เป้าหมาย/งบแคมเปญถอด (ไม่มีข้อมูลจริง — สเปก 2026-09-26) */
 export function buildCampaignsModel({ data, ads, inBrandScope, brandFilter, filters, todayLocal = isoDay(new Date()) }) {
-  const { period, from: customFrom, to: customTo, compare: chosenCompare, channel, brand: brandSel = "all", status = "all", objective = "all", budget: budgetState = "all", basis: revenueBasis, q: query = "" } = filters;
+  const { period, from: customFrom, to: customTo, compare: chosenCompare, channel, brand: brandSel = "all", status = "all", basis: revenueBasis, q: query = "" } = filters;
   const compare = effectiveCompare(period, chosenCompare);
-    const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
+    /* หน้าแคมเปญไม่มีปุ่ม "คิดจาก ยอดใหม่/ยอดรวม" — ค่าที่เลือกจากหน้าภาพรวมติดมาทาง URL/session ต้องไม่ถูกรับ
+       (ตรวจรอบละเอียด 26 ก.ย.: เลือกยอดใหม่แล้วทุกแคมเปญกลายเป็น "รอข้อมูล" โดยหาสาเหตุไม่เจอ) */
+    const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), "total", { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
-    const range = periodRange(period, customFrom, customTo);
+    // วันล่าสุดที่มีค่าแอดทั้งระบบ (ไม่ขึ้นกับแบรนด์/ช่องทางที่กรอง) — ตัดช่วง "ล่าสุด/นี้" (ตรวจรอบ 28 ก.ย.) และตัดสิน "หยุดใช้เงินแล้ว"
+    const dataThrough = (ads.source === "meta_pilot" ? syncedThrough(ads.pilot?.summary?.lastSuccessAt) : null) ?? latestSpendDay(analyticsCards(ads.cards));
+    const cutoff = ads.source === "meta_pilot" ? dataCutoff(todayLocal, dataThrough) : null;
+    const range = periodRange(period, customFrom, customTo, new Date(), cutoff);
     const before = compareRange(period, range, compare);
     const brands = (data.brands ?? []).filter((b) => b.active !== false && (brandFilter === "all" || b.id === brandFilter));
     const selectedBrand = brandSel === "all" || brands.some((b) => b.id === brandSel) ? brandSel : "all";
     const month = isoDay(new Date()).slice(0, 7);
-    const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));
+    const shownFrom = isoDay(new Date(range.start)), shownTo = range.end > range.start ? isoDay(new Date(new Date(range.end).getTime() - 1)) : shownFrom;
+    const dataTo = range.end > range.start ? shownTo : isoDay(new Date(new Date(range.start).getTime() - 86_400_000));   // ช่วงว่าง = ไม่มีข้อมูล (shownTo ไว้ทำป้าย)
     /* ข้อมูลจริง = เป้าและงบ Meta จากระบบขายของพี่ทัช (แท็บเป้าของเราถอดแล้ว) · ข้อมูลจำลอง = ค่าที่เคยบันทึกไว้ในตั้งค่า (สาธิตอย่างเดียว) */
     const real = ads.source === "meta_pilot";
     const goalMonth = `${(period === "mtd" ? todayLocal : shownTo).slice(0, 7)}-01`;
@@ -39,14 +51,12 @@ export function buildCampaignsModel({ data, ads, inBrandScope, brandFilter, filt
       : plansFromTargets({ targets, adBudgets: data.ad_budgets ?? [], month, channelsByBrand: adChannelsByBrand(scopedAll, periodRange("mtd", null, null)) });
     const all = campaignRows(scoped, range, {
       brands, adBudgets, campaignBudgets: data.campaign_budgets ?? [],
-      today: isoDay(new Date()), prevRange: before,
+      today: isoDay(new Date()), prevRange: before, roasFromMeta: !real, dataThrough,
     });
     const q = query.trim().toLowerCase();
     const filtered = all.filter((r) =>
       (selectedBrand === "all" || r.brandId === selectedBrand)
-      && (status === "all" || r.status === status)
-      && (objective === "all" || (r.objective ?? "unknown") === objective)
-      && (budgetState === "all" || (budgetState === "set" ? r.budget != null : r.budget == null))
+      && (status === "all" || deliveryFilterKey(r) === status)
       && (!q || r.name.toLowerCase().includes(q))
     );
     /* ข้อมูลจริง: ตัดสินรายแคมเปญด้วยเพดาน CPL จากระบบขายเท่านั้น — ROAS เป้าเป็นยอดจริงระดับแบรนด์ ส่วน ROAS แคมเปญเป็นยอดที่ Meta เห็น
@@ -59,15 +69,21 @@ export function buildCampaignsModel({ data, ads, inBrandScope, brandFilter, filt
       /* เป้า: แบรนด์ที่เลือก หรือรวมทุกแบรนด์ในขอบเขต — ตัวเลขจริงเทียบใน CampaignsTable (ตามมุมมองที่กรองอยู่) */
       goalTargets: real ? realGoalTargets(brands, selectedBrand, salesTargets, ads.salesGoals, goalMonth)
         : selectedBrand === "all" ? combineTargets(brands.map((b) => targets[b.id])) : normalizeTargets(targets[selectedBrand]),
-      targetPeriod: periodForTargets({ monthView: period === "mtd", from: shownFrom, to: shownTo, today: todayLocal }),
+      targetPeriod: periodForTargets({ monthView: period === "mtd", from: shownFrom, to: dataTo, today: todayLocal }),
       salesSummary: real ? campaignSalesSummary({
-        sales: ads.sales, from: shownFrom, to: shownTo, sourceBrandIds: SALES_BRAND_IDS, basis: revenueBasis,
+        sales: ads.sales, from: shownFrom, to: dataTo, sourceBrandIds: SALES_BRAND_IDS, basis: revenueBasis,
         brandIds: (selectedBrand === "all" ? brands : brands.filter((b) => b.id === selectedBrand)).map((b) => b.id),
         names: Object.fromEntries(brands.map((b) => [b.id, b.name])),
         spendByBrand: Object.fromEntries(brands.map((b) => [b.id, filtered.filter((r) => r.brandId === b.id).reduce((n, r) => n + (r.spend ?? 0), 0)])),
       }) : null,
-      channelList: adsChannelList(scopedAll), scopeEmpty: all.length === 0, range,
-      statuses: [...new Set(all.map((r) => r.status))], objectives: [...new Set(all.map((r) => r.objective ?? "unknown"))],
+      channelList: adsChannelList(scopedAll), scopeEmpty: all.length === 0, range, dataThrough, cutoff,
+      statuses: ["active", "paused"].filter((k) => all.some((r) => deliveryFilterKey(r) === k)),
+      /* มุมกลุ่มเป้าหมาย: การ์ดของแคมเปญที่ผ่านตัวกรองทุกตัว → รวมตามชุดโฆษณา */
+      audiences: (() => { const keep = new Set(filtered.map((r) => r.key)); return audienceRows(scoped.filter((c) => keep.has(campaignKeyOf(c))), range, { brands, brandCpl: brandCplIndex(scoped, range), dataThrough }); })(),
+      loading: real && ["idle", "loading"].includes(ads.pilot?.status),
+      loadError: real && ads.pilot?.status === "error",   // ชุด A ข้อ 5 — ห้ามบอกว่าไม่มีข้อมูลแคมเปญ
+      // สถานะเปิด/ปิดเป็นของตอนดึงเช้า — ทุกตัวปิดแต่เมื่อวานยังใช้เงิน = ต้องบอก (ทดสอบแบบผู้ใช้จริง 27 ก.ย.)
+      statusNote: real ? statusSnapshotNote(all.flatMap((r) => r.creatives ?? []), scopedAll, todayLocal) : null,
       compareLabel: compare === "lastMonth" ? "วันเดียวกันเดือนก่อน" : "ช่วงก่อนหน้า",
     };
 }

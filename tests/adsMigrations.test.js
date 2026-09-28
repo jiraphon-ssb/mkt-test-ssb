@@ -280,11 +280,21 @@ describe("0013 ปิดสิทธิ์เขียนตารางบิ�
 /* 23 ก.ย.: ดึงวันละครั้งตี 5 — ตาราง pg_cron ต้องตรงกับที่ ads-cron ใช้ตัดสิน ไม่งั้นรอบเช้าไม่มีใครยิง */
 describe("20260923090000_ads_cron_daily — ตาราง pg_cron วันละครั้ง", () => {
   const sql = read("supabase/migrations/20260923090000_ads_cron_daily.sql");
-  it("ใช้นิพจน์เดียวกับ DAILY_CRON_EXPR และถอด job เดิมก่อน (รันซ้ำได้)", async () => {
+  it("ตั้งตี 5 (ประวัติ — ถูกแทนด้วย 20260928090000) และถอด job เดิมก่อน (รันซ้ำได้)", () => {
+    expect(sql).toContain("cron.schedule('ads-sync-tick', '0,10,20,30,40,50 22 * * *'");
+    expect(sql.indexOf("cron.unschedule('ads-sync-tick')")).toBeLessThan(sql.indexOf("cron.schedule("));
+    expect(sql).not.toMatch(/'7 \* \* \* \*'\s*,/);
+  });
+});
+
+/* 28 ก.ย.: อาร์ตย้ายรอบดึงเป็น 09:00 ไทย (แอดเปิด 07:00–07:30) — migration ล่าสุดต้องตรงกับ DAILY_CRON_EXPR */
+describe("20260928090000_ads_cron_9am — ย้ายรอบดึงเป็น 09:00", () => {
+  const sql = read("supabase/migrations/20260928090000_ads_cron_9am.sql");
+  it("ใช้นิพจน์เดียวกับ DAILY_CRON_EXPR · ถอด job เดิมก่อน · บอกวิธีย้อนกลับ", async () => {
     const { DAILY_CRON_EXPR } = await import("../supabase/functions/_shared/dailySchedule.js");
     expect(sql).toContain(`cron.schedule('ads-sync-tick', '${DAILY_CRON_EXPR}'`);
     expect(sql.indexOf("cron.unschedule('ads-sync-tick')")).toBeLessThan(sql.indexOf("cron.schedule("));
-    expect(sql).not.toMatch(/'7 \* \* \* \*'\s*,/);
+    expect(sql).toMatch(/ย้อนกลับ/);
   });
 });
 

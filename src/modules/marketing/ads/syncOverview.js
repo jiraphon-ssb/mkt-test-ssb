@@ -4,13 +4,13 @@
    (บน production หน้าเดิมโชว์ "ยังไม่เคยดึง" ระหว่างรอ API ทั้งที่ดึงสำเร็จแล้ว) */
 import { adsErrorText } from "./adsSyncMessages.js";
 import { tokenDaysLeft } from "./syncSources.js";
-import { DAILY_TZ, dayIn, doneToday, nextDailyRunAt, nextDailyTickAt } from "../../../../supabase/functions/_shared/dailySchedule.js";
+import { DAILY_RUN_LABEL, DAILY_TZ, dayIn, doneToday, nextDailyRunAt, nextDailyTickAt } from "../../../../supabase/functions/_shared/dailySchedule.js";
 
 const HOUR = 3_600_000;
 const time = (value) => { const t = Date.parse(value ?? ""); return Number.isFinite(t) ? t : null; };
 const num = (value) => Number(value ?? 0).toLocaleString("th-TH");
-const SALES_STALE_HOURS = 36;      // ดึงวันละครั้งตี 5 — เกินวันครึ่ง = ข้ามไปหนึ่งวันแล้ว
-const DAILY_SUB = "ดึงวันละครั้ง · ตี 5";
+const SALES_STALE_HOURS = 36;      // ดึงวันละครั้ง (09:00) — เกินวันครึ่ง = ข้ามไปหนึ่งวันแล้ว
+const DAILY_SUB = `ดึงวันละครั้ง · ${DAILY_RUN_LABEL}`;   // เวลาอ่านจาก dailySchedule.js ที่เดียว (28 ก.ย. ย้ายเป็น 09:00)
 const CREATIVE_WINDOW_HOURS = 48;  // รีเฟรชวันละครั้งต่อบัญชี (ครั้งละบัญชี) — เกิน 2 วัน = ค้าง
 
 /** "53 นาทีก่อน" · "4 ชม. 54 นาทีก่อน" · "3 วันก่อน" — หน่วยเดียวกันทุกแถวบนหน้า Sync
@@ -71,11 +71,16 @@ export function salesSourceRow({ runs = [], facts = [], ready = true, today, now
   if (!ready) return loadingRow(base);
   const last = runs.filter((run) => run.pipeline === "sales").sort((a, b) => (time(b.started_at) ?? 0) - (time(a.started_at) ?? 0))[0];
   const month = String(today ?? "").slice(0, 7);
-  // วันนี้ที่ทีมยังไม่กรอก ไม่นับเป็นวันที่ขาด (วันยังไม่จบ)
+  // วันนี้และเมื่อวานที่ทีมยังไม่กรอก ไม่นับเป็นวันที่ขาด — วันนี้ยังไม่จบ · ทีมกรอกของเมื่อวานตอนเช้า
+  // (ตรวจรอบ 28 ก.ย.: เลยเที่ยงคืนตัวหารกระโดด 74/78 → 74/81 ทั้งที่ยังไม่ถึงเวลากรอก)
+  const [ty, tm, td] = String(today ?? "").split("-").map(Number);
+  const yesterday = Number.isFinite(td) ? new Date(Date.UTC(ty, tm - 1, td - 1)).toISOString().slice(0, 10) : null;
   // เฉพาะแถวจากระบบขายพี่ทัช — แถว source 'tmk' (JUNTAKARN) มีแถวของตัวเอง ถ้านับรวมที่นี่ตัวหารจะบวมเท่าตัว
-  const monthFacts = facts.filter((fact) => (fact.source ?? "crm") === "crm" && String(fact.fact_date ?? "").startsWith(month) && (fact.fact_date !== today || fact.inquiry_filled === true));
+  const monthFacts = facts.filter((fact) => (fact.source ?? "crm") === "crm" && String(fact.fact_date ?? "").startsWith(month) && (fact.inquiry_filled === true || !(yesterday && fact.fact_date >= yesterday)));
   const filled = monthFacts.filter((fact) => fact.inquiry_filled === true).length;
-  const complete = monthFacts.length ? { text: `คนทักทีมกรอก ${filled}/${monthFacts.length} วัน`, sub: "ยอด · ลีด · ออเดอร์ มาครบ" } : null;
+  // หลายแบรนด์ = นับวัน × แบรนด์ (เดือนมี 27 วันแต่ขึ้น 78) → บอกว่ารวมกี่แบรนด์ (ทดสอบแบบผู้ใช้จริง)
+  const brandCount = new Set(monthFacts.map((fact) => fact.brand_id)).size;
+  const complete = monthFacts.length ? { text: `คนทักทีมกรอก ${filled}/${monthFacts.length} วัน${brandCount > 1 ? ` (รวม ${brandCount} แบรนด์)` : ""}`, sub: "ยอด · Lead · ออเดอร์ มาครบ" } : null;
   if (!last) return { ...base, state: "bad", stateLabel: "ยังไม่เคยดึง", hint: "กดดึงยอดขายตอนนี้ในเมนู หรือตรวจคีย์ระบบขาย", fresh: { text: "—", sub: DAILY_SUB }, complete };
   const [label] = statusOf(last.status);
   const failed = last.status === "failed";
@@ -143,7 +148,7 @@ export function syncIssues({ rows = {}, authorizations = { ready: false, items: 
     const lacking = (goals.missingByBrand ?? []).filter((item) => item.missing?.length);
     if (lacking.length) {
       const fields = [...new Set(lacking.flatMap((item) => item.missing))];
-      out.push({ key: "goals", level: "wait", text: `เป้าเดือนนี้ยังไม่ตั้ง: ${fields.join(" · ")} (${lacking.length} แบรนด์)`, hint: "ทีมขายตั้งที่หน้าเป้าหมายของระบบขาย", tab: "sales" });
+      out.push({ key: "goals", level: "wait", text: `เป้าเดือนนี้ยังไม่ตั้ง: ${fields.join(" · ")} (${lacking.map((item) => item.name).join(" · ")})`, hint: "ทีมขายตั้งที่หน้าเป้าหมายของระบบขาย", tab: "sales" });
     }
   }
   return out.sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
@@ -158,12 +163,12 @@ export function syncVerdict({ loading = false, issues = [] } = {}) {
   return { state: "ok", title: "ข้อมูลพร้อมใช้" };
 }
 
-/** ตัวตั้งเวลาเรียก ads-cron รอบถัดไป — ช่วงเช้า 05:00–05:50 ไทยทุก 10 นาที (ตารางจริงอยู่ที่ _shared/dailySchedule.js) */
+/** ตัวตั้งเวลาเรียก ads-cron รอบถัดไป — ช่วงเช้า 09:00–09:50 ไทยทุก 10 นาที (ตารางจริงอยู่ที่ _shared/dailySchedule.js) */
 export function nextCronAt(now = Date.now()) {
   return nextDailyTickAt(now);
 }
 
-/** ดึงค่าแอดรอบถัดไปจริง — ดึงไปแล้ววันนี้ = ตี 5 พรุ่งนี้ · ยังไม่ได้ดึง = รอบถัดไปของตัวตั้งเวลา (ในช่วงเช้าคือรอบเก็บตก) */
+/** ดึงค่าแอดรอบถัดไปจริง — ดึงไปแล้ววันนี้ = 09:00 พรุ่งนี้ · ยังไม่ได้ดึง = รอบถัดไปของตัวตั้งเวลา (ในช่วงเช้าคือรอบเก็บตก) */
 export function nextSyncAt(lastSuccessAt, now = Date.now()) {
   return doneToday(lastSuccessAt, dayIn(now, DAILY_TZ)) ? nextDailyRunAt(now) : nextDailyTickAt(now);
 }
@@ -205,15 +210,15 @@ export function historyTimeline({ ticks = [], syncRuns = [], pipelineRuns = [], 
     .map(({ sort, ...item }) => ({ ...item, kind: sort === "inventory" ? "inventory" : item.kind }));
 }
 
-/** Snapshot บัญชีแอดทุกตัวที่ token เห็น (หน้า บิล & กระทบยอด · spec 2026-09-22) — ads-cron เก็บวันละครั้งตี 5
+/** Snapshot บัญชีแอดทุกตัวที่ token เห็น (หน้า บิล & กระทบยอด · spec 2026-09-22) — ads-cron เก็บวันละครั้ง 09:00
     RLS อ่านได้เฉพาะ team_lead → allowed:false = บอกตรงๆ ไม่หลอกว่า "รอรอบแรก" */
-const SNAPSHOT_STALE_HOURS = 26;   // เก็บวันละครั้งตี 5 — เกิน 26 ชม. = พลาดรอบเช้า
+const SNAPSHOT_STALE_HOURS = 26;   // เก็บวันละครั้งตอนเช้า — เกิน 26 ชม. = พลาดรอบเช้า
 export function snapshotSourceRow({ snapshots = [], ready = true, allowed = true, now = Date.now() } = {}) {
-  const base = { key: "snapshots", name: "Snapshot บัญชีแอด", sub: "หน้า บิล & กระทบยอด", icon: "billing" };
+  const base = { key: "snapshots", name: "ยอดค้างบัญชีแอด", sub: "หน้า บิล & กระทบยอด", icon: "billing" };
   if (!allowed) return { ...base, state: "muted", stateLabel: "เฉพาะหัวหน้าทีม", hint: null, fresh: null, complete: null };
   if (!ready) return loadingRow(base);
-  const freshSub = "เก็บวันละครั้ง · ตี 5";
-  if (!snapshots.length) return { ...base, state: "waiting", stateLabel: "รอรอบแรก", hint: "จะเริ่มมีข้อมูลในรอบตี 5 · หรือกดดึง Snapshot เองในเมนู", fresh: { text: "ยังไม่มีข้อมูล", sub: freshSub }, complete: null };
+  const freshSub = `เก็บวันละครั้ง · ${DAILY_RUN_LABEL}`;
+  if (!snapshots.length) return { ...base, state: "waiting", stateLabel: "รอรอบแรก", hint: `จะเริ่มมีข้อมูลในรอบ ${DAILY_RUN_LABEL} · หรือกดดึง Snapshot เองในเมนู`, fresh: { text: "ยังไม่มีข้อมูล", sub: freshSub }, complete: null };
   const newest = snapshots.map((s) => s.fetched_at).filter(Boolean).sort().at(-1);
   const stale = now - (time(newest) ?? 0) > SNAPSHOT_STALE_HOURS * HOUR;
   const badStatus = snapshots.filter((s) => s.account_status != null && s.account_status !== 1).length;
@@ -224,6 +229,16 @@ export function snapshotSourceRow({ snapshots = [], ready = true, allowed = true
     stateLabel: badStatus ? `บัญชีสถานะผิดปกติ ${badStatus}` : stale ? "ล่าช้า" : "ปกติ",
     hint: badStatus ? "ดูรายบัญชีในหน้า บิล & กระทบยอด" : stale ? "เกิน 26 ชม. — ตรวจ ads-cron ในแท็บประวัติ" : null,
     fresh: { text: ago(newest, now), sub: freshSub },
-    complete: { text: `${snapshots.length} บัญชีที่ token เห็น`, sub: badStatus ? `สถานะผิดปกติ ${badStatus} บัญชี — ดูในหน้า บิล & กระทบยอด` : null },
+    complete: { text: `${snapshots.length} บัญชีที่เข้าถึงได้`, sub: badStatus ? `สถานะผิดปกติ ${badStatus} บัญชี — ดูในหน้า บิล & กระทบยอด` : null },
   };
+}
+
+/** เวลาของ "ข้อมูลล่าสุด" — วันเดียวกับตอนนี้ = เวลาอย่างเดียว · คนละวัน = ใส่วันที่ (ตรวจรอบ 28 ก.ย.: หลังเที่ยงคืน "05:20" อ่านเป็นเช้าวันนี้ที่ยังไม่ถึง) */
+export function lastClock(value, now = new Date()) {
+  if (!value) return "—";
+  const at = new Date(value);
+  const tz = { timeZone: "Asia/Bangkok" };
+  const day = (d) => new Intl.DateTimeFormat("en-CA", tz).format(d);
+  const time = new Intl.DateTimeFormat("th-TH", { ...tz, hour: "2-digit", minute: "2-digit" }).format(at);
+  return day(at) === day(new Date(now)) ? time : `${new Intl.DateTimeFormat("th-TH", { ...tz, day: "numeric", month: "short" }).format(at)} ${time}`;
 }

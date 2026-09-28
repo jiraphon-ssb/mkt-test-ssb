@@ -9,7 +9,7 @@
 export const GOAL_EDIT_FIELDS = [
   { key: "sales_target", label: "เป้ายอดขาย", unit: "money", hint: "ยอดขายรวมทั้งเดือน (ทั้งลูกค้าใหม่และเก่า)" },
   // หน้า Overview มีปุ่มสลับ "ยอดรวม / ยอดใหม่" — โหมดยอดใหม่เทียบกับช่องนี้ ไม่ใช่เป้ายอดรวม
-  { key: "sales_new_target", label: "เป้ายอดลูกค้าใหม่", unit: "money", hint: "ใช้ตอนหน้า Overview อยู่โหมด “ยอดใหม่”" },
+  { key: "sales_new_target", label: "เป้ายอดลูกค้าใหม่", unit: "money", hint: "ใช้ตอนหน้าภาพรวมอยู่โหมด “ยอดใหม่”" },
   { key: "ad_budget", label: "งบแอด", unit: "money", hint: "งบค่าแอด Meta ของเดือนนี้" },
   { key: "orders_target", label: "เป้ายืนยันออเดอร์", unit: "count", hint: "จำนวนออเดอร์ที่รับรู้ยอด" },
   { key: "deposits_target", label: "เป้าได้ออเดอร์", unit: "count", hint: "เข้าสเตจออกแบบครั้งแรก" },

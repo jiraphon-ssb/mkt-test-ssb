@@ -18,7 +18,7 @@ describe("metaSourceRow", () => {
     const row = metaSourceRow({ accounts: [acc(), acc({ key: "b", reconciliation: { ready: false } })], ready: true, now: NOW });
     expect(row).toMatchObject({ state: "ok", stateLabel: "ปกติ", sub: "2 บัญชี" });
     expect(row.fresh.text).toBe("4 ชม. 54 นาทีก่อน");
-    expect(row.fresh.sub).toBe("ดึงวันละครั้ง · ตี 5");
+    expect(row.fresh.sub).toBe("ดึงวันละครั้ง · 09:00");
     expect(row.complete).toEqual({ text: "ไม่มีวันขาด", sub: "ตรวจยอดผ่าน 1/2" });
   });
   it("บัญชีไหนพัง = ทั้งแถว bad และบอกจำนวน · ขาดวัน = บอกรวมกี่วัน", () => {
@@ -59,10 +59,10 @@ describe("salesSourceRow", () => {
     const row = salesSourceRow({ runs: [run("sales")], facts, ready: true, today: "2026-09-17", now: NOW });
     expect(row).toMatchObject({ state: "ok", stateLabel: "ปกติ" });
     expect(row.fresh.text).toBe("53 นาทีก่อน");
-    expect(row.fresh.sub).toBe("ดึงวันละครั้ง · ตี 5");
-    expect(row.complete.text).toBe("คนทักทีมกรอก 2/3 วัน");
+    expect(row.fresh.sub).toBe("ดึงวันละครั้ง · 09:00");
+    expect(row.complete.text).toBe("คนทักทีมกรอก 2/3 วัน (รวม 2 แบรนด์)");
     const withToday = [...facts, { brand_id: "b_td", fact_date: "2026-09-17", inquiry_filled: false }];
-    expect(salesSourceRow({ runs: [run("sales")], facts: withToday, ready: true, today: "2026-09-17", now: NOW }).complete.text).toBe("คนทักทีมกรอก 2/3 วัน");
+    expect(salesSourceRow({ runs: [run("sales")], facts: withToday, ready: true, today: "2026-09-17", now: NOW }).complete.text).toBe("คนทักทีมกรอก 2/3 วัน (รวม 2 แบรนด์)");
   });
   it("ไม่เคยดึง = bad · รอบล่าสุดล้ม = bad พร้อมเหตุผล · เก่าเกิน 36 ชม. = warn", () => {
     expect(salesSourceRow({ runs: [], facts: [], ready: true, today: "2026-09-17", now: NOW })).toMatchObject({ state: "bad", stateLabel: "ยังไม่เคยดึง" });
@@ -74,7 +74,7 @@ describe("salesSourceRow", () => {
       { brand_id: "b_jt", fact_date: "2026-09-01", source: "tmk", inquiry_filled: true },
       { brand_id: "b_jt", fact_date: "2026-09-02", source: "tmk", inquiry_filled: true },
     ];
-    expect(salesSourceRow({ runs: [run("sales")], facts: withJk, ready: true, today: "2026-09-17", now: NOW }).complete.text).toBe("คนทักทีมกรอก 2/3 วัน");
+    expect(salesSourceRow({ runs: [run("sales")], facts: withJk, ready: true, today: "2026-09-17", now: NOW }).complete.text).toBe("คนทักทีมกรอก 2/3 วัน (รวม 2 แบรนด์)");
   });
   it("รอบ partial เพราะเฟส JUNTAKARN ล้มอย่างเดียว = แถวนี้ยังปกติ · เป้าล้ม = เตือน", () => {
     const jkOnly = run("sales", { status: "partial", summary: { jk: { error: "JK_NO_PERMISSION" }, goals: { error: null } } });
@@ -126,7 +126,7 @@ describe("syncIssues", () => {
     const goals = { ready: true, missingByBrand: [{ name: "TEAMDEE", missing: ["งบแอด", "CPL"] }, { name: "t around", missing: ["งบแอด"] }] };
     const issues = syncIssues({ rows, goals, authorizations: { ready: true, items: [{ status: "connected", expires_at: null }] }, now: NOW });
     expect(issues.map((i) => i.level)).toEqual(["warn", "wait"]);
-    expect(issues[1].text).toBe("เป้าเดือนนี้ยังไม่ตั้ง: งบแอด · CPL (2 แบรนด์)");
+    expect(issues[1].text).toBe("เป้าเดือนนี้ยังไม่ตั้ง: งบแอด · CPL (TEAMDEE · t around)");   // บอกชื่อแบรนด์ ไม่ใช่แค่จำนวน (ทดสอบแบบผู้ใช้จริง)
   });
 });
 
@@ -144,21 +144,22 @@ describe("syncVerdict", () => {
   });
 });
 
-describe("nextCronAt — รอบถัดไปของตัวตั้งเวลา (ช่วงเช้า 05:00–05:50 ไทย)", () => {
-  it("กลางวัน = ตี 5 พรุ่งนี้ · ในช่วงเช้า = รอบเก็บตกถัดไป", () => {
-    expect(nextCronAt(Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-17T22:00:00.000Z");
-    expect(nextCronAt(Date.parse("2026-09-17T22:08:00Z"))).toBe("2026-09-17T22:10:00.000Z");
+/* 28 ก.ย.: รอบดึงย้ายเป็น 09:00–09:50 ไทย (02:00–02:50 UTC) */
+describe("nextCronAt — รอบถัดไปของตัวตั้งเวลา (ช่วงเช้า 09:00–09:50 ไทย)", () => {
+  it("กลางวัน = 09:00 พรุ่งนี้ · ในช่วงเช้า = รอบเก็บตกถัดไป", () => {
+    expect(nextCronAt(Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-18T02:00:00.000Z");
+    expect(nextCronAt(Date.parse("2026-09-18T02:08:00Z"))).toBe("2026-09-18T02:10:00.000Z");
   });
 });
 
 describe("nextSyncAt — ดึงค่าแอดรอบถัดไปจริง (ไม่ใช่ tick ที่ไม่มีงาน)", () => {
-  it("ดึงไปแล้วเช้านี้ = ตี 5 พรุ่งนี้ แม้ตอนนี้ยังอยู่ในช่วงเก็บตก", () => {
-    expect(nextSyncAt("2026-09-16T22:03:00Z", Date.parse("2026-09-16T22:15:00Z"))).toBe("2026-09-17T22:00:00.000Z");
-    expect(nextSyncAt("2026-09-16T22:07:30Z", Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-17T22:00:00.000Z");
+  it("ดึงไปแล้วเช้านี้ = 09:00 พรุ่งนี้ แม้ตอนนี้ยังอยู่ในช่วงเก็บตก", () => {
+    expect(nextSyncAt("2026-09-17T02:03:00Z", Date.parse("2026-09-17T02:15:00Z"))).toBe("2026-09-18T02:00:00.000Z");
+    expect(nextSyncAt("2026-09-17T02:07:30Z", Date.parse("2026-09-17T03:00:00Z"))).toBe("2026-09-18T02:00:00.000Z");
   });
   it("วันนี้ยังไม่ได้ดึง: ในช่วงเช้า = รอบเก็บตกถัดไป · ไม่เคยดึง = รอบถัดไป", () => {
-    expect(nextSyncAt("2026-09-15T22:03:00Z", Date.parse("2026-09-16T22:15:00Z"))).toBe("2026-09-16T22:20:00.000Z");
-    expect(nextSyncAt(null, Date.parse("2026-09-17T03:20:00Z"))).toBe("2026-09-17T22:00:00.000Z");
+    expect(nextSyncAt("2026-09-16T02:03:00Z", Date.parse("2026-09-17T02:15:00Z"))).toBe("2026-09-17T02:20:00.000Z");
+    expect(nextSyncAt(null, Date.parse("2026-09-17T03:20:00Z"))).toBe("2026-09-18T02:00:00.000Z");
   });
 });
 
@@ -208,14 +209,14 @@ describe("snapshotSourceRow", () => {
     const row = snapshotSourceRow({ allowed: true, ready: true, snapshots: [], now });
     expect(row.state).toBe("waiting");
     expect(row.stateLabel).toBe("รอรอบแรก");
-    expect(row.fresh.sub).toBe("เก็บวันละครั้ง · ตี 5");
+    expect(row.fresh.sub).toBe("เก็บวันละครั้ง · 09:00");
   });
   it("สดใน 26 ชม. = ปกติ · นับบัญชีครบ · บัญชีสถานะผิดปกติดันเป็นเตือน", () => {
     const ok = snapshotSourceRow({ allowed: true, ready: true, now,
       snapshots: [snap("1"), snap("2"), snap("3")] });
     expect(ok.state).toBe("ok");
     expect(ok.stateLabel).toBe("ปกติ");
-    expect(ok.complete.text).toBe("3 บัญชีที่ token เห็น");
+    expect(ok.complete.text).toBe("3 บัญชีที่เข้าถึงได้");
     expect(ok.complete.sub).toBeNull();
     const warn = snapshotSourceRow({ allowed: true, ready: true, now,
       snapshots: [snap("1"), snap("2", { account_status: 2 })] });
@@ -230,5 +231,32 @@ describe("snapshotSourceRow", () => {
     expect(row.state).toBe("warn");
     expect(row.stateLabel).toBe("ล่าช้า");
     expect(row.hint).toContain("ads-cron");
+  });
+});
+
+/* ทดสอบแบบผู้ใช้จริง: "คนทักทีมกรอก 74/78 วัน" — เดือนมีแค่ 27 วัน คนอ่านงงว่า 78 วันมาจากไหน (3 แบรนด์รวมกัน) */
+it("หลายแบรนด์: บอกว่านับรวมกี่แบรนด์", () => {
+  const facts2 = ["b_td", "b_jd"].flatMap((b) => ["2026-09-15", "2026-09-16"].map((d) => ({ brand_id: b, fact_date: d, inquiry_filled: d === "2026-09-15" })));
+  // วันนี้ 18 — วันที่ 16 เลยช่วงกรอกของเมื่อวานแล้วจึงนับว่าขาด (เมื่อวานยังไม่กรอกไม่นับ · ตรวจรอบ 28 ก.ย.)
+  expect(salesSourceRow({ runs: [run("sales")], facts: facts2, ready: true, today: "2026-09-18", now: NOW }).complete.text).toBe("คนทักทีมกรอก 2/4 วัน (รวม 2 แบรนด์)");
+});
+
+/* ตรวจรอบ 28 ก.ย. (00:40): "คนทักทีมกรอก" ขยับ 74/78 → 74/81 ทันทีที่เลยเที่ยงคืน เพราะนับเมื่อวาน (ที่ทีมกรอกตอนเช้า) เป็นวันที่ขาด
+   และ "ข้อมูลล่าสุด 05:20" ไม่มีวันที่ อ่านเป็น 05:20 ของวันนี้ซึ่งยังไม่ถึง */
+import { lastClock } from "../src/modules/marketing/ads/syncOverview.js";
+describe("หลังเที่ยงคืน", () => {
+  it("เมื่อวานที่ทีมยังไม่กรอก ไม่นับเป็นวันที่ขาด (ทีมกรอกของเมื่อวานตอนเช้า) · กรอกแล้วนับตามปกติ", () => {
+    const facts = [
+      { brand_id: "b_td", fact_date: "2026-09-26", inquiry_filled: true },
+      { brand_id: "b_td", fact_date: "2026-09-27", inquiry_filled: false },
+      { brand_id: "b_ta", fact_date: "2026-09-27", inquiry_filled: true },
+    ];
+    const row = salesSourceRow({ runs: [run("sales")], facts, ready: true, today: "2026-09-28", now: NOW });
+    expect(row.complete.text).toBe("คนทักทีมกรอก 2/2 วัน (รวม 2 แบรนด์)");
+  });
+  it("lastClock: วันเดียวกัน = เวลาอย่างเดียว · คนละวัน = วันที่ + เวลา", () => {
+    expect(lastClock("2026-09-27T22:20:00Z", new Date("2026-09-28T03:00:00Z"))).toBe("05:20");            // 28 ก.ย. 05:20 น. ไทย · ตอนนี้ 10:00 น.
+    expect(lastClock("2026-09-26T22:20:00Z", new Date("2026-09-27T17:40:00Z"))).toBe("27 ก.ย. 05:20");    // ตอนนี้ 28 ก.ย. 00:40 น.
+    expect(lastClock(null, new Date())).toBe("—");
   });
 });

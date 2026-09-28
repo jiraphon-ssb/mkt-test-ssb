@@ -10,7 +10,7 @@ import { adsCardsForSource, adsSourceAccess, factsLoadRange, factsToAdCards, nor
 import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
 
 const STORAGE_KEY = "ssb.ads.source";
-const EMPTY = { status: "idle", facts: [], creatives: [], connections: [], sales: [], salesGoals: [], goalOverrides: [], error: null, loadedAt: null };
+const EMPTY = { status: "idle", facts: [], creatives: [], creativesFailed: false, salesFailed: false, goalsFailed: false, connections: [], sales: [], salesGoals: [], goalOverrides: [], error: null, loadedAt: null };
 let cache = EMPTY;
 let inflight = null;
 const listeners = new Set();
@@ -27,14 +27,16 @@ export async function loadPilotFacts({ force = false } = {}) {
   inflight = (async () => {
     try {
       const range = factsLoadRange(isoDay(new Date()));
+      /* ภาพครีเอทีฟพัง = ยอดยังดูได้ แต่ต้องไม่หายเงียบ (26 ก.ย.: เห็นจริง รายการขึ้นชิ้นไม่มีภาพและไม่รวมกันโดยไม่มีใครบอก) */
+      let creativesFailed = false, salesFailed = false, goalsFailed = false;   // ยอดขาย/เป้าพังต้องไม่หายเงียบ (ทดสอบละเอียดรอบ 2)
       const [connections, facts, creatives, sales, salesGoals, goalOverrides] = await Promise.all([
-        apiClient.ads.connections(), apiClient.ads.facts(range), apiClient.ads.creatives().catch(() => []),   // creative ไม่มี = ยังดูยอดได้
+        apiClient.ads.connections(), apiClient.ads.facts(range), apiClient.ads.creatives().catch(() => { creativesFailed = true; return []; }),   // creative พัง = ยังดูยอดได้ แต่ติดธงให้หน้าบอกผู้ใช้
         // ต้องรวม 'tmk' (ยอด JUNTAKARN) ด้วย ไม่งั้นแถบที่มาของตัวเลขบอกไม่ได้ว่าแหล่งของ JK สดแค่ไหน
-        apiClient.ads.businessFacts({ ...range, sources: ["crm", "tmk"] }).catch(() => []),                   // ยอดขายจริงยังไม่เชื่อม = ยังดูยอดแอดได้
-        apiClient.ads.salesGoals().catch(() => []),                                                           // เป้าจากระบบขาย (เฟส 3) ยังไม่มีก็ใช้เป้าในหน้าตั้งค่า
-        apiClient.ads.goalOverrides().catch(() => []),                                                        // เป้าที่คนแก้เอง — อ่านไม่ได้ก็ยังใช้เป้าจากระบบขายได้
+        apiClient.ads.businessFacts({ ...range, sources: ["crm", "tmk"] }).catch(() => { salesFailed = true; return []; }),                   // ยอดขายจริงยังไม่เชื่อม = ยังดูยอดแอดได้
+        apiClient.ads.salesGoals().catch(() => { goalsFailed = true; return []; }),                                                           // เป้าจากระบบขาย (เฟส 3) ยังไม่มีก็ใช้เป้าในหน้าตั้งค่า
+        apiClient.ads.goalOverrides().catch(() => { goalsFailed = true; return []; }),                                                        // เป้าที่คนแก้เอง — อ่านไม่ได้ก็ยังใช้เป้าจากระบบขายได้
       ]);
-      publish({ status: "ready", facts, creatives, sales, salesGoals, goalOverrides, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });
+      publish({ status: "ready", facts, creatives, creativesFailed, salesFailed, goalsFailed, sales, salesGoals, goalOverrides, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });
     } catch (error) {
       publish({ ...EMPTY, status: "error", error });
     } finally {
@@ -73,7 +75,7 @@ export function useAdsData() {
     // เป้าที่ทุกหน้าได้รับ = ค่าที่ merge แล้ว (ค่าที่แก้ในหน้าตั้งค่าชนะ) — หน้าอื่นไม่ต้องรู้ว่ามี override
     salesGoals: source === "meta_pilot" ? goals : [],
     mockFallback: source === "mock",                   // ยอดใหม่ 62% เป็นค่าจำลอง — ห้ามใช้กับข้อมูลจริง
-    pilot: { status: pilot.status, error: pilot.error, loadedAt: pilot.loadedAt, summary },
+    pilot: { status: pilot.status, error: pilot.error, loadedAt: pilot.loadedAt, creativesFailed: Boolean(pilot.creativesFailed), salesFailed: Boolean(pilot.salesFailed), goalsFailed: Boolean(pilot.goalsFailed), summary },
     reload: () => loadPilotFacts({ force: true }),
   };
 }

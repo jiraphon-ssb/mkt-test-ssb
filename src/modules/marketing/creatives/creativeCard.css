@@ -1,0 +1,33 @@
+/* การ์ดครีเอทีฟตัวเดียว — จากการ์ดแผงแคมเปญเดิม (v0.13.0) · token กลางทั้งหมด (สว่าง/มืดชุดเดียว) */
+.mkt-root .cc, .cc { display:flex; flex-direction:column; min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:12px; background:var(--surface); cursor:pointer; transition:border-color .12s ease-out; }
+.cc:hover { border-color:var(--line-strong, color-mix(in srgb,var(--ink) 25%,var(--line))); }
+.cc.is-fatigue { border-color:color-mix(in srgb,var(--warn) 45%,var(--line)); }
+.cc-body { display:flex; flex:1; flex-direction:column; gap:8px; min-width:0; padding:12px 13px 13px; }
+.cc-title { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.cc-title > b { display:-webkit-box; overflow:hidden; color:var(--ink); font-size:13px; font-weight:650; line-height:1.4; overflow-wrap:anywhere; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.cc-action { flex:none; padding:2px 9px; border:1px solid var(--line); border-radius:99px; font-size:11px; font-weight:700; white-space:nowrap; }
+.cc-action--rose { color:var(--bad-text); border-color:color-mix(in srgb,var(--bad) 45%,var(--line)); background:color-mix(in srgb,var(--bad) 10%,transparent); }
+.cc-action--emerald { color:var(--ok-text); border-color:color-mix(in srgb,var(--ok) 45%,var(--line)); background:color-mix(in srgb,var(--ok) 10%,transparent); }
+.cc-action--amber { color:var(--warn-text,var(--ink)); border-color:color-mix(in srgb,var(--warn) 45%,var(--line)); background:color-mix(in srgb,var(--warn) 10%,transparent); }
+.cc-action--zinc { color:var(--ink-soft); }
+.cc-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px; margin:0; padding:9px 0; border-block:1px solid var(--line); }
+.cc-facts dt { color:var(--ink-soft); font-size:11px; }
+.cc-facts dd { margin:3px 0 0; color:var(--ink); font-size:13px; font-weight:650; font-variant-numeric:tabular-nums; }
+.cc-facts dd.bad { color:var(--bad-text); }
+.cc-rule { margin:0; font-size:11.5px; color:var(--ink-soft); }
+.cc-rule--fail b { color:var(--bad-text); } .cc-rule--pass b { color:var(--ok-text); }
+.cc-foot { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:2px; color:var(--ink-soft); font-size:11.5px; }
+.cc-links { display:flex; align-items:center; gap:10px; }
+.cc-links a { display:inline-flex; align-items:center; gap:3px; min-height:24px; color:var(--accent-text,var(--ink)); font-weight:700; text-decoration:none; }
+.cc-links a:focus-visible, .cc:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
+.cc-check { display:inline-flex; align-items:center; gap:4px; min-height:24px; cursor:pointer; }
+.cc-check input { width:15px; height:15px; }
+.cc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr)); gap:12px; }
+.cc-rule { display:grid; gap:2px; }
+.cc-rule span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ชื่อชิ้นงาน = ปุ่มเปิดหน้าต่าง (หน้าตาเหมือนข้อความเดิม) */
+.mkt-root .cc-open, .cc-open { display:block; min-width:0; padding:0; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.cc-open:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:3px; border-radius:4px; }
+/* กฎยังตัดสินไม่ได้/ไม่มีข้อมูล — โทนกลาง ไม่ใช่แดง/เขียว (รีวิวโค้ด 28 ก.ย.: เดิมไม่มีกฎของสถานะนี้) */
+.cc-rule--pending b, .cc-rule--nodata b, .cc-rule--na b { color:var(--ink); }

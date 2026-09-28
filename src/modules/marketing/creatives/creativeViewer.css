@@ -1,0 +1,77 @@
+/* หน้าต่างครีเอทีฟ แบบ B (อาร์ตเคาะ 25 ก.ย.) — กรอบ .cl-preview เดิม · token กลางทั้งหมด (สว่าง/มืดชุดเดียว) */
+.cv { width:min(1160px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); display:flex; flex-direction:column; }
+.cv-head { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:14px 18px; border-bottom:1px solid var(--line); }
+.cv-head-text { display:grid; gap:2px; min-width:0; }
+.cv-head-text span { color:var(--ink-soft); font-size:12px; }
+.cv-head h2 { margin:0; font-size:17px; line-height:1.35; overflow-wrap:anywhere; }
+.cv-nav { display:flex; align-items:center; gap:8px; flex:none; }
+.cv-stepper { display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:99px; }
+.mkt-root .cv-stepper button, .cv-stepper button { display:grid; place-items:center; width:36px; height:36px; border:0; background:none; color:var(--ink); cursor:pointer; border-radius:99px; }
+.cv-stepper button:disabled { opacity:.35; cursor:default; }
+.cv-stepper span { min-width:56px; text-align:center; color:var(--ink-soft); font-size:12px; font-variant-numeric:tabular-nums; }
+.mkt-root .cv-close, .cv-close { display:grid; place-items:center; width:38px; height:38px; border:1px solid var(--line); border-radius:99px; background:none; color:var(--ink); cursor:pointer; }
+.cv-stepper button:focus-visible, .cv-close:focus-visible, .cv-actions > *:focus-visible, .cv-more:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:2px; }
+
+/* แถวสูงตามเนื้อหาเสมอ — หน้าต่างถูกจำกัดความสูง แถว auto จะหดจนวางทับกัน (เห็นจริงบนมือถือ 25 ก.ย.) */
+.cv-body { display:grid; grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr); grid-auto-rows:max-content; align-content:start; gap:18px; padding:18px; overflow:auto; flex:1 1 auto; min-height:0; }
+.cv-left, .cv-right { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.cv-media { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.cv-media .cl-preview-pane { padding:10px; }
+.cv-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.mkt-root .cv-actions > a, .mkt-root .cv-actions > button, .cv-actions > a, .cv-actions > button { display:inline-flex; align-items:center; gap:6px; min-height:34px; padding:0 12px; border:1px solid var(--line); border-radius:99px; background:none; color:var(--ink); font:inherit; font-size:12px; font-weight:600; text-decoration:none; cursor:pointer; }
+.cv-copy { display:grid; gap:6px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; }
+.cv-copy h3, .cv-group h3, .cv-campaigns h3 { margin:0; color:var(--ink); font-size:12.5px; font-weight:700; }
+.cv-copy strong { font-size:13px; }
+.cv-copy p { margin:0; color:var(--ink-soft); font-size:12.5px; line-height:1.65; white-space:pre-wrap; }
+.cv-copy p.is-clamped { display:-webkit-box; overflow:hidden; -webkit-line-clamp:5; -webkit-box-orient:vertical; }
+.cv-copy small { color:var(--ink-soft); font-size:11px; }
+.mkt-root .cv-more, .cv-more { justify-self:start; padding:0; border:0; background:none; color:var(--accent-text,var(--ink)); font:inherit; font-size:12px; font-weight:650; cursor:pointer; }
+
+.cv-state { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; }
+.cv-state small { color:var(--ink-soft); font-size:11px; }
+.cv-pill { display:inline-flex; align-items:center; gap:7px; padding:5px 12px; border-radius:99px; background:var(--surface-2); color:var(--ink); font-size:12.5px; font-weight:650; }
+.cv-pill i { width:8px; height:8px; border-radius:50%; background:var(--ink-faint,var(--ink-soft)); }
+.cv-pill--emerald { background:color-mix(in srgb,var(--ok) 14%,transparent); color:var(--ok-text); } .cv-pill--emerald i { background:var(--ok); }
+.cv-pill--amber { background:color-mix(in srgb,var(--warn) 14%,transparent); } .cv-pill--amber i { background:var(--warn); }
+.cv-pill--rose { background:color-mix(in srgb,var(--bad) 14%,transparent); color:var(--bad-text); } .cv-pill--rose i { background:var(--bad); }
+.cv-advice { margin:0; padding:10px 14px; border:1px solid var(--line); border-radius:12px; font-size:13px; line-height:1.5; }
+.cv-advice span { color:var(--ink-soft); }
+.cv-advice--rose { background:color-mix(in srgb,var(--bad) 10%,transparent); border-color:color-mix(in srgb,var(--bad) 35%,var(--line)); } .cv-advice--rose b, .cv-advice--rose span { color:var(--bad-text); }
+.cv-advice--emerald { background:color-mix(in srgb,var(--ok) 10%,transparent); border-color:color-mix(in srgb,var(--ok) 35%,var(--line)); } .cv-advice--emerald b { color:var(--ok-text); }
+.cv-advice--amber { background:color-mix(in srgb,var(--warn) 10%,transparent); border-color:color-mix(in srgb,var(--warn) 35%,var(--line)); }
+.cv-group { padding:12px 14px; border:1px solid var(--line); border-radius:12px; }
+.cv-group dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 14px; margin:10px 0 0; }
+.cv-group dt { color:var(--ink-soft); font-size:11px; line-height:1.3; }
+.cv-group dd { margin:3px 0 0; color:var(--ink); font-size:14px; font-weight:650; font-variant-numeric:tabular-nums; }
+.cv-group dd.bad, .cv-campaigns td.bad { color:var(--bad-text); }
+
+.cv-status { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--ink); white-space:nowrap; }
+.cv-status i { width:7px; height:7px; border-radius:50%; background:var(--ink-faint,var(--ink-soft)); }
+.cv-status--emerald i { background:var(--ok); } .cv-status--amber i { background:var(--warn); }
+.cv-status--rose { color:var(--bad-text); } .cv-status--rose i { background:var(--bad); } .cv-status--zinc { color:var(--ink-soft); }
+
+.cv-campaigns { grid-column:1/-1; padding:12px 14px 6px; border:1px solid var(--line); border-radius:12px; }
+.cv-campaigns-scroll { overflow-x:auto; margin-top:8px; }
+.cv-campaigns table { width:100%; border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.cv-campaigns th, .cv-campaigns td { padding:9px 10px; border-top:1px solid var(--line); text-align:left; white-space:nowrap; }
+.cv-campaigns thead th { border-top:0; color:var(--ink-soft); font-size:11px; font-weight:700; }
+.cv-campaigns .num { text-align:right; }
+.cv-campaigns tbody th { max-width:280px; overflow:hidden; text-overflow:ellipsis; }
+.cv-adsets { display:block; overflow:hidden; margin-top:2px; color:var(--ink-soft); font-size:11px; font-weight:500; text-overflow:ellipsis; white-space:nowrap; }
+.cv-camp-state { display:inline-flex; align-items:center; gap:8px; }
+.cv-camp-state small { color:var(--warn-text,var(--ink-soft)); font-size:11px; font-weight:650; }
+.cv-campaigns tbody th a { color:var(--ink); font-weight:650; text-decoration:underline; text-decoration-color:var(--line); text-underline-offset:3px; }
+.cv-campaigns tr.is-here { background:color-mix(in srgb,var(--aw-accent,var(--accent)) 8%,transparent); }
+
+@media (max-width:860px) {
+  .cl-preview.cv { width:100vw; max-height:100dvh; border-radius:0; }
+  .cv-body { grid-template-columns:1fr; padding:14px; }
+  .cv-group dl { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+/* ผลกฎเต็ม (การ์ดเหลือบรรทัดเดียว — 26 ก.ย.) */
+.cv-rule { display:grid; gap:3px; padding:10px 14px; border:1px solid var(--line); border-radius:12px; font-size:12.5px; line-height:1.5; }
+.cv-rule span { color:var(--ink-soft); }
+.cv-rule--pass b { color:var(--ok-text); } .cv-rule--fail b { color:var(--bad-text); }
+/* โทนกลาง (ติดตาม · รอข้อมูล · แพงแต่ขายได้) — เดิมไม่มีกฎ ได้แค่กรอบพื้นฐาน (รีวิวโค้ด 28 ก.ย.) */
+.cv-advice--zinc { background:var(--surface-2); }

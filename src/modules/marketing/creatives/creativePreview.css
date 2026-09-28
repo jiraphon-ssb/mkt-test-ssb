@@ -27,3 +27,6 @@
 @keyframes cl-preview-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .mkt-root .cl-preview .spin { animation:none; } }
 @media(max-width:860px){ .mkt-root .cl-preview-body { grid-template-columns:1fr; } .mkt-root .cl-preview-layer { padding:0; } .mkt-root .cl-preview { max-height:100dvh; border-radius:0; } }
+/* ตัวอย่างจาก Meta แบบฝัง (แท็บในหน้าต่างครีเอทีฟ) — แถบตำแหน่งอยู่เหนือกรอบ ไม่ใช่เต็มหน้าต่าง */
+.mkt-root .cl-preview-pane { display:grid; gap:10px; align-content:start; }
+.mkt-root .cl-preview-pane .cl-preview-formats { padding:0; border:0; background:none; }

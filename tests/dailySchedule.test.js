@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
-  DAILY_CRON_EXPR, DAILY_RUN_HOUR, DAILY_TICK_MINUTES, doneToday, nextDailyRunAt, nextDailyTickAt,
+  DAILY_CRON_EXPR, DAILY_RUN_HOUR, DAILY_RUN_LABEL, DAILY_TICK_MINUTES, DAILY_WINDOW_LABEL, doneToday, nextDailyRunAt, nextDailyTickAt,
 } from "../supabase/functions/_shared/dailySchedule.js";
 
-/* 23 ก.ย.: อาร์ตสั่งลดการดึงเหลือวันละครั้งตอนตี 5 — ไม่ให้หนักเครื่องฝั่งระบบขาย (SSB/TMK) และ Meta */
-describe("ตารางเวลา — ตี 5 เวลาไทย", () => {
-  it("นิพจน์ pg_cron (UTC) ตรงกับตี 5 ไทย และนาทีตรงกับรอบเก็บตก", () => {
+/* 23 ก.ย.: อาร์ตสั่งลดการดึงเหลือวันละครั้ง — ไม่ให้หนักเครื่องฝั่งระบบขาย (SSB/TMK) และ Meta
+   28 ก.ย.: อาร์ตย้ายเป็น 09:00 — แอดเปิด 07:00–07:30 ดึงตี 5 สถานะขึ้น "ปิดอยู่" ทุกแถว */
+describe("ตารางเวลา — 09:00 เวลาไทย", () => {
+  it("รอบหลัก 09:00 · ป้ายเวลาสำหรับหน้าจออ่านจากค่าเดียวกัน", () => {
+    expect(DAILY_RUN_HOUR).toBe(9);
+    expect(DAILY_RUN_LABEL).toBe("09:00");
+    expect(DAILY_WINDOW_LABEL).toBe("09:10–09:50");
+    expect(DAILY_CRON_EXPR).toBe("0,10,20,30,40,50 2 * * *");   // 02:00–02:50 UTC
+  });
+  it("นิพจน์ pg_cron (UTC) ตรงกับเวลาไทย และนาทีตรงกับรอบเก็บตก", () => {
     const [minutes, hour] = DAILY_CRON_EXPR.split(" ");
     expect((Number(hour) + 7) % 24).toBe(DAILY_RUN_HOUR);
     expect(minutes.split(",").map(Number)).toEqual(DAILY_TICK_MINUTES);
@@ -37,13 +44,13 @@ describe("doneToday — นับวันละครั้งตามวั�
 });
 
 describe("เวลารอบถัดไป (หน้า Sync)", () => {
-  it("ก่อนตี 5 = ตี 5 วันนี้ · หลังช่วงเช้า = ตี 5 พรุ่งนี้", () => {
-    expect(nextDailyRunAt(Date.parse("2026-09-16T20:00:00.000Z"))).toBe("2026-09-16T22:00:00.000Z"); // 03:00 → 05:00
-    expect(nextDailyRunAt(Date.parse("2026-09-17T03:00:00.000Z"))).toBe("2026-09-17T22:00:00.000Z"); // 10:00 → พรุ่งนี้
+  it("ก่อน 9 โมง = 09:00 วันนี้ · หลังช่วงเช้า = 09:00 พรุ่งนี้", () => {
+    expect(nextDailyRunAt(Date.parse("2026-09-16T20:00:00.000Z"))).toBe("2026-09-17T02:00:00.000Z"); // 17 ก.ย. 03:00 → 09:00
+    expect(nextDailyRunAt(Date.parse("2026-09-17T03:00:00.000Z"))).toBe("2026-09-18T02:00:00.000Z"); // 10:00 → พรุ่งนี้
   });
   it("อยู่ในช่วงเก็บตก = รอบเก็บตกถัดไป · ตรงเวลาพอดีนับเป็นรอบถัดไป", () => {
-    expect(nextDailyTickAt(Date.parse("2026-09-16T22:03:00.000Z"))).toBe("2026-09-16T22:10:00.000Z");
-    expect(nextDailyTickAt(Date.parse("2026-09-16T22:10:00.000Z"))).toBe("2026-09-16T22:20:00.000Z");
-    expect(nextDailyTickAt(Date.parse("2026-09-16T22:55:00.000Z"))).toBe("2026-09-17T22:00:00.000Z");
+    expect(nextDailyTickAt(Date.parse("2026-09-17T02:03:00.000Z"))).toBe("2026-09-17T02:10:00.000Z");
+    expect(nextDailyTickAt(Date.parse("2026-09-17T02:10:00.000Z"))).toBe("2026-09-17T02:20:00.000Z");
+    expect(nextDailyTickAt(Date.parse("2026-09-17T02:55:00.000Z"))).toBe("2026-09-18T02:00:00.000Z");
   });
 });

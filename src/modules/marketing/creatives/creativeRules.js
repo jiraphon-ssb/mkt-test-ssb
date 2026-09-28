@@ -1,7 +1,7 @@
 /* กฎคัดครีเอทีฟ — ทีมตั้งเกณฑ์เองว่า "ค่าแอดที่ใช้ไป คุ้มกับผลที่ได้ไหม" (เก็บใน settings.ads_control.creativeRules)
    ผลต่อชิ้น: pass ผ่าน · fail ไม่ผ่าน · pending ยังตัดสินไม่ได้ (ใช้เงินยังน้อย) · nodata ไม่มีข้อมูลตัวนั้น · na ไม่เข้าข่ายกฎ
    ตัวเลขใช้ของ Meta ทั้งหมด (การซื้อ/ROAS = attribution ของ Meta ไม่ใช่ยอดจากระบบขาย) */
-import { fmtInt, fmtMoney, fmtNum } from "../dash/charts/theme.js";
+import { fmtInt, fmtMoney, fmtNum, trunc2 } from "../dash/charts/theme.js";
 
 /* kind: cost = ค่าแอด ÷ จำนวน (count = ฟิลด์จำนวนที่หาร · ยังไม่มีผลเลยแต่ใช้เงินเกินเพดาน = ไม่ผ่าน)
    ratio / count / money = เทียบค่าตรงๆ · scale = ตัวคูณจากค่าในแถวเป็นหน่วยที่คนกรอก (CTR เก็บ 0.012 กรอก 1.2) */
@@ -12,7 +12,7 @@ export const CREATIVE_RULE_METRICS = [
   { key: "cpc", label: "ต้นทุนต่อคลิกทั้งหมด (CPC)", kind: "cost", count: "clicks", noun: "คลิก", unit: "money", defaultOp: "lte" },
   { key: "cpm", label: "ต้นทุนต่อ 1,000 การเห็น (CPM)", kind: "cost", count: "impressions", noun: "การเห็น", per: 1000, unit: "money", defaultOp: "lte" },
   { key: "roas", label: "ROAS จากการซื้อ (Meta)", kind: "ratio", unit: "times", defaultOp: "gte" },
-  { key: "ctr", label: "CTR (คลิกทั้งหมด)", kind: "ratio", unit: "pct", scale: 100, defaultOp: "gte" },
+  { key: "ctr", label: "CTR ทั้งหมด", kind: "ratio", unit: "pct", scale: 100, defaultOp: "gte" },
   { key: "frequency", label: "ความถี่เฉลี่ยรายวัน", kind: "ratio", unit: "times", defaultOp: "lte" },
   { key: "purchases", label: "จำนวนการซื้อ", kind: "count", unit: "count", defaultOp: "gte" },
   { key: "leads", label: "จำนวนผลลัพธ์จาก Meta", kind: "count", unit: "count", defaultOp: "gte" },
@@ -29,7 +29,13 @@ export const MAX_CREATIVE_RULES = 12;
 export function parseRuleNumber(value) {
   if (value == null) return null;
   if (typeof value === "number") return Number.isFinite(value) && value >= 0 ? value : NaN;
-  const text = String(value).replace(/[,\s฿%×xX]|บาท|เท่า|ครั้ง|คน/g, "");
+  /* ตัวเลขสองชุดคั่นช่องว่าง/x ("5 x 3", "0x10", "12 34") หรือคอมมาผิดตำแหน่ง ("1,2,3") = อ่านไม่ออก
+     เดิมลบตัวคั่นทิ้งหมดแล้วต่อกันเป็น 53 / 123 — ช่องนี้ใช้กรอกยอดใบแจ้งยอดหน้าบิลด้วย (ทดสอบละเอียดรอบ 2) */
+  const raw = String(value).trim();
+  if (/\d[\s×xX]+\d/.test(raw) || /^0[xX]/.test(raw)) return NaN;
+  const numberPart = raw.match(/[\d.,]+/)?.[0] ?? "";
+  if (numberPart.includes(",") && !/^\d{1,3}(,\d{3})+(\.\d*)?$/.test(numberPart)) return NaN;
+  const text = raw.replace(/[,\s฿%×xX]|บาท|เท่า|ครั้ง|คน/g, "");
   if (text === "") return null;
   if (!/^\d*\.?\d+$|^\d+\.$/.test(text)) return NaN;
   return Number(text);
@@ -92,6 +98,9 @@ export const ruleTitle = (rule) => {
   return rule?.metric === "cpl" ? normalized.replace(/\bcpl\b/ig, "ต้นทุนต่อผลลัพธ์จาก Meta") : normalized;
 };
 
+/** ชื่อผลกฎภาษาไทย — ใช้ร่วมกันทั้งการ์ด ตาราง และหน้าต่างครีเอทีฟ */
+export const RULE_STATUS_TEXT = { pass: "ผ่านกฎ", fail: "ไม่ผ่านกฎ", pending: "ยังตัดสินไม่ได้", nodata: "ไม่มีข้อมูล", na: "ไม่เข้าข่ายกฎ" };
+
 export function describeRule(rule) {
   const m = METRIC[rule.metric];
   const op = RULE_OPS.find(([k]) => k === rule.op)?.[1] ?? "";
@@ -105,6 +114,12 @@ export function evaluateCreativeRule(row, rule) {
   if (rule.brandId && rule.brandId !== "all" && row.brandId !== rule.brandId) return { status: "na", actual: null, text: "กฎนี้ใช้กับแบรนด์อื่น" };
   if (["money", "cost"].includes(m.kind) && row.currency && row.currency !== "THB") {
     return { status: "nodata", actual: null, text: `กฎนี้ตั้งเป็นบาท แต่บัญชีใช้ ${row.currency}` };
+  }
+  /* ข้อมูลจริง (roasFromMeta:false): ไม่ใช้ ROAS ของ Meta ตัดสิน — กติกาเดียวกับคำแนะนำหน้าแคมเปญ/การ์ด
+     เดิมกฎ ROAS ขึ้น "ไม่ผ่าน 0.40×" ขัดกับคำแนะนำ "ต้นทุนดี" บนการ์ดใบเดียวกัน (ชุด C ข้อ 10)
+     กฎต้นทุนต่อการซื้อ/จำนวนการซื้อยังใช้ได้ — ชิ้นที่ Meta เห็นการซื้อจริงตัดสินได้ ไม่เห็นก็ขึ้นไม่มีข้อมูลเอง */
+  if (row.roasFromMeta === false && rule.metric === "roas") {
+    return { status: "nodata", skipped: true, actual: null, text: `${m.label} ใช้ตัดสินไม่ได้กับข้อมูลจริง — ยอดขายอยู่ในระบบขาย Meta เห็นไม่ครบ` };
   }
   const spend = row.spend ?? 0;
   if (rule.minSpend > 0 && spend < rule.minSpend) {
@@ -121,9 +136,11 @@ export function evaluateCreativeRule(row, rule) {
         ? { status: "fail", actual: null, text: `ใช้ไป ${fmtMoney(spend)} ยังไม่มี${m.noun} (เพดาน ${target} ต่อ${m.noun})` }
         : { status: "pending", actual: null, text: `ใช้ไป ${fmtMoney(spend)} ยังไม่มี${m.noun} · ยังไม่ถึงเพดาน ${target}` };
     }
-    return { status: "nodata", actual: null, text: `ไม่มีข้อมูล${m.label}` };
+    return { status: "nodata", actual: null, text: `ไม่มีข้อมูล ${m.label}` };
   }
-  const ok = rule.op === "gte" ? actual >= rule.value : actual <= rule.value;
+  /* ตัดสินที่ความละเอียดเดียวกับที่แสดง (ตัด 2 ตำแหน่ง) — เดิมขึ้น "฿50.00 เกินเพดาน ฿50.00" (ทดสอบละเอียดรอบ 2) */
+  const shown2 = m.unit === "count" ? actual : trunc2(actual);   // ค่าเดียวกับที่แสดง (รีวิวโค้ด 28 ก.ย.: 2.01 เคยตัดเป็น 2.00)
+  const ok = rule.op === "gte" ? shown2 >= rule.value : shown2 <= rule.value;
   const shown = formatRuleValue(rule.metric, actual);
   if (ok) return { status: "pass", actual, text: `${m.label} ${shown} ${rule.op === "gte" ? "ถึงเกณฑ์" : "อยู่ในเพดาน"} ${target}` };
   return { status: "fail", actual, text: rule.op === "gte" ? `${m.label} ${shown} ต่ำกว่าเกณฑ์ ${target}` : `${m.label} ${shown} เกินเพดาน ${target}` };
@@ -133,8 +150,13 @@ export function evaluateCreativeRule(row, rule) {
 export function evaluateCreativeRules(row, rules = [], selected = "none") {
   if (!selected || selected === "none") return null;
   const chosen = selected === "all" ? rules : rules.filter((r) => r.id === selected);
-  const results = chosen.map((rule) => ({ rule, ...evaluateCreativeRule(row, rule) })).filter((r) => r.status !== "na");
-  if (!results.length) return { status: "na", results: [], text: "ไม่มีกฎที่เข้าข่ายชิ้นนี้" };
+  const all = chosen.map((rule) => ({ rule, ...evaluateCreativeRule(row, rule) })).filter((r) => r.status !== "na");
+  if (!all.length) return { status: "na", results: [], text: "ไม่มีกฎที่เข้าข่ายชิ้นนี้" };
+  /* กฎที่ข้ามบนข้อมูลจริง (ROAS ของ Meta) ไม่ร่วมตัดสิน — เดิมทับผลกฎอื่นจนหน้าจริงขึ้น "ผ่าน 0" (ทดสอบละเอียด 27 ก.ย.)
+     เหลือแต่กฎที่ข้าม (เลือกกฎ ROAS อย่างเดียว) = ไม่มีข้อมูล พร้อมเหตุผล */
+  const counted = all.filter((r) => !r.skipped);
+  if (!counted.length) return { status: "nodata", results: all, text: all.map((r) => r.text).join(" · ") };
+  const results = counted;
   const pick = (status) => results.filter((r) => r.status === status);
   const failed = pick("fail");
   if (failed.length) return { status: "fail", results, text: failed.map((r) => r.text).join(" · ") };

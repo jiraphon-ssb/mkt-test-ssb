@@ -49,10 +49,10 @@ describe("targetProgress — ทำได้เท่าไรจากเป้
     expect(targetProgress(metric("roas"), 3.7, 4, MONTH)).toMatchObject({ tone: "amber", text: "ใกล้เป้า" });
     expect(targetProgress(metric("roas"), 2, 4, MONTH)).toMatchObject({ tone: "rose", text: "ต่ำกว่าเป้า", pct: 0.5 });
   });
-  it("%Ads ต่ำกว่าดี: ≤ เพดาน = อยู่ในเป้า · เกิน ≤ 10% = เกินเป้าเล็กน้อย · เกินกว่านั้น = เกินเป้า", () => {
-    expect(targetProgress(metric("pctAds"), 0.18, 0.2, MONTH)).toMatchObject({ tone: "emerald", text: "อยู่ในเป้า" });
-    expect(targetProgress(metric("pctAds"), 0.215, 0.2, MONTH)).toMatchObject({ tone: "amber", text: "เกินเป้าเล็กน้อย" });
-    expect(targetProgress(metric("pctAds"), 0.3, 0.2, MONTH)).toMatchObject({ tone: "rose", text: "เกินเป้า" });
+  it("%Ads ต่ำกว่าดี: ≤ เพดาน = อยู่ในเพดาน · เกิน ≤ 10% = เกินเพดานเล็กน้อย · เกินกว่านั้น = เกินเป้า", () => {
+    expect(targetProgress(metric("pctAds"), 0.18, 0.2, MONTH)).toMatchObject({ tone: "emerald", text: "อยู่ในเพดาน" });
+    expect(targetProgress(metric("pctAds"), 0.215, 0.2, MONTH)).toMatchObject({ tone: "amber", text: "เกินเพดานเล็กน้อย" });
+    expect(targetProgress(metric("pctAds"), 0.3, 0.2, MONTH)).toMatchObject({ tone: "rose", text: "เกินเพดาน" });
   });
   it("ยอดนับ โหมดเดือนนี้: เทียบเป้าเดือน (pct) แต่ตัดสินจากจังหวะที่ควรถึงวันนี้", () => {
     const p = targetProgress(metric("closed"), 45, 100, MONTH);
@@ -71,7 +71,7 @@ describe("goalsFor — จับคู่ค่าจริงกับเป้
   it("คืน map ตาม key · ค่าที่ไม่ส่งมาเป็น nodata", () => {
     const g = goalsFor({ roas: 5, pctAds: 0.25, inquiries: 40 }, { roas: 4, pctAds: 0.2, inquiries: 112, closed: 10 }, WEEK);
     expect(g.roas.text).toBe("ถึงเป้า");
-    expect(g.pctAds.text).toBe("เกินเป้า");
+    expect(g.pctAds.text).toBe("เกินเพดาน");
     expect(g.inquiries.target).toBe(28);
     expect(g.closed.state).toBe("nodata");
     expect(g.cpl.state).toBe("unset");

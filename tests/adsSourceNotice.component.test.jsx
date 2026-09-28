@@ -15,7 +15,7 @@ const ads = (patch = {}) => ({
   salesGoals: ["b_td", "b_jk", "b_ta", "b_jt"].map((brand_id) => ({ brand_id, month: "2026-09-01", sales_target: 1000000 })),
   pilot: { status: "ready", error: null, summary }, ...patch,
 });
-const show = (props) => render(<MemoryRouter><AdsSourceNotice ads={ads(props)} /></MemoryRouter>);
+const show = (props, extra = {}) => render(<MemoryRouter><AdsSourceNotice ads={ads(props)} {...extra} /></MemoryRouter>);
 
 describe("AdsSourceControl — ไม่มีตัวสลับแหล่งข้อมูลแล้ว", () => {
   it("ข้อมูลจริง = ไม่มีป้ายอะไรบนหัวหน้า (แถบด้านล่างบอกอยู่แล้ว)", () => {
@@ -30,10 +30,10 @@ describe("AdsSourceControl — ไม่มีตัวสลับแหล่�
 });
 
 describe("AdsSourceNotice — สามชั้น", () => {
-  it("ชั้นที่ 1 สรุป + ธงวันนี้ยังไม่จบ + ปุ่มโหลดใหม่", () => {
-    show();
+  it("ชั้นที่ 1 สรุป + ธงวันนี้ยังไม่จบ (เมื่อดูวันนี้) + ปุ่มโหลดใหม่", () => {
+    show(undefined, { todayOnly: true });
     expect(screen.getByRole("status").textContent).toContain("ข้อมูลจริง");
-    expect(screen.getByText(/วันนี้ยังไม่สิ้นสุด/)).toBeTruthy();
+    expect(screen.getByText(/ของวันนี้จะครบพรุ่งนี้/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /โหลดใหม่/ })).toBeTruthy();
   });
 
@@ -67,8 +67,43 @@ describe("AdsSourceNotice — สามชั้น", () => {
     expect(within(chips[2]).getByText("รอเชื่อมแหล่งข้อมูล")).toBeTruthy();
   });
 
-  it("โหลดไม่สำเร็จ = บอกเหตุผลไทยและไม่สลับไปข้อมูลตัวอย่างเงียบๆ", () => {
-    show({ pilot: { status: "error", error: "SALES_READ_FAILED", summary } });
-    expect(screen.getByRole("alert").textContent).toContain("ไม่ได้แสดงข้อมูลตัวอย่างแทน");
+  /* ทดสอบละเอียดรอบ 2 (27 ก.ย.): โหลดพังแล้วขึ้นสองที่ (แถบนี้ + กล่องในหน้า) พร้อมปุ่มลองใหม่สองปุ่ม · ระหว่างโหลดก็ซ้อนสองบรรทัด
+     → สถานะโหลด/พังให้กล่องในหน้าบอกที่เดียว (อยู่ตรงที่ข้อมูลควรอยู่ บอกได้ว่า "ไม่ได้แปลว่าไม่มีข้อมูล") แถบนี้เงียบ */
+  it("กำลังโหลด / โหลดไม่สำเร็จ = แถบนี้ไม่ขึ้น (กล่องในหน้าบอกแทน ไม่ซ้อนสองที่)", () => {
+    const { container } = show({ pilot: { status: "error", error: "SALES_READ_FAILED", summary } });
+    expect(container.textContent).toBe("");
+    cleanup();
+    expect(show({ pilot: { status: "loading", error: null, summary } }).container.textContent).toBe("");
   });
+});
+
+/* 26 ก.ย. (สเปก creative-page-hierarchy): แถบขึ้นเฉพาะตอนมีเรื่อง — ปกติ (สดและครบ) ไม่กินพื้นที่ทุกหน้า ดูรายละเอียดที่หน้าสถานะ Sync */
+describe("AdsSourceNotice — ขึ้นเฉพาะตอนมีปัญหา", () => {
+  // ทุกแหล่งสด ณ 18 ก.ย. (ข้อมูลใน fixture ถึง 18 ก.ย.)
+  const fresh = () => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-09-18T10:00:00+07:00")); };
+  afterEach(() => vi.useRealTimers());
+
+  it("ทุกแหล่งสดและครบ = ไม่แสดงแถบ", () => {
+    fresh();
+    const { container } = show();
+    expect(container.firstChild).toBeNull();
+  });
+  it("สดและครบ แต่กำลังดู 'วันนี้' = แสดงแถบพร้อมธงวันนี้ยังไม่จบ", () => {
+    fresh();
+    show(undefined, { todayOnly: true });
+    expect(screen.getByText(/ของวันนี้จะครบพรุ่งนี้/)).toBeTruthy();
+  });
+  it("แหล่งค้าง = ยังแสดงแถบ แต่ไม่มีธงวันนี้เมื่อไม่ได้ดูวันนี้", () => {
+    show({ sales: [{ brand_id: "b_td", fact_date: "2026-09-10", source: "crm" }] });
+    expect(screen.getByRole("status").textContent).toContain("ยอดขาย TD · JD · TA");
+    expect(screen.queryByText(/ของวันนี้จะครบพรุ่งนี้/)).toBeNull();
+  });
+});
+
+/* ทดสอบละเอียดรอบ 2: ยอดขาย/เป้าโหลดพัง ห้ามสรุปว่า "ยังไม่มีข้อมูลยอดขาย / ยังไม่ตั้งเป้า" */
+it("ยอดขาย/เป้าโหลดไม่สำเร็จ = บอกบรรทัดเดียว + โหลดใหม่ · ไม่ขึ้น 'ยังไม่มี' / 'ยังไม่ตั้งเป้า'", () => {
+  const { container } = show({ pilot: { status: "ready", error: null, summary, salesFailed: true } });
+  expect(screen.getByRole("alert").textContent).toContain("โหลดยอดขายและเป้าไม่สำเร็จ");
+  expect(screen.getByRole("button", { name: /โหลดใหม่/ })).toBeTruthy();
+  expect(container.textContent).not.toMatch(/ยังไม่มีข้อมูล|ยังไม่ตั้งเป้า/);
 });

@@ -10,7 +10,8 @@ import "./creativeMedia.css";
 const KIND_ICON = { video: Film, carousel: Images, image: ImageIcon, none: ImageOff };
 const MAX_DOTS = 10;
 
-export function CreativeMedia({ row, onPreview }) {
+/** openLabel = ข้อความของปุ่มบนรูป (หน้าคลังใช้ "เปิดดูชิ้นนี้" → หน้าต่างครีเอทีฟ · สเปก 2026-09-25) */
+export function CreativeMedia({ row, onPreview, openLabel = "ดูตัวอย่างโฆษณา" }) {
   const asset = row.asset;
   const view = mediaView(asset);
   const multi = view.count > 1;
@@ -109,12 +110,12 @@ export function CreativeMedia({ row, onPreview }) {
     {(state === "none" || broken) && <span className="cl-media-fallback">
       <ImageOff size={24} aria-hidden="true" />
       <strong>{broken ? (multi ? "ภาพนี้หมดอายุ" : "ภาพหมดอายุ") : "ยังไม่มีภาพ"}</strong>
-      <small>{broken ? (multi ? "เลื่อนดูภาพอื่นได้ หรือดึงข้อมูลใหม่ในหน้าสถานะ Sync" : "กดดึงข้อมูลใหม่ในหน้าสถานะ Sync") : canPreview ? "กดเพื่อดูตัวอย่างโฆษณาจาก Meta" : "จะแสดงหลังดึง Creative สำเร็จ"}</small>
+      <small>{broken ? (multi ? "เลื่อนดูภาพอื่นได้ หรือดึงข้อมูลใหม่ในหน้าสถานะ Sync" : "กดดึงข้อมูลใหม่ในหน้าสถานะ Sync") : canPreview ? `กดเพื่อ${openLabel}` : "จะแสดงหลังดึง Creative สำเร็จ"}</small>
     </span>}
     {item?.type === "video" && !broken && <span className="cl-media-play" aria-hidden="true"><Play size={20} fill="currentColor" /></span>}
     <span className="cl-media-badge"><KindIcon size={12} aria-hidden="true" />{badge}</span>
-    {canPreview && <button type="button" className="cl-media-open" onClick={openPreview} aria-label={`ดูตัวอย่างโฆษณา ${row.creative} (${view.label})`}>
-      <span className="cl-media-hint" aria-hidden="true">ดูตัวอย่างโฆษณา</span>
+    {canPreview && <button type="button" className="cl-media-open" onClick={openPreview} aria-label={`${openLabel} ${row.creative} (${view.label})`}>
+      <span className="cl-media-hint" aria-hidden="true">{openLabel}</span>
     </button>}
     {multi && <>
       <button ref={prevRef} type="button" className="cl-media-nav cl-media-nav--prev" onClick={() => go(index - 1)} disabled={index === 0} aria-label="ภาพก่อนหน้า"><ChevronLeft size={20} aria-hidden="true" /></button>

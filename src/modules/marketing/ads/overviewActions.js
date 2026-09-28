@@ -43,3 +43,28 @@ export function brandAdvice({ revPace, budgetPace } = {}) {
     why: `ยอด ${pct(revPace.value)} · งบ ${pct(budgetPace.value)}${overBudget ? " (ใช้เกินงบทั้งเดือนแล้ว)" : ""}`,
   };
 }
+
+/* ทดสอบแบบใช้งานจริง 27 ก.ย. (อาร์ต "แก้เลยตามนี้"): ตารางแบรนด์เรียงตามความด่วน ไม่ใช่ลำดับชื่อ
+   อันดับจากตารางตัดสินใจ (rank มาก = ด่วน) · เท่ากันเอาที่ขาดจากแผนมากกว่าก่อน · ตัดสินไม่ได้ (gap ไม่รู้) ไว้ท้าย */
+const URGENT_RANK = 2;   // ตั้งแต่ "ตามผลใกล้ชิด" ขึ้นไป = มีเรื่องต้องดู · ต่ำกว่านี้ (ตามแผน/โอกาสเพิ่มงบ) ไม่ใช่เรื่องด่วน
+export function byUrgency(brands = []) {
+  const rank = (x) => x.pace2?.advice?.rank ?? 0;
+  const gap = (x) => x.pace2?.rev?.gap;
+  return [...brands].sort((x, y) => rank(y) - rank(x)
+    || (gap(x) == null) - (gap(y) == null)
+    || (gap(x) ?? 0) - (gap(y) ?? 0));
+}
+
+/** บรรทัดสรุปบนสุดของภาพรวม — คาดขาดเป้าเท่าไร · ค่าแอดเกินงบกี่แบรนด์ · เรื่องแรกคือแบรนด์ไหน
+    shortfall บวก = คาดขาด · ติดลบ = คาดเกินเป้า · null = ยังคาดไม่ได้ (ไม่มีเป้า/ข้อมูล) */
+export function overviewDigest({ overallPace, brands = [] } = {}) {
+  if (!overallPace) return null;
+  const forecastGap = overallPace.rev?.forecastGap;
+  const top = byUrgency(brands)[0];
+  return {
+    shortfall: forecastGap == null || !Number.isFinite(forecastGap) ? null : -forecastGap,
+    overBudget: brands.filter((x) => x.pace2?.advice?.overBudget).length,
+    companyOver: Boolean(overallPace.budget?.overTarget),   // งบรวมทั้งบริษัทใช้เกินแล้ว (ตรวจรอบ 27 ก.ย. ดึก)
+    first: top && (top.pace2?.advice?.rank ?? 0) >= URGENT_RANK ? { id: top.id, name: top.name, action: top.pace2.advice.action } : null,
+  };
+}

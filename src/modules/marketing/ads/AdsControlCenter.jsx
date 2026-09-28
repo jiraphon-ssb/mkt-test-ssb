@@ -1,6 +1,9 @@
 import { fmtMoney, fmtNum, fmtPct } from "../dash/charts/theme.js";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { sourceChips } from "./adsSourceStrip.js";
+import { DAILY_RUN_LABEL } from "../../../../supabase/functions/_shared/dailySchedule.js";
+import { isoDay } from "../adsScope.js";
 import { ArrowLeft, CircleAlert, Database, ExternalLink, Link2, LoaderCircle, LogOut, Save, Scale, ShieldAlert, Target } from "lucide-react";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
@@ -16,13 +19,14 @@ import { GoalSettingsPanel } from "./GoalSettingsPanel.jsx";
 import { incompleteRules, normalizeCreativeRules, ruleTitle } from "../creatives/creativeRules.js";
 
 const SOURCE_DETAILS = {
-  meta: "Spend · Delivery · Messaging",
-  google: "Spend · Traffic · Conversions",
-  tiktok: "Spend · Video · Leads",
-  shopee: "Spend · Orders · GMV",
+  /* ภาษาคนใช้ ไม่ใช่ชื่อ field ของ API (ตรวจรอบ 28 ก.ย.) */
+  meta: "ค่าแอด · การแสดงผล · คนทัก",
+  google: "ค่าแอด · คนเข้าเว็บ · คอนเวอร์ชัน",
+  tiktok: "ค่าแอด · วิดีโอ · Lead",
+  shopee: "ค่าแอด · ออเดอร์ · ยอดขาย",
 };
 
-/* ดึงวันละครั้งตี 5 — ต่ำกว่า 26/50 ชม. ไม่มีผล (adsDataHealth ยกเป็นขั้นต่ำ) */
+/* ดึงวันละครั้ง 09:00 — ต่ำกว่า 26/50 ชม. ไม่มีผล (adsDataHealth ยกเป็นขั้นต่ำ) */
 const DEFAULT_RULES = {
   staleHours: DAILY_STALE_HOURS,
   missingDataHours: DAILY_MISSING_HOURS,
@@ -97,7 +101,7 @@ function Connections({ brands, config, setConfig, toast, isLead }) {
       </div> : <div className="acc-callout"><CircleAlert size={17} /><span>ยังไม่เปิดเชื่อมต่อแพลตฟอร์มนี้ · บันทึก mapping เตรียมไว้ได้</span></div>}
       {sourceId === "meta" && !oauth.loading && needsPostScopeReconnect(oauth.authorizations) && <div className="acc-callout acc-callout--action" role="status"><CircleAlert size={17} /><span><b>เชื่อม Meta ใหม่อีกครั้งเพื่อแสดงภาพโฆษณาจริง</b> · โฆษณาแบบบูสต์โพสต์เพจต้องใช้สิทธิ์อ่านเพจ (อ่านอย่างเดียว) ตอนนี้การ์ดจึงเป็นรูปโปรไฟล์เพจ · ตอนเชื่อม ให้กดยืนยันสิทธิ์เพจทุกเพจที่ยิงแอด และยืนยัน Business ที่เป็นเจ้าของเพจด้วย (เพจใต้ Business Manager ไม่โผล่ถ้าไม่ยืนยัน)</span><button type="button" className="acc-oauth-connect" onClick={connectMeta}><Link2 size={14} /> เชื่อมใหม่</button></div>}
       <details className="acc-source-options"><summary>ตัวเลือกการดึงข้อมูล</summary><div className="acc-source-config">
-        <div className="acc-source-fixed"><span>ดึงอัตโนมัติ</span><b>วันละครั้ง · ตี 5</b><small>เวลาไทย · กดดึงเองได้ที่หน้า Sync</small></div>
+        <div className="acc-source-fixed"><span>ดึงอัตโนมัติ</span><b>วันละครั้ง · {DAILY_RUN_LABEL}</b><small>เวลาไทย · กดดึงเองได้ที่หน้า Sync</small></div>
         <label><span>ย้อนหลัง</span><Dropdown className="dd--block" ariaLabel="ย้อนหลัง" options={[["30", "30 วัน"], ["90", "90 วัน"], ["180", "180 วัน"]]} value={String(sourceConfig.backfillDays)} onChange={(value) => updateSource({ backfillDays: Number(value) })} /></label>
         <label><span>Attribution</span><Dropdown className="dd--block" ariaLabel="Attribution" options={[["platform_default", "ตามแพลตฟอร์ม"], ["7d_click_1d_view", "7d click / 1d view"], ["1d_click", "1d click"]]} value={sourceConfig.attribution} onChange={(value) => updateSource({ attribution: value })} /></label>
         <label><span>ผลลัพธ์ที่ใช้วัด</span><Dropdown className="dd--block" ariaLabel="ผลลัพธ์ที่ใช้วัด" options={source.leadEvents.map((event) => [event, source.id === "meta" ? metaResultLabel(event) : event])} value={sourceConfig.leadEvent ?? source.leadEvents[0]} onChange={(value) => updateSource({ leadEvent: value })} /></label>
@@ -110,7 +114,7 @@ function Connections({ brands, config, setConfig, toast, isLead }) {
           <div className="acc-brand-cell"><BrandMark brand={brand} size={30} /><strong>{brand.name}</strong></div>
           <label><span>{source.accountLabel}</span><input disabled={!isLead} list={sourceId === "meta" ? "meta-oauth-accounts" : undefined} value={row.accountId ?? ""} onChange={(event) => { const accountId = event.target.value; const account = accountById.get(accountId); updateMapping(brand.id, { accountId, authorizationId: account?.authorization_id ?? row.authorizationId, oauthStatus: account ? "connected" : row.oauthStatus, accountName: account?.account_name ?? row.accountName }); }} placeholder={sourceId === "meta" && mappable.length ? "เลือกบัญชีที่เชื่อมแล้ว" : `${source.accountPrefix}000000000`} /></label>
           <div className="acc-locale"><label><span>Timezone</span><Dropdown className="dd--block" ariaLabel={`Timezone ${brand.name}`} options={[["Asia/Bangkok", "Asia/Bangkok"], ["UTC", "UTC"]]} value={row.timezone ?? sourceConfig.timezone} onChange={(value) => updateMapping(brand.id, { timezone: value })} /></label><label><span>Currency</span><Dropdown className="dd--block" ariaLabel={`Currency ${brand.name}`} options={[["THB", "THB"], ["USD", "USD"]]} value={row.currency ?? sourceConfig.currency} onChange={(value) => updateMapping(brand.id, { currency: value })} /></label></div>
-          <div className="acc-connection-state"><span className={`acc-state ${accountById.has(row.accountId) ? "ready" : ""}`}>{accountById.has(row.accountId) ? "OAuth เชื่อมแล้ว" : "ยังไม่เชื่อมบัญชีนี้"}</span>{row.enabled && <small className={validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "ok" : "bad"}>{validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "Mapping พร้อม" : "กรอกไม่ครบ"}</small>}{row.connectionError && <small className="bad" role="alert">{adsErrorText(row.connectionError)}</small>}<label className="acc-enable"><input type="checkbox" disabled={!isLead} checked={Boolean(row.enabled)} onChange={(event) => updateMapping(brand.id, { enabled: event.target.checked })} /><span>เตรียมดึง</span></label></div>
+          <div className="acc-connection-state"><span className={`acc-state ${accountById.has(row.accountId) ? "ready" : ""}`}>{accountById.has(row.accountId) ? "เชื่อม Meta แล้ว" : "ยังไม่เชื่อมบัญชีนี้"}</span>{row.enabled && <small className={validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "ok" : "bad"}>{validateAdsConnection(sourceId, { ...row, timezone: row.timezone ?? sourceConfig.timezone, currency: row.currency ?? sourceConfig.currency }).ok ? "ตั้งค่าครบ" : "กรอกไม่ครบ"}</small>}{row.connectionError && <small className="bad" role="alert">{adsErrorText(row.connectionError)}</small>}<label className="acc-enable"><input type="checkbox" disabled={!isLead} checked={Boolean(row.enabled)} onChange={(event) => updateMapping(brand.id, { enabled: event.target.checked })} /><span>ดึงข้อมูลบัญชีนี้</span></label></div>
         </div>;
       })}
       {sourceId === "meta" && <datalist id="meta-oauth-accounts">{mappable.map((account) => <option key={`${account.authorization_id}:${account.external_account_id}`} value={account.external_account_id}>{[account.account_name || account.external_account_id, account.connected_by && `เชื่อมโดย ${account.connected_by}`].filter(Boolean).join(" · ")}</option>)}</datalist>}
@@ -184,7 +188,7 @@ function Reconciliation({ config, brands, toast, isLead }) {
   </section></div>;
 }
 
-export function AdsControlCenter({ brands, saved, onSave, toast }) {
+export function AdsControlCenter({ brands, saved, onSave, toast, ads = null }) {
   const initial = useMemo(() => saved ?? {}, [saved]);
   const requestedTab = new URLSearchParams(window.location.search).get("tab");
   const [tab, setTab] = useState(["sources", "goals", "rules", "reconcile"].includes(requestedTab) ? requestedTab : "sources");
@@ -233,6 +237,12 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   };
   const currentConfig = { ...config, rules };
   const health = adsDataHealth(currentConfig);
+  /* ข้อมูลจริง: ป้ายหัวหน้าอ่านความสดค่าแอดจากแหล่งเดียวกับแถบสถานะข้อมูล (ตรวจรอบ 28 ก.ย.: เดิมคิดจากค่าที่บันทึกไว้ 21 ก.ย.
+     ขึ้น "ข้อมูลขาด" ตลอด ขณะหน้าสถานะ Sync ขึ้น "ข้อมูลใช้ได้") · กดไปดูรายละเอียดที่หน้าสถานะ Sync */
+  const liveMeta = ads?.source === "meta_pilot" && ads.pilot?.status === "ready"
+    ? sourceChips({ summary: ads.pilot.summary ?? {}, sales: ads.sales ?? [], salesGoals: ads.salesGoals ?? [], today: isoDay(new Date()) })[0] : null;
+  const pill = liveMeta ? { state: { ok: "healthy", warn: "stale", muted: "missing" }[liveMeta.tone] ?? "missing",
+    label: liveMeta.tone === "ok" ? "ข้อมูลใช้ได้" : liveMeta.tone === "warn" ? "ค่าแอดยังไม่สด" : "ยังไม่มีค่าแอด" } : health;
   /* dirty ต่อส่วน (22 ก.ย. — อาร์ตถามเรื่องปุ่มเซฟ): ปุ่มเดียวครอบแท็บ บัญชี+กฎ · เทียบกับค่าที่บันทึกล่าสุด
      สะอาด = ปุ่มบอก "บันทึกแล้ว" กดไม่ได้ · แก้ค้าง = จุดบนแท็บนั้น + ถามก่อนออกจากหน้า */
   const snap = (value) => JSON.stringify(value ?? {});
@@ -252,7 +262,9 @@ export function AdsControlCenter({ brands, saved, onSave, toast }) {
   const savedAt = initial.updatedAt ? new Date(initial.updatedAt).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : null;
   const primaryTabs = [["sources",Link2,"1 · บัญชี"],["goals",Target,"2 · เป้า"],["rules",ShieldAlert,"3 · กฎ"],["reconcile",Scale,"4 · ตรวจยอด"]];
   return <main className="aw acc">
-    <header className="acc-header"><div><Link to="/mkt/ads" onClick={confirmLeave}><ArrowLeft size={15} /> ภาพรวมโฆษณา</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1><span className={`acc-health-pill ${health.state}`}>{health.label}</span></div>
+    <header className="acc-header"><div><Link to="/mkt/ads" onClick={confirmLeave}><ArrowLeft size={15} /> ภาพรวมโฆษณา</Link><h1>ตั้งค่าข้อมูลโฆษณา</h1>{liveMeta
+      ? <Link to="/mkt/ads/sync" className="acc-health-link" title="ดูรายละเอียดที่หน้าสถานะ Sync"><span className={`acc-health-pill ${pill.state}`}>{pill.label}</span></Link>
+      : <span className={`acc-health-pill ${pill.state}`}>{pill.label}</span>}</div>
       <div className="acc-save-wrap">
         <button type="button" className="acc-save" onClick={save} disabled={linking || !isLead || !dirty} aria-busy={linking}
           title={!isLead ? "เฉพาะหัวหน้าทีมบันทึกการตั้งค่าได้" : dirty ? "ครอบแท็บ บัญชี และ กฎ (แท็บเป้าบันทึกในตัวเอง)" : "ไม่มีการแก้ไขค้าง"}>

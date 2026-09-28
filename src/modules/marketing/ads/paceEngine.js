@@ -72,7 +72,8 @@ export function paceOf({ actual, target, clock = {}, direction = "higher", fresh
   const full = {
     value, expectedToDate,
     gap: a - expectedToDate,                       // ติดลบ = ช้ากว่าแผน · บวก = เหนือแผน
-    forecast, forecastGap: forecast - t,
+    // ส่วนต่างคิดจากคาดปิดเดือนที่ตัดสตางค์แล้ว — คาดปิด + ส่วนต่าง บนจอบวกกลับได้เท่าเป้าพอดี (ตรวจรอบ 27 ก.ย. ดึก)
+    forecast, forecastGap: (Math.trunc(Number((forecast * 100).toFixed(4))) - Math.trunc(Number((t * 100).toFixed(4)))) / 100,
     remaining,
     requiredDaily: daysLeft !== null && daysLeft > 0 ? Math.max(0, remaining) / daysLeft : null,
     overTarget: a > t,
@@ -104,7 +105,7 @@ const LABEL = {
   higher: { ontrack: "เหนือแผน", warn: "ใกล้เป้า", bad: "ช้ากว่าแผน", unknown: "ยังตัดสินใจไม่ได้" },
   spend: { ontrack: "ตามแผน", under: "ใช้ช้ากว่าแผน", warn: "ใช้เร็วกว่าแผน", bad: "เกินงบ", unknown: "ยังตัดสินใจไม่ได้" },
   rate_higher: { ontrack: "ถึงเป้า", warn: "ใกล้เป้า", bad: "ต่ำกว่าเป้า", unknown: "ยังตัดสินใจไม่ได้" },
-  rate_lower: { ontrack: "อยู่ในเป้า", warn: "เกินเป้าเล็กน้อย", bad: "เกินเป้า", unknown: "ยังตัดสินใจไม่ได้" },
+  rate_lower: { ontrack: "อยู่ในเพดาน", warn: "เกินเพดานเล็กน้อย", bad: "เกินเพดาน", unknown: "ยังตัดสินใจไม่ได้" },
 };
 export const paceLabel = (state, direction = "higher") => (LABEL[direction] ?? LABEL.higher)[state] ?? LABEL.higher.unknown;
 
@@ -148,4 +149,23 @@ export function gaugeFraction(value) {
   const n = finite(value);
   if (n === null) return { fraction: null, over: false };
   return { fraction: Math.min(1, Math.max(0, n / GAUGE_MAX)), over: n > GAUGE_MAX };
+}
+
+/** นาฬิกาเดือนที่นับถึง "เมื่อวาน" (วันสุดท้ายที่ข้อมูลครบ) — ยอดขายและค่าแอดดึงวันละครั้งตอน 09:00
+    เดิมนับวันนี้เต็มวัน → "ควรถึงวันนี้" สูงกว่าที่ข้อมูลจะมีได้ ~1 วัน · คาดสิ้นเดือนของค่าแอดต่ำกว่าจริง (อาร์ตเคาะ 27 ก.ย.)
+    วันที่ 1 = ยังไม่มีวันไหนครบ → elapsed 0 (paceOf ตอบ too_early) · today คงเป็นวันจริงไว้ให้ด่าน "ข้อมูลเก่า" */
+export function monthClockAsOf(today, dataThrough = null) {
+  const text = String(today ?? "");
+  if (!ISO.test(text)) return { ...monthClock(null), asOf: null };
+  const year = Number(text.slice(0, 4)), month = Number(text.slice(5, 7)), day = Number(text.slice(8, 10));
+  const daysTotal = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const early = { daysElapsed: 0, daysTotal, daysLeft: daysTotal, elapsed: 0, today: text, asOf: null };
+  if (day <= 1) return early;
+  const dayIso = (d) => new Date(Date.UTC(year, month - 1, d)).toISOString().slice(0, 10);
+  let asOf = dayIso(day - 1);
+  /* หลังเที่ยงคืนก่อนรอบดึง 09:00 ข้อมูลยังถึงแค่ก่อนเมื่อวาน (ตรวจรอบ 27 ก.ย. ดึก) → คิดถึงวันที่มีข้อมูล
+     ถอยไม่เกิน 1 วัน — ค้างนานกว่านั้นคือท่อพัง ให้ด่านข้อมูลเก่า (staleAfterDays) เป็นคนบอก ไม่ใช่ซ่อนด้วยการเลื่อนนาฬิกา */
+  if (ISO.test(String(dataThrough ?? "")) && dataThrough < asOf) asOf = dataThrough > dayIso(day - 2) ? dataThrough : dayIso(day - 2);
+  if (asOf < dayIso(1)) return early;   // ยังไม่มีวันไหนของเดือนนี้ที่ข้อมูลครบ
+  return { ...monthClock(asOf), today: text, asOf };
 }

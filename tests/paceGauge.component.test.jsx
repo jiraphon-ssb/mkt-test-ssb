@@ -16,7 +16,9 @@ describe("PaceGauge", () => {
     expect(screen.getByText("74.08%")).toBeTruthy();
     expect(screen.getByText("ของที่ควรได้ถึงวันนี้")).toBeTruthy();
     expect(screen.getByText("ช้ากว่าแผน")).toBeTruthy();
-    expect(screen.getByText("ตามแผน")).toBeTruthy();        // หมุดอ้างอิง 100% ต้องมีเสมอ
+    // หมุดอ้างอิง 100% ต้องมีเสมอ — แต่ต้องไม่ใช่คำสถานะ ("ตามแผน" บนหัวคู่กับ "ช้ากว่าแผน" ใต้ตัวเลข อ่านขัดกัน · ชุด C ข้อ 13)
+    expect(document.querySelector(".pg-pin-label").textContent).toBe("100%");
+    expect(screen.queryByText("ตามแผน")).toBeNull();
   });
   it("อ่านออกด้วยเครื่องอ่านหน้าจอเป็นประโยคเต็ม", () => {
     const svg = gauge({ pace: paceOf({ actual: 2997302, target: 5780000, clock }) });
@@ -57,7 +59,7 @@ describe("PaceGauge", () => {
     expect(screen.getByText("ถึงเป้า")).toBeTruthy();
     cleanup();
     render(<PaceGauge pace={thresholdOf(0.1379, 0.126, { direction: "lower" })} kind="rate_lower" caption="ของเพดาน %Ads"/>);
-    expect(screen.getByText("เกินเป้าเล็กน้อย")).toBeTruthy();
+    expect(screen.getByText("เกินเพดานเล็กน้อย")).toBeTruthy();
   });
   it("โหมดงบใช้คำของงบ (เกินงบ ไม่ใช่ ช้ากว่าแผน)", () => {
     render(<PaceGauge pace={paceOf({ actual: 57038.53, target: 45000, clock, direction: "spend" })} />);

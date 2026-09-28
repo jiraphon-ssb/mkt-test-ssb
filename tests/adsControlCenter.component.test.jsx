@@ -132,3 +132,33 @@ describe("ปุ่มบันทึกรู้จักการแก้ค�
     for (const input of document.querySelectorAll(".acc-rule input")) expect(input.disabled).toBe(true);
   });
 });
+
+/* ตรวจรอบ 28 ก.ย.: หน้าตั้งค่าขึ้น "ข้อมูลขาด" (คิดจากค่าที่บันทึกไว้ 21 ก.ย.) แต่หน้าสถานะ Sync ขึ้น "ข้อมูลใช้ได้"
+   → ข้อมูลจริง: ป้ายหัวหน้าอ่านจากแหล่งเดียวกับแถบสถานะข้อมูล และกดไปหน้าสถานะ Sync ได้ */
+describe("ป้ายสถานะข้อมูลบนหัวหน้าตั้งค่า", () => {
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  const yesterday = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;   // วันที่ท้องถิ่น (UTC ช่วงดึกได้วันก่อนหน้า)
+  const stale = { sources: { meta: {} }, sync: { meta: [{ lastSuccessAt: "2026-09-21T05:00:00Z", status: "healthy" }] } };
+  const live = (to) => ({ source: "meta_pilot", pilot: { status: "ready", summary: { accounts: 4, to } }, sales: [], salesGoals: [] });
+  it("ข้อมูลจริงสด = ข้อมูลปกติ ไม่ใช่ข้อมูลขาด · ป้ายเป็นลิงก์ไปสถานะ Sync", () => {
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={stale} ads={live(yesterday)} onSave={() => {}} /></MemoryRouter>);
+    const pill = document.querySelector(".acc-health-pill");
+    expect(pill.textContent).not.toMatch(/ข้อมูลขาด/);
+    expect(pill.closest("a").getAttribute("href")).toBe("/mkt/ads/sync");
+    expect(pill.textContent).toBe("ข้อมูลใช้ได้");
+  });
+  it("ค่าแอดค้างหลายวัน = บอกว่ายังไม่สด", () => {
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={stale} ads={live("2026-01-01")} onSave={() => {}} /></MemoryRouter>);
+    expect(document.querySelector(".acc-health-pill").textContent).toBe("ค่าแอดยังไม่สด");
+  });
+});
+
+/* ตรวจรอบ 28 ก.ย.: หน้าตั้งค่ามีศัพท์ระบบ/อังกฤษ และช่องติ๊ก "เตรียมดึง" อ่านเหมือนสถานะ (ข้อมูลดึงทุกวันอยู่แล้ว) */
+it("คำในแท็บบัญชีเป็นภาษาคนใช้: ช่องติ๊ก = ดึงข้อมูลบัญชีนี้ · ไม่มี OAuth/Mapping/Spend", () => {
+  const saved = { mappings: { b_td: { accountId: "123", enabled: true, timezone: "Asia/Bangkok", currency: "THB" } } };
+  render(<MemoryRouter><AdsControlCenter brands={brands} saved={saved} onSave={() => {}} /></MemoryRouter>);
+  const text = document.body.textContent;
+  expect(screen.getByRole("checkbox", { name: "ดึงข้อมูลบัญชีนี้" })).toBeTruthy();
+  expect(text).not.toMatch(/เตรียมดึง|OAuth|Mapping|Spend ·/);
+  expect(text).toContain("ค่าแอด · การแสดงผล · คนทัก");
+});

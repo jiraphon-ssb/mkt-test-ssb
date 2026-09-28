@@ -6,12 +6,13 @@ import "./dateRangePicker.css";
 /* DateRangePicker — ปุ่มเดียวเปิด popover: ซ้าย = ช่วงสำเร็จรูป (radio) · ขวา = ปฏิทิน 2 เดือน เลือกช่วงเอง (คลิกวันแรก → วันสุดท้าย)
    props: period · from/to (ISO วัน รวมหัวท้าย ที่แสดงอยู่) · onChange({period, from, to}) กดยืนยันถึงส่ง · max = วันสุดท้ายที่เลือกได้ (วันนี้)
    วันที่ทั้งหมดคิดใน adsScope.js (มีเทส) — คอมโพเนนต์นี้แค่แสดงผล/รับคลิก */
-const toShown = (range) => ({ from: isoDay(new Date(range.start)), to: isoDay(new Date(new Date(range.end).getTime() - 1)) });
+// ช่วงว่าง (เช่นสัปดาห์นี้วันจันทร์ก่อนข้อมูลเข้า) = วันเริ่มวันเดียว ไม่กลับหัว
+const toShown = (range) => { const from = isoDay(new Date(range.start)); return { from, to: new Date(range.end) > new Date(range.start) ? isoDay(new Date(new Date(range.end).getTime() - 1)) : from }; };
 const monthOf = (iso) => ({ y: Number(iso.slice(0, 4)), m: Number(iso.slice(5, 7)) - 1 });
 const addMonths = ({ y, m }, n) => { const d = new Date(y, m + n, 1); return { y: d.getFullYear(), m: d.getMonth() }; };
 const monthIndex = ({ y, m }) => y * 12 + m;
 
-export function DateRangePicker({ period, from, to, onChange, max = isoDay(new Date()), presets = PERIOD_PRESETS, className = "" }) {
+export function DateRangePicker({ period, from, to, onChange, max = isoDay(new Date()), presets = PERIOD_PRESETS, className = "", through = null }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ period, from, to });
   const [pending, setPending] = useState(null);
@@ -30,7 +31,8 @@ export function DateRangePicker({ period, from, to, onChange, max = isoDay(new D
   }, [open, period, from, to]);
 
   const presetLabel = presets.find((p) => p[0] === period)?.[1] ?? "กำหนดเอง";
-  const pickPreset = (key) => { const s = toShown(periodRange(key, null, null)); setDraft({ period: key, ...s }); setPending(null); setView(addMonths(monthOf(s.to), -1)); };
+  // through = วันสุดท้ายที่มีข้อมูล — ช่วง "ล่าสุด/นี้" ในตัวเลือกต้องตรงกับที่หน้าคิดจริง (ตรวจรอบ 28 ก.ย.)
+  const pickPreset = (key) => { const s = toShown(periodRange(key, null, null, new Date(), through)); setDraft({ period: key, ...s }); setPending(null); setView(addMonths(monthOf(s.to), -1)); };
   const clickDay = (iso) => {
     if (iso > max) return;
     if (!pending) { setPending(iso); setDraft({ period: "custom", from: iso, to: iso }); return; }

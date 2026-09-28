@@ -1,7 +1,7 @@
 /* Overview ใช้ยอดจริงและเป้าจากระบบขาย (pure) — ค่าแอดยังเป็นของ Meta · ไม่มีข้อมูล = null พร้อมเหตุผล */
 import { describe, it, expect } from "vitest";
 import {
-  goalTargetsByBrand, combineGoalTargets, plansFromSalesGoals, salesFactsByBrand, applySalesToBrands, applySalesToSummary, salesPipeline, campaignSalesSummary, salesTrendValue,
+  cashSummary, goalTargetsByBrand, combineGoalTargets, plansFromSalesGoals, salesFactsByBrand, applySalesToBrands, applySalesToSummary, salesPipeline, campaignSalesSummary, salesTrendValue,
 } from "../src/modules/marketing/ads/salesOverview.js";
 
 const goal = (brand_id, patch = {}) => ({ brand_id, month: "2026-09-01", version: 2, goal_source: "sale_goal", sales_target: 1000000, sales_new_target: 600000, ad_budget: 100000,
@@ -298,4 +298,80 @@ describe("Lead ก่อน 1 ก.ย. — ย้ายจาก sheet เข้
     expect(salesTrendValue({ sales: rows, key: "cpl", brandIds: ["b_td"], spend: 500, ...day })).toBeNull();
     expect(salesTrendValue({ sales: rows, key: "orders", brandIds: ["b_td"], ...day })).toBe(5);
   });
+});
+
+/* 26 ก.ย. (สเปก overview-cash): เงินเข้า · มัดจำ · ยกเลิก/คืนเงิน — ระบบ TMK ไม่มีเงินเข้า/มัดจำ (ส่งมาเป็น 0) */
+describe("salesFactsByBrand — เงินจริง", () => {
+  const row = (brand_id, source, patch) => ({ brand_id, source, fact_date: "2026-09-10", gross_revenue: 0, cash_received: 0, deposits: 0, deposit_value: 0, cancelled: 0, cancelled_value: 0, refunds: 0, ...patch });
+  it("รวมมูลค่ายกเลิก/คืนเงิน · cashTracked เฉพาะแบรนด์ที่มีแถวจากระบบที่ไม่ใช่ TMK", () => {
+    const out = salesFactsByBrand([
+      row("b_td", "crm", { cash_received: 1000, cancelled: 1, cancelled_value: 50, refunds: 20 }),
+      row("b_jt", "tmk", { gross_revenue: 500, cancelled: 2, cancelled_value: 588 }),
+    ], { from: "2026-09-01", to: "2026-09-30" });
+    expect(out.get("b_td")).toMatchObject({ cash: 1000, cancelled: 1, cancelledValue: 50, refunds: 20, cashTracked: true });
+    expect(out.get("b_jt")).toMatchObject({ cancelled: 2, cancelledValue: 588, cashTracked: false });
+  });
+});
+
+describe("cashSummary — กล่องเงินจริง", () => {
+  const sales = new Map([
+    ["b_td", { revenue: 2019076.88, cash: 2461202.88, deposits: 246, depositValue: 2112626.88, cancelled: 2, cancelledValue: 0, refunds: 0, cashTracked: true }],
+    ["b_jk", { revenue: 1131214, cash: 848244, deposits: 130, depositValue: 1140104, cancelled: 1, cancelledValue: 0, refunds: 0, cashTracked: true }],
+    ["b_jt", { revenue: 210126, cash: 0, deposits: 0, depositValue: 0, cancelled: 2, cancelledValue: 588, refunds: 0, cashTracked: false }],
+  ]);
+  const brands = [{ id: "b_td", name: "TEAMDEE", spend: 200000 }, { id: "b_jk", name: "JK Design", spend: 120093.86 }, { id: "b_jt", name: "JUNTAKARN", spend: 30000 }];
+  const out = cashSummary({ sales, brands });
+
+  it("รายแบรนด์: เงินเข้า · ส่วนต่างกับยอดขาย · เงินเข้าต่อค่าแอด (ไม่ปัด)", () => {
+    expect(out.byBrand.b_jk).toMatchObject({ tracked: true, cash: 848244, gap: -282970, deposits: 130, depositValue: 1140104 });
+    expect(out.byBrand.b_jk.cashPerSpend).toBeCloseTo(848244 / 120093.86, 10);
+    expect(out.byBrand.b_td.gap).toBeCloseTo(442126, 6);
+  });
+  it("TMK: เงินเข้า/มัดจำ = null ไม่ใช่ 0 · ยกเลิกยังนับ", () => {
+    expect(out.byBrand.b_jt).toMatchObject({ tracked: false, cash: null, deposits: null, depositValue: null, gap: null, cashPerSpend: null, cancelled: 2, cancelledValue: 588 });
+  });
+  it("รวม: เฉพาะแบรนด์ที่มีเงินเข้า (ค่าแอดก็รวมเฉพาะแบรนด์นั้น) · บอกแบรนด์ที่ไม่รวม · ยกเลิกรวมทุกแบรนด์", () => {
+    expect(out.overall).toMatchObject({ tracked: true, cash: 3309446.88, deposits: 376, spend: 320093.86, excluded: ["JUNTAKARN"], cancelled: 5, cancelledValue: 588 });
+    expect(out.overall.gap).toBeCloseTo(3309446.88 - 3150290.88, 6);
+  });
+  it("ไม่มีแบรนด์ไหนมีข้อมูล = null ทั้งกล่อง", () => {
+    expect(cashSummary({ sales: new Map(), brands }).overall).toBeNull();
+  });
+});
+
+/* ชุด A ข้อ 7: รู้เงินเข้าเฉพาะเมื่อระบบขายส่งค่ามา — ช่องว่างต้องเป็น "ไม่รู้" ไม่ใช่ ฿0 */
+describe("cashTracked ต้องมีค่าเงินเข้าจริง", () => {
+  it("แถวที่ไม่มี cash_received (null) ไม่ทำให้แบรนด์ถูกนับว่ารู้เงินเข้า", () => {
+    const out = salesFactsByBrand([{ brand_id: "b_x", source: "crm", fact_date: "2026-09-10", gross_revenue: 1000, cash_received: null }], { from: "2026-09-01", to: "2026-09-30" });
+    expect(out.get("b_x").cashTracked).toBe(false);
+    expect(cashSummary({ sales: out, brands: [{ id: "b_x", name: "X", spend: 100 }] }).byBrand.b_x.cash).toBeNull();
+  });
+});
+
+/* อาร์ตเคาะ 27 ก.ย.: บางวันระบบขายไม่ได้กรอกเงินเข้า → รวมเฉพาะวันที่กรอก + บอกจำนวนวัน
+   เดิมวันที่ไม่กรอกถูกนับ ฿0 แล้วเอาไปเทียบยอดขายทุกวัน → "ยังเก็บเงินไม่ครบ" เกินจริง */
+describe("เงินจริง — วันที่ไม่ได้กรอกเงินเข้า", () => {
+  const day = (d, revenue, cash) => ({ brand_id: "b_td", source: "crm", fact_date: `2026-09-${d}`, gross_revenue: revenue, cash_received: cash, deposits: 0, deposit_value: 0 });
+  const facts = [day("10", 1000, 900), day("11", 2000, 2100), day("12", 5000, null)];
+  const sales = salesFactsByBrand(facts, { from: "2026-09-01", to: "2026-09-30" });
+  it("นับวันที่กรอก · ยอดขายเทียบเฉพาะวันเดียวกัน", () => {
+    expect(sales.get("b_td")).toMatchObject({ cash: 3000, cashDays: 2, cashDaysTotal: 3, cashRevenue: 3000 });
+  });
+  it("ส่วนต่าง = เงินเข้า − ยอดขายของวันที่กรอก (ไม่ใช่ยอดขายทุกวัน) · บอกจำนวนวัน", () => {
+    const out = cashSummary({ sales, brands: [{ id: "b_td", name: "TEAMDEE", spend: 1000 }] });
+    expect(out.byBrand.b_td).toMatchObject({ cash: 3000, gap: 0, cashDays: 2, cashDaysTotal: 3 });
+    expect(out.overall.partial).toEqual([{ name: "TEAMDEE", days: 2, total: 3 }]);
+  });
+});
+
+it("เงินจริง: วันนี้ยังไม่กรอก ไม่นับเป็นวันที่ขาด", () => {
+  const f = [{ brand_id: "b_td", source: "crm", fact_date: "2026-09-10", gross_revenue: 100, cash_received: 100 }, { brand_id: "b_td", source: "crm", fact_date: "2026-09-11", gross_revenue: 50, cash_received: null }];
+  expect(salesFactsByBrand(f, { from: "2026-09-01", to: "2026-09-30", today: "2026-09-11" }).get("b_td")).toMatchObject({ cashDays: 1, cashDaysTotal: 1, cashRevenue: 100 });
+});
+
+/* รีวิวโค้ด 28 ก.ย.: ช่วง "ล่าสุด/นี้" จบที่เมื่อวานแล้ว — ถ้านับเมื่อวาน (ที่ทีมกรอกตอนเช้า) เป็นวันขาด หน้าภาพรวมขึ้น "ทีมกรอก 26/27"
+   ขณะหน้าสถานะ Sync ขึ้นครบ → เกณฑ์เดียวกัน: วันนี้และเมื่อวานที่ยังไม่กรอกไม่นับในตัวหาร (ทั้งคนทักและเงินเข้า) */
+it("salesFactsByBrand: เมื่อวานที่ยังไม่กรอก ไม่นับเป็นวันขาด · สองวันก่อนนับ", () => {
+  const rows = [fact("b_td", "2026-09-25", { inquiry_filled: false, cash_received: null }), fact("b_td", "2026-09-26", { inquiry_filled: true, cash_received: 100 }), fact("b_td", "2026-09-27", { inquiry_filled: false, cash_received: null })];
+  expect(salesFactsByBrand(rows, { from: "2026-09-01", to: "2026-09-27", today: "2026-09-28" }).get("b_td")).toMatchObject({ inquiryFilledDays: 1, days: 2, cashDays: 1, cashDaysTotal: 2 });
 });

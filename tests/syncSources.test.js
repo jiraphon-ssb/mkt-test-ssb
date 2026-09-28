@@ -78,7 +78,7 @@ describe("goalGaps — เป้าเดือนนี้มาจากไห
     const out = goalGaps({ goal_source: "sale_target", version: 0, sales_target: 3300000, orders_target: 193, deposits_target: 206, leads_target: 344, inquiry_target: 1173, ad_budget: null, cpl: null, roas: null, pct_ads_new: null, cac: null, cpi: null });
     expect(out.source).toBe("sale_target");
     // "ยอดลูกค้าใหม่" เป็นช่องที่เพิ่มมา 18 ก.ย. 69 (ตั้งเองได้ในหน้าตั้งค่า) เป้าแบบเก่าไม่มีให้
-    expect(out.missing).toEqual(["ยอดลูกค้าใหม่", "งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อทัก"]);
+    expect(out.missing).toEqual(["ยอดลูกค้าใหม่", "งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อคนทัก"]);
     expect(out.present).toHaveLength(5);
   });
   /* 18 ก.ย. 69: 0 = ตั้งใจให้เป็นศูนย์ (เดือนที่พักแอด) ไม่ใช่ "ยังไม่ตั้ง"
@@ -187,7 +187,8 @@ describe("แหล่งข้อมูลยอดขาย JUNTAKARN (ระ�
      และคอลัมน์ "ครบแค่ไหน" ต้องบอกความครบจริงแบบแถวยอดขาย ไม่ใช่เอานิยามมาวาง */
   it("คืนเวลารอบดึงล่าสุด + ความครบของเดือนนี้ ให้เทียบกับแถวอื่นได้", () => {
     const runs = [{ pipeline: "sales", started_at: "2026-09-18T02:07:00Z", summary: { jk: { error: null } } }];
-    const row = jkSourceRow([jkFact("2026-09-16"), jkFact("2026-09-17", { inquiry_filled: false })], { today: "2026-09-18", runs });
+    // 17 ยังไม่กรอก = ขาด เมื่อดูวันที่ 19 (เลยช่วงกรอกของเมื่อวานแล้ว · ตรวจรอบ 28 ก.ย.)
+    const row = jkSourceRow([jkFact("2026-09-16"), jkFact("2026-09-17", { inquiry_filled: false })], { today: "2026-09-19", runs });
     expect(row.ranAt).toBe("2026-09-18T02:07:00Z");
     expect(row.days).toBe(2);
     expect(row.filled).toBe(1);
@@ -217,4 +218,11 @@ describe("แหล่งข้อมูลยอดขาย JUNTAKARN (ระ�
     ];
     expect(jkSourceRow([jkFact("2026-09-17")], { today: "2026-09-18", runs }).state).toBe("ok");
   });
+});
+
+/* ตรวจรอบ 28 ก.ย.: เกณฑ์เดียวกับแถวยอดขาย — เมื่อวานที่ทีมยังไม่กรอกไม่นับเป็นวันที่ขาด (ทีมกรอกของเมื่อวานตอนเช้า) */
+it("jkSourceRow: เมื่อวานยังไม่กรอก ไม่นับในตัวหาร · สองวันก่อนยังไม่กรอก = ขาด", () => {
+  const f = (d, filled) => ({ brand_id: "b_jt", source: "tmk", fact_date: d, inquiry_filled: filled });
+  const row = jkSourceRow([f("2026-09-25", false), f("2026-09-26", true), f("2026-09-27", false), f("2026-09-28", false)], { today: "2026-09-28" });
+  expect(row).toMatchObject({ filled: 1, days: 2 });
 });

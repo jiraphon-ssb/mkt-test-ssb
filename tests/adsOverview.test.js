@@ -1,3 +1,4 @@
+import { actionLabel as actionLabelOf } from "../src/modules/marketing/creatives/creativeStatus.js";
 import { describe, it, expect } from "vitest";
 import {
   adsByBrandChannel, adsByChannel, adsChannelList, adsCompanyPaceChart, adsCompanySummary, adsSpendShareByBrand, adsDecisionRows, adsFunnel, adsKpis, adsWeekly,
@@ -564,6 +565,23 @@ describe("ครีเอทีฟ — ตัวไหนเวิร์ค / �
     expect(rows[0].roas).toBe(4);
     expect(rows[0].brand).toBe("TEAMDEE");
   });
+  /* 25 ก.ย.: หน้าต่างครีเอทีฟต้องบอกว่าชิ้นนี้อยู่แคมเปญไหน · แต่ละแคมเปญได้เท่าไร · เปิด/ปิด */
+  it("แยกยอดรายแคมเปญ · ผลรวมเท่ายอดทั้งชิ้น · สถานะมาจากโฆษณาในแคมเปญนั้น (มีตัวเปิด = ACTIVE)", () => {
+    const asset = (adId, status) => ({ provider: "meta", connectionId: "conn-1", storyId: "1_2", adId, name: "โพสต์เดียว", media: [], status, statusAt: "2026-07-20T22:05:00Z" });
+    const [row] = adsCreativeRows([
+      { ...shot("a", "โพสต์เดียว", 5), campaign: "C1", creative_data: asset("ad-1", "PAUSED") },
+      { ...shot("b", "โพสต์เดียว", 6), campaign: "C1", creative_data: asset("ad-2", "ACTIVE") },
+      { ...shot("c", "โพสต์เดียว", 7, { spend: 500, leads: 0 }), campaign: "C2", creative_data: asset("ad-3", "CAMPAIGN_PAUSED") },
+    ], RANGE_M, brands);
+    expect(row.perCampaign.map((p) => p.campaign)).toEqual(["C1", "C2"]);
+    expect(row.perCampaign.reduce((n, p) => n + p.spend, 0)).toBe(row.spend);
+    expect(row.perCampaign[0]).toMatchObject({ spend: 4000, leads: 20, cpl: 200, status: "ACTIVE" });
+    expect(row.perCampaign[1]).toMatchObject({ spend: 500, leads: 0, cpl: null, status: "CAMPAIGN_PAUSED" });
+    expect(row.perCampaign[0].ctr).toBeCloseTo(0.02);
+    // หน้าต่างแบบละเอียด (อาร์ตเคาะ 25 ก.ย.): ตารางรายแคมเปญมีการแสดงผล · การซื้อ · ต่อการซื้อ
+    expect(row.perCampaign[0].impressions).toBe(200_000);
+    expect(row.perCampaign[1].cpa).toBeNull();
+  });
   it("ชื่อเหมือนกันแต่ Meta creative id คนละตัว ต้องไม่ถูกรวมเป็นชิ้นเดียว", () => {
     const asset = (creativeId, adId) => ({ provider: "meta", connectionId: "conn-1", creativeId, adId, name: "ชื่อซ้ำ", media: [] });
     const rows = adsCreativeRows([
@@ -618,6 +636,116 @@ describe("ครีเอทีฟ — ตัวไหนเวิร์ค / �
     ], RANGE_M, brands);
     expect(rows[0].ctrDrop).toBeGreaterThan(0.25);
     expect(rows[0].fatigue).toBe(false);
+  });
+  /* 26 ก.ย. (สเปก creative-page-hierarchy): CTR ลิงก์ · ROAS ไม่หลอกตา · ชุดโฆษณา */
+  it("CTR ลิงก์ · CPC ลิงก์ จาก link_clicks (ชิ้นและรายแคมเปญ) · ไม่มี link_clicks = null ไม่เดาจากคลิกทั้งหมด", () => {
+    const [row] = adsCreativeRows([shot("a", "ลิงก์", 5, { link_clicks: 500 }), shot("b", "ลิงก์", 20, { link_clicks: 300 })], RANGE_M, brands);
+    expect(row).toMatchObject({ linkClicks: 800, linkCtr: 0.004, linkCpc: 5 });     // 800 ÷ 200,000 · 4,000 ÷ 800
+    expect(row.perCampaign[0]).toMatchObject({ linkClicks: 800, linkCtr: 0.004 });
+    expect(row.ctr).toBeCloseTo(0.02);                                              // CTR ทั้งหมดความหมายเดิม (ฐานกฎเริ่มล้า)
+    const [none] = adsCreativeRows([shot("n", "ไม่มีลิงก์", 5)], RANGE_M, brands);
+    expect(none).toMatchObject({ linkClicks: null, linkCtr: null, linkCpc: null });
+  });
+  it("ROAS = null เมื่อ Meta ไม่เห็นยอดเลย (ชิ้นทักแชท) · มีรายได้หรือการซื้อ = คิดตามจริง", () => {
+    const [chat] = adsCreativeRows([shot("c", "ทักแชท", 5, { revenue: 0, purchases: 0 })], RANGE_M, brands);
+    expect(chat.roas).toBeNull();
+    expect(chat.perCampaign[0].roas).toBeNull();
+    expect(chat.action).not.toBe("Stop");                                           // ไม่ขึ้น "ควรหยุด" จาก ROAS 0 อีก
+    const [sale] = adsCreativeRows([shot("s", "มียอด", 5, { revenue: 140, purchases: 1 })], RANGE_M, brands);
+    expect(sale.roas).toBe(0.07);
+    // มีการซื้อแต่ไม่มีมูลค่า (Meta ไม่ได้วัดมูลค่า) = ไม่รู้ ROAS → null ไม่ใช่ 0.00x · กติกาเดียวกับหน้าแคมเปญ (เห็นจริง 26 ก.ย.)
+    const [noValue] = adsCreativeRows([shot("v", "ซื้อไม่มีมูลค่า", 5, { revenue: 0, purchases: 2 })], RANGE_M, brands);
+    expect(noValue.roas).toBeNull();
+  });
+  it("รายแคมเปญบอกชื่อชุดโฆษณาที่ชิ้นนี้อยู่ (ไม่ซ้ำ เรียงตามที่เจอ)", () => {
+    const [row] = adsCreativeRows([
+      { ...shot("a", "โพสต์", 5), campaign: "C1", ad_group: "หว่าน 25-45" },
+      { ...shot("b", "โพสต์", 6), campaign: "C1", ad_group: "INT หน่วยงาน" },
+      { ...shot("c", "โพสต์", 7), campaign: "C1", ad_group: "หว่าน 25-45" },
+    ], RANGE_M, brands);
+    expect(row.perCampaign[0].adsets).toEqual(["หว่าน 25-45", "INT หน่วยงาน"]);
+  });
+  /* 26 ก.ย. อาร์ตเคาะ: ข้อมูลจริง = คำแนะนำครีเอทีฟใช้หลักเดียวกับหน้าแคมเปญ — ไม่ตัดสินด้วย ROAS ของ Meta
+     (เห็นจริง: ชิ้น CPL ฿71 ถูกกว่าเฉลี่ย แต่ขึ้น "ควรหยุด" เพราะ ROAS 0.95x) · เทียบ CPL กับค่าเฉลี่ยแบรนด์แทน */
+  it("ข้อมูลจริง: ROAS ของ Meta ไม่ทำให้ขึ้น ควรหยุด/ควรแก้/น่าขยาย · ตัวเลข ROAS ยังแสดงตามจริง", () => {
+    const real = { roasFromMeta: false };
+    const days3 = (id, name, over) => [5, 6, 7].map((d) => shot(`${id}${d}`, name, d, over));   // ข้อมูลจริงต้องรันครบ 3 วัน (ชุด A ข้อ 14)
+    const [low] = adsCreativeRows(days3("l", "ROAS ต่ำ", { revenue: 1900, purchases: 1 }), RANGE_M, brands, undefined, real);
+    expect(low.roas).toBe(0.95);
+    expect(low.action).toBe("ติดตาม");
+    const [high] = adsCreativeRows(days3("h", "ROAS สูง", { revenue: 20_000, purchases: 5 }), RANGE_M, brands, undefined, real);
+    expect(high.action).not.toBe("Scale");
+    // ข้อมูลตัวอย่าง (ค่าเริ่มต้น) ยังตัดสินด้วย ROAS เหมือนเดิม
+    expect(adsCreativeRows([shot("l2", "ROAS ต่ำ", 5, { revenue: 1900, purchases: 1 })], RANGE_M, brands)[0].action).toBe("Stop");
+  });
+  it("ข้อมูลจริง: CPL แพงกว่าเฉลี่ยแบรนด์ ≥ 1.5 เท่า = ควรแก้ · ถูก ≤ 0.8 เท่า = ต้นทุนดี · ผลลัพธ์ < 5 ยังไม่เทียบ", () => {
+    const real = { roasFromMeta: false };
+    // แบรนด์: 3 ชิ้น รันชิ้นละ 3 วัน วันละ 2,000 · ผลลัพธ์ต่อวัน 40 / 10 / 10 → เฉลี่ย 18,000 ÷ 180 = ฿100
+    const days3 = (id, name, over) => [5, 6, 7].map((d) => shot(`${id}${d}`, name, d, over));
+    const rows = adsCreativeRows([
+      ...days3("a", "ถูก", { leads: 40, revenue: 0, purchases: 0 }),   // CPL 50 = 0.5 เท่า
+      ...days3("b", "แพง", { leads: 10, revenue: 0, purchases: 0 }),   // CPL 200 = 2 เท่า
+      ...days3("c", "แพง2", { leads: 10, revenue: 0, purchases: 0 }),
+    ], RANGE_M, brands, undefined, real);
+    const by = Object.fromEntries(rows.map((r) => [r.creative, r]));
+    expect(by["ถูก"]).toMatchObject({ action: "Good", tone: "emerald" });
+    expect(by["ถูก"].why).toBe("CPL ฿50.00 ถูกกว่าเฉลี่ยแบรนด์ ฿100.00 อยู่ 50.00%");
+    expect(by["แพง"]).toMatchObject({ action: "Fix", tone: "amber" });
+    expect(by["แพง"].why).toBe("CPL ฿200.00 แพงกว่าเฉลี่ยแบรนด์ ฿100.00 อยู่ 100.00%");
+    const few = adsCreativeRows([shot("f", "น้อย", 5, { leads: 2, spend: 100, revenue: 0, purchases: 0 }), shot("g", "อื่น", 5, { leads: 40, revenue: 0, purchases: 0 })], RANGE_M, brands, undefined, real);
+    expect(few.find((r) => r.creative === "น้อย").action).toBe("รอข้อมูล");   // ผลลัพธ์ < 5 = รอข้อมูล (ชุด A ข้อ 14)
+  });
+  /* ตรวจรอบ 27 ก.ย. ดึก: กติกาเดียวกับแคมเปญ — Meta เห็นยอดขาย ROAS ≥ 2 = "แพงแต่ขายได้" ไม่ใช่ควรแก้จาก CPL */
+  it("ข้อมูลจริง: CPL แพงกว่าเฉลี่ยแต่ Meta เห็นยอดขาย ROAS ≥ 2 = แพงแต่ขายได้ · CPL เกิน ฿500 ก็เหมือนกัน", () => {
+    const real = { roasFromMeta: false };
+    const days3 = (id, name, over) => [5, 6, 7].map((d) => shot(`${id}${d}`, name, d, over));
+    const rows = adsCreativeRows([
+      ...days3("a", "ถูก", { leads: 40, revenue: 0, purchases: 0 }),
+      ...days3("b", "แพงขายได้", { leads: 10, revenue: 6000, purchases: 3 }),   // CPL 200 = 2 เท่า · ROAS 3×
+      ...days3("c", "แพงขายไม่ได้", { leads: 10, revenue: 0, purchases: 0 }),
+    ], RANGE_M, brands, undefined, real);
+    const by = Object.fromEntries(rows.map((r) => [r.creative, r]));
+    expect(by["แพงขายได้"]).toMatchObject({ action: "Sells", tone: "zinc" });
+    expect(by["แพงขายได้"].why).toBe("CPL ฿200.00 แพงกว่าเฉลี่ยแบรนด์ ฿100.00 อยู่ 100.00% แต่ Meta เห็นยอดขาย ROAS 3.00×");
+    expect(by["แพงขายไม่ได้"].action).toBe("Fix");
+    const [pricey] = adsCreativeRows(days3("p", "ต้นทุน 600", { spend: 6000, leads: 10, revenue: 15000, purchases: 2 }), RANGE_M, brands, undefined, real);
+    expect(pricey.action).toBe("Sells");   // CPL 600 > เกณฑ์ ฿500 แต่ ROAS 2.5×
+  });
+  /* รีวิวโค้ด 28 ก.ย.: แคมเปญ ≥ 2.5 เท่า = ควรหยุด แต่ครีเอทีฟชิ้นเดียวกันขึ้นแค่ควรแก้ → เกณฑ์เดียวกัน */
+  it("ข้อมูลจริง: ครีเอทีฟแพงกว่าเฉลี่ยตั้งแต่ 2.5 เท่า = ควรหยุด (เกณฑ์เดียวกับแคมเปญ)", () => {
+    const real = { roasFromMeta: false };
+    const days3 = (id, name, over) => [5, 6, 7].map((d) => shot(`${id}${d}`, name, d, over));
+    const rows = adsCreativeRows([
+      ...days3("a", "ถูก", { leads: 60, revenue: 0, purchases: 0 }),
+      ...days3("b", "แพงมาก", { leads: 5, revenue: 0, purchases: 0 }),
+    ], RANGE_M, brands, undefined, { ...real, brandCpl: new Map([["b_td|Meta Ads", 100]]) });
+    const by = Object.fromEntries(rows.map((r) => [r.creative, r]));
+    expect(by["แพงมาก"]).toMatchObject({ action: "Stop", tone: "rose" });   // CPL 400 = 4 เท่า
+    expect(by["แพงมาก"].next).toBe("ปิดชิ้นนี้ แล้วย้ายงบไปชิ้นที่ CPL ต่ำกว่า");
+  });
+  it("ชุด A ข้อ 2: รายได้ไม่รู้ ≠ ข้อมูลไม่ครบ (บัญชีที่ไม่วัดมูลค่าการซื้อ) · ผลลัพธ์ไม่รู้ยังไม่ครบ", () => {
+    const [noRev] = adsCreativeRows([shot("a", "ไม่วัดมูลค่า", 5, { revenue: null }), shot("b", "ไม่วัดมูลค่า", 20, { revenue: null })], RANGE_M, brands);
+    expect(noRev.complete).toBe(true);
+    expect(noRev.action).not.toBe("ข้อมูลไม่ครบ");
+    const [noLeads] = adsCreativeRows([shot("c", "ไม่รู้ผล", 5, { leads: null })], RANGE_M, brands);
+    expect(noLeads.complete).toBe(false);
+  });
+  /* ชุด A ข้อ 14: เกณฑ์ข้อมูลขั้นต่ำเท่าแคมเปญ (ข้อมูลจริง) — เดิมแคมเปญรัน 2 วันขึ้น "รอข้อมูล" แต่ครีเอทีฟชิ้นเดียวของมันขึ้น "ควรหยุด" */
+  it("ข้อมูลจริง: รันไม่ถึง 3 วัน หรือผลลัพธ์ไม่ถึง 5 = รอข้อมูล · ใช้เงินเกินเกณฑ์แล้วไม่ได้ผลเลย (≥3 วัน) = ควรหยุด", () => {
+    const real = { roasFromMeta: false };
+    const twoDays = adsCreativeRows([shot("a", "สองวัน", 5, { spend: 600, leads: 0, revenue: 0 }), shot("b", "สองวัน", 6, { spend: 600, leads: 0, revenue: 0 })], RANGE_M, brands, undefined, real);
+    expect(twoDays[0].action).toBe("รอข้อมูล");
+    const fewLeads = adsCreativeRows([5, 6, 7].map((d) => shot(`f${d}`, "ผลน้อย", d, { spend: 100, leads: 1, revenue: 0 })), RANGE_M, brands, undefined, real);
+    expect(fewLeads[0].action).toBe("รอข้อมูล");
+    const wasted = adsCreativeRows([5, 6, 7].map((d) => shot(`w${d}`, "เผาเงิน", d, { spend: 1000, leads: 0, revenue: 0 })), RANGE_M, brands, undefined, real);
+    expect(wasted[0].action).toBe("Stop");
+    expect(actionLabelOf(twoDays[0])).toBe("รอข้อมูล");
+  });
+  it("ชุด A ข้อ 15: CTR/CPC ลิงก์ของครีเอทีฟหารเฉพาะวันที่มีข้อมูลคลิกลิงก์ (ชิ้นและรายแคมเปญ)", () => {
+    const [row] = adsCreativeRows([shot("a", "ลิงก์บางวัน", 5, { link_clicks: 1000 }), shot("b", "ลิงก์บางวัน", 20)], RANGE_M, brands);
+    expect(row.linkCtr).toBeCloseTo(0.01, 10);                // 1,000 ÷ 100,000 (วันที่มีข้อมูล) ไม่ใช่ ÷ 200,000
+    expect(row.linkCpc).toBeCloseTo(2, 10);                   // 2,000 ÷ 1,000
+    expect(row.perCampaign[0].linkCtr).toBeCloseTo(0.01, 10);
   });
   it("เรียงเรื่องด่วนก่อน (Stop > Fix > Scale > ติดตาม)", () => {
     const rows = adsCreativeRows([

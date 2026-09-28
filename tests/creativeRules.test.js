@@ -53,7 +53,7 @@ describe("evaluateCreativeRule", () => {
     expect(evaluateCreativeRule(row(), rule({ metric: "roas", op: "gte", value: 3 })).status).toBe("pass");
     const ctr = evaluateCreativeRule(row(), rule({ metric: "ctr", op: "gte", value: 1 }));
     expect(ctr.status).toBe("fail");
-    expect(ctr.text).toBe("CTR (คลิกทั้งหมด) 0.50% ต่ำกว่าเกณฑ์ 1.00%");
+    expect(ctr.text).toBe("CTR ทั้งหมด 0.50% ต่ำกว่าเกณฑ์ 1.00%");
   });
   it("ใช้เงินเกินเพดานแล้วยังไม่มีการซื้อเลย = ไม่ผ่าน (ไม่ใช่ข้ามเพราะหารไม่ได้)", () => {
     const r = evaluateCreativeRule(row({ purchases: 0, cpa: null, spend: 2500 }), rule());
@@ -65,6 +65,8 @@ describe("evaluateCreativeRule", () => {
   });
   it("บัญชีไม่วัดการซื้อ (null) = ไม่มีข้อมูล · ใช้เงินน้อยกว่าขั้นต่ำ = ยังตัดสินไม่ได้", () => {
     expect(evaluateCreativeRule(row({ purchases: null, cpa: null }), rule()).status).toBe("nodata");
+    // เว้นวรรคระหว่าง "ไม่มีข้อมูล" กับชื่อตัวชี้วัด (26 ก.ย. เห็นจริง "ไม่มีข้อมูลROAS จากการซื้อ")
+    expect(evaluateCreativeRule(row({ purchases: null, cpa: null }), rule()).text).toMatch(/^ไม่มีข้อมูล \S/);
     const low = evaluateCreativeRule(row({ spend: 300 }), rule({ minSpend: 500 }));
     expect(low.status).toBe("pending");
     expect(low.text).toBe("ใช้ไป ฿300.00 ยังไม่ถึงขั้นต่ำ ฿500.00");
@@ -101,7 +103,74 @@ describe("หลายกฎ · สรุป · กรอง", () => {
   it("ชื่อกฎทั่วไปแบบเก่าแสดงชื่อ metric ที่ตรงกับข้อมูล Meta", () => {
     expect(ruleTitle(rule({ name: "คัด roas", metric: "roas" }))).toBe("ROAS จากการซื้อ (Meta)");
     expect(ruleTitle(rule({ name: "คัด CPL", metric: "cpl" }))).toBe("ต้นทุนต่อผลลัพธ์จาก Meta");
-    expect(ruleTitle(rule({ name: "คัดCTR", metric: "ctr" }))).toBe("CTR (คลิกทั้งหมด)");
+    expect(ruleTitle(rule({ name: "คัดCTR", metric: "ctr" }))).toBe("CTR ทั้งหมด");
     expect(ruleTitle(rule({ name: "ชิ้นชนะสำหรับโปรเดือนนี้", metric: "roas" }))).toBe("ชิ้นชนะสำหรับโปรเดือนนี้");
   });
+});
+
+/* ชุด C ข้อ 10 (ตรวจรอบละเอียด 26 ก.ย.): ข้อมูลจริงเป็นธุรกิจทักแชท Meta แทบไม่เห็นการซื้อ
+   การ์ดบอก "ต้นทุนดี" แต่ผลกฎบอก "ไม่ผ่าน ROAS 0.40×" · แถบกฎ "ไม่ผ่าน 36 ชิ้น ฿267,542" มาจากกฎ ROAS ที่ใช้ไม่ได้
+   → แถวที่ roasFromMeta:false กฎที่อิงการซื้อของ Meta = ไม่มีข้อมูล (บอกเหตุผล) ไม่ใช่ไม่ผ่าน */
+describe("กฎที่อิงการซื้อของ Meta กับข้อมูลจริง", () => {
+  const real = { spend: 5000, leads: 50, purchases: 1, revenue: 2000, roas: 0.4, roasFromMeta: false };
+  const rule = (metric, value, op) => ({ id: metric, metric, value, op: op ?? (metric === "roas" || metric === "purchases" ? "gte" : "lte"), minSpend: 0, brandId: "all" });
+  it("กฎ ROAS = nodata พร้อมเหตุผล ไม่ใช่ไม่ผ่าน", () => {
+    const out = evaluateCreativeRule(real, rule("roas", 2));
+    expect(out.status).toBe("nodata");
+    expect(out.text).toMatch(/ระบบขาย/);
+  });
+  it("กฎอื่นยังตัดสินตามปกติ (รวมต้นทุนต่อการซื้อ — ชิ้นที่ Meta เห็นการซื้อจริงใช้ได้)", () => {
+    expect(evaluateCreativeRule(real, rule("cpl", 50)).status).toBe("fail");    // 5000 ÷ 50 = 100 > 50
+    expect(evaluateCreativeRule(real, rule("cpa", 1000)).status).toBe("fail");  // 5000 ÷ 1
+  });
+  it("ข้อมูลจำลอง (ไม่มีธง) ยังใช้กฎ ROAS ได้", () => {
+    expect(evaluateCreativeRule({ ...real, roasFromMeta: undefined }, rule("roas", 2)).status).toBe("fail");
+  });
+  it("adsCreativeRows ติดธง roasFromMeta ให้ทุกแถว", async () => {
+    const { adsCreativeRows } = await import("../src/modules/marketing/adsOverview.js");
+    const card = { id: "a", track: "project", status: "measured", archived: true, brand_id: "b1", campaign: "c1", creative: "A", source: "meta", ad_platform: "Meta Ads",
+      brief: { channels: ["Meta Ads"] }, metrics: { spend: 100, leads: 2, impressions: 1000, clicks: 10, measured_at: "2026-09-05T10:00:00.000Z" } };
+    const range = { start: new Date("2026-09-01"), end: new Date("2026-09-10") };
+    expect(adsCreativeRows([card], range, [], undefined, { roasFromMeta: false })[0].roasFromMeta).toBe(false);
+  });
+});
+
+/* ทดสอบละเอียด 27 ก.ย.: หน้าจริงขึ้น "ผ่าน 0 · ยังตัดสินไม่ได้ 210" — กฎ ROAS ที่ข้ามบนข้อมูลจริงกลายเป็น "ไม่มีข้อมูล"
+   แล้วทับผลของกฎอื่นทุกชิ้น (ใช้ "ทุกกฎ") → ชิ้นที่ผ่านกฎ CTR ก็ไม่มีวันผ่าน */
+describe("กฎที่ข้ามบนข้อมูลจริงไม่ทับกฎอื่น", () => {
+  const real = { spend: 5000, leads: 50, impressions: 100000, ctr: 0.04, roas: 0.4, roasFromMeta: false };
+  const rules = [
+    { id: "roas", metric: "roas", op: "gte", value: 2, minSpend: 0, brandId: "all" },
+    { id: "ctr", metric: "ctr", op: "gte", value: 3, minSpend: 0, brandId: "all" },
+  ];
+  it("ทุกกฎ: ROAS ถูกข้าม · CTR 4% ผ่านเกณฑ์ 3% = ผ่าน", () => {
+    expect(evaluateCreativeRules(real, rules, "all").status).toBe("pass");
+    expect(creativeRuleSummary([real], rules, "all")).toMatchObject({ pass: 1, nodata: 0 });
+  });
+  it("ทุกกฎ: CTR ไม่ผ่าน = ไม่ผ่าน (ไม่ใช่ยังตัดสินไม่ได้)", () => {
+    expect(evaluateCreativeRules({ ...real, ctr: 0.01 }, rules, "all").status).toBe("fail");
+  });
+  it("เลือกกฎ ROAS อย่างเดียว = ไม่มีข้อมูล พร้อมเหตุผล", () => {
+    const out = evaluateCreativeRules(real, rules, "roas");
+    expect(out.status).toBe("nodata");
+    expect(out.text).toMatch(/ระบบขาย/);
+  });
+});
+
+/* ทดสอบละเอียดรอบ 2 (agent): "฿50.00 เกินเพดาน ฿50.00" — ตัดสินที่ความละเอียดเดียวกับที่แสดง */
+it("ค่าที่แสดงเท่าเพดานพอดี = ผ่าน ไม่ใช่ 'เกินเพดาน' ตัวเลขเดียวกัน", () => {
+  const rule = { id: "c", metric: "cpl", op: "lte", value: 50, minSpend: 0, brandId: "all" };
+  expect(evaluateCreativeRule({ spend: 150.01, leads: 3 }, rule).status).toBe("pass");
+  expect(evaluateCreativeRule({ spend: 0.1 + 0.2, leads: 1 }, { ...rule, value: 0.3 }).status).toBe("pass");
+});
+
+/* ทดสอบละเอียดรอบ 2 (agent): ช่องกรอกตัวเลข (กฎ + ยอดใบแจ้งยอดหน้าบิล) รับขยะ — "5 x 3" → 53 · "1,2,3" → 123 */
+it("parseRuleNumber: ตัวเลขสองชุดคั่นช่องว่าง/x หรือคอมมาผิดตำแหน่ง = อ่านไม่ออก", () => {
+  for (const bad of ["5 x 3", "0x10", "1,2,3", "12 34"]) expect(parseRuleNumber(bad)).toBeNaN();
+  for (const [ok, v] of [["180,900", 180900], ["1,234.50", 1234.5], ["3x", 3], ["฿ 500", 500], ["1.5 %", 1.5], ["2 เท่า", 2]]) expect(parseRuleNumber(ok)).toBe(v);
+});
+
+/* รีวิวโค้ด 28 ก.ย.: กฎ ROAS ≥ 2.01 กับค่าจริง 2.01 เคยขึ้น "ต่ำกว่าเกณฑ์" (ตัดเพี้ยนเป็น 2.00) */
+it("ROAS ≥ 2.01 กับค่าจริง 2.01 = ผ่าน", () => {
+  expect(evaluateCreativeRule(row({ roas: 2.01 }), rule({ metric: "roas", op: "gte", value: 2.01 })).status).toBe("pass");
 });

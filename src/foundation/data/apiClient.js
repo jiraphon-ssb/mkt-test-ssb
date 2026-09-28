@@ -16,6 +16,7 @@ import { AR_MAIN_STAGES, arEligible, buildForecast, buildAging, arKpis } from ".
 /* เดโม marketing — วันต่อ Supabase จริง 2 บรรทัดนี้จะถูกแทนด้วย db.from/db.rpc */
 import { store as mktStore } from "../../modules/marketing/data/DataStore.js";
 import { functionErrorCode } from "../../modules/marketing/ads/adsSyncMessages.js";
+import { chargeWindow } from "../../modules/marketing/ads/chargeMatch.js";
 import { hoursWaitingInReview as mktHoursWaiting } from "../../modules/marketing/mktRules.js";
 
 /* AP (เงินออก) data surface — spec §17. All AP reads/writes go through here;
@@ -2523,10 +2524,10 @@ const adsData = {
   /** การตัดบัตรรายครั้ง (โครงท่อเมล — ว่างจนกว่าจะเปิดใช้) */
   async billingCharges(monthIso) {
     const db = requireSupabase();
-    const start = new Date(`${monthIso}T00:00:00Z`);
-    const next = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+    /* ย้อน 2 เดือนเป็นจุดตั้งต้นของการแมท (อาร์ตอนุญาต 27 ก.ย.) — แถวของเดือนที่ดูยังกรองในโมเดล */
+    const { from, before } = chargeWindow(monthIso);
     const { data, error } = await db.from("ad_billing_charges").select("*")
-      .gte("charge_date", monthIso).lt("charge_date", next).order("charge_date");
+      .gte("charge_date", from).lt("charge_date", before).order("charge_date");
     if (error) throw error;
     return data ?? [];
   },

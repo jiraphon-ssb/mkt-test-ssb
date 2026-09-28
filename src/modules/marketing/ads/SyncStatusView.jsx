@@ -20,12 +20,13 @@ import { ADS_PROVIDERS } from "./adsConnectorContract.js";
 import { applyConnectionResult, applyCoverage, applyReconciliation, latestReconcileByConnection, runSyncJobs, syncCreativesFor } from "./adsConnectionSync.js";
 import { missingDaysOf, planSyncJobs } from "../../../../supabase/functions/_shared/adsBackfill.js";
 import { todayInTimeZone } from "../../../../supabase/functions/_shared/metaInsights.js";
+import { DAILY_RUN_LABEL, DAILY_WINDOW_LABEL } from "../../../../supabase/functions/_shared/dailySchedule.js";
 import { monthsBackStart } from "../../../../supabase/functions/_shared/salesInventory.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
 import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
 import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
-import { ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextSyncAt, salesSourceRow, snapshotSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
+import { ago, agoHours, creativeSourceRow, historyTimeline, lastClock, metaSourceRow, nextSyncAt, salesSourceRow, snapshotSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import { newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
 import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
 import { isSupabaseConfigured } from "../../../foundation/data/supabaseClient.js";
@@ -34,7 +35,7 @@ import "./syncStatus.css";
 
 const when = (value) => value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
 const clock = (value) => value ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
-/** รอบถัดไปมักเป็นตี 5 พรุ่งนี้ — บอกวันด้วย ไม่งั้น "05:00" อ่านเป็นเมื่อเช้าได้ */
+/** รอบถัดไปมักเป็น 09:00 พรุ่งนี้ — บอกวันด้วย ไม่งั้น "09:00" อ่านเป็นเมื่อเช้าได้ */
 const nextClock = (value, now) => value && todayInTimeZone(new Date(value), TZ) !== todayInTimeZone(new Date(now), TZ) ? `พรุ่งนี้ ${clock(value)}` : clock(value);
 
 const TABS = [["meta", "บัญชี Meta"], ["sales", "ยอดขาย"], ["access", "สิทธิ์และคีย์"], ["history", "ประวัติ"]];
@@ -142,7 +143,7 @@ export function HistoryList({ items, filter, onFilter }) {
   }
   return <div className="sy-history" ref={top}>
     <div className="sy-filter" role="group" aria-label="กรองประวัติ">{HISTORY_FILTERS.map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => onFilter(key)}>{label}</button>)}</div>
-    <p className="sy-note">ดึงอัตโนมัติวันละครั้งตอนตี 5 (รอบ 05:10–05:50 เก็บงานที่ค้าง) · ทุกแหล่งดึงวันละครั้ง · รอบที่ไม่มีงานไม่แสดง{oldest ? ` · แสดงตั้งแต่ ${new Intl.DateTimeFormat("th-TH", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" }).format(new Date(oldest))} (ระบบเก็บไว้ 90 วัน)` : ""}</p>
+    <p className="sy-note">ดึงอัตโนมัติวันละครั้งตอน {DAILY_RUN_LABEL} น. (รอบ {DAILY_WINDOW_LABEL} เก็บงานที่ค้าง) · ทุกแหล่งดึงวันละครั้ง · รอบที่ไม่มีงานไม่แสดง{oldest ? ` · แสดงตั้งแต่ ${new Intl.DateTimeFormat("th-TH", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" }).format(new Date(oldest))} (ระบบเก็บไว้ 90 วัน)` : ""}</p>
     {items.length ? <>
       {groups.map((group) => <section className="sy-day" key={group.key}>
         <h4>{group.at ? dayHead(group.at) : "ไม่ทราบวัน"}</h4>
@@ -225,7 +226,7 @@ export function SyncStatusView() {
       allowed: !demo && user?.role === "team_lead", now }),
   };
   // โหลดส่วนไหนไม่สำเร็จ = บอกที่แถวนั้น ไม่ปล่อยให้ดูเหมือนไม่มีข้อมูล
-  const failedLoad = (keys, row) => keys.some((key) => res[key]?.error && res[key]?.data == null) ? { ...row, state: "bad", stateLabel: "โหลดสถานะไม่สำเร็จ", hint: "กดตรวจใหม่", fresh: null, complete: null } : row;
+  const failedLoad = (keys, row) => keys.some((key) => res[key]?.error && res[key]?.data == null) ? { ...row, state: "bad", stateLabel: "โหลดสถานะไม่สำเร็จ", hint: "กดตรวจใหม่", fresh: null, complete: null, loadFailed: true } : row;
   rows.meta = failedLoad(["connections", "recons"], rows.meta);
   rows.creatives = failedLoad(["pipes"], rows.creatives);
   rows.sales = failedLoad(["pipes", "facts"], rows.sales);
@@ -240,7 +241,8 @@ export function SyncStatusView() {
     },
   });
   const verdict = syncVerdict({ loading: anyLoading, issues });
-  const lastData = [rows.meta.state !== "loading" ? metaAccounts.map((row) => row.lastSuccessAt).filter(Boolean).sort().at(-1) : null, pipes.filter((run) => run.pipeline === "sales" && run.status !== "failed").map((run) => run.started_at).sort().at(-1)].filter(Boolean).sort().at(-1);
+  /* โหลดสถานะ Meta ไม่สำเร็จ = ไม่รู้ว่าข้อมูลล่าสุดเมื่อไร — เดิมหยิบเวลาเก่าใน settings มาขึ้น "6 วันก่อน" (ทดสอบละเอียดรอบ 2 · 27 ก.ย.) */
+  const lastData = [rows.meta.state !== "loading" && !rows.meta.loadFailed ? metaAccounts.map((row) => row.lastSuccessAt).filter(Boolean).sort().at(-1) : null, pipes.filter((run) => run.pipeline === "sales" && run.status !== "failed").map((run) => run.started_at).sort().at(-1)].filter(Boolean).sort().at(-1);
   // บัญชีที่ดึงนานสุดถึงคิวก่อน — ใช้บอกเวลาดึงค่าแอดรอบถัดไปจริง (tick ที่ไม่มีงานไม่นับ)
   const oldestMetaSync = metaAccounts.filter((row) => row.connected).map((row) => row.lastSuccessAt).filter(Boolean).sort()[0] ?? null;
   const unusedProviders = ADS_PROVIDERS.filter((provider) => provider.id !== "meta" && !accounts.some((row) => row.providerId === provider.id)).map((provider) => provider.name);
@@ -417,15 +419,15 @@ export function SyncStatusView() {
   const syncAll = () => startRun(["facts", "creatives", "sales", "goals"], "all");
   const syncNow = () => startRun(["facts", "creatives"], "ads");
   const syncSales = () => startRun(["sales", "goals"], "sales");
-  /* เก็บ snapshot บัญชีแอดเดี๋ยวนี้ (หน้า บิล & กระทบยอด) — ปกติ ads-cron ทำให้วันละครั้งตี 5
+  /* เก็บ snapshot บัญชีแอดเดี๋ยวนี้ (หน้า บิล & กระทบยอด) — ปกติ ads-cron ทำให้วันละครั้ง 09:00
      ปุ่มนี้ไว้ตอนไม่อยากรอรอบ · โหลดสถานะใหม่หลังเสร็จเพื่อให้แถวในตารางอัปเดตทันที */
   const snapshotNow = async () => {
     try {
       const { accounts } = await apiClient.ads.snapshotAccounts();
-      toast?.(`เก็บ Snapshot บัญชีแอดแล้ว ${accounts} บัญชี`, "ok");
+      toast?.(`เก็บยอดค้างบัญชีแอดแล้ว ${accounts} บัญชี`, "ok");
       reload();
     } catch (error) {
-      toast?.(adsErrorText(error, "เก็บ Snapshot บัญชีแอดไม่สำเร็จ"), "bad");
+      toast?.(adsErrorText(error, "เก็บยอดค้างบัญชีแอดไม่สำเร็จ"), "bad");
     }
   };
 
@@ -470,7 +472,7 @@ export function SyncStatusView() {
                 <ShoppingBag size={14} aria-hidden="true" /><span><b>ดึงยอดขายเท่านั้น</b><small>ย้อน 14 วัน ทุกแบรนด์ที่เชื่อมแหล่งแล้ว</small></span>
               </button>
               <button type="button" role="menuitem" onClick={snapshotNow} disabled={busy}>
-                <CalendarClock size={14} aria-hidden="true" /><span><b>ดึง Snapshot บัญชีแอด</b><small>เก็บยอดค้าง · สถานะบัญชี · บัญชีนอกระบบ เดี๋ยวนี้ (ปกติเก็บเองทุกเช้าตี 5)</small></span>
+                <CalendarClock size={14} aria-hidden="true" /><span><b>ดึงยอดค้างบัญชีแอด</b><small>เก็บยอดค้าง · สถานะบัญชี · บัญชีนอกระบบ เดี๋ยวนี้ (ปกติเก็บเองทุกเช้า {DAILY_RUN_LABEL} น.)</small></span>
               </button>
               <p className="sy-menu-group" role="presentation">ระบบขาย</p>
               <button type="button" role="menuitem" onClick={backfillSales} disabled={busy}>
@@ -495,7 +497,7 @@ export function SyncStatusView() {
         <VerdictIcon size={22} aria-hidden="true" className={verdict.state === "loading" ? "spin" : undefined} />
         <div>
           <strong>{verdict.title}</strong>
-          <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${clock(lastData)} (${ago(lastData, now)})` : "—"} · ดึงค่าแอดรอบถัดไป {nextClock(nextSyncAt(oldestMetaSync, now), now)}</>}</span>
+          <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${lastClock(lastData, now)} (${ago(lastData, now)})` : "—"} · ดึงค่าแอดรอบถัดไป {nextClock(nextSyncAt(oldestMetaSync, now), now)}</>}</span>
         </div>
       </div>
       <SyncTimeline rows={stepRows(run)} headline={runHeadline(run)} onHide={runEnded(run) ? () => setRun(null) : null} />
@@ -513,7 +515,7 @@ export function SyncStatusView() {
         <SourceRow row={rows.meta} onOpen={() => setTab("meta")} />
         <SourceRow row={rows.creatives} onOpen={() => setTab("meta")} />
         <SourceRow row={rows.sales} onOpen={() => setTab("sales")} />
-        {jkBrand && <SourceRow onOpen={() => setTab("sales")} row={jkReady ? {
+        {jkBrand && <SourceRow onOpen={() => setTab("sales")} row={jkReady ? failedLoad(["pipes", "facts"], {
           key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, icon: "sales",
           /* นิยามที่ต่างจากแบรนด์อื่นอยู่ใต้ชื่อแหล่ง (คำเต็มเป็น tooltip) ไม่ใช่ไปเบียดคอลัมน์ "ครบแค่ไหน"
              ซึ่งอีก 3 แถวใช้บอกความครบของข้อมูล */
@@ -529,7 +531,7 @@ export function SyncStatusView() {
               ? { text: `ข้อมูลถึง ${dayLabel(jk.fresh)}`, sub: `คนทักทีมกรอก ${jk.filled}/${jk.days} วัน` }
               : null,
           hint: "ค่าแอด Meta ยังดึงตามปกติ",
-        } : { key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, sub: "ระบบ TMK · เฉพาะ Facebook", subTitle: jk.detail, icon: "sales",
+        }) : { key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, sub: "ระบบ TMK · เฉพาะ Facebook", subTitle: jk.detail, icon: "sales",
           // ระหว่างโหลดห้ามสรุปว่า "ยังไม่เคยดึง" — กติกาเดียวกับอีก 3 แถว (บั๊กบน production 17 ก.ย.)
           state: "loading", stateLabel: "กำลังตรวจ…", fresh: null, complete: null }} />}
         {waitingBrands.map((brand) => <SourceRow key={brand.id} row={{ key: brand.id, name: `ยอดขาย ${brand.name}`, icon: "sales", state: "waiting", stateLabel: "รอเชื่อมแหล่งข้อมูล", fresh: null, complete: null, hint: "ค่าแอด Meta ยังดึงตามปกติ" }} />)}

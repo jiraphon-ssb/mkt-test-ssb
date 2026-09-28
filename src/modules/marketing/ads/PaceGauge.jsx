@@ -45,7 +45,7 @@ export function PaceGauge({ pace, kind = null, title = "จังหวะทำ
       <line className="pg-tick" x1={tx1} y1={ty1} x2={tx2} y2={ty2} strokeWidth="2.5" />
       <polygon className="pg-pin" points={`${CX - 5},${pinY} ${CX + 5},${pinY} ${CX},${pinY + 7}`} />
       {/* ตัวชี้วัดแบบอัตราไม่มีตาราง "ควรถึงวันนี้" — หมุดคือเส้นเป้า ไม่ใช่จังหวะ */}
-      {!mini && <text className="pg-pin-label" x={CX} y={pinY - 4} textAnchor="middle">{direction === "rate_lower" ? "เพดาน" : direction.startsWith("rate") ? "เป้า" : "ตามแผน"}</text>}
+      {!mini && <text className="pg-pin-label" x={CX} y={pinY - 4} textAnchor="middle">{direction === "rate_lower" ? "เพดาน" : direction.startsWith("rate") ? "เป้า" : "100%" /* เป็นขีดสเกลคู่ 0%/200% — เดิม "ตามแผน" อ่านเป็นสถานะ ขัดกับ "ช้ากว่าแผน" ใต้ตัวเลข (ชุด C ข้อ 13) */}</text>}
       {/* ทะลุสเกล — วางนอกวงพ้นความหนาเส้น ไม่งั้นกลืนไปกับปลายส่วนโค้งจนมองไม่เห็น */}
       {over && <text className="pg-over" x={CX + R + 11} y={CY + 5} textAnchor="middle">»</text>}
       {showValue && <text className="pg-value" x={CX} y={CY - 12} textAnchor="middle">{text}</text>}

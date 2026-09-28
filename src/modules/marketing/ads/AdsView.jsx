@@ -17,8 +17,9 @@ import { useReportFilters } from "../ui/useReportFilters.js";
 import { buildOverviewModel } from "./overviewModel.js";
 import { useAdsData } from "./useAdsData.js";
 import { GoalLine } from "../ui/GoalLine.jsx";
+import { METRIC_LABEL, trendOf } from "./glossary.js";
 
-const fmtRoas = (value) => value == null ? "—" : `${fmtNum(value, 2)}x`;
+const fmtRoas = (value) => value == null ? "—" : `${fmtNum(value, 2)}×`;
 const GAUGE_TONE = { emerald: "var(--ok)", amber: "var(--warn)", rose: "var(--bad)", zinc: "var(--ink-soft)" };
 
 const fmtMetric = (fmt, v) => {
@@ -27,9 +28,9 @@ const fmtMetric = (fmt, v) => {
   if (fmt === "int") return fmtInt(v);
   if (fmt === "compact") return fmtCompact(v);
   if (fmt === "pct2") return fmtPct(v, 2);
-  if (fmt === "pct1") return fmtPct(v, 1);
-  if (fmt === "roas") return `${fmtNum(v, 2)}x`;
-  if (fmt === "freq") return `${fmtNum(v, 2)}x`;
+  if (fmt === "pct1") return fmtPct(v, 2);
+  if (fmt === "roas") return `${fmtNum(v, 2)}×`;
+  if (fmt === "freq") return `${fmtNum(v, 2)}×`;
   return String(v);
 };
 
@@ -41,11 +42,11 @@ export function SalePipeline({ items, worstKey = null, row = false, title = true
       {!row && title && <span className="ads-pipe-title">Sale pipeline</span>}
       {items.map((it) => {
         const d = change(it.value, it.before);
-        const good = d == null || d === 0 ? null : it.sense === "lower" ? d < 0 : d > 0;
+        const { good, word: trendWord } = trendOf(d, it.sense === "lower" ? "lower" : "higher");   // < 5% = ทรงตัว (ตรวจรอบ 28 ก.ย.)
         /* ฐานเล็ก (ต่ำกว่า 10) — % แกว่งแรงจากส่วนต่างไม่กี่หน่วย อย่าให้สีตะโกน */
         const tiny = it.fmt === "int" && (it.value ?? 0) < 10 && (it.before ?? 0) < 10;
         const deltaText = d == null ? "เทียบไม่ได้"
-          : `${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}% เทียบช่วงก่อน${good == null ? "" : good ? " (ดีขึ้น)" : " (แย่ลง)"}${tiny ? " · ฐานเล็ก" : ""}`;
+          : `${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}% เทียบช่วงก่อน${trendWord ? ` (${trendWord})` : ""}${tiny ? " · ฐานเล็ก" : ""}`;
         const convText = it.conv != null ? `${fmtPct(it.conv, 0)} จากขั้นก่อน` : it.convPlaceholder ?? null;
         const goal = goals?.[it.key] ?? null;
         /* โหมด gauge (หน้า Overview): บนจอเหลือแค่ค่าของขั้น + จังหวะ — บริบทที่เหลือย้ายมาอยู่ในไอคอน i
@@ -60,7 +61,8 @@ export function SalePipeline({ items, worstKey = null, row = false, title = true
             <div className="ads-pipe-item aw-metric ads-stage" key={it.key}>
               <div className="aw-metric-head ads-stage-head">
                 <b><span className="ads-stage-name">{it.label}</span><InfoTip label={it.label} lines={tip} /></b>
-                {worstKey === it.key && <span className="ads-stage-worst">หล่นแรงสุด</span>}
+                {/* "หล่นแรงสุด" คนอ่านเป็นจังหวะเป้า (การ์ดนั้นขึ้น "ใกล้เป้า" แต่อีกขั้นช้ากว่า) → คอขวด = อัตราผ่านจากขั้นก่อนต่ำสุด (ทดสอบแบบผู้ใช้จริง) */}
+                {worstKey === it.key && <span className="ads-stage-worst" title={it.conv != null ? `ผ่านจากขั้นก่อนแค่ ${fmtPct(it.conv, 2)} — ต่ำสุดใน funnel` : "ผ่านจากขั้นก่อนน้อยสุดใน funnel"}>คอขวด</span>}
               </div>
               <div className="aw-metric-body">
                 <b className="aw-metric-num mono">{fmtMetric(it.fmt, it.value)}
@@ -77,7 +79,7 @@ export function SalePipeline({ items, worstKey = null, row = false, title = true
                   : <span className="zinc">{goal?.state === "nodata" ? "ยังไม่มีข้อมูล" : "ยังไม่ตั้งเป้า"}</span>}
                 {/* ดีขึ้น/แย่ลงเทียบเดือนก่อน (อาร์ตขอ 21 ก.ย. ค่ำ) — ฐานเล็ก/เทียบไม่ได้ = สีจาง ไม่ตะโกน */}
                 <span className={d == null || tiny || good == null ? "ads-muted" : good ? "ads-good" : "ads-over"}>
-                  {d == null ? "เทียบเดือนก่อนไม่ได้" : `เทียบเดือนก่อน ${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}%${good == null ? "" : good ? " ดีขึ้น" : " แย่ลง"}${tiny ? " · ฐานเล็ก" : ""}`}
+                  {d == null ? "เทียบเดือนก่อนไม่ได้" : `เทียบเดือนก่อน ${d >= 0 ? "▲" : "▼"} ${fmtNum(Math.abs(d), 2)}%${trendWord ? ` ${trendWord}` : ""}${tiny ? " · ฐานเล็ก" : ""}`}
                 </span></>}
               </div>
             </div>
@@ -92,13 +94,13 @@ export function SalePipeline({ items, worstKey = null, row = false, title = true
                 <span className="ads-muted">เทียบไม่ได้</span>
               ) : (
                 <span className={tiny || good == null ? "ads-muted" : good ? "ads-good" : "ads-over"}>
-                  {d >= 0 ? "▲" : "▼"} {fmtNum(Math.abs(d), 2)}%{good == null ? "" : good ? " ดีขึ้น" : " แย่ลง"}{tiny ? " · ฐานเล็ก" : ""}
+                  {d >= 0 ? "▲" : "▼"} {fmtNum(Math.abs(d), 2)}%{trendWord ? ` ${trendWord}` : ""}{tiny ? " · ฐานเล็ก" : ""}
                 </span>
               )}
             </span>
             {it.conv != null ? (
               <span className={`ads-pipe-conv ${worstKey === it.key ? "ads-pipe-conv--worst" : ""}`}>
-                {fmtPct(it.conv, 0)} {worstKey === it.key ? "· หล่นแรงสุด" : "จากขั้นก่อน"}
+                {fmtPct(it.conv, 0)} จากขั้นก่อน{worstKey === it.key ? " · คอขวด" : ""}
               </span>
             ) : it.convPlaceholder ? (
               <span className="ads-pipe-conv">{it.convPlaceholder}</span>
@@ -128,20 +130,21 @@ function Sparkline({ values, tone = "zinc", lower = false, word = true }) {
   const y = (v) => H - 2 - ((v - min) / span) * (H - 4);
   const d = pts.map((p, k) => `${k === 0 ? "M" : "L"}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
   const first = vs[0], last = vs[vs.length - 1];
-  const better = lower ? last < first : last > first;
+  // เส้นแนวโน้มใช้เกณฑ์เดียวกับตัวเลขเทียบ: เปลี่ยน < 5% = ทรงตัว (ตรวจรอบ 28 ก.ย.)
+  const trend = trendOf(first ? ((last - first) / Math.abs(first)) * 100 : null, lower ? "lower" : "higher");
   return (
     <span className="ads-spark">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
         <path d={d} fill="none" stroke={GAUGE_TONE[tone]} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
         <circle cx={x(pts[pts.length - 1].i)} cy={y(last)} r="1.8" fill={GAUGE_TONE[tone]} />
       </svg>
-      {word && <b className={better ? "ads-good" : "ads-over"}>{better ? "ดีขึ้น" : "แย่ลง"}</b>}
+      {word && trend.word && <b className={trend.good == null ? "ads-muted" : trend.good ? "ads-good" : "ads-over"}>{trend.word}</b>}
     </span>
   );
 }
 
 /* การ์ดแพลตฟอร์มโหมด "ช่วงที่เลือก": ยอดของช่วงล้วน ไม่มีงบ/จังหวะรายเดือน (ไม่มีความหมายกับช่วงสั้น) */
-function ChannelCardRange({ c }) {
+function ChannelCardRange({ c, real = false }) {
   const meta = platformMeta(c.key);
   const d = c.delivery;
   return (
@@ -153,15 +156,15 @@ function ChannelCardRange({ c }) {
       <div className="ads-chan-main">
         <div className="ads-chan-top">
           <span className="ads-chan-spend mono">ค่าแอด <b>{fmtMoney(c.spend)}</b></span>
-          <span className="ads-chan-pct mono"><span className="ads-chan-pctads">%Ads <b>{c.pctAds != null ? fmtPct(c.pctAds, 1) : "—"}</b></span></span>
+          {!real && <span className="ads-chan-pct mono"><span className="ads-chan-pctads">%Ads (Meta) <b>{c.pctAds != null ? fmtPct(c.pctAds, 2) : "—"}</b></span></span>}
         </div>
         <dl className="ads-metrics">
           <div><dt>ยอดขาย</dt><dd className="mono">{fmtMoney(c.revenue)}</dd></div>
-          <div><dt>ROAS</dt><dd className="mono">{fmtRoas(c.roas)}</dd></div>
-          <div><dt>ลีด</dt><dd className="mono">{fmtInt(c.leads)}</dd></div>
+          <div><dt>{METRIC_LABEL.roasMeta}</dt><dd className="mono">{fmtRoas(c.roas)}</dd></div>
+          <div><dt>{METRIC_LABEL.result}</dt><dd className="mono">{fmtInt(c.leads)}</dd></div>
           <div><dt>CPL</dt><dd className="mono">{c.cpl != null ? fmtMoney(c.cpl) : "—"}</dd></div>
-          <div><dt>CTR</dt><dd className="mono">{d.ctr != null ? fmtPct(d.ctr, 2) : "—"}</dd></div>
-          <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${fmtNum(d.frequency, 2)}x` : "—"}</dd></div>
+          <div><dt>{METRIC_LABEL.ctrAll}</dt><dd className="mono">{d.ctr != null ? fmtPct(d.ctr, 2) : "—"}</dd></div>
+          <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${fmtNum(d.frequency, 2)}×` : "—"}</dd></div>
         </dl>
         <p className="ads-chan-support ads-muted">งบ/จังหวะรายเดือนดูได้เมื่อเลือกช่วง "เดือนนี้"</p>
       </div>
@@ -169,10 +172,11 @@ function ChannelCardRange({ c }) {
   );
 }
 
-export function ChannelCard({ c, monthView = true }) {    // export ให้เทสระดับหน้าจอเรียกตรงได้
+/** real = ข้อมูลจริง: ไม่แสดง %Ads (Meta) — Meta แทบไม่เห็นยอดขายของธุรกิจทักแชท ตัวเลขนี้ขึ้น 130% ข้าง %Ads จริง 24% ทำคนงง (ทดสอบแบบผู้ใช้จริง 27 ก.ย.) */
+export function ChannelCard({ c, monthView = true, real = false, asOfText = "วันนี้" }) {    // export ให้เทสระดับหน้าจอเรียกตรงได้
   const [openDetail, setOpenDetail] = useState(false);
   const meta = platformMeta(c.key);
-  if (!monthView) return <ChannelCardRange c={c} />;
+  if (!monthView) return <ChannelCardRange c={c} real={real} />;
   const d = c.delivery;
   /* รื้อ 21 ก.ย. ค่ำ (อาร์ตขอ "ทำให้ครบเหมือนที่เคยแก้ๆมา") — ภาษาเดียวกับการ์ดงบ/tile ทั้งหน้า:
      ตัวเลขใหญ่ ค่าจริง/งบ · หน้าปัด mini · facts แถวเดียว · จังหวะ+คำสถานะจาก engine · ป้ายเฉพาะเมื่อมีเรื่อง */
@@ -199,7 +203,7 @@ export function ChannelCard({ c, monthView = true }) {    // export ให้เ
 
             {c.budget != null ? (
               <div className="ads-bullet" role="img"
-                aria-label={`ใช้ไป ${fmtMoney(c.spend)} จากงบ ${fmtMoney(c.budget)} · ควรใช้ ${fmtMoney(c.pace.expectedSpend)} ณ วันนี้`}>
+                aria-label={`ใช้ไป ${fmtMoney(c.spend)} จากงบ ${fmtMoney(c.budget)} · ควรใช้ ${fmtMoney(c.pace.expectedSpend)} ณ ${asOfText === "วันนี้" ? "วันนี้" : asOfText}`}>
                 {/* ช่วงคุณภาพ: ก่อนขีด = ยังตามจังหวะ · หลังขีด = เร็วกว่าจังหวะ (มีคำกำกับใต้แถบ) */}
                 <span className="ads-bullet-range ads-bullet-range--ok" style={{ width: `${Math.round(c.pace.expected * 100)}%` }} />
                 <span className="ads-bullet-range ads-bullet-range--warn" style={{ left: `${Math.round(c.pace.expected * 100)}%` }} />
@@ -212,12 +216,13 @@ export function ChannelCard({ c, monthView = true }) {    // export ให้เ
 
             {c.budget != null && (
               <dl className="aw-facts">
-                <div><dt>ควรใช้วันนี้</dt><dd>{fmtMoney(c.pace.expectedSpend)}</dd></div>
-                <div><dt>งบคงเหลือ</dt><dd>{c.pace.remaining != null ? fmtMoney(c.pace.remaining) : "—"}</dd></div>
+                <div><dt>{asOfText === "วันนี้" ? "ควรใช้วันนี้" : `ควรใช้ถึง ${asOfText}`}</dt><dd>{fmtMoney(c.pace.expectedSpend)}</dd></div>
+                {/* ติดลบ = ใช้เกินงบ — เดิมขึ้น "งบคงเหลือ ฿-7,780.32" (ชุด C ข้อ 13) */}
+                <div><dt>{c.pace.remaining != null && c.pace.remaining < 0 ? "ใช้เกินงบ" : "งบคงเหลือ"}</dt><dd>{c.pace.remaining != null ? fmtMoney(Math.abs(c.pace.remaining)) : "—"}</dd></div>
                 <div><dt>คาดใช้สิ้นเดือน</dt><dd>{c.pace.forecast != null ? fmtMoney(c.pace.forecast) : "—"}</dd></div>
                 <div><dt>เฉลี่ย/วัน</dt><dd>{c.pace.average != null ? fmtMoney(c.pace.average) : "—"}</dd></div>
                 <div><dt>เหลือเวลา</dt><dd>{c.pace.daysLeft != null ? `${c.pace.daysLeft} วัน` : "—"}</dd></div>
-                <div><dt>%Ads</dt><dd>{c.pctAds != null ? fmtPct(c.pctAds, 1) : "—"}</dd></div>
+                {!real && <div><dt>%Ads (Meta)</dt><dd>{c.pctAds != null ? fmtPct(c.pctAds, 2) : "—"}</dd></div>}
               </dl>
             )}
 
@@ -232,7 +237,7 @@ export function ChannelCard({ c, monthView = true }) {    // export ให้เ
 
           {ratio != null && state !== "unknown" && (
             <div className="aw-hero-side">
-              <PaceGauge width={178} kind="spend" title="จังหวะใช้งบ" caption="ของงบที่ควรใช้ถึงวันนี้"
+              <PaceGauge width={178} kind="spend" title="จังหวะใช้งบ" caption={`ของงบที่ควรใช้ถึง${asOfText === "วันนี้" ? "" : " "}${asOfText}`}
                 pace={{ value: ratio, state, direction: "spend" }}/>
             </div>
           )}
@@ -250,17 +255,17 @@ export function ChannelCard({ c, monthView = true }) {    // export ให้เ
         {openDetail && (
           <div className="ads-detail-body">
             <dl className="ads-metrics">
-              <div><dt>ROAS</dt><dd className="mono">{fmtRoas(c.roas)}</dd></div>
+              <div><dt>{METRIC_LABEL.roasMeta}</dt><dd className="mono">{fmtRoas(c.roas)}</dd></div>
               <div><dt>CPL</dt><dd className="mono">{c.cpl != null ? fmtMoney(c.cpl) : "—"}</dd></div>
-              <div><dt>CTR</dt><dd className="mono">{d.ctr != null ? fmtPct(d.ctr, 2) : "—"}</dd></div>
+              <div><dt>{METRIC_LABEL.ctrAll}</dt><dd className="mono">{d.ctr != null ? fmtPct(d.ctr, 2) : "—"}</dd></div>
               <div><dt>CPC</dt><dd className="mono">{d.cpc != null ? fmtMoney(d.cpc) : "—"}</dd></div>
               <div><dt>CPM</dt><dd className="mono">{d.cpm != null ? fmtMoney(d.cpm) : "—"}</dd></div>
-              <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${fmtNum(d.frequency, 2)}x` : "—"}</dd></div>
+              <div><dt>ความถี่</dt><dd className="mono">{d.frequency != null ? `${fmtNum(d.frequency, 2)}×` : "—"}</dd></div>
             </dl>
 
             <div className="ads-chan-spark">
               <span className="ads-muted">CPL ในเดือน</span>
-              <Sparkline values={c.cplSeries} tone={st.tone} lower />
+              <Sparkline values={c.cplSeries} tone={tone} lower />
             </div>
 
             {c.campaigns.length > 0 && (
@@ -273,7 +278,7 @@ export function ChannelCard({ c, monthView = true }) {    // export ให้เ
                       <span className="ads-camp-name">{cp.name}</span>
                       <span className="ads-camp-nums mono">
                         {fmtMoney(cp.spend)}
-                        <span className="ads-muted"> · CPL {cp.cpl != null ? fmtMoney(cp.cpl) : "—"} · ROAS {fmtRoas(cp.roas)}</span>
+                        <span className="ads-muted"> · CPL {cp.cpl != null ? fmtMoney(cp.cpl) : "—"} · {METRIC_LABEL.roasMeta} {fmtRoas(cp.roas)}</span>
                       </span>
                     </li>
                   ))}
@@ -301,14 +306,14 @@ export function AdsView() {
 
   const v = useMemo(() => buildOverviewModel({ data, ads, inBrandScope, brandFilter, filters }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, ads.cards, ads.mockFallback, ads.source, ads.sales, ads.salesGoals, inBrandScope, brandFilter, filters]);
+    [data, ads.cards, ads.mockFallback, ads.source, ads.pilot?.summary?.lastSuccessAt, ads.sales, ads.salesGoals, inBrandScope, brandFilter, filters]);
 
   const shownFrom = isoDay(new Date(v.range.start));
-  const shownTo = isoDay(new Date(new Date(v.range.end).getTime() - 1));
+  const shownTo = v.range.end > v.range.start ? isoDay(new Date(new Date(v.range.end).getTime() - 1)) : shownFrom;   // ช่วงว่าง = วันเริ่ม
   const changeRange = ({ period: nextPeriod, from, to }) => setFilters({ period: nextPeriod, from, to });
 
-  return <AdsWorkspace v={v} ads={ads} selected={filters.brand === "all" ? null : filters.brand} onSelect={(id) => setFilters({ brand: id ?? "all" })} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
-    <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} onChange={changeRange} />
+  return <AdsWorkspace v={v} ads={ads} todayOnly={period === "today"} selected={filters.brand === "all" ? null : filters.brand} onSelect={(id) => setFilters({ brand: id ?? "all" })} ChannelCard={ChannelCard} SalePipeline={SalePipeline} settings={data.settings} updateAdsControl={updateAdsControl} toast={toast} controls={<>
+    <DateRangePicker period={period} from={shownFrom} to={shownTo} max={todayLocal} through={v.cutoff} onChange={changeRange} />
     <RevenueBasisToggle value={revenueBasis} onChange={setRevenueBasis} />
     <Dropdown label="ช่องทาง" options={[["all", "ทั้งหมด"], ...v.channelList.map((item) => [item, item])]} value={channel} onChange={setChannel} />
     <CompareControl period={period} value={compare} onChange={setCompare} />

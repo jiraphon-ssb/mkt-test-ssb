@@ -155,7 +155,7 @@ export function CreativeRunsPanel({ latestByConnection = new Map(), accounts = [
   return <section className="sy-panel" aria-labelledby="sy-creative-title">
     <header><div><h2 id="sy-creative-title">Creative</h2><p>รูปและข้อความโฆษณาจาก Meta · ภาพจริงดึงจากโพสต์ผ่านสิทธิ์เพจ/Business</p></div></header>
     {rows.length ? <div className="sy-run-table">
-      <div className="sy-run-row sy-creative-row head"><span>บัญชี</span><span>รีเฟรชล่าสุด</span><span>ชิ้นงาน</span><span>ภาพจริงจากโพสต์</span><span>ภาพจาก hash</span><span>ผล</span></div>
+      <div className="sy-run-row sy-creative-row head"><span>บัญชี</span><span>รีเฟรชล่าสุด</span><span>ชิ้นงาน</span><span>ภาพจริงจากโพสต์</span><span>ภาพจากคลังรูป</span><span>ผล</span></div>
       {rows.map((account) => {
         const run = latestByConnection.get(account.connectionId) ?? null;
         const view = creativeRunView(run);

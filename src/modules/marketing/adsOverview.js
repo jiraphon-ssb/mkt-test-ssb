@@ -5,7 +5,7 @@
    งบ = data.ad_budgets (mock ราย แบรนด์×ช่องทาง×เดือน) — ยังไม่มี = แสดง "ยังไม่ตั้งงบ" ไม่เดา
    ============================================================ */
 
-import { fmtNum, fmtMoney } from "./dash/charts/theme.js";
+import { fmtNum, fmtMoney, fmtPct } from "./dash/charts/theme.js";
 import { adsRollup, analyticsCards, cardAnchorISO, inRange } from "./mktAnalytics.js";
 import { creativeAssetOf } from "./ads/metaCreativeContract.js";
 
@@ -14,6 +14,9 @@ export const share = (a, b) => (a == null || b == null || b <= 0 ? null : a / b)
 
 /** ROAS = รายได้ ÷ ค่าแอด — ค่าแอด 0/ว่าง หรือรายได้ว่าง คืน null */
 export const roasOf = (revenue, spend) => (spend == null || spend <= 0 || revenue == null ? null : revenue / spend);
+/* ROAS ระดับชิ้น/รายแคมเปญของครีเอทีฟ: Meta ไม่เห็นมูลค่ายอดขาย (รายได้ 0/ไม่รู้ — ชิ้นทักแชท หรือมีการซื้อแต่ไม่ได้วัดมูลค่า) = null ไม่ใช่ 0.00x
+   กันการ์ดขึ้น 0.00x สีแดงและคำแนะนำ "ควรหยุด" จาก ROAS ทั้งที่ชิ้นนั้นได้คนทักถูก · กติกาเดียวกับหน้าแคมเปญ (สเปก 2026-09-26) */
+const salesRoas = (revenue, _purchases, spend) => (revenue > 0 ? roasOf(revenue, spend) : null);
 
 /** เลือกฐานยอดขายให้ทุก aggregate ใช้ฟิลด์เดียวกัน
     ยอดใหม่ต้องมีค่าจากต้นทางจริง; ถ้าไม่มีให้เป็น null แทนการเดาหรือใช้ยอดรวมแทน */
@@ -686,7 +689,7 @@ export function decideAction(row, rules = ACTION_RULES) {
   }
   if (roas != null && roas < rules.stopRoas) {
     return { action: "Stop", tone: "rose", rank: 4,
-      why: `ROAS ${fmtNum(roas, 2)}x — ได้กลับน้อยกว่าที่จ่าย`, next: "ปิดก่อน แล้วตรวจว่ากลุ่มเป้าหมายหรือข้อเสนอผิดตรงไหน" };
+      why: `ROAS ${fmtNum(roas, 2)}× — ได้กลับน้อยกว่าที่จ่าย`, next: "ปิดก่อน แล้วตรวจว่ากลุ่มเป้าหมายหรือข้อเสนอผิดตรงไหน" };
   }
   if (fatigue) {
     return { action: "Fix", tone: "amber", rank: 3,
@@ -694,7 +697,7 @@ export function decideAction(row, rules = ACTION_RULES) {
   }
   if (roas != null && roas < rules.fixRoas) {
     return { action: "Fix", tone: "amber", rank: 3,
-      why: `ROAS ${fmtNum(roas, 2)}x — ยังไม่ถึงจุดคุ้ม`, next: "ลองแก้ข้อเสนอหรือหน้าปลายทางก่อนเติมงบ" };
+      why: `ROAS ${fmtNum(roas, 2)}× — ยังไม่ถึงจุดคุ้ม`, next: "ลองแก้ข้อเสนอหรือหน้าปลายทางก่อนเติมงบ" };
   }
   if (cpl != null && cpl > rules.highCpl) {
     return { action: "Fix", tone: "amber", rank: 3,
@@ -703,7 +706,7 @@ export function decideAction(row, rules = ACTION_RULES) {
   }
   if (roas != null && roas >= rules.scaleRoas) {
     return { action: "Scale", tone: "emerald", rank: 1,
-      why: `ROAS ${fmtNum(roas, 2)}x — คุ้มกว่าเกณฑ์`, next: "เติมงบทีละน้อย แล้วดูว่า CPL ยังนิ่งไหม" };
+      why: `ROAS ${fmtNum(roas, 2)}× — คุ้มกว่าเกณฑ์`, next: "เติมงบทีละน้อย แล้วดูว่า CPL ยังนิ่งไหม" };
   }
   return { action: "ติดตาม", tone: "zinc", rank: 0, why: "ผลอยู่ในช่วงปกติ", next: "ดูต่ออีก 2–3 วัน ยังไม่ต้องแตะ" };
 }
@@ -711,7 +714,29 @@ export function decideAction(row, rules = ACTION_RULES) {
 /* ---------- ครีเอทีฟ: ตัวไหนเวิร์ค · ควรทำอะไรต่อ ----------
    จับกลุ่มตามชิ้นงานจริง (แบรนด์ × แพลตฟอร์ม × ครีเอทีฟ) เพราะนั่นคือหน่วยที่ลงมือแก้ได้
    "เริ่มล้า" ดูจากความถี่สูง หรือ CTR ครึ่งหลังตกจากครึ่งแรก */
-export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES) {
+/** คีย์ของ "เฉลี่ยแบรนด์" = แบรนด์ × แพลตฟอร์ม (อาร์ตเคาะ 27 ก.ย.) — ผลลัพธ์ต่างแพลตฟอร์มคนละชนิด เฉลี่ยรวมกันเพี้ยน
+    และไม่ขยับตามตัวกรองช่องทาง → หน้าแคมเปญกับหน้า Creative ได้ตัวเลขเดียวกันเสมอ */
+export const cplKey = (brandId, platform) => `${brandId}|${platform}`;
+
+/** ค่าเฉลี่ย CPL ต่อแบรนด์ × แพลตฟอร์ม (ชุดเดียวทั้งระบบ — ตรวจรอบละเอียด 26 ก.ย.)
+    Σค่าแอด ÷ Σผลลัพธ์ นับเฉพาะการ์ดที่รู้ทั้งค่าแอดและผลลัพธ์ · ไม่มีผลลัพธ์เลย = null
+    ใช้ทั้งหน้าแคมเปญ มุมกลุ่มเป้าหมาย คลัง Creative และการ์ดในแผงแคมเปญ → ป้าย "เฉลี่ยแบรนด์" หมายถึงตัวเลขเดียวกันทุกที่ */
+export function brandCplIndex(cards, range) {
+  const sum = new Map();
+  for (const c of adFactRows(cards, range)) {
+    const m = c.metrics ?? {};
+    if (m.spend == null || m.leads == null) continue;
+    const key = cplKey(c.brand_id, adPlatformOf(c));
+    const t = sum.get(key) ?? { spend: 0, leads: 0 };
+    t.spend += Number(m.spend) || 0; t.leads += Number(m.leads) || 0;
+    sum.set(key, t);
+  }
+  return new Map([...sum].map(([id, t]) => [id, t.leads > 0 ? t.spend / t.leads : null]));
+}
+
+/** roasFromMeta = false (ข้อมูลจริง): คำแนะนำไม่ใช้ ROAS ของ Meta (ชิ้นทักแชท Meta แทบไม่เห็นยอดขาย) — หลักเดียวกับหน้าแคมเปญ
+    แต่เทียบ CPL กับค่าเฉลี่ยแบรนด์แทน · ตัวเลข ROAS ยังคืนตามจริงเพื่อแสดง (อาร์ตเคาะ 26 ก.ย.) */
+export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES, { roasFromMeta = true, brandCpl = null } = {}) {
   const names = new Map(brands.map((b) => [b.id, b.name]));
   const mid = new Date((new Date(range.start).getTime() + new Date(range.end).getTime()) / 2).toISOString();
   const acc = new Map();
@@ -736,20 +761,39 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
       row = {
         key, creative, platform, brandId: c.brand_id, brand: names.get(c.brand_id) ?? c.brand_id,
         campaigns: new Set(), resultEvents: new Set(), resultLabels: new Set(), currencies: new Set(), asset,
-        spend: 0, leads: 0, revenue: 0, purchases: undefined, impressions: 0, clicks: 0, reach: 0,
-        early: { imp: 0, clk: 0 }, late: { imp: 0, clk: 0 }, complete: true,
+        spend: 0, leads: 0, revenue: 0, purchases: undefined, impressions: 0, clicks: 0, linkClicks: null, linkImpressions: 0, linkSpend: 0, reach: 0,
+        early: { imp: 0, clk: 0 }, late: { imp: 0, clk: 0 }, complete: true, byCampaign: new Map(), spendDays: new Set(),
       };
       acc.set(key, row);
     }
     if (!row.asset && asset) row.asset = asset;
     const m = c.metrics ?? {};
-    if (m.spend == null || m.leads == null || m.revenue == null) row.complete = false;
-    row.campaigns.add(c.campaign ?? c.brief?.campaign ?? "ไม่ระบุแคมเปญ");
+    if (m.spend == null || m.leads == null) row.complete = false;   // รายได้ไม่รู้ ≠ ไม่ครบ (แค่ ROAS เป็น null) — ชุด A 26 ก.ย.
+    const campName = c.campaign ?? c.brief?.campaign ?? "ไม่ระบุแคมเปญ";
+    row.campaigns.add(campName);
+    /* ยอดแยกตามแคมเปญ — หน้าต่างครีเอทีฟแสดง "อยู่ใน N แคมเปญ" (สเปก 2026-09-25) · กติกา null เหมือนยอดรวมของชิ้น */
+    let pc = row.byCampaign.get(campName);
+    if (!pc) { pc = { campaign: campName, spend: 0, leads: 0, revenue: 0, purchases: undefined, impressions: 0, clicks: 0, linkClicks: null, linkImpressions: 0, adsets: new Set(), status: null, statusAt: null }; row.byCampaign.set(campName, pc); }
+    pc.spend += m.spend ?? 0;
+    pc.leads += m.leads ?? 0;
+    pc.revenue = pc.revenue == null || m.revenue == null ? null : pc.revenue + m.revenue;
+    pc.purchases = pc.purchases === null || m.purchases == null ? null : (pc.purchases ?? 0) + m.purchases;
+    pc.impressions += m.impressions ?? 0;
+    pc.clicks += m.clicks ?? m.link_clicks ?? 0;
+    /* คลิกลิงก์: นับเฉพาะวันที่ Meta ส่งมา · ไม่มีเลยทั้งแถว = null (ห้ามเดาจากคลิกทั้งหมด) — สเปก 2026-09-26 */
+    if (m.link_clicks != null) {   // ตัวหารนับเฉพาะวันที่มีข้อมูลคลิกลิงก์ (ชุด A ข้อ 15)
+      pc.linkClicks = (pc.linkClicks ?? 0) + m.link_clicks; pc.linkImpressions += m.impressions ?? 0;
+      row.linkClicks = (row.linkClicks ?? 0) + m.link_clicks; row.linkImpressions += m.impressions ?? 0; row.linkSpend += m.spend ?? 0;
+    }
+    if (c.ad_group) pc.adsets.add(c.ad_group);
+    // โพสต์เดียวอาจอยู่หลายชุดโฆษณาในแคมเปญเดียว — มีตัวไหนเปิด = ถือว่าเปิดในแคมเปญนั้น
+    if (asset?.status && (pc.status == null || asset.status === "ACTIVE")) { pc.status = asset.status; pc.statusAt = asset.statusAt ?? null; }
     if (c.result_event ?? m.result_event) row.resultEvents.add(c.result_event ?? m.result_event);
     if (c.result_label ?? m.result_label) row.resultLabels.add(c.result_label ?? m.result_label);
     if (c.currency) row.currencies.add(c.currency);
     row.spend += m.spend ?? 0;
     row.leads += m.leads ?? 0;
+    if ((m.spend ?? 0) > 0) row.spendDays.add(String(cardAnchorISO(c) ?? "").slice(0, 10));
     row.revenue = row.revenue == null || m.revenue == null ? null : row.revenue + m.revenue;
     // การซื้อ: แถวไหนไม่รู้ (บัญชีไม่วัด) ทั้งชิ้น = ไม่รู้ ไม่ใช่ 0 (กติกาเดียวกับยอด)
     row.purchases = row.purchases === null || m.purchases == null ? null : (row.purchases ?? 0) + m.purchases;
@@ -760,7 +804,7 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     half.imp += m.impressions ?? 0;
     half.clk += m.clicks ?? m.link_clicks ?? 0;
   }
-  return [...acc.values()].map(({ early, late, campaigns, resultEvents, resultLabels, currencies, ...row }) => {
+  const rows = [...acc.values()].map(({ early, late, campaigns, resultEvents, resultLabels, currencies, byCampaign, spendDays, ...row }) => {
     const ctr = share(row.clicks, row.impressions);
     const ctrEarly = share(early.clk, early.imp), ctrLate = share(late.clk, late.imp);
     const ctrDrop = ctrEarly == null || ctrLate == null || ctrEarly === 0 ? null : (ctrEarly - ctrLate) / ctrEarly;
@@ -773,18 +817,63 @@ export function adsCreativeRows(cards, range, brands = [], rules = ACTION_RULES)
     const base = {
       ...row,
       campaigns: [...campaigns],
+      perCampaign: [...byCampaign.values()].map(({ clicks, adsets, linkImpressions, ...p }) => ({
+        ...p, cpl: p.leads > 0 ? p.spend / p.leads : null, ctr: share(clicks, p.impressions), roas: salesRoas(p.revenue, p.purchases, p.spend),
+        linkCtr: share(p.linkClicks, linkImpressions), adsets: [...adsets],
+        cpa: p.purchases > 0 ? p.spend / p.purchases : null,
+      })).sort((a, b) => b.spend - a.spend),
       resultEvents: [...resultEvents], resultLabels: [...resultLabels], currencies: [...currencies],
       resultLabel: resultLabels.size === 1 ? [...resultLabels][0] : resultLabels.size > 1 ? "ผลลัพธ์หลายแบบ" : "ผลลัพธ์",
       currency: currencies.size === 1 ? [...currencies][0] : currencies.size > 1 ? null : "THB",
       ctr, ctrEarly, ctrLate, ctrDrop, frequency, fatigue,
       cpc: share(row.spend, row.clicks),
+      linkCtr: share(row.linkClicks, row.linkImpressions), linkCpc: share(row.linkSpend, row.linkClicks),
       cpl: row.leads > 0 ? row.spend / row.leads : null,
       cpa: row.purchases > 0 ? row.spend / row.purchases : null,
       cpm: row.impressions > 0 ? (row.spend / row.impressions) * 1000 : null,
-      roas: roasOf(row.revenue, row.spend),
+      roas: salesRoas(row.revenue, row.purchases, row.spend),
     };
-    return { ...base, ...decideAction(base, rules) };
-  }).sort((a, b) => b.rank - a.rank || b.spend - a.spend);
+    return { ...base, days: spendDays.size, roasFromMeta, ...(roasFromMeta ? decideAction(base, rules) : realCreativeAction({ ...base, days: spendDays.size }, rules)) };
+  });
+  return (roasFromMeta ? rows : withBrandCplAdvice(rows, brandCpl ?? brandCplIndex(cards, range), rules)).sort((a, b) => b.rank - a.rank || b.spend - a.spend);
+}
+
+/* ข้อมูลจริง: เกณฑ์ข้อมูลขั้นต่ำเท่าแคมเปญ (campaignDecision: 3 วัน · 5 ผลลัพธ์ เว้นแต่ใช้เงินเกินเกณฑ์แล้วไม่ได้ผลเลย)
+   และไม่ตัดสินด้วย ROAS ของ Meta — ตรวจรอบละเอียด 26 ก.ย.: แคมเปญรัน 2 วันขึ้น "รอข้อมูล" แต่ครีเอทีฟของมันขึ้น "ควรหยุด" */
+const CREATIVE_MIN_DAYS = 3, CREATIVE_MIN_LEADS = 5;
+function realCreativeAction(row, rules) {
+  const noRoas = { ...row, roas: null };
+  if (!row.complete) return decideAction(noRoas, rules);
+  const wait = { action: "รอข้อมูล", tone: "zinc", rank: 0, why: `รันมา ${row.days} วัน · ผลลัพธ์ ${row.leads}`, next: `รอให้ครบ ${CREATIVE_MIN_DAYS} วัน และ ${CREATIVE_MIN_LEADS} ผลลัพธ์ก่อนตัดสิน` };
+  if (row.days < CREATIVE_MIN_DAYS) return wait;
+  const wasted = row.spend > rules.wasteSpend && row.leads === 0;
+  if (row.leads < CREATIVE_MIN_LEADS && !wasted) return wait;
+  const d = decideAction(noRoas, rules);
+  // ต้นทุนเกินเกณฑ์ (ไม่ใช่ล้า) แต่ Meta เห็นยอดขายถึงจุดคุ้ม = แพงแต่ขายได้ — กติกาเดียวกับหน้าแคมเปญ (ตรวจรอบ 27 ก.ย. ดึก)
+  return d.action === "Fix" && !row.fatigue && creativeSells(row, rules) ? sellsAction(row, d.why) : d;
+}
+const creativeSells = (row, rules) => row.roas != null && row.roas >= rules.fixRoas;
+const sellsAction = (row, costWhy) => ({ action: "Sells", tone: "zinc", rank: 1,
+  why: `${costWhy} แต่ Meta เห็นยอดขาย ROAS ${fmtNum(row.roas, 2)}×`, next: "อย่าเพิ่งปิด — เทียบยอดขายจริงของแบรนด์ในหน้าภาพรวมก่อน แล้วค่อยลดต้นทุน" });
+
+/* CPL เทียบค่าเฉลี่ยแบรนด์ — เกณฑ์เดียวกับ campaignDecision (≥ 1.5 เท่า = ควรแก้ · ≤ 0.8 เท่า = ต้นทุนดี)
+   แตะเฉพาะชิ้นที่ยัง "ติดตาม" (กฎที่หนักกว่า เช่น ใช้เงินไม่มีผล/ล้า ชนะ) · ผลลัพธ์ < 5 = ตัวเลขน้อยแกว่งง่าย ยังไม่เทียบ */
+const CPL_HIGH = 1.5, CPL_STOP = 2.5, CPL_LOW = 0.8, CPL_MIN_LEADS = 5;
+function withBrandCplAdvice(rows, brandCpl, rules = ACTION_RULES) {
+  return rows.map((r) => {
+    const avg = brandCpl.get(cplKey(r.brandId, r.platform)) ?? null;
+    if (r.action !== "ติดตาม" || !r.complete || r.cpl == null || !avg || r.leads < CPL_MIN_LEADS) return r;
+    const ratio = r.cpl / avg;
+    if (ratio >= CPL_HIGH && creativeSells(r, rules)) return { ...r, ...sellsAction(r, `CPL ${fmtMoney(r.cpl)} แพงกว่าเฉลี่ยแบรนด์ ${fmtMoney(avg)} อยู่ ${fmtPct(ratio - 1)}`) };
+    // ≥ 2.5 เท่า = ควรหยุด เกณฑ์เดียวกับแคมเปญ (รีวิวโค้ด 28 ก.ย.: แคมเปญขึ้นควรหยุด แต่ครีเอทีฟชิ้นเดียวกันขึ้นแค่ควรแก้)
+    if (ratio >= CPL_STOP) return { ...r, action: "Stop", tone: "rose", rank: 4,
+      why: `CPL ${fmtMoney(r.cpl)} แพงกว่าเฉลี่ยแบรนด์ ${fmtMoney(avg)} อยู่ ${fmtPct(ratio - 1)}`, next: "ปิดชิ้นนี้ แล้วย้ายงบไปชิ้นที่ CPL ต่ำกว่า" };
+    if (ratio >= CPL_HIGH) return { ...r, action: "Fix", tone: "amber", rank: 3,
+      why: `CPL ${fmtMoney(r.cpl)} แพงกว่าเฉลี่ยแบรนด์ ${fmtMoney(avg)} อยู่ ${fmtPct(ratio - 1)}`, next: "ย้ายงบไปชิ้นที่ CPL ต่ำกว่า หรือทำชิ้นใหม่แทน" };
+    if (ratio <= CPL_LOW) return { ...r, action: "Good", tone: "emerald", rank: 1,
+      why: `CPL ${fmtMoney(r.cpl)} ถูกกว่าเฉลี่ยแบรนด์ ${fmtMoney(avg)} อยู่ ${fmtPct(1 - ratio)}`, next: "ทำชิ้นแนวนี้เพิ่ม · ดูยอดขายของแบรนด์ประกอบก่อนเติมงบ" };
+    return r;
+  });
 }
 
 

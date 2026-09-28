@@ -42,6 +42,8 @@
 .mkt-root .ads-suite .cp-more-filters>div select { width:100%; }
 /* แผงตัวกรองเปิดชิดซ้ายของปุ่ม (เดิม right:0 → ปุ่มอยู่ต้นแถวเมื่อจอแคบแล้วแผงหลุดออกนอกจอด้านซ้าย) */
 .mkt-root .ads-suite .cp-more-filters>div { left:0; right:auto; }
+/* จอเล็ก: ปุ่ม "ตัวกรอง" อยู่ครึ่งขวาของแถว — ชิดซ้ายแล้วกล่องกว้าง 240 ล้นขอบจอขวา (ทดสอบละเอียด 27 ก.ย.: 197–437px บนจอ 375) */
+@media (max-width:700px) { .mkt-root .ads-suite .cp-more-filters>div { left:auto; right:0; width:min(240px,calc(100vw - 32px)); } }
 /* แท็บตัวชี้วัด (ตัวชี้วัดและแนวโน้ม): ให้ข้อความแท็บกับ dropdown "ตัวชี้วัดอื่น" อยู่เส้นกลางเดียวกัน
    ปุ่มแท็บสูง 34 = ข้อความกึ่งกลางใน 32 + เส้นใต้ 2 · dropdown 32 ชิดบน → กึ่งกลางที่ 16px เท่ากัน */
 .mkt-root .ads-suite .aw-trend-controls .aw-tabs { align-items:flex-start; }

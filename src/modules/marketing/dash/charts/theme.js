@@ -85,13 +85,16 @@ export function baseOpts(extra = {}) {
 /* ---------- format ----------
    null ≠ 0 — ค่าที่ "ไม่รู้" ต้องขึ้น "—" ทุกตัว (เดิม fmtInt/fmtMoney ปัด null เป็น 0
    ทำให้ยอดที่ยังไม่รู้ขึ้น ฿0 ข้างๆ ROAS ที่ขึ้น "—" บนบรรทัดเดียวกัน) */
-const unknown = (n) => n == null || (typeof n === "number" && !Number.isFinite(n));
+/* ตัวเลขที่เป็นสตริงล้วน ("1234.5") แปลงได้ · อย่างอื่น ("", "abc", "1,000") = ไม่รู้ — เดิมขึ้น "฿NaN.00" / "0.00" (ทดสอบละเอียดรอบ 2) */
+const toNum = (n) => (typeof n === "number" ? n : typeof n === "string" && /^\s*-?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?\s*$/i.test(n) ? Number(n) : NaN);
+const unknown = (n) => n == null || !Number.isFinite(toNum(n));
 /* กติกาอาร์ต 17 ก.ย. 2569: ค่าที่มีทศนิยมต้องแสดงทศนิยม "ห้ามปัด" — ตัดทิ้งที่ 2 ตำแหน่ง
    ล้างเศษ float ที่ตำแหน่งที่ 6 ก่อน (toFixed(6)) แล้วตัดสตริงเหลือ 2 ตำแหน่ง — ไม่ใช้ Math.trunc(n*100)
    เพราะ float เก็บ 57035.04 เป็น 57035.0399999… และยอดที่บวกหลายพันแถวได้ 326972.3299999999 (จริง = .33)
    ถ้าตัดตรงๆ จะหายไป 1 สตางค์ และคนละหน้าที่บวกคนละลำดับจะขึ้นไม่เท่ากัน (เห็นจริง 17 ก.ย.) */
-export function fmtNum(n, digits = 2) {
-  if (unknown(n)) return "—";
+export function fmtNum(value, digits = 2) {
+  if (unknown(value)) return "—";
+  const n = toNum(value);
   const negative = n < 0;
   const [whole, frac = ""] = Math.abs(n).toFixed(6).split(".");
   const cut = frac.slice(0, digits).padEnd(digits, "0");
@@ -100,7 +103,14 @@ export function fmtNum(n, digits = 2) {
   return negative && /[1-9]/.test(text) ? `-${text}` : text;
 }
 /** จำนวนนับ: จำนวนเต็มไม่มีทศนิยม · มีเศษต้องแสดงเศษ (ไม่ปัด) */
-export const fmtInt = (n) => (unknown(n) ? "—" : Number.isInteger(n) ? n.toLocaleString("th-TH") : fmtNum(n, 2));
+/** ค่าตัด 2 ตำแหน่งแบบเดียวกับที่ fmtNum แสดง — ใช้ตัดสินเกณฑ์ให้ตรงกับตัวเลขบนจอ
+    คูณ 100 ก่อนแล้วล้างเศษ float (8.2×100 = 819.9999… ถ้าตัดตรงๆ ได้ 8.19 · รีวิวโค้ด 28 ก.ย.) */
+export const trunc2 = (x) => Math.trunc(Number((x * 100).toFixed(6))) / 100;
+export const fmtInt = (value) => {
+  if (unknown(value)) return "—";
+  const n = toNum(value) + 0;   // -0 → 0 (เดิมขึ้น "-0")
+  return Number.isInteger(n) ? n.toLocaleString("th-TH") : fmtNum(n, 2);
+};
 /** ตัวย่อ (1.2k) — ใช้กับป้ายแกนกราฟเท่านั้น ห้ามใช้แสดงค่า */
 export const fmtCompact = (n) =>
   unknown(n) ? "—"
@@ -108,8 +118,14 @@ export const fmtCompact = (n) =>
   : n >= 1_000 ? `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`
   : String(Math.round(n));
 /** เปอร์เซ็นต์ 2 ตำแหน่งแบบตัดทิ้ง (อาร์กิวเมนต์ที่สองคงไว้ให้โค้ดเดิมเรียกได้ แต่ไม่ลดตำแหน่งแล้ว) */
-export const fmtPct = (x) => (unknown(x) ? "—" : `${fmtNum(x * 100, 2)}%`);
-export const fmtMoney = (n) => (unknown(n) ? "—" : `฿${fmtNum(n, 2)}`);
+export const fmtPct = (x) => (unknown(x) ? "—" : `${fmtNum(toNum(x) * 100, 2)}%`);
+/** เงินติดลบวางเครื่องหมายหน้า ฿ ("-฿1.23" ไม่ใช่ "฿-1.23") · ตัดแล้วเป็นศูนย์ = ไม่มีเครื่องหมาย */
+export const fmtMoney = (value) => {
+  if (unknown(value)) return "—";
+  const n = toNum(value);
+  const text = fmtNum(Math.abs(n), 2);
+  return n < 0 && /[1-9]/.test(text) ? `-฿${text}` : `฿${text}`;
+};
 export const fmtRoas = (x, suffix = "×") => (unknown(x) ? "—" : `${fmtNum(x, 2)}${suffix}`);
 export const fmtDays = (x) => (x == null ? "—" : `${fmtNum(x, 2)} วัน`);
 

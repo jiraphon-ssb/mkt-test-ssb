@@ -16,7 +16,7 @@
 .bl-stats small { color:var(--ink-faint,var(--ink-soft)); font-size:10.5px; }
 
 .bl-table { margin-top:18px; }
-.bl-row { cursor:pointer; display:grid; grid-template-columns:minmax(0,1.3fr) 110px 110px 110px 110px minmax(0,1.4fr) 170px; gap:0 14px; align-items:center; padding:12px 0; border-top:1px solid var(--line); }
+.bl-row { cursor:pointer; display:grid; grid-template-columns:minmax(0,1.3fr) 110px 110px 110px 110px 110px minmax(0,1.4fr) 170px; gap:0 14px; align-items:center; padding:12px 0; border-top:1px solid var(--line); }
 .bl-row--head { cursor:default; padding:8px 0; color:var(--ink-soft); font-size:10.5px; font-weight:700; border-top:0; border-bottom:1px solid var(--line); }
 .bl-row > span > b { display:block; font-size:12.5px; font-weight:600; }
 .bl-row > span > small { display:block; color:var(--ink-faint,var(--ink-soft)); font-size:10.5px; }
@@ -44,7 +44,56 @@
 .bl-charges > div { display:grid; grid-template-columns:110px auto minmax(0,1fr); gap:12px; }
 
 @media (max-width: 1100px) {
-  .bl-row { grid-template-columns:minmax(0,1.3fr) 100px 100px minmax(0,1.2fr) 150px; }
-  .bl-row > :nth-child(3), .bl-row > :nth-child(5) { display:none; }   /* จอแคบซ่อน VAT กับ statement — ดูในแถวขยาย */
+  .bl-row { grid-template-columns:minmax(0,1.3fr) 100px 100px 100px minmax(0,1.2fr) 150px; }
+  .bl-row > :nth-child(4), .bl-row > :nth-child(6) { display:none; }   /* จอแคบซ่อน VAT กับ statement — ดูในแถวขยาย · Meta ตัดจริงยังเห็น */
   .bl-detail { grid-template-columns:minmax(0,1fr); }
+}
+
+/* รายการที่ Meta ตัดบัตร + ช่วงค่าแอดที่ครอบคลุม (26 ก.ย.) */
+.bl-charge-list { display:flex; flex-direction:column; gap:7px; font-size:12px; grid-column:1/-1; }
+.bl-charge-list > div { display:grid; grid-template-columns:64px 120px minmax(0,1fr) auto; gap:10px; align-items:baseline; }
+.bl-charge-list > div > b { font-variant-numeric:tabular-nums; }
+.bl-unbilled { margin:4px 0 0; color:var(--ink-soft); }
+.bl-unbilled.amber { color:var(--warn-text,var(--ink)); font-weight:600; }
+@media (max-width: 700px) { .bl-charge-list > div { grid-template-columns:56px minmax(0,1fr); } .bl-charge-list > div > small, .bl-charge-list > div > .aw-flag { grid-column:1/-1; } }
+
+.mkt-root .bl-name, .bl-name { display:block; padding:0; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.bl-name:focus-visible { outline:2px solid var(--aw-accent,var(--accent)); outline-offset:3px; border-radius:4px; }
+
+/* ชุด D ข้อ 18 — ขั้นยืนยันก่อนบันทึก (append-only) · ผลบันทึก · คอลัมน์ที่ซ่อนมาอยู่ในแถวกาง · มือถือ */
+.bl-confirm--check { padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--bg); font-size:12px; }
+.bl-confirm--check dl { display:flex; flex-direction:column; gap:5px; margin:0; }
+.bl-confirm--check dl > div { display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; }
+.bl-confirm--check dt { color:var(--ink-soft); }
+.bl-confirm--check dd { margin:0; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.bl-confirm-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.mkt-root .bl-confirm .bl-ghost { border-color:var(--line); background:var(--surface-2); color:var(--ink); }
+.bl-saved { margin:12px 0 0; color:var(--ok-text); font-size:12.5px; font-weight:600; }
+.bl-saved:empty { display:none; }
+.bl-detail-facts { display:none; grid-column:1/-1; margin:0; gap:8px 20px; font-size:12px; }
+.bl-detail-facts dt { color:var(--ink-soft); font-size:11px; }
+.bl-detail-facts dd { margin:2px 0 0; font-variant-numeric:tabular-nums; }
+@media (max-width: 1100px) { .bl-detail-facts { display:flex; flex-wrap:wrap; } }
+
+/* ≤900: ตาราง 6 คอลัมน์แน่นจน "ยังไม่กรอก" หักกลางคำ (เห็นที่ 768) → เป็นการ์ดต่อบัญชี ตัวเลขมีป้ายกำกับของตัวเอง */
+@media (max-width: 900px) {
+  .bl-row--head { display:none; }
+  .bl-row { grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 14px; padding:14px 0; }
+  .bl-row > :nth-child(1) { grid-column:1/-1; }
+  .bl-row > :nth-child(7) { grid-column:1/3; }
+  .bl-row > :nth-child(8) { grid-column:3; justify-self:end; }
+  .bl-row .num { text-align:left; }
+  .bl-row .num::before { content:attr(data-label); display:block; margin-bottom:2px; color:var(--ink-soft); font-size:10.5px; }
+  .mkt-root .bl-verify { min-height:40px; }
+}
+@media (max-width: 700px) {
+  .bl-head { flex-direction:column; align-items:flex-start; }
+  .bl-row .aw-flag { margin-left:0; margin-top:4px; }
+  .mkt-root .bl-confirm input { height:40px; font-size:16px; }   /* 16px กัน iOS ซูมเข้าช่องกรอก */
+  .bl-confirm--check dl > div { grid-template-columns:1fr; gap:2px; }
+}
+@media (max-width: 480px) {
+  .bl-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .bl-row > :nth-child(7), .bl-row > :nth-child(8) { grid-column:1/-1; justify-self:stretch; }
+  .mkt-root .bl-verify { width:100%; }
 }

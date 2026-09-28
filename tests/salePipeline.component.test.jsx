@@ -44,7 +44,7 @@ describe("SalePipeline โหมด gauge", () => {
     for (const line of ["จากแอด Meta 1,466 · ทีมกรอก 19/20 วัน", "ทำได้ 86.89% ของเป้าเดือน"]) {
       expect(tip.textContent).toContain(line);
     }
-    expect(screen.getByText("หล่นแรงสุด")).toBeTruthy();      // คอขวดต้องเห็นโดยไม่ต้องเปิดไอคอน
+    expect(screen.getByText("คอขวด")).toBeTruthy();      // คอขวดต้องเห็นโดยไม่ต้องเปิดไอคอน
   });
 });
 

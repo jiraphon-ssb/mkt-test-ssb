@@ -1,0 +1,5 @@
+/* ช่วงที่ข้อมูลยังไม่เข้า — ใช้ร่วมภาพรวม · แคมเปญ · Creative (27–28 ก.ย.) */
+.aw-today-pending { display:grid; gap:6px; justify-items:start; padding:20px; background:var(--surface); border:1px solid var(--line); border-radius:12px; }
+.aw-today-pending b { font-size:15px; } .aw-today-pending p { margin:0; color:var(--ink-soft); font-size:13px; }
+.aw-today-pending a { margin-top:6px; padding:7px 14px; border:1px solid var(--line); border-radius:8px; color:var(--ink); font-weight:700; font-size:13px; text-decoration:none; }
+.aw-today-pending a:hover { background:var(--surface-2); }

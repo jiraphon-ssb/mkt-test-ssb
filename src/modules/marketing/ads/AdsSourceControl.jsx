@@ -3,8 +3,7 @@
    18 ก.ย. 69: ถอดตัวสลับ "ของจริง / ตัวอย่าง" ออก — หน้านี้ใช้ข้อมูลจริงเสมอ (โหมดเดโมยังเป็นข้อมูลตัวอย่าง)
    แถบบอกอยู่แล้วว่าเป็นข้อมูลจริง ป้ายสลับจึงซ้ำและกินที่หัวหน้า */
 import { Link } from "react-router-dom";
-import { AlertTriangle, Clock3, Database, LoaderCircle, RefreshCw } from "lucide-react";
-import { adsErrorText } from "./adsSyncMessages.js";
+import { Clock3, Database, RefreshCw } from "lucide-react";
 import { SOURCE_LEGEND, sourceChips, stripVerdict } from "./adsSourceStrip.js";
 import { isoDay } from "../adsScope.js";
 
@@ -16,14 +15,18 @@ export function AdsSourceControl({ ads }) {
   return <span className="aw-demo" title="โหมดเดโม — ตัวเลขทั้งหมดเป็นข้อมูลตัวอย่าง"><i /> ข้อมูลตัวอย่าง</span>;
 }
 
-export function AdsSourceNotice({ ads }) {
+/** todayOnly: หน้ากำลังดูช่วง "วันนี้" วันเดียว — ธงบอกว่าของวันนี้จะครบพรุ่งนี้ มีความหมายเฉพาะกรณีนี้
+    (ตรวจรอบ 27 ก.ย. ดึก: เดิมเขียน "วันนี้ยังไม่สิ้นสุด ยอดยังเปลี่ยนได้" แต่ข้อมูลดึงวันละครั้ง ตัวเลขไม่เปลี่ยนจนถึงเช้าพรุ่งนี้) */
+export function AdsSourceNotice({ ads, todayOnly = false }) {
   if (ads.source !== "meta_pilot") return null;
-  const { status, error, summary } = ads.pilot;
-  if (status === "loading" || status === "idle") {
-    return <div className="ads-source-note" role="status"><LoaderCircle size={14} className="spin" /><span>กำลังโหลดตัวเลขจริง…</span></div>;
-  }
-  if (status === "error") {
-    return <div className="ads-source-note bad" role="alert"><AlertTriangle size={14} /><span><b>โหลดตัวเลขจริงไม่สำเร็จ</b> · {adsErrorText(error, "ลองใหม่อีกครั้ง")} · ไม่ได้แสดงข้อมูลตัวอย่างแทน</span><button type="button" onClick={ads.reload}><RefreshCw size={13} /> ลองใหม่</button></div>;
+  const { status, summary } = ads.pilot;
+  /* กำลังโหลด / โหลดไม่สำเร็จ: กล่องในหน้าบอกที่เดียว (อยู่ตรงที่ข้อมูลควรอยู่ พร้อมเหตุผลและปุ่มลองใหม่)
+     เดิมขึ้นซ้อนสองที่ + ปุ่มลองใหม่สองปุ่ม (ทดสอบละเอียดรอบ 2 · 27 ก.ย.) */
+  if (status === "loading" || status === "idle" || status === "error") return null;
+  /* ยอดขาย/เป้าโหลดพัง (ค่าแอดยังมา) — ห้ามให้ป้ายแหล่งข้อมูลสรุปว่า "ยังไม่มี / ยังไม่ตั้งเป้า" (ทดสอบละเอียดรอบ 2 · 27 ก.ย.) */
+  if (ads.pilot.salesFailed || ads.pilot.goalsFailed) {
+    return <div className="ads-source-note warn" role="alert"><Database size={14} aria-hidden="true" /><span><b>โหลดยอดขายและเป้าไม่สำเร็จ</b> · ตัวเลขค่าแอด Meta ยังใช้ได้</span>
+      <button type="button" className="ads-source-reload" onClick={ads.reload}><RefreshCw size={13} aria-hidden="true" /> โหลดใหม่</button></div>;
   }
   if (summary.empty) {
     return <div className="ads-source-note warn" role="status"><Database size={14} /><span><b>ยังไม่มีค่าแอดจริง</b> · {summary.accounts ? `${summary.accounts} บัญชีเชื่อมแล้ว แต่ยังไม่เคยดึงข้อมูล` : "ยังไม่มีบัญชี Meta ที่บันทึก mapping"}</span><Link to={summary.accounts ? "/mkt/ads/sync" : "/mkt/ads?panel=settings&tab=sources"}>{summary.accounts ? "ไปดึงข้อมูล" : "ไปตั้งค่าบัญชี"}</Link></div>;
@@ -31,12 +34,16 @@ export function AdsSourceNotice({ ads }) {
   const today = isoDay(new Date());
   const chips = sourceChips({ summary, sales: ads.sales, salesGoals: ads.salesGoals, today });
   const verdict = stripVerdict(chips);
+  const todayFlag = todayOnly && summary.provisionalToday;
+  /* ขึ้นเฉพาะตอนมีเรื่อง (สเปก 2026-09-26 · อาร์ตให้เอาออกจากพื้นผิวหลัก): สดและครบ = ไม่กินพื้นที่ทุกหน้า
+     รายละเอียดแหล่งข้อมูลตอนปกติดูที่หน้าสถานะ Sync */
+  if (verdict.state === "ok" && !todayFlag) return null;
   /* มินิมอล (อาร์ต 21 ก.ย. ค่ำ): บนแถบเหลือบรรทัดเดียว — สรุป (บอกชื่อแหล่งที่มีปัญหาในตัว) + โหลดใหม่
      ป้ายรายแหล่งย้ายเข้า fold "ที่มาของตัวเลข" · ธงวันนี้ยังไม่จบเป็นข้อความจาง ไม่ใช่ pill เหลือง (มันคือสภาพปกติทุกวัน) */
   return <section className={`ads-source-note ${verdict.state}`} aria-label="ที่มาของตัวเลข">
     <div className="ads-source-top">
       <p className="ads-source-verdict" role="status"><Database size={14} aria-hidden="true" /><b>{verdict.text}</b></p>
-      {summary.provisionalToday && <span className="ads-source-flag"><Clock3 size={13} aria-hidden="true" /> วันนี้ยังไม่สิ้นสุด ยอดยังเปลี่ยนได้</span>}
+      {todayFlag && <span className="ads-source-flag"><Clock3 size={13} aria-hidden="true" /> ค่าแอดและยอดขายดึงวันละครั้งตอนเช้า — ของวันนี้จะครบพรุ่งนี้</span>}
       <button type="button" className="ads-source-reload" onClick={ads.reload}><RefreshCw size={13} aria-hidden="true" /> โหลดใหม่</button>
     </div>
     <details className="ads-source-legend">

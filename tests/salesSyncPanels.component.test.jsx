@@ -57,7 +57,7 @@ describe("GoalMatrix", () => {
     expect(within(td).getAllByText("—")).toHaveLength(7);   // +1 ช่อง "ยอดลูกค้าใหม่" ที่เพิ่มมา
     // JUNTAKARN ยังไม่มีเป้าเลย จึงเข้ามาในบรรทัดสรุปด้วย (เดิมนับแค่ TEAMDEE)
     const summary = screen.getByText(/ยังไม่ตั้ง:/).textContent;
-    for (const label of ["งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อทัก", "เป้ายอดขาย", "ยอดลูกค้าใหม่"]) expect(summary).toContain(label);
+    for (const label of ["งบแอด", "CPL", "ROAS", "%Ads", "CAC", "ต้นทุนต่อคนทัก", "เป้ายอดขาย", "ยอดลูกค้าใหม่"]) expect(summary).toContain(label);
     expect(within(screen.getByRole("row", { name: /แบรนด์ใหม่/ })).getByText("รอเชื่อมแหล่งข้อมูล")).toBeTruthy();
     // JUNTAKARN มีแหล่งแล้วแต่ยังไม่มีใครตั้งเป้าให้ → ต้องบอกว่า "ยังไม่ตั้งเป้า" ไม่ใช่ "รอเชื่อมแหล่งข้อมูล"
     expect(within(screen.getByRole("row", { name: /JUNTAKARN/ })).getByText("ยังไม่ตั้งเป้า")).toBeTruthy();

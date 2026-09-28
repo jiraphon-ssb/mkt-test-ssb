@@ -63,3 +63,29 @@ describe("lineSeries — ช่วงวันที่ยังไม่จบ 
     expect(s.segment.borderDash(seg(16, true))).toEqual([3, 4]);
   });
 });
+
+/* ทดสอบละเอียดรอบ 2 (agent): ตัวจัดรูปรับค่าที่ไม่ใช่ตัวเลขแล้วขึ้น "฿NaN.00" / "0.00" / "-0" */
+import { fmtInt as fi, fmtMoney as fm, fmtNum as fn, fmtPct as fp } from "../src/modules/marketing/dash/charts/theme.js";
+describe("ตัวจัดรูป — ค่าที่ไม่ใช่ตัวเลข = — · ติดลบวางเครื่องหมายหน้า ฿", () => {
+  it("สตริงว่าง / ตัวอักษร / NaN = —", () => {
+    for (const v of ["", "abc", NaN, "1,000"]) { expect(fn(v)).toBe("—"); expect(fm(v)).toBe("—"); expect(fp(v)).toBe("—"); }
+  });
+  it("ตัวเลขที่เป็นสตริงล้วนยังแสดงได้", () => { expect(fm("1234.567")).toBe("฿1,234.56"); });
+  it("-0 = 0 · เงินติดลบ = -฿ (ไม่ใช่ ฿-)", () => {
+    expect(fi(-0)).toBe("0");
+    expect(fm(-1.239)).toBe("-฿1.23");
+    expect(fm(-0.001)).toBe("฿0.00");
+  });
+});
+
+/* รีวิวโค้ด 28 ก.ย.: ตัดสินเกณฑ์ด้วย Math.trunc(n*100) เพี้ยน 1 สตางค์ (8.2 → 8.19) — ป้ายขึ้น "ROAS 8.20× ต่ำกว่าเป้า 8.20×"
+   → ค่าที่ใช้ตัดสินต้องเท่ากับตัวเลขที่ fmtNum แสดง */
+import { trunc2 } from "../src/modules/marketing/dash/charts/theme.js";
+describe("trunc2 = ค่าเดียวกับที่ fmtNum แสดง", () => {
+  it("ไม่เพี้ยนจากเศษ float · ตัดไม่ปัด · ติดลบตัดเข้าหาศูนย์", () => {
+    expect([0.29, 1.13, 2.01, 8.2, 4.35].map(trunc2)).toEqual([0.29, 1.13, 2.01, 8.2, 4.35]);
+    expect(trunc2(50.006)).toBe(50);
+    expect(trunc2(2.999)).toBe(2.99);
+    expect(trunc2(-1.239)).toBe(-1.23);
+  });
+});

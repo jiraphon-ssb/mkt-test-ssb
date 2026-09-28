@@ -1,13 +1,14 @@
 /* ตัวเลขทั้งหน้า Overview จากข้อมูล + ตัวกรอง — logic ล้วน (แยกจาก component ให้เทสได้) */
 import { analyticsCards } from "../mktAnalytics.js";
 import { adChannelsByBrand, adsByBrandChannel, adsChannelList, adsCompanySummary, adsSalePipeline, filterByChannel, revenueBasisCards, share } from "../adsOverview.js";
-import { compareRange, effectiveCompare, isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
+import { compareRange, dataCutoff, syncedThrough, effectiveCompare, isoDay, periodRange, sameDatesLastMonth, rangeLabel } from "../adsScope.js";
 import { combineTargets, goalsFor, normalizeTargets, periodForTargets, pipelineValues, plansFromTargets } from "../adsTargets.js";
-import { applySalesToBrands, applySalesToSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals, salesFactsByBrand, salesPipeline } from "./salesOverview.js";
+import { applySalesToBrands, applySalesToSummary, cashSummary, combineGoalTargets, goalTargetsByBrand, plansFromSalesGoals, salesFactsByBrand, salesPipeline } from "./salesOverview.js";
 import { FUNNEL_STAGE_KEYS, funnelStagesOf, metricCoverage } from "./salesFacts.js";
 import { GOAL_FIELDS, SALES_BRAND_IDS } from "./syncSources.js";
-import { monthClock, paceOf } from "./paceEngine.js";
+import { monthClockAsOf, paceOf } from "./paceEngine.js";
 import { brandAdvice } from "./overviewActions.js";
+import { latestSpendDay } from "../adsCampaigns.js";
 import { adsCreativeRows, adsDailySeries } from "../adsOverview.js";
 
 export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filters }) {
@@ -17,18 +18,33 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
   const compare = effectiveCompare(period, chosenCompare);
     const scopedAll = revenueBasisCards(analyticsCards(ads.cards).filter(inBrandScope), revenueBasis, { mockFallback: ads.mockFallback });
     const scoped = filterByChannel(scopedAll, channel);
-    const range = periodRange(period, customFrom, customTo);
+    const today = isoDay(new Date());
+    // ข้อมูลครบถึง = วันก่อนรอบดึงสำเร็จล่าสุด · ไม่รู้เวลารอบดึง = วันล่าสุดที่มีค่าแอด (รีวิวโค้ด 28 ก.ย.)
+    const dataThrough = ads?.source === "meta_pilot" ? syncedThrough(ads.pilot?.summary?.lastSuccessAt) ?? latestSpendDay(analyticsCards(ads.cards ?? [])) : null;
+    /* ช่วง "ล่าสุด/นี้" จบที่วันที่มีข้อมูล แล้วช่วงเทียบคิดจากช่วงนั้น (ตรวจรอบ 28 ก.ย.: เดือนนี้ ▼5.60% ทั้งที่จริง ▲0.51%) */
+    const cutoff = dataCutoff(today, dataThrough);
+    const range = periodRange(period, customFrom, customTo, new Date(), cutoff);
     const before = compareRange(period, range, compare);
     const brands = (data.brands ?? []).filter((brand) => brand.active !== false && (brandFilter === "all" || brand.id === brandFilter));
-    const today = isoDay(new Date());
-    const monthRange = periodRange("mtd", null, null);
+    /* จังหวะคิดถึงวันที่ข้อมูลครบ (เมื่อวาน) ไม่ใช่วันนี้ — อาร์ตเคาะ 27 ก.ย. · วันที่ 1 ใช้วันนี้ (นาฬิกาหลักตอบ "ยังเร็วไป") */
+    /* ข้อมูลจริงดึงวันละครั้ง 09:00 — หลังเที่ยงคืนก่อนรอบนั้น ข้อมูลยังถึงแค่ก่อนเมื่อวาน (ตรวจรอบ 27 ก.ย. ดึก)
+       dataThrough = วันล่าสุดที่มีค่าแอดทั้งระบบ (ไม่ขึ้นกับแบรนด์ที่กรอง) · ข้อมูลตัวอย่างไม่มีรอบดึง ใช้เมื่อวานตามเดิม */
+    const paceClock = monthClockAsOf(today, dataThrough);
+    const paceDay = paceClock.asOf ?? today;
+    const monthRange = periodRange("mtd", null, null, new Date(), cutoff);
     /* โหมดช่วงเวลา: "เดือนนี้" = ยอด + เป้า + จังหวะรายเดือน · ช่วงอื่น (วันนี้/7 วัน/กำหนดเอง) = ทุกยอดคิดจากช่วงที่เลือกล้วน
        และเทียบกับช่วงก่อน — เป้า/จังหวะรายเดือนไม่มีความหมายกับช่วง 1 วันหรือ 7 วัน จึงไม่แสดง */
     const monthView = period === "mtd";
     const sumRange = monthView ? monthRange : range;
     const prevRange = monthView ? sameDatesLastMonth(monthRange) : before;
-    const shownFrom = isoDay(new Date(range.start)), shownTo = isoDay(new Date(new Date(range.end).getTime() - 1));
-    const targetPeriod = periodForTargets({ monthView, from: shownFrom, to: shownTo, today });
+    // ช่วงว่าง (สัปดาห์นี้วันจันทร์ก่อนข้อมูลเข้า) = ป้ายเป็นวันเริ่ม ไม่ใช่ "28 – 27 ก.ย."
+    const shownFrom = isoDay(new Date(range.start)), shownTo = range.end > range.start ? isoDay(new Date(new Date(range.end).getTime() - 1)) : shownFrom;
+    /* ช่วงว่าง: shownTo ใช้ทำป้ายเท่านั้น — ข้อมูลต้องเป็นช่วงว่างจริง ไม่ใช่วันเริ่ม 1 วัน (รีวิวโค้ด 28 ก.ย.:
+       "สัปดาห์นี้" วันจันทร์ กล่อง funnel/เป้าเคยอ่านข้อมูลครึ่งวันของวันนี้) */
+    const dataTo = range.end > range.start ? shownTo : isoDay(new Date(new Date(range.start).getTime() - 86_400_000));
+    /* ยังไม่มีวันไหนของเดือนนี้ที่ข้อมูลครบ (วันที่ 1 · วันที่ 2 ก่อน 09:00) = เป้ายังไม่คาดหวังอะไร ไม่ใช่ 1 วัน */
+    const targetPeriod = monthView && !paceClock.asOf ? { mode: "month", elapsed: 0, monthDays: paceClock.daysTotal }
+      : periodForTargets({ monthView, from: shownFrom, to: dataTo, today: paceDay });
     /* ข้อมูลจริง = ยึดระบบขายของพี่ทัช: ยอดขาย · funnel · เป้า · งบ Meta มาจากระบบขายทั้งหมด (แผน 2026-09-17 ข้อ 3–4)
        ค่าแอดยังเป็นของ Meta · ระดับแพลตฟอร์ม/แคมเปญยังเป็น Meta attribute (ยอดจริงมาถึงแค่แบรนด์×วัน)
        ข้อมูลจำลอง (สาธิต) ใช้เป้าจากหน้าตั้งค่าเดิมต่อ ไม่ผสมกับยอดจริง */
@@ -41,22 +57,23 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
         targets: data.settings?.ads_control?.targets ?? {}, adBudgets: data.ad_budgets ?? [], salesTargets: data.sales_targets ?? [],
         month: planMonth, channelsByBrand: adChannelsByBrand(scopedAll, monthView ? monthRange : range),
       });
-    const metaTotals = adsByBrandChannel(scopedAll, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
+    const metaTotals = adsByBrandChannel(scopedAll, sumRange, brands, plans.adBudgets, paceDay, plans.salesTargets, prevRange);
     const dayRange = (r) => ({ from: isoDay(new Date(r.start)), to: isoDay(new Date(new Date(r.end).getTime() - 1)), today });
-    const sales = real ? salesFactsByBrand(ads.sales, dayRange(sumRange)) : null;
+    const sales = real ? salesFactsByBrand(ads.sales, { ...dayRange(sumRange), today }) : null;
     const prevSales = real ? salesFactsByBrand(ads.sales, dayRange(prevRange)) : null;
     const brandTotals = real ? applySalesToBrands(metaTotals, { sales, prevSales, basis: revenueBasis, sourceBrandIds: SALES_BRAND_IDS }) : metaTotals;
-    const filteredBrands = channel === "all" ? brandTotals : adsByBrandChannel(scoped, sumRange, brands, plans.adBudgets, today, plans.salesTargets, prevRange);
+    const filteredBrands = channel === "all" ? brandTotals : adsByBrandChannel(scoped, sumRange, brands, plans.adBudgets, paceDay, plans.salesTargets, prevRange);
     const filteredById = new Map(filteredBrands.map((brand) => [brand.id, brand]));
-    const summary = real ? applySalesToSummary(adsCompanySummary(brandTotals, today), brandTotals, today) : adsCompanySummary(brandTotals, today);
+    const summary = real ? applySalesToSummary(adsCompanySummary(brandTotals, paceDay), brandTotals, paceDay) : adsCompanySummary(brandTotals, paceDay);
     const metaPipelines = Object.fromEntries(brands.map((brand) => [brand.id, adsSalePipeline(scoped.filter((card) => card.brand_id === brand.id), range, before)]));
     const metaOverall = adsSalePipeline(scoped, range, before);
     let pipelines = metaPipelines;
     let overallPipeline = metaOverall;
     let goals;
+    let funnelBrandIds = null, funnelExcludedNames = [];   // กราฟแนวโน้มใช้ชุดเดียวกับกล่อง funnel (ตรวจรอบ 28 ก.ย.)
     if (real) {
       const coverage = metricCoverage(ads.sales);
-      const pipeSales = salesFactsByBrand(ads.sales, { from: shownFrom, to: shownTo, today });
+      const pipeSales = salesFactsByBrand(ads.sales, { from: shownFrom, to: dataTo, today });
       const pipePrev = salesFactsByBrand(ads.sales, dayRange(before));
       const metaInquiriesOf = (pipeline) => pipeline?.items?.find((item) => item.key === "inquiries")?.value ?? null;
       const byId = new Map(brandTotals.map((brand) => [brand.id, brand]));
@@ -67,7 +84,7 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
           sales: pipeSales.get(brand.id) ?? null, prevSales: pipePrev.get(brand.id) ?? null,
           metaInquiries: metaInquiriesOf(metaPipelines[brand.id]),
           spend: row?.spend ?? null, prevSpend: row?.prevSpend ?? null,
-          basis: revenueBasis, depositsSince: coverage.get(brand.id)?.deposits ?? null, from: shownFrom, to: shownTo,
+          basis: revenueBasis, depositsSince: coverage.get(brand.id)?.deposits ?? null, from: shownFrom, to: dataTo,
           waiting: !SALES_BRAND_IDS.includes(brand.id),
           // ระบบขายของบางแบรนด์ไม่มีครบทุกขั้น (JUNTAKARN ไม่มี Lead/มัดจำ) — ขั้นที่ไม่มีต้องขึ้น "—" ไม่ใช่ 0
           stages: funnelStagesOf(brand.id),
@@ -93,10 +110,11 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
         sales: mergeIds(pipeSales, funnelIds), prevSales: mergeIds(pipePrev, funnelIds),
         metaInquiries: metaInquiriesOf(adsSalePipeline(sourceCards, range, before)),
         spend: sumOf((row) => row.spend), prevSpend: sumOf((row) => row.prevSpend),
-        basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: shownTo,
+        basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: dataTo,
         stages: FUNNEL_STAGE_KEYS,   // แบรนด์ที่เข้า funnel ภาพรวมเก็บครบ 4 ขั้นทุกแบรนด์
       });
       if (funnelExcluded.length) overallPipeline = { ...overallPipeline, excluded: funnelExcluded };
+      funnelBrandIds = funnelIds; funnelExcludedNames = funnelExcluded;
       /* ROAS · %Ads · CAC ภาพรวมต้องนับ "ทุกแบรนด์ที่มีแหล่งยอดขาย" ตามกติกาที่เขียนไว้ใน README
          ต่างจากขั้น funnel ที่นับเฉพาะแบรนด์ที่เก็บครบ — ไม่งั้นบนหน้าเดียวกันจะมี ROAS สองค่า
          (แผงประสิทธิภาพนับ 3 แบรนด์ = 9.05× แต่กราฟแนวโน้มกับ %Ads นับ 4 แบรนด์ = 8.04×)
@@ -107,7 +125,7 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
         sales: mergeIds(pipeSales, SALES_BRAND_IDS), prevSales: mergeIds(pipePrev, SALES_BRAND_IDS),
         metaInquiries: null,
         spend: sumAll((row) => row.spend), prevSpend: sumAll((row) => row.prevSpend),
-        basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: shownTo,
+        basis: revenueBasis, depositsSince: starts[starts.length - 1] ?? null, from: shownFrom, to: dataTo,
         stages: FUNNEL_STAGE_KEYS,
       });
       const allRatios = new Map(["roas", "pctAds", "cac"].map((key) => [key, allPipeline.items.find((item) => item.key === key)]));
@@ -140,7 +158,7 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
        ทุกการ์ดอ่านจากชุดนี้ชุดเดียว — จังหวะ · คำแนะนำ · เรื่องที่ต้องทำวันนี้
        ค่าแอดจาก Meta มาช้ากว่ายอดขาย 1 วันเสมอ จึงตั้งเพดานความเก่าไว้ 2 วัน
        (1 วันจะทำให้จังหวะงบขึ้น "ยังตัดสินใจไม่ได้" ทุกเช้า · เกิน 2 วัน = ท่อมีปัญหาจริง) */
-    const clock = monthClock(today);
+    const clock = paceClock;
     const spendDays = adsDailySeries(scopedAll, monthRange).filter((day) => day.spend > 0);
     const spendThrough = spendDays.length ? spendDays[spendDays.length - 1].day : null;
     const paceSet = (row) => {
@@ -167,10 +185,12 @@ export function buildOverviewModel({ data, ads, inBrandScope, brandFilter, filte
       summary,
       brands: brandRows,
       pipelines,
-      overallPipeline,
+      overallPipeline, funnelBrandIds, funnelExcluded: funnelExcludedNames,
       goals,
-      clock,
-      spendThrough,
+      clock, asOf: paceClock.asOf,
+      spendThrough, dataThrough, cutoff,
       overallPace,
+      /* เงินจริงจากระบบขาย (สเปก 2026-09-26) — ข้อมูลตัวอย่างไม่มีระบบขาย = null (ไม่แสดงกล่อง) */
+      cash: real ? cashSummary({ sales, brands: brandTotals }) : null,
     };
 }

@@ -26,9 +26,12 @@ export function jkSourceRow(facts = [], { today, runs = [] } = {}) {
   /* ranAt = รอบดึงทำงานเมื่อไร — หน่วยเดียวกับคอลัมน์ "สดแค่ไหน" ของอีก 3 แถว
      (เดิมแถวนี้เอา "วันที่ของข้อมูล" ไปวางในคอลัมน์นั้น คนละความหมายกับแถวข้างบน อ่านเทียบกันไม่ได้) */
   const ranAt = lastRun?.started_at ?? null;
-  // ความครบของเดือนนี้ นับแบบเดียวกับแถวยอดขาย: วันนี้ที่ทีมยังไม่กรอกไม่นับเป็นวันที่ขาด (วันยังไม่จบ)
+  // ความครบของเดือนนี้ นับแบบเดียวกับแถวยอดขาย: วันนี้และเมื่อวานที่ทีมยังไม่กรอกไม่นับเป็นวันที่ขาด
+  // (วันนี้ยังไม่จบ · ทีมกรอกของเมื่อวานตอนเช้า — ตรวจรอบ 28 ก.ย.)
   const month = String(today ?? "").slice(0, 7);
-  const monthFacts = mine.filter((fact) => String(fact.fact_date ?? "").startsWith(month) && (fact.fact_date !== today || fact.inquiry_filled === true));
+  const [ty, tm, td] = String(today ?? "").split("-").map(Number);
+  const yesterday = Number.isFinite(td) ? new Date(Date.UTC(ty, tm - 1, td - 1)).toISOString().slice(0, 10) : null;
+  const monthFacts = mine.filter((fact) => String(fact.fact_date ?? "").startsWith(month) && (fact.inquiry_filled === true || !(yesterday && fact.fact_date >= yesterday)));
   const days = monthFacts.length;
   const filled = monthFacts.filter((fact) => fact.inquiry_filled === true).length;
   const base = { error: null, fresh: last, ranAt, days, filled, detail: JK_SOURCE_DETAIL };
@@ -42,7 +45,7 @@ export function jkSourceRow(facts = [], { today, runs = [] } = {}) {
 
 export const COVERAGE_METRICS = [
   { key: "inquiries", label: "คนทัก (ทีมกรอก)" },
-  { key: "qualified_leads", label: "ลีด", stage: "qualified" },
+  { key: "qualified_leads", label: "Lead", stage: "qualified" },
   { key: "deposits", label: "ได้ออเดอร์", stage: "deposits" },
   { key: "orders", label: "ยืนยันออเดอร์" },
   { key: "gross_revenue", label: "ยอดขาย" },
@@ -111,8 +114,8 @@ export function coverageMatrix(facts = [], { brandIds = [], from, to, today = nu
 }
 
 export const GOAL_FIELDS = [
-  ["sales_target", "เป้ายอดขาย"], ["sales_new_target", "ยอดลูกค้าใหม่"], ["orders_target", "ยืนยันออเดอร์"], ["deposits_target", "ได้ออเดอร์"], ["leads_target", "ลีด"], ["inquiry_target", "คนทัก"],
-  ["ad_budget", "งบแอด"], ["cpl", "CPL"], ["roas", "ROAS"], ["pct_ads_new", "%Ads"], ["cac", "CAC"], ["cpi", "ต้นทุนต่อทัก"],
+  ["sales_target", "เป้ายอดขาย"], ["sales_new_target", "ยอดลูกค้าใหม่"], ["orders_target", "ยืนยันออเดอร์"], ["deposits_target", "ได้ออเดอร์"], ["leads_target", "Lead"], ["inquiry_target", "คนทัก"],
+  ["ad_budget", "งบแอด"], ["cpl", "CPL"], ["roas", "ROAS"], ["pct_ads_new", "%Ads"], ["cac", "CAC"], ["cpi", "ต้นทุนต่อคนทัก"],
 ];
 
 /** เป้าเดือนนี้ของแบรนด์: ที่มา · ช่องที่มี · ช่องที่ยังไม่ตั้ง */
@@ -131,7 +134,7 @@ export function goalGaps(goal) {
 
 const INVENTORY = [
   ["goals", "เป้าหมายแบบใหม่ (งบแอด · CPL · ROAS · %Ads)", (d) => d.rowCount > 0 ? `${d.rowCount} เวอร์ชัน` : "ระบบพร้อม แต่ยังไม่มีใครบันทึกเป้าในหน้าเป้าหมาย"],
-  ["legacyTargets", "เป้าแบบเก่า (ยอด · ออเดอร์ · มัดจำ · ลีด · คนทัก)", (d) => d.rowCount > 0 ? `มีเดือน ${Object.keys(d.summary ?? {}).map((m) => m.slice(0, 7)).join(" · ")}` : "ยังไม่มี"],
+  ["legacyTargets", "เป้าแบบเก่า (ยอด · ออเดอร์ · ได้ออเดอร์ · Lead · คนทัก)", (d) => d.rowCount > 0 ? `มีเดือน ${Object.keys(d.summary ?? {}).map((m) => m.slice(0, 7)).join(" · ")}` : "ยังไม่มี"],
   ["adSpendCsv", "ค่าแอดที่นำเข้าจากไฟล์ (Google · TikTok)", (d) => d.rowCount > 0 ? `${d.rowCount} แถว` : "ยังไม่มีใครนำเข้า"],
   ["budget", "งบประมาณรายได้ / การตลาด", (d) => d.rowCount > 0 ? `มีเดือน ${Object.keys(d.summary ?? {}).map((m) => m.slice(0, 7)).join(" · ")}` : "ยังไม่มีงบในช่วงนี้"],
   ["marketingPctTarget", "% การตลาดเป้า (โมดูลงบ)", (d) => d.summary?.active > 0 ? `ตั้งไว้ ${d.summary.active} รายการ` : "ยังไม่ได้ตั้ง"],
