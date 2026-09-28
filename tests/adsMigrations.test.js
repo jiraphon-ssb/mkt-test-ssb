@@ -298,6 +298,19 @@ describe("20260928090000_ads_cron_9am — ย้ายรอบดึงเป�
   });
 });
 
+/* 29 ก.ย.: รายการตัดบัตรจาก Meta activities — upsert onConflict (external_account_id, reference) ต้องมี unique index ตรงคอลัมน์นี้
+   (ไม่ใช่ partial index — ON CONFLICT จับ partial ไม่ได้ถ้าไม่ระบุ where) · รันซ้ำได้ · ไม่แตะ RLS/สิทธิ์เดิม */
+describe("20260929100000_ad_billing_charges_unique", () => {
+  const sql = read("supabase/migrations/20260929100000_ad_billing_charges_unique.sql");
+  it("unique index (external_account_id, reference) แบบรันซ้ำได้ · มี index วันที่ตัดสำหรับหน้าบิล · บอกวิธีย้อนกลับ", () => {
+    expect(sql).toMatch(/create unique index if not exists ad_billing_charges_account_reference_key\s+on public\.ad_billing_charges \(external_account_id, reference\);/);
+    expect(sql).not.toMatch(/ad_billing_charges \(external_account_id, reference\)\s*where/i);
+    expect(sql).toMatch(/create index if not exists ad_billing_charges_charge_date_idx\s+on public\.ad_billing_charges \(charge_date\);/);
+    expect(sql).toMatch(/ย้อนกลับ/);
+    expect(sql).not.toMatch(/policy|grant|disable row level security/i);
+  });
+});
+
 /* 25 ก.ย.: ตารางครีเอทีฟบอกเปิด/ปิด — คอลัมน์ต้องรับเฉพาะค่ารูปแบบ Meta และรันซ้ำได้ */
 describe("0014_ad_creative_status", () => {
   const sql = read("src/supabase/migrations/0014_ad_creative_status.sql");

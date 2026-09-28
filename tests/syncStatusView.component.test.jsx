@@ -296,6 +296,25 @@ describe("งานอื่น · ดึง Snapshot บัญชีแอด",
     await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึงยอดค้างบัญชีแอด/ })); });
     expect(toastSpy.some(([msg]) => msg.includes("8"))).toBe(true);
   });
+  /* 29 ก.ย.: ปุ่มเดียวกันดึงรายการตัดบัตรจาก Meta ด้วย — แจ้งจำนวนรายการ · ดึงไม่ได้ = บอกตรงๆ ไม่เงียบ */
+  it("แจ้งจำนวนรายการตัดบัตรที่ดึงได้ · บันทึกไม่สำเร็จ = บอกว่ารายการตัดบัตรยังไม่เข้า", async () => {
+    const toastSpy = [];
+    toastRef.fn = (msg, kind) => toastSpy.push([msg, kind]);
+    snapshotResult = { accounts: 8, charges: { rows: 12, failedAccounts: 0, stored: true } };
+    show();
+    await settle("snapshots", []);
+    fireEvent.click(screen.getByText("งานอื่น"));
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึงยอดค้างบัญชีแอด/ })); });
+    expect(toastSpy.at(-1)).toEqual(["เก็บยอดค้างบัญชีแอดแล้ว 8 บัญชี · รายการตัดบัตร 12 รายการ", "ok"]);
+    cleanup();
+    snapshotResult = { accounts: 8, charges: { rows: 12, failedAccounts: 0, stored: false } };
+    show();
+    await settle("snapshots", []);
+    fireEvent.click(screen.getByText("งานอื่น"));
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึงยอดค้างบัญชีแอด/ })); });
+    expect(toastSpy.at(-1)).toEqual(["เก็บยอดค้างบัญชีแอดแล้ว 8 บัญชี · แต่รายการตัดบัตรบันทึกไม่สำเร็จ", "bad"]);
+    snapshotResult = { accounts: 8 };
+  });
 });
 
 /* ทดสอบละเอียดรอบ 2 (27 ก.ย.) — จำลองโหลดพังบนหน้าจริง: หัวหน้าขึ้น "ข้อมูลล่าสุด 13:38 (6 วันก่อน)" จากค่าเก่าใน settings

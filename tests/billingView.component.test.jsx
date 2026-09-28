@@ -245,7 +245,7 @@ describe("แมทรายการตัดบัตร", () => {
     const row = (await screen.findByText("TEAMDEE")).closest("[data-row]");
     expect(screen.getByRole("table", { name: "กระทบยอดรายบัญชี" }).querySelector(".bl-row--head").textContent).toContain("Meta ตัดจริง");
     expect(row.querySelector("[data-col=charged]").textContent).toBe("—");
-    expect(screen.getByText(/ยังไม่มีรายการตัดบัตร/)).toBeTruthy();
+    expect(screen.getByText(/เดือนนี้ยังไม่มีรายการ/)).toBeTruthy();   // 29 ก.ย. ข้อความใหม่: ดึงจาก Meta เอง
     expect(screen.queryByText(/Meta ตัดเกิน/)).toBeNull();
   });
   it("ตัดตรงกับค่าแอด: คอลัมน์ขึ้นยอดที่ตัด · เจาะดูเห็นรายการ + ช่วงค่าแอดที่ครอบคลุม · ไม่มีป้าย", async () => {
@@ -376,9 +376,16 @@ it("ฟอร์มผลตรวจ: ช่องยอดบอกว่า�
   expect(screen.queryByRole("textbox", { name: "ยอดก่อน VAT ตามใบแจ้งยอด" })).toBeNull();
   expect(calls.addReview).toHaveLength(0);
 });
-it("ยังไม่มีไฟล์ตัดบัตร: บอกว่าช่องนำเข้ายังไม่เปิด (ไม่ใช่ให้หาปุ่มนำเข้าที่ไม่มี)", async () => {
+/* 29 ก.ย.: รายการตัดบัตรดึงจาก Meta เองทุกเช้า — ไม่มีการนำเข้าไฟล์อีก ข้อความต้องบอกที่มาจริง */
+it("ยังไม่มีรายการตัดบัตร: บอกว่าระบบดึงจาก Meta ทุกเช้า (ไม่พูดถึงการนำเข้าไฟล์)", async () => {
   show();
-  expect(await screen.findByText(/ช่องนำเข้ายังไม่เปิด/)).toBeTruthy();
+  expect(await screen.findByText(/ระบบดึงรายการตัดบัตรจาก Meta ทุกวันตอน 09:00/)).toBeTruthy();
+  expect(screen.queryByText(/นำเข้า|Payment activity/)).toBeNull();
+});
+it("มีรายการตัดบัตรจาก Meta: การ์ดบอกว่ามาจาก Meta โดยตรง", async () => {
+  state.charges = [{ id: "c1", external_account_id: "111000111", charge_date: "2026-09-05", amount: 150807.37, reference: "T1", source: "meta_api", raw: { kind: "charge" } }];
+  show();
+  expect(await screen.findByText("ดึงจาก Meta ทุกเช้า")).toBeTruthy();
 });
 
 /* ตรวจรอบ 28 ก.ย.: เดือนก่อนไม่แสดงยอดค้าง (เป็นของวันนี้) · บัญชีนอกระบบที่ไม่มียอดของเดือนนั้นรวมบรรทัดเดียว */

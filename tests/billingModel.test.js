@@ -287,3 +287,25 @@ describe("เดือนที่ผ่านมาแล้ว", () => {
     expect(m.rows.find((r) => r.external_account_id === "1")).toMatchObject({ spend: 12400, balance: null, flag: { text: "เงินออกนอกระบบ", tone: "rose" } });
   });
 });
+
+/* 29 ก.ย.: รายการจาก Meta activities มีชนิด (raw.kind) — นับเป็นยอดตัดเฉพาะ "charge"
+   ตัดไม่ผ่าน/บัตรถูกปฏิเสธ/คืนเงิน/chargeback ไม่ใช่เงินที่ออกจริง → ไม่นับ แต่ต้องเตือน */
+describe("รายการตัดบัตรจาก Meta API — ชนิดรายการ", () => {
+  const api = (charge_date, amount, reference, kind) => ({ id: reference, external_account_id: "111000111", charge_date, amount, reference, source: "meta_api", raw: { kind } });
+  const jd = (m) => m.rows.find((r) => r.external_account_id === "111000111");
+  it("นับเฉพาะตัดสำเร็จ · ตัดไม่ผ่าน/คืนเงิน ขึ้นแถบเตือนพร้อมจำนวนและยอด", () => {
+    const m = build({ today: "2026-09-21", charges: [
+      api("2026-09-05", 100555, "T1", "charge"),
+      api("2026-09-06", 7000, "F1", "failed"), api("2026-09-07", 7000, "D1", "declined"),
+      api("2026-09-08", 120.5, "R1", "refund"),
+    ] });
+    expect(jd(m).charge).toMatchObject({ charged: 100555, count: 1 });
+    expect(m.totals.charged).toBe(100555);
+    expect(m.alerts.find((a) => a.key === "chargeFailed").text).toBe("ตัดบัตรไม่ผ่าน 2 ครั้ง ฿14,000.00 — ตรวจบัตร/วิธีชำระเงินใน Billing hub ก่อนแอดหยุด");
+    expect(m.alerts.find((a) => a.key === "chargeRefund").text).toBe("Meta คืนเงิน 1 รายการ ฿120.50");
+  });
+  it("รายการเก่าที่ไม่มีชนิด (อัปโหลด/อีเมล) นับเป็นยอดตัดตามเดิม", () => {
+    const m = build({ today: "2026-09-21", charges: [{ ...api("2026-09-05", 100555, "T1"), raw: {} }] });
+    expect(jd(m).charge.charged).toBe(100555);
+  });
+});

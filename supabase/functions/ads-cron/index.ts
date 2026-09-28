@@ -10,6 +10,7 @@ import { planCreativeTargets, planCronJobs, planReconcileTargets, salesDue, summ
 import { hourInTimeZone, todayInTimeZone } from "../_shared/metaInsights.js";
 import { DAILY_TZ, doneToday } from "../_shared/dailySchedule.js";
 import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch, pickSnapshotAuthorization } from "../_shared/adsAccountSnapshot.js";
+import { syncBillingCharges } from "../_shared/adsBillingCharges.js";
 
 const cronSleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -216,6 +217,16 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
             month_spend: { ...(priorById.get(row.external_account_id) ?? {}), ...(monthSpend[row.external_account_id] ?? {}) },
           })), { onConflict: "external_account_id" });
         if (snapError) console.error("[ads-cron] snapshot upsert", snapError.message);
+        /* รายการตัดบัตรจริงของ Meta (29 ก.ย.) — ทุกบัญชีที่ token เห็น รวมบัญชีนอกระบบ · ล้มไม่กระทบ snapshot/รอบ sync */
+        try {
+          const charges = await syncBillingCharges({
+            db, fetch, token: snapToken, sleep: cronSleep, version: graphVersion(),
+            accountIds: snapshots.map((row) => row.external_account_id), today: todayInTimeZone(new Date(now), "Asia/Bangkok"),
+          });
+          if (charges.error || charges.failed.length) console.error("[ads-cron] billing charges", charges.error ?? "", charges.failed.length ? `failed ${charges.failed.length} accounts` : "");
+        } catch (error) {
+          console.error("[ads-cron] billing charges", error instanceof Error ? error.message : error);
+        }
       }
     }
   } catch (error) {

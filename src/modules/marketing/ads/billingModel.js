@@ -59,7 +59,18 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
     dailyByAccount.set(accountId, map);
   }
   const chargesByAccount = new Map();
+  /* รายการจาก Meta activities มีชนิด (29 ก.ย.): นับเป็นยอดตัดเฉพาะ "charge" · แถวเก่าไม่มีชนิด (อัปโหลด/อีเมล) = ยอดตัด
+     ตัดไม่ผ่าน/ปฏิเสธ/chargeback/คืนเงิน ไม่ใช่เงินที่ออกจริง → ไม่เข้าการแมท แต่เก็บไว้เตือนเฉพาะของเดือนที่ดู */
+  const problems = { failed: [], refund: [] };
   for (const c of charges) {
+    const kind = c.raw?.kind ?? "charge";
+    if (kind !== "charge") {
+      if (String(c.charge_date ?? "").startsWith(monthPrefix)) {
+        if (["failed", "declined", "chargeback"].includes(kind)) problems.failed.push(Number(c.amount) || 0);
+        else if (kind === "refund") problems.refund.push(Number(c.amount) || 0);
+      }
+      continue;
+    }
     const accountId = normId(c.external_account_id);
     chargesByAccount.set(accountId, [...(chargesByAccount.get(accountId) ?? []), {
       date: String(c.charge_date ?? "").slice(0, 10), amount: Number(c.amount), reference: c.reference ?? null,
@@ -206,6 +217,11 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
     alerts.push({ key: "chargeOver", tone: "rose",
       text: `Meta ตัดเกินค่าแอดที่ระบบเห็น ${count} รายการ ${fmtMoney(amount)} — ระบบดึงค่าแอดบางวันขาด หรือมีการใช้เงินที่ระบบไม่เห็น` });
   }
+  const sumList = (list) => list.reduce((n, a) => n + Math.round(a * 100), 0) / 100;
+  if (problems.failed.length) alerts.push({ key: "chargeFailed", tone: "rose",
+    text: `ตัดบัตรไม่ผ่าน ${problems.failed.length} ครั้ง ${fmtMoney(sumList(problems.failed))} — ตรวจบัตร/วิธีชำระเงินใน Billing hub ก่อนแอดหยุด` });
+  if (problems.refund.length) alerts.push({ key: "chargeRefund", tone: "amber",
+    text: `Meta คืนเงิน ${problems.refund.length} รายการ ${fmtMoney(sumList(problems.refund))}` });
   const reviewCount = rows.filter((r) => r.status === "review").length;
   if (reviewCount) alerts.push({ key: "review", tone: "rose", text: `ส่วนต่างเกินเกณฑ์ ${reviewCount} บัญชี` });
   const badStatus = rows.filter((r) => r.accountStatus != null && r.accountStatus !== 1);

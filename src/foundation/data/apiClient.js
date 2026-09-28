@@ -2498,7 +2498,7 @@ const adsData = {
     const db = requireSupabase();
     const { data, error } = await db.functions.invoke("ads-snapshot", { body: {} });
     if (error) throw await adsFunctionError(error, "SNAPSHOT_FAILED");
-    return { accounts: data?.accounts ?? 0 };
+    return { accounts: data?.accounts ?? 0, charges: data?.charges ?? null };   // charges: รายการตัดบัตรจาก Meta (29 ก.ย.)
   },
   /** snapshot บัญชีแอดทุกตัวที่ token เห็น (ads-cron เขียน) — ฐานของตัวตรวจเงินออกนอกระบบ + ยอดค้าง */
   async accountSnapshots() {

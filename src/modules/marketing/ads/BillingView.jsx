@@ -12,6 +12,7 @@ import { factsLoadRange } from "./adsFacts.js";
 import { parseRuleNumber } from "../creatives/creativeRules.js";
 import "./adsWorkspace.css";
 import "./billingView.css";
+import { DAILY_RUN_LABEL } from "../../../../supabase/functions/_shared/dailySchedule.js";
 
 const money = (n) => (n == null ? "—" : fmtMoney(n));
 const monthIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
@@ -179,7 +180,7 @@ export function BillingView({ month: initialMonth }) {
 
       <div className="bl-stats">
         <div><span>ระบบนับได้ · {model.rangeLabel}</span><b>{money(model.totals.spend)}</b><small>{spendKnown ? `รวม ${model.rows.filter((r) => r.connected).length} บัญชีที่เชื่อม${spendThroughText}` : "ยังไม่มีตัวเลข"}</small></div>
-        <div><span>Meta ตัดจริง</span><b>{money(model.totals.charged)}</b><small>{model.totals.charged == null ? "ยังไม่มีไฟล์ · ช่องนำเข้ายังไม่เปิด" : "จากรายการตัดบัตรที่นำเข้า"}</small></div>
+        <div><span>Meta ตัดจริง</span><b>{money(model.totals.charged)}</b><small>{model.totals.charged == null ? `ยังไม่มีรายการ · ดึงทุกเช้า ${DAILY_RUN_LABEL}` : "ดึงจาก Meta ทุกเช้า"}</small></div>
         <div><span>VAT 7%</span><b>{money(model.totals.vat)}</b><small>ค่าประมาณ — ใบกำกับจริงที่ Billing hub</small></div>
         <div><span>รวมโดยประมาณ</span><b>{money(model.totals.gross)}</b><small>ระบบนับ + VAT</small></div>
         <div><span>ยอดค้างที่ Meta ยังไม่ตัด</span><b>{money(model.totals.balance)}</b><small>{remote.status === "error" ? "โหลดไม่สำเร็จ" : model.pastMonth ? "ยอดค้างเป็นของวันนี้ — ดูที่เดือนปัจจุบัน" : model.totals.balance == null ? "รอระบบดึงยอดค้างจาก Meta รอบแรก" : "ดึงจาก Meta รอบล่าสุด"}</small></div>
@@ -259,8 +260,8 @@ export function BillingView({ month: initialMonth }) {
       {/* เดือนที่ผ่านมาแล้ว ไม่มียอดของเดือนนั้นในระบบ = ไม่มีอะไรให้ตรวจ ไม่ขึ้นเป็นแถว (ตรวจรอบ 28 ก.ย.) */}
       {model.offSystemUnknown?.length > 0 && <p className="aw-key">บัญชีนอกระบบที่ไม่มียอดของเดือนนี้ในระบบ {model.offSystemUnknown.length} บัญชี · {model.offSystemUnknown.map((a) => a.accountName).join(" · ")}</p>}
 
-      {/* ยังไม่มีไฟล์ตัดบัตร = บอกบรรทัดเดียวว่าคอลัมน์นี้มาจากไหน (ไม่ใช่คำเตือน) */}
-      {remote.status === "ready" && model.totals.charged == null && <p className="aw-key">ยังไม่มีรายการตัดบัตร — คอลัมน์ "Meta ตัดจริง" จะขึ้นเมื่อนำเข้าไฟล์ Payment activity จาก Billing hub ของแต่ละบัญชี (ช่องนำเข้าจะเปิดเมื่อได้ไฟล์ตัวอย่างจริง)</p>}
+      {/* ยังไม่มีรายการตัดบัตร = บอกบรรทัดเดียวว่าคอลัมน์นี้มาจากไหน (ไม่ใช่คำเตือน) · 29 ก.ย. ดึงจาก Meta เอง ไม่มีการนำเข้าไฟล์ */}
+      {remote.status === "ready" && model.totals.charged == null && <p className="aw-key">ระบบดึงรายการตัดบัตรจาก Meta ทุกวันตอน {DAILY_RUN_LABEL} น. — เดือนนี้ยังไม่มีรายการ (หรือยังไม่ถึงรอบดึงครั้งแรก · กด "ดึงยอดค้างบัญชีแอด" ในหน้าสถานะ Sync เพื่อดึงเดี๋ยวนี้)</p>}
 
       <p className="aw-key">ระบบนับ = ผลรวมค่าแอดรายวันของเดือนจาก Meta · VAT เป็นค่าประมาณ (คำนวณ 7%) ไม่ใช่เอกสารทางการ · เกณฑ์ผลเทียบ: ≤ 0.50% ตรงกัน · ≤ 2.00% ต่างเล็กน้อย · เกิน = ต้องตรวจ · ผลตรวจเก็บแบบเพิ่มอย่างเดียว แก้ย้อนหลังไม่ได้{model.totals.charged != null ? " · รายการตัดบัตร: ระบบรู้ค่าแอดรายวันแต่ไม่รู้ว่า Meta ตัดตอนไหนของวัน ยอดที่ยังไม่ถูกตัดจึงเป็นช่วง · ตรวจโดยตั้งต้นจากรายการตัดย้อนหลัง 2 เดือน (ส่วนเกินที่น้อยกว่าค่าแอดหนึ่งวันของรายการตั้งต้นตรวจไม่ได้)" : ""}</p>
     </section>

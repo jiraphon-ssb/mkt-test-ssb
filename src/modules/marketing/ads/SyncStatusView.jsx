@@ -423,8 +423,10 @@ export function SyncStatusView() {
      ปุ่มนี้ไว้ตอนไม่อยากรอรอบ · โหลดสถานะใหม่หลังเสร็จเพื่อให้แถวในตารางอัปเดตทันที */
   const snapshotNow = async () => {
     try {
-      const { accounts } = await apiClient.ads.snapshotAccounts();
-      toast?.(`เก็บยอดค้างบัญชีแอดแล้ว ${accounts} บัญชี`, "ok");
+      const { accounts, charges } = await apiClient.ads.snapshotAccounts();
+      // ปุ่มเดียวกันดึงรายการตัดบัตรจาก Meta ด้วย (29 ก.ย.) — บันทึกไม่สำเร็จต้องบอก ไม่เงียบ
+      if (charges && !charges.stored) toast?.(`เก็บยอดค้างบัญชีแอดแล้ว ${accounts} บัญชี · แต่รายการตัดบัตรบันทึกไม่สำเร็จ`, "bad");
+      else toast?.(`เก็บยอดค้างบัญชีแอดแล้ว ${accounts} บัญชี${charges ? ` · รายการตัดบัตร ${charges.rows} รายการ` : ""}`, "ok");
       reload();
     } catch (error) {
       toast?.(adsErrorText(error, "เก็บยอดค้างบัญชีแอดไม่สำเร็จ"), "bad");
@@ -472,7 +474,7 @@ export function SyncStatusView() {
                 <ShoppingBag size={14} aria-hidden="true" /><span><b>ดึงยอดขายเท่านั้น</b><small>ย้อน 14 วัน ทุกแบรนด์ที่เชื่อมแหล่งแล้ว</small></span>
               </button>
               <button type="button" role="menuitem" onClick={snapshotNow} disabled={busy}>
-                <CalendarClock size={14} aria-hidden="true" /><span><b>ดึงยอดค้างบัญชีแอด</b><small>เก็บยอดค้าง · สถานะบัญชี · บัญชีนอกระบบ เดี๋ยวนี้ (ปกติเก็บเองทุกเช้า {DAILY_RUN_LABEL} น.)</small></span>
+                <CalendarClock size={14} aria-hidden="true" /><span><b>ดึงยอดค้างบัญชีแอด</b><small>เก็บยอดค้าง · สถานะบัญชี · บัญชีนอกระบบ · รายการตัดบัตร เดี๋ยวนี้ (ปกติเก็บเองทุกเช้า {DAILY_RUN_LABEL} น.)</small></span>
               </button>
               <p className="sy-menu-group" role="presentation">ระบบขาย</p>
               <button type="button" role="menuitem" onClick={backfillSales} disabled={busy}>

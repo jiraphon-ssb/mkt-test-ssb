@@ -6,6 +6,7 @@ import { activeMemberUserIds, adminClient, corsHeaders, decryptToken, graphVersi
 import { publicSyncCode } from "../_shared/adsSyncJob.js";
 import { todayInTimeZone } from "../_shared/metaInsights.js";
 import { fetchAccountMonthSpend, fetchAccountSnapshots, monthsToFetch, pickSnapshotAuthorization } from "../_shared/adsAccountSnapshot.js";
+import { syncBillingCharges } from "../_shared/adsBillingCharges.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -38,7 +39,19 @@ Deno.serve(async (request) => {
         })), { onConflict: "external_account_id" });
       if (error) throw error;
     }
-    return json(request, { accounts: rows.length });
+    /* รายการตัดบัตรจริงของ Meta (29 ก.ย.) — ปุ่มเดียวกันดึงให้ด้วย ไม่ต้องรอรอบ 09:00 · ล้มไม่ทำให้ snapshot ล้ม */
+    let charges = null;
+    if (rows.length) try {
+      const result = await syncBillingCharges({
+        db, fetch, token, sleep, version: graphVersion(),
+        accountIds: rows.map((row) => row.external_account_id), today: todayInTimeZone(new Date(), "Asia/Bangkok"),
+      });
+      charges = { rows: result.rows, failedAccounts: result.failed.length, stored: !result.error };
+      if (result.error) console.error("[ads-snapshot] billing charges", result.error);
+    } catch (error) {
+      console.error("[ads-snapshot] billing charges", error instanceof Error ? error.message : error);
+    }
+    return json(request, { accounts: rows.length, charges });
   } catch (error) {
     const code = publicSyncCode(error);
     console.error("[ads-snapshot]", code, error instanceof Error ? error.message : "");
