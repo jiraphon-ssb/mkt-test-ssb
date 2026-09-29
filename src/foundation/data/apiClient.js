@@ -2494,9 +2494,10 @@ const adsData = {
   },
   /* ── บิล & กระทบยอด (spec 2026-09-22) — team_lead เท่านั้น RLS คุมอีกชั้น ── */
   /** สั่งเก็บ snapshot เดี๋ยวนี้ (ปุ่มในหน้า Sync) — ปกติ ads-cron ทำให้วันละครั้งตี 5 อยู่แล้ว */
-  async snapshotAccounts() {
+  /** billingSince (ไม่บังคับ) = ดึงรายการตัดบัตรย้อนตั้งแต่วันนั้น — ใช้เติมรอยรั่วครั้งเดียว (ปกติย้อน 7 วันจากรายการล่าสุด) */
+  async snapshotAccounts({ billingSince = null } = {}) {
     const db = requireSupabase();
-    const { data, error } = await db.functions.invoke("ads-snapshot", { body: {} });
+    const { data, error } = await db.functions.invoke("ads-snapshot", { body: billingSince ? { billingSince } : {} });
     if (error) throw await adsFunctionError(error, "SNAPSHOT_FAILED");
     return { accounts: data?.accounts ?? 0, charges: data?.charges ?? null };   // charges: รายการตัดบัตรจาก Meta (29 ก.ย.)
   },

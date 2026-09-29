@@ -15,6 +15,9 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json(request, { error: "METHOD_NOT_ALLOWED" }, 405);
   try {
     const { db } = isServiceRole(request) ? { db: adminClient() } : await requireTeamLead(request);
+    /* billingSince (ไม่บังคับ) = ดึงรายการตัดบัตรย้อนตั้งแต่วันนั้น (ครั้งเดียว เติมรอยรั่ว) · ค่าเสีย/ไม่ส่ง = รอบปกติ — syncBillingCharges ตรวจรูปแบบวันที่เอง */
+    const body = await request.json().catch(() => ({}));
+    const billingSince = typeof body?.billingSince === "string" ? body.billingSince : null;
     // token ที่ใช้ได้จริงเท่านั้น (เชื่อมอยู่ · ไม่หมดอายุ · เจ้าของยัง active) — เกณฑ์เดียวกับ ads-reconcile
     const { data: auths } = await db.from("ad_provider_authorizations")
       .select("id,user_id,status,expires_at,token_ciphertext,token_iv");
@@ -45,8 +48,9 @@ Deno.serve(async (request) => {
       const result = await syncBillingCharges({
         db, fetch, token, sleep, version: graphVersion(),
         accountIds: rows.map((row) => row.external_account_id), today: todayInTimeZone(new Date(), "Asia/Bangkok"),
+        since: billingSince,
       });
-      charges = { rows: result.rows, failedAccounts: result.failed.length, stored: !result.error };
+      charges = { rows: result.rows, failedAccounts: result.failed.length, stored: !result.error, since: result.since };
       if (result.error) console.error("[ads-snapshot] billing charges", result.error);
     } catch (error) {
       console.error("[ads-snapshot] billing charges", error instanceof Error ? error.message : error);

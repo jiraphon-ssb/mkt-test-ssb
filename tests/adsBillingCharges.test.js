@@ -47,9 +47,22 @@ describe("parseBillingActivities — แปลงเหตุการณ์เ�
 });
 
 describe("ช่วงวันที่ที่ดึง", () => {
-  it("activitiesUrl: หมวด BUDGET · ช่วงวัน · เฉพาะช่องที่ใช้", () => {
+  /* 29 ก.ย. (ตรวจข้อมูลกับ Meta): ส่งวันที่เปล่า Meta ตีเป็น 00:00 UTC (= 07:00 ไทย) และ until ไม่รวม
+     → บิลที่ตัดหลัง 07:00 ของวันที่ดึงหาย (t around ตัด 07:08 วันนี้ ฿19,572.33 ไม่เข้า) + รอยต่อช่วงหาย 1 วัน
+     (29 ส.ค. 07:00 – 30 ส.ค. 07:00 ไทย: TEAMDEE ฿7,000 ตอน 20:26 ไม่เข้า) — ต้องเป็นเวลาเที่ยงคืนไทย และ until = วันถัดไป */
+  it("activitiesUrl: หมวด BUDGET · ช่วงเป็น unix เที่ยงคืนเวลาไทย · until ครอบทั้งวันสุดท้าย", () => {
     const url = activitiesUrl({ version: "v26.0", accountId: "900000001", since: "2026-09-01", until: "2026-09-29" });
-    expect(url).toBe("https://graph.facebook.com/v26.0/act_900000001/activities?fields=event_type,event_time,extra_data&category=BUDGET&since=2026-09-01&until=2026-09-29&limit=500");
+    const since = Date.parse("2026-09-01T00:00:00+07:00") / 1000;
+    const until = Date.parse("2026-09-30T00:00:00+07:00") / 1000;
+    expect(url).toBe(`https://graph.facebook.com/v26.0/act_900000001/activities?fields=event_type,event_time,extra_data&category=BUDGET&since=${since}&until=${until}&limit=500`);
+  });
+  it("ช่วงที่แบ่งต่อกันไม่มีรอยรั่ว: until ของช่วงก่อน = since ของช่วงถัดไป (เวลาเดียวกันเป๊ะ)", () => {
+    const [a, b] = chargeWindows({ since: "2026-06-01", until: "2026-09-29" });
+    const q = (w) => new URL(activitiesUrl({ version: "v26.0", accountId: "1", ...w })).searchParams;
+    expect(q(a).get("until")).toBe(q(b).get("since"));
+    // บิล TEAMDEE 29 ส.ค. 20:26 ไทย ต้องอยู่ในช่วงใดช่วงหนึ่ง
+    const t = Date.parse("2026-08-29T20:26:00+07:00") / 1000;
+    expect([a, b].some((w) => Number(q(w).get("since")) <= t && t < Number(q(w).get("until")))).toBe(true);
   });
   it("chargeWindows: แบ่งช่วงละไม่เกิน 90 วัน ต่อกันไม่ขาด", () => {
     expect(chargeWindows({ since: "2026-06-01", until: "2026-09-29" })).toEqual([
@@ -95,7 +108,7 @@ describe("syncBillingCharges", () => {
     const { db, calls } = fakeDb({ latest: "2026-09-26" });
     const out = await syncBillingCharges({ db, fetch: okFetch, token: "t", sleep: async () => {}, version: "v26.0", accountIds: ["900000001"], today: "2026-09-29" });
     expect(calls.latestQuery).toEqual({ table: "ad_billing_charges", col: "source", val: "meta_api" });
-    expect(okFetch.mock.calls[0][0]).toContain("since=2026-09-19&until=2026-09-29");
+    expect(okFetch.mock.calls[0][0]).toContain(`since=${Date.parse("2026-09-19T00:00:00+07:00") / 1000}&until=${Date.parse("2026-09-30T00:00:00+07:00") / 1000}`);
     expect(calls.upserts[0]).toMatchObject({ table: "ad_billing_charges", opts: { onConflict: "external_account_id,reference" } });
     expect(out).toEqual({ since: "2026-09-19", rows: 1, failed: [], error: null });
   });
@@ -121,4 +134,20 @@ it("เหตุการณ์เดียวกันมาซ้ำในช�
   const out = await syncBillingCharges({ db, fetch, token: "t", sleep: async () => {}, version: "v26.0", accountIds: ["1"], today: "2026-06-10" });
   expect(upserts[0]).toHaveLength(1);
   expect(out.rows).toBe(1);
+});
+
+/* ดึงย้อนตั้งแต่วันที่กำหนด (ครั้งเดียว) — เติมรอยรั่ว 29 ส.ค. ที่รอบปกติ (ย้อน 7 วัน) ไปไม่ถึง */
+it("syncBillingCharges({ since }): ไม่สนรายการล่าสุด · ต่ำกว่าวันเริ่มระบบ/ค่าเสีย = ใช้วันเริ่มระบบ/ปกติ", async () => {
+  const calls = [];
+  const fetch = vi.fn(async (url) => { calls.push(String(url)); return { ok: true, status: 200, json: async () => ({ data: [] }) }; });
+  const db = { from: () => ({
+    select: () => ({ eq: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: { charge_date: "2026-09-28" } }) }) }) }) }),
+    upsert: async () => ({ error: null }),
+  }) };
+  const base = { db, fetch, token: "t", sleep: async () => {}, version: "v26.0", accountIds: ["1"], today: "2026-09-29" };
+  const at = (iso) => Date.parse(`${iso}T00:00:00+07:00`) / 1000;
+  expect((await syncBillingCharges({ ...base, since: "2026-06-01" })).since).toBe("2026-06-01");
+  expect(calls[0]).toContain(`since=${at("2026-06-01")}`);
+  expect((await syncBillingCharges({ ...base, since: "2025-01-01" })).since).toBe("2026-06-01");     // ก่อนวันเริ่มระบบ = วันเริ่มระบบ
+  expect((await syncBillingCharges({ ...base, since: "ไม่ใช่วันที่" })).since).toBe("2026-09-21");  // ค่าเสีย = รอบปกติ (ล่าสุด −7)
 });

@@ -54,9 +54,15 @@ export function parseBillingActivities(events = [], accountId) {
   return rows;
 }
 
+/** เที่ยงคืนเวลาไทยของวันนั้นเป็น unix วินาที (ไทยไม่มี DST) */
+const bangkokMidnight = (iso) => Date.parse(`${iso}T00:00:00+07:00`) / 1000;
+
+/** since/until = วันที่ไทย (รวมทั้งสองวัน) → ส่งเป็น unix เที่ยงคืนไทย · until = เที่ยงคืนของวันถัดไป (ไม่รวม)
+    เดิมส่งวันที่เปล่า Meta ตีเป็น 00:00 UTC (= 07:00 ไทย) และ until ไม่รวม → บิลหลัง 07:00 ของวันที่ดึงหาย
+    และรอยต่อระหว่างช่วง 90 วันหาย 1 วัน (ตรวจกับ Meta 29 ก.ย.: t around ตัด 07:08 ฿19,572.33 · TEAMDEE 29 ส.ค. 20:26 ฿7,000 ไม่เข้า) */
 export function activitiesUrl({ version, accountId, since, until }) {
   const id = String(accountId).replace(/^act_/, "");
-  return `https://graph.facebook.com/${version}/act_${id}/activities?fields=event_type,event_time,extra_data&category=BUDGET&since=${since}&until=${until}&limit=500`;
+  return `https://graph.facebook.com/${version}/act_${id}/activities?fields=event_type,event_time,extra_data&category=BUDGET&since=${bangkokMidnight(since)}&until=${bangkokMidnight(addDays(until, 1))}&limit=500`;
 }
 
 /** แบ่งช่วงละไม่เกิน 90 วัน (ช่วงยาวให้ผลช้าและเสี่ยงหมดเวลา Edge Function) */
@@ -96,10 +102,12 @@ export async function fetchBillingCharges({ fetch, token, sleep, version, accoun
 
 /** ดึงรายการตัดบัตรตั้งแต่รายการล่าสุด (ย้อนซ้อน 7 วัน) ถึงวันนี้ แล้ว upsert กันซ้ำ — ใช้ร่วม ads-cron และ ads-snapshot
     ล้มตรงไหนคืนผลสรุป ไม่ throw (รอบ cron/ปุ่มยอดค้างต้องไปต่อ) · ต้องมี unique index (external_account_id, reference) */
-export async function syncBillingCharges({ db, fetch, token, sleep, version, accountIds = [], today }) {
+export async function syncBillingCharges({ db, fetch, token, sleep, version, accountIds = [], today, since: fromDay = null }) {
   const { data: latest } = await db.from("ad_billing_charges").select("charge_date").eq("source", "meta_api")
     .order("charge_date", { ascending: false }).limit(1).maybeSingle();
-  const since = billingSince({ latest: latest?.charge_date ?? null });
+  /* since = ดึงย้อนตั้งแต่วันที่กำหนด (ครั้งเดียว ใช้เติมรอยรั่ว) · ไม่ส่ง/ค่าเสีย = รอบปกติ ย้อนซ้อน 7 วันจากรายการล่าสุด */
+  const since = ISO_DAY.test(String(fromDay ?? "")) ? (fromDay < BILLING_START ? BILLING_START : fromDay)
+    : billingSince({ latest: latest?.charge_date ?? null });
   const fetched = await fetchBillingCharges({ fetch, token, sleep, version, accountIds, since, until: today });
   // เหตุการณ์เดียวกันซ้ำในชุด (หน้าซ้อน/ช่วงชนขอบ) = แถวเดียว — upsert ชุดเดียวที่มีคีย์ซ้ำ Postgres จะ error ทั้งชุด
   const rows = [...new Map(fetched.rows.map((row) => [`${row.external_account_id}|${row.reference}`, row])).values()];
