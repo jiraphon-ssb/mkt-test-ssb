@@ -102,3 +102,11 @@ describe("billListCsv", () => {
 it("billingHubUrl: ลิงก์ Billing hub ของบัญชีนั้น (ใบเสร็จรายใบรออาร์ตส่งตัวอย่างลิงก์)", () => {
   expect(billingHubUrl("act_900000001")).toBe("https://business.facebook.com/billing_hub/payment_activity?asset_id=900000001");
 });
+
+/* security-review 29 ก.ย. (ต่ำ): ชื่อบัญชี Meta ขึ้นต้น = + - @ → Excel ตีเป็นสูตร (CSV formula injection) — ใส่ ' นำหน้า */
+it("billListCsv: ข้อความที่ขึ้นต้นด้วย = + - @ ถูกกันไม่ให้ Excel ตีเป็นสูตร · ยอดเงินไม่ถูกแตะ", () => {
+  const [item] = buildBillList({ month: "2026-09-01", charges: [{ external_account_id: "1", charge_date: "2026-09-01", amount: 10, reference: "@x", raw: { kind: "charge" } }],
+    rows: [{ external_account_id: "1", accountName: '=HYPERLINK("http://evil")', brandName: "+cmd", connected: true }] }).items;
+  const line = billListCsv([item]).split("\n")[1];
+  expect(line).toBe(`2026-09-01,"'=HYPERLINK(""http://evil"")",1,'+cmd,'@x,10.00,THB,สำเร็จ,`);
+});

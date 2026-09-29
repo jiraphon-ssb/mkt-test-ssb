@@ -76,7 +76,8 @@ export function buildBillList({ month, charges = [], rows = [], snapshots = [], 
   return { items, accounts, totals: { count: items.length, chargedCount, charged: chargedSum, offSystemCharged, failedCount, failed, refundCount, refund, vat36 } };
 }
 
-const esc = (v) => { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+/* ข้อความขึ้นต้น = + - @ tab CR → ใส่ ' นำหน้า กัน Excel ตีเป็นสูตร (security-review 29 ก.ย. · ชื่อบัญชีมาจาก Meta) — ยอดเงินเป็นตัวเลขบวกเสมอ ไม่ผ่านตรงนี้ */
+const esc = (v) => { let s = v == null ? "" : String(v); if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 export const BILL_CSV_HEAD = ["วันที่", "บัญชี", "เลขบัญชี", "แบรนด์", "เลขรายการ", "ยอด (บาท)", "สกุลเงิน", "สถานะ", "ครอบคลุมค่าแอด"];
 
 /** CSV ให้ฝ่ายบัญชี — เรียงเก่า→ใหม่แบบสมุดบัญชี · ยอดทศนิยม 2 ตำแหน่งไม่ปัด ไม่มีคอมมา · มี BOM ให้ Excel อ่านไทย */
