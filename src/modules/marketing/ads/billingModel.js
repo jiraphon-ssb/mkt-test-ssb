@@ -62,6 +62,7 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
   /* รายการจาก Meta activities มีชนิด (29 ก.ย.): นับเป็นยอดตัดเฉพาะ "charge" · แถวเก่าไม่มีชนิด (อัปโหลด/อีเมล) = ยอดตัด
      ตัดไม่ผ่าน/ปฏิเสธ/chargeback/คืนเงิน ไม่ใช่เงินที่ออกจริง → ไม่เข้าการแมท แต่เก็บไว้เตือนเฉพาะของเดือนที่ดู */
   const problems = { failed: [], refund: [] };
+  const monthChargeCents = new Map();   // บัญชี → { cents, count } ของรายการตัดสำเร็จในเดือนที่ดู (ใช้กับบัญชีนอกระบบ)
   for (const c of charges) {
     const kind = c.raw?.kind ?? "charge";
     if (kind !== "charge") {
@@ -72,6 +73,10 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
       continue;
     }
     const accountId = normId(c.external_account_id);
+    if (String(c.charge_date ?? "").startsWith(monthPrefix) && Number.isFinite(Number(c.amount))) {
+      const agg = monthChargeCents.get(accountId) ?? { cents: 0, count: 0 };
+      monthChargeCents.set(accountId, { cents: agg.cents + Math.round(Number(c.amount) * 100), count: agg.count + 1 });
+    }
     chargesByAccount.set(accountId, [...(chargesByAccount.get(accountId) ?? []), {
       date: String(c.charge_date ?? "").slice(0, 10), amount: Number(c.amount), reference: c.reference ?? null,
       vat: c.raw?.vat ?? null,   // ตัวแกะไฟล์ใส่ VAT แยกไว้ใน raw ถ้าไฟล์มีคอลัมน์ภาษี
@@ -123,6 +128,8 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
       charges: accountCharges, daily: dailyByAccount.get(account) ?? new Map(), balance: current ? baht(snap?.balance_cents) : null, today: today ?? undefined, dataThrough,
     }) : null;
     const charge = chargeMatch ? monthChargeSummary(chargeMatch, monthPrefix, { current }) : null;
+    /* ค่าแอดถูกตัดถึงวันไหน (วันสุดท้ายที่รายการของเดือนนี้ครอบคลุม) — ส่วนต่างกับค่าแอดส่วนใหญ่คือช่วงหลังวันนี้ที่ยังไม่ถึงรอบตัด */
+    const coveredThrough = (charge?.charges ?? []).reduce((max, c) => (c.coverTo && (!max || c.coverTo > max) ? c.coverTo : max), null);
     const flag = status === "review" ? { text: "ต้องตรวจ", tone: "rose" }
       : charge?.overCount > 0 ? { text: "Meta ตัดเกินค่าแอด", tone: "rose" }
       : charge?.status === "review" ? { text: "ยอดค้างไม่ตรง", tone: "amber" }
@@ -133,6 +140,7 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
       external_account_id: account,
       accountName: connection.account_name || snap?.account_name || account,
       brandName: brandName.get(connection.brand_id) ?? connection.brand_id ?? "",
+      brandId: connection.brand_id || null,   // รางบัญชี/ตารางใช้โลโก้แบรนด์ (BrandMark) แบบหน้าภาพรวม
       connected: true,
       spend,
       ...withVat(spend),
@@ -141,7 +149,7 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
       })).sort((a, b) => b.spend - a.spend),
       balance: balanceOf(snap),
       accountStatus,
-      statement, diff, diffPct, status, flag, review, charge, chargeMatch,
+      statement, diff, diffPct, status, flag, review, charge, chargeMatch, coveredThrough,
     });
   }
 
@@ -150,21 +158,26 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
   const offSystemIdle = [], offSystemUnknown = [];
   /* ค่าแอดยังไม่รู้ = ไม่รู้ด้วยว่าบัญชีไหนเชื่อม (รายชื่อสกัดจาก cards) → ห้ามตัดสินว่านอกระบบ
      เดิมระหว่างโหลดทุกบัญชีขึ้น "เงินออกนอกระบบ" แดงทั้งหน้า (เจอบนหน้าจริง · ชุด D) */
-  for (const snap of spendKnown ? snapshots : []) {
+  /* บัญชีที่ถูกตัดบัตรแต่ไม่มีทั้งการเชื่อมและ snapshot ก็ต้องขึ้น — เงินออกจริง (29 ก.ย.) */
+  const offSources = [...snapshots, ...[...monthChargeCents.keys()]
+    .filter((id) => !connected.has(id) && !snapshots.some((s) => normId(s.external_account_id) === id))
+    .map((id) => ({ external_account_id: id, account_name: null }))];
+  for (const snap of spendKnown ? offSources : []) {
     const account = normId(snap.external_account_id);
     if (connected.has(account)) continue;
+    const offCharge = monthChargeCents.get(account) ?? null;
     /* ยอดเดือนจริงจาก Meta insights (ads-cron เก็บไว้ใน month_spend) — ไม่ใช่ delta ประมาณ
        ไม่มีคีย์เดือนนั้น = ยังไม่เคยเก็บ ต้องเป็น null ("ไม่รู้") ห้ามเป็น 0 ("ไม่ได้ใช้") */
     const cents = snap.month_spend?.[monthPrefix];
     const spend = cents == null ? null : baht(cents);
     /* เดือนนี้ใช้ ฿0 และไม่มียอดค้าง = ไม่มีอะไรให้ตรวจ → รวมเป็นบรรทัดเดียว ไม่ขึ้นเป็นแถว (ชุด D ข้อ 18)
        ยอดไม่รู้ (null) ยังขึ้นเป็นแถว — ไม่รู้ ≠ ไม่ได้ใช้ */
-    if (spend === 0 && !(balanceOf(snap) > 0)) {
+    if (spend === 0 && !(balanceOf(snap) > 0) && !offCharge) {
       offSystemIdle.push({ external_account_id: account, accountName: snap.account_name || account });
       continue;
     }
     /* เดือนที่ผ่านมาแล้วและไม่มียอดของเดือนนั้นในระบบ = ไม่มีอะไรให้ตรวจ → บรรทัดเดียว (ตรวจรอบ 28 ก.ย.) · เดือนนี้ยังขึ้นแถว (ไม่รู้ ≠ ไม่ได้ใช้) */
-    if (pastMonth && spend == null) {
+    if (pastMonth && spend == null && !offCharge) {
       offSystemUnknown.push({ external_account_id: account, accountName: snap.account_name || account });
       continue;
     }
@@ -172,6 +185,7 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
       external_account_id: account,
       accountName: snap.account_name || account,
       brandName: "",
+      brandId: null,
       connected: false,
       spend,
       ...withVat(spend),
@@ -180,9 +194,25 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
       accountStatus: snap.account_status ?? null,
       statement: null, diff: null, diffPct: null,
       status: "offsystem",
-      flag: spend > 0 ? { text: "เงินออกนอกระบบ", tone: "rose" } : null,
+      /* ถูกตัดบัตร = เงินออกแน่แล้ว ชัดกว่ายอดใช้ (29 ก.ย.: ส.ค. Finix2/JD2 ถูกตัด ฿7,832.93 แต่หน้าเงียบ) */
+      flag: offCharge ? { text: "ถูกตัดบัตรนอกระบบ", tone: "rose" } : spend > 0 ? { text: "เงินออกนอกระบบ", tone: "rose" } : null,
+      charge: offCharge ? { charged: offCharge.cents / 100, count: offCharge.count, charges: [] } : null,
+      coveredThrough: null,
       review: reviewByAccount.get(account) ?? null,
     });
+  }
+
+  /* "ควรทำ" ต่อบัญชี — คอลัมน์เดียวกับตารางแบรนด์หน้าภาพรวม: บอกขั้นต่อไปเป็นคำกริยา ไม่ใช่แค่ป้ายสถานะ (29 ก.ย.) */
+  for (const r of rows) {
+    const flagText = r.flag?.text;
+    r.action = !r.connected && (r.charge || r.spend > 0) ? { text: "เชื่อมบัญชีเข้าระบบ", tone: "rose" }
+      : r.status === "review" ? { text: "เทียบใบแจ้งยอดอีกครั้ง", tone: "rose" }
+      : flagText === "Meta ตัดเกินค่าแอด" ? { text: "ตรวจใบเสร็จใน Billing hub", tone: "rose" }
+      : flagText === "ยอดค้างไม่ตรง" ? { text: "เทียบยอดค้างใน Billing hub", tone: "amber" }
+      : flagText === "เช็ก VAT" ? { text: "เช็กใบกำกับ VAT", tone: "amber" }
+      : flagText === "บัญชีมีปัญหา" ? { text: "ตรวจสถานะบัญชีใน Meta", tone: "amber" }
+      : r.review ? { text: "ตรวจแล้ว", tone: "emerald" }
+      : { text: "ตามรอบตัดบัตร", tone: "zinc" };
   }
 
   /* เรียง: มีป้ายก่อน (แดงก่อนเหลือง) แล้วตามยอดมาก→น้อย */
@@ -205,10 +235,48 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
     charged: connectedRows.some((r) => r.charge) ? connectedRows.reduce((sum, r) => sum + (r.charge?.charged ?? 0), 0) : null,
   };
 
+  /* สมการ "ทำไมสองยอดไม่เท่ากัน" (29 ก.ย.) — ค่าแอดของเดือน → ยอดตัดบัตรทั้งหมดของเดือน (ทุกบัญชี)
+     ใช้ alloc ของแต่ละรายการ (ค่าแอดรายวันที่รายการจ่าย) · afterMonth คิดเป็นเศษเหลือ → สมการลงตัวทุกสตางค์เสมอ
+     แบ่งตามลำดับค่าแอดรายวัน — วันที่ตัดบัตรคร่อมเวลาในวันเป็นค่าประมาณ */
+  const offChargedC = rows.filter((r) => !r.connected && r.charge).reduce((n, r) => n + Math.round(r.charge.charged * 100), 0);
+  const monthStart = `${monthPrefix}-01`;
+  /* สมการต่อแถว (29 ก.ย. รื้อตามหน้าอื่น: เลือกบัญชีในรางซ้ายแล้ว hero ต้องมีสมการของบัญชีนั้น) · ภาพรวม = ผลรวมเป็นสตางค์ */
+  const zero = { spendC: 0, chargedC: 0, prevC: 0, unmatchedC: 0, vatC: 0, afterC: 0, offC: 0 };
+  const total = { ...zero };
+  const toBaht = (x) => ({ spend: x.spendC / 100, afterMonth: x.afterC / 100, fromPrev: x.prevC / 100, unmatched: x.unmatchedC / 100,
+    vatCharged: x.vatC / 100, offSystem: x.offC / 100, charged: (x.chargedC + x.offC) / 100 });
+  for (const r of rows) {
+    if (!r.connected) {
+      const offC = r.charge ? Math.round(r.charge.charged * 100) : 0;
+      r.bridge = { spend: null, afterMonth: null, fromPrev: 0, unmatched: 0, vatCharged: 0, offSystem: offC / 100, charged: offC / 100 };
+      r.billedShare = null;
+      total.offC += offC;
+      continue;
+    }
+    const x = { ...zero, spendC: centsOf(r.spend) };
+    for (const c of r.charge?.charges ?? []) {
+      const amountC = Math.round(c.amount * 100);
+      x.chargedC += amountC;
+      x.vatC += amountC - Math.round((c.net ?? c.amount) * 100);
+      x.unmatchedC += Math.round((c.uncovered ?? 0) * 100);
+      x.prevC += Math.round((c.alloc ?? []).filter((a) => a.day < monthStart).reduce((n, a) => n + a.amount, 0) * 100);
+    }
+    x.afterC = x.spendC - (x.chargedC - x.prevC - x.unmatchedC - x.vatC);   // เศษเหลือ → สมการลงตัวทุกสตางค์
+    r.bridge = spendKnown ? toBaht(x) : null;
+    /* ค่าแอดเดือนนี้ที่ถูกตัดแล้ว (ส่วนที่ไม่ใช่ "ยังไม่ถึงรอบตัด") — แถบในรางซ้าย/hero */
+    r.billedShare = spendKnown && x.spendC > 0 ? (x.spendC - x.afterC) / x.spendC : null;
+    for (const k of Object.keys(zero)) total[k] += x[k];
+  }
+  const bridge = spendKnown ? toBaht(total) : null;
+  const billedShare = spendKnown && total.spendC > 0 ? (total.spendC - total.afterC) / total.spendC : null;
+
   /* alerts — exception-based: เดือนเรียบร้อย = [] */
   const alerts = [];
   const offAccounts = rows.filter((r) => !r.connected && r.flag);
-  if (offAccounts.length) alerts.push({ key: "offsystem", tone: "rose",
+  const offCharged = rows.filter((r) => !r.connected && r.charge);
+  if (offCharged.length) alerts.push({ key: "offsystem", tone: "rose",
+    text: `บัญชีนอกระบบถูกตัดบัตร ${fmtMoney(offChargedC / 100)} — ${offCharged.map((r) => r.accountName).join(" · ")} ยังไม่ได้เชื่อมเข้าระบบ` });
+  else if (offAccounts.length) alerts.push({ key: "offsystem", tone: "rose",
     text: `เงินออกนอกระบบ ${fmtMoney(offSystemSpend)} — ${offAccounts.map((r) => r.accountName).join(" · ")} ยังไม่ได้เชื่อมเข้าระบบ` });
   const overRows = rows.filter((r) => r.charge?.overCount > 0);
   if (overRows.length) {
@@ -231,7 +299,7 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
   const [y, m] = String(month).split("-").map(Number);
   const rangeLabel = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("th-TH", { month: "short", year: "numeric", timeZone: "UTC" });
 
-  return { month, rangeLabel, rows, totals, alerts, offSystemIdle, offSystemUnknown, pastMonth };
+  return { month, rangeLabel, rows, totals, alerts, offSystemIdle, offSystemUnknown, pastMonth, current, bridge, billedShare };
 }
 
 /** รายการบัญชีที่เชื่อม สกัดจาก cards (มี account_id + brand_id ติดมาแล้ว) — ไม่ต้องดึง ad_connections แยก */

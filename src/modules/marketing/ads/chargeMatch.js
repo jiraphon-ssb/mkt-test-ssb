@@ -41,7 +41,7 @@ function evaluate(groups, days, spends, { today, dataThrough, netOf }) {
 
   // ก่อนช่วงข้อมูลค่าแอด = ตรวจไม่ได้ ไม่ใช่ตัดเกิน
   for (const g of anchorIdx < 0 ? groups : groups.slice(0, anchorIdx)) {
-    for (const c of netItems(g)) out.push({ ...c, covered: 0, uncovered: c.net, coverFrom: null, coverTo: null, status: "nodata" });
+    for (const c of netItems(g)) out.push({ ...c, covered: 0, uncovered: c.net, coverFrom: null, coverTo: null, alloc: [], status: "nodata" });
   }
   if (!anchor) return { charges: out, unbilledMin: clean(total), unbilledMax: clean(total), anchorDate: null, laterNet: 0, lo: null, hi: null };
 
@@ -53,14 +53,15 @@ function evaluate(groups, days, spends, { today, dataThrough, netOf }) {
   let back = end;
   for (const c of anchorItems) {
     let want = c.net, from = null, to = null;
+    const alloc = [];   // ค่าแอดรายวันที่รายการนี้จ่าย (ก่อน VAT) — หน้าต่างรายละเอียดบิล + สมการกระทบยอด (29 ก.ย.)
     while (want > EPS && back >= 0) {
       const take = Math.min(rem[back], want);
-      if (take > EPS) { rem[back] -= take; want -= take; to ??= days[back]; from = days[back]; }
+      if (take > EPS) { rem[back] -= take; want -= take; to ??= days[back]; from = days[back]; alloc.unshift({ day: days[back], amount: clean(take) }); }
       if (rem[back] <= EPS) back -= 1;
     }
     const uncovered = clean(Math.max(0, want));
     // ข้อมูลค่าแอดย้อนไม่ถึงยอดรายการแรก = nodata (ไม่รู้ว่ารอบบิลเริ่มเมื่อไหร่)
-    out.push({ ...c, covered: clean(c.net - uncovered), uncovered, coverFrom: from, coverTo: to, status: uncovered > overTol(c.net) ? "nodata" : "ok" });
+    out.push({ ...c, covered: clean(c.net - uncovered), uncovered, coverFrom: from, coverTo: to, alloc, status: uncovered > overTol(c.net) ? "nodata" : "ok" });
   }
   // ช่วงที่แสดง: ต่อจากจุดที่รายการแรกย้อนกินถึง (ก่อนหน้านั้น = รอบบิลก่อนหน้าที่ไม่อยู่ในไฟล์)
   for (let k = 0; k < end; k++) rem[k] = 0;
@@ -87,13 +88,14 @@ function evaluate(groups, days, spends, { today, dataThrough, netOf }) {
     const limit = lastIdxOnOrBefore(days, g.date);
     items.forEach((c, i) => {
       let want = c.net - perItem[i], from = null, to = null;
+      const alloc = [];
       for (let k = ptr; k <= limit && want > EPS; k++) {
         const take = Math.min(rem[k], want);
-        if (take > EPS) { rem[k] -= take; want -= take; from ??= days[k]; to = days[k]; }
+        if (take > EPS) { rem[k] -= take; want -= take; from ??= days[k]; to = days[k]; alloc.push({ day: days[k], amount: clean(take) }); }
         if (rem[k] <= EPS && k === ptr) ptr = k + 1;
       }
       const uncovered = clean(perItem[i]);
-      out.push({ ...c, covered: clean(c.net - uncovered), uncovered, coverFrom: from, coverTo: to, status: uncovered > EPS ? short : "ok" });
+      out.push({ ...c, covered: clean(c.net - uncovered), uncovered, coverFrom: from, coverTo: to, alloc, status: uncovered > EPS ? short : "ok" });
     });
   }
 

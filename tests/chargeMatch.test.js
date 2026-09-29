@@ -228,3 +228,26 @@ describe("เดา VAT ต้องไม่เตือนผิด และ�
     expect(monthChargeSummary(m, new Date(Date.UTC(2026, 0, 15))).charged).toBe(20);
   });
 });
+
+/* 29 ก.ย. — หน้าต่างรายละเอียดบิล + สมการกระทบยอด: แต่ละรายการต้องบอกว่าจ่ายค่าแอดวันไหนเท่าไร (ยอดก่อน VAT) */
+describe("alloc — ค่าแอดรายวันที่แต่ละรายการจ่าย", () => {
+  it("รายการแรกย้อน · รายการถัดไปต่อ · เรียงวันเก่า→ใหม่ · ผลรวม = covered", () => {
+    const m = matchAccountCharges({ charges: [ch("2026-09-06", 3000), ch("2026-09-03", 2000)], daily, today: "2026-09-10" });
+    expect(m.charges[0].alloc).toEqual([{ day: "2026-09-02", amount: 1000 }, { day: "2026-09-03", amount: 1000 }]);
+    expect(m.charges[1].alloc).toEqual([{ day: "2026-09-04", amount: 1000 }, { day: "2026-09-05", amount: 1000 }, { day: "2026-09-06", amount: 1000 }]);
+  });
+  it("ตัดกลางวัน: วันเดียวแบ่งให้สองรายการ", () => {
+    const m = matchAccountCharges({ charges: [ch("2026-09-03", 500), ch("2026-09-05", 2500)], daily, today: "2026-09-10" });
+    expect(m.charges[0].alloc).toEqual([{ day: "2026-09-03", amount: 500 }]);
+    expect(m.charges[1].alloc).toEqual([{ day: "2026-09-03", amount: 500 }, { day: "2026-09-04", amount: 1000 }, { day: "2026-09-05", amount: 1000 }]);
+  });
+  it("ยอดรวม VAT: alloc เป็นยอดก่อน VAT (net)", () => {
+    const m = matchAccountCharges({ charges: [ch("2026-09-02", 2140, "A", { vat: 140 })], daily, today: "2026-09-10" });
+    expect(m.charges[0].alloc).toEqual([{ day: "2026-09-01", amount: 1000 }, { day: "2026-09-02", amount: 1000 }]);
+    expect(m.charges[0].net).toBe(2000);
+  });
+  it("ก่อนช่วงข้อมูล = alloc ว่าง", () => {
+    const m = matchAccountCharges({ charges: [ch("2026-08-20", 700)], daily, today: "2026-09-10" });
+    expect(m.charges[0].alloc).toEqual([]);
+  });
+});

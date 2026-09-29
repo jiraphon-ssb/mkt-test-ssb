@@ -309,3 +309,87 @@ describe("รายการตัดบัตรจาก Meta API — ชน�
     expect(jd(m).charge.charged).toBe(100555);
   });
 });
+
+/* 29 ก.ย. — โครงหน้าบิลใหม่: สมการ "ทำไมสองยอดไม่เท่ากัน" · VAT ภ.พ.36 จากยอดที่จ่าย · ค่าแอดถูกตัดถึง · บัญชีนอกระบบที่ถูกตัดบัตร */
+describe("สมการกระทบยอด", () => {
+  const charge = (account, date, amount, reference) => ({ external_account_id: account, charge_date: date, amount, reference, source: "meta_api", raw: { kind: "charge" } });
+  // ค่าแอด: 5 ส.ค. 555 · 5 ก.ย. 100,000 · 6 ก.ย. 50,807.37
+  // ตัด 5 ส.ค. 300 (ตั้งต้น) → เศษ 255 ของ ส.ค. ไปตัดพร้อมรายการ 5 ก.ย. · 6 ก.ย. เก็บต่อ → ส่วนที่เหลือของ ก.ย. ยังไม่ถูกตัด
+  const charges = [charge("111000111", "2026-08-05", 300, "A0"), charge("111000111", "2026-09-05", 60000, "C1"),
+    charge("111000111", "2026-09-06", 70000, "C2"), charge("999000999", "2026-09-10", 363.22, "F1")];
+  const snapshots = [
+    { external_account_id: "111000111", account_name: "JD1", account_status: 1, balance_cents: 2106237, fetched_at: "2026-09-28T09:00:00Z" },
+    { external_account_id: "999000999", account_name: "Finix2", account_status: 1, balance_cents: 0, fetched_at: "2026-09-28T09:00:00Z" },
+  ];
+  const m = build({ charges, snapshots, today: "2026-09-28" });
+
+  it("ค่าแอด − ใช้แล้วตัดหลังสิ้นเดือน + ค่าแอดเดือนก่อนที่มาตัด + นอกระบบ = ยอดตัดบัตรทั้งหมด (ลงตัวทุกสตางค์)", () => {
+    expect(m.bridge).toEqual({ spend: 150807.37, afterMonth: 21062.37, fromPrev: 255, unmatched: 0, vatCharged: 0, offSystem: 363.22, charged: 130363.22 });
+    const b = m.bridge;
+    expect(Math.round((b.spend - b.afterMonth + b.fromPrev + b.unmatched + b.vatCharged + b.offSystem) * 100)).toBe(Math.round(b.charged * 100));
+  });
+  it("แถวบัญชี: ค่าแอดถูกตัดถึงวันไหน · จำนวนใบเสร็จของเดือน", () => {
+    const jd = m.rows.find((r) => r.external_account_id === "111000111");
+    expect(jd.coveredThrough).toBe("2026-09-06");
+    expect(jd.charge.count).toBe(2);
+  });
+  it("บัญชีนอกระบบที่ถูกตัดบัตร = แถวพร้อมยอดตัด + ป้ายแดง + แถบเตือนบอกยอดที่ถูกตัด", () => {
+    const off = m.rows.find((r) => r.external_account_id === "999000999");
+    expect(off).toMatchObject({ connected: false, charge: { charged: 363.22, count: 1 }, flag: { text: "ถูกตัดบัตรนอกระบบ", tone: "rose" } });
+    expect(m.alerts.find((a) => a.key === "offsystem").text).toBe("บัญชีนอกระบบถูกตัดบัตร ฿363.22 — Finix2 ยังไม่ได้เชื่อมเข้าระบบ");
+  });
+  it("เดือนที่ผ่านมา: บัญชีนอกระบบที่ถูกตัดบัตรขึ้นเป็นแถว ไม่ถูกรวมเป็น 'ไม่มียอดของเดือนนี้'", () => {
+    const aug = build({ month: "2026-08-01", charges: [charge("999000999", "2026-08-29", 363.22, "F0")], snapshots, today: "2026-09-28" });
+    expect(aug.offSystemUnknown.map((a) => a.accountName)).not.toContain("Finix2");
+    expect(aug.rows.find((r) => r.external_account_id === "999000999").charge.charged).toBe(363.22);
+  });
+  it("ยังไม่มีรายการตัดบัตร: ใช้แล้วตัดหลังสิ้นเดือน = ค่าแอดทั้งหมด · ค่าแอดไม่รู้ = ไม่มีสมการ", () => {
+    expect(build({ today: "2026-09-28" }).bridge).toMatchObject({ spend: 150807.37, afterMonth: 150807.37, charged: 0 });
+    expect(build({ spendKnown: false, today: "2026-09-28" }).bridge).toBeNull();
+  });
+});
+
+/* 29 ก.ย. (รื้อตามหน้าอื่น) — รางบัญชีด้านซ้ายเลือกบัญชีแล้ว hero ต้องมีสมการของบัญชีนั้น + โลโก้แบรนด์ */
+describe("สมการรายบัญชี + brandId", () => {
+  const charge = (account, date, amount, reference) => ({ external_account_id: account, charge_date: date, amount, reference, source: "meta_api", raw: { kind: "charge" } });
+  const charges = [charge("111000111", "2026-08-05", 300, "A0"), charge("111000111", "2026-09-05", 60000, "C1"),
+    charge("111000111", "2026-09-06", 70000, "C2"), charge("999000999", "2026-09-10", 363.22, "F1")];
+  const snapshots = [
+    { external_account_id: "111000111", account_name: "JD1", account_status: 1, balance_cents: 2106237, fetched_at: "2026-09-28T09:00:00Z" },
+    { external_account_id: "999000999", account_name: "Finix2", account_status: 1, balance_cents: 0, fetched_at: "2026-09-28T09:00:00Z" },
+  ];
+  const m = build({ charges, snapshots, today: "2026-09-28" });
+  it("แถวที่เชื่อม: สมการของบัญชีเอง · สัดส่วนค่าแอดเดือนนี้ที่ถูกตัดแล้ว · brandId", () => {
+    const jd = m.rows.find((r) => r.external_account_id === "111000111");
+    expect(jd.bridge).toEqual({ spend: 150807.37, afterMonth: 21062.37, fromPrev: 255, unmatched: 0, vatCharged: 0, offSystem: 0, charged: 130000 });
+    expect(jd.billedShare).toBeCloseTo(129745 / 150807.37, 6);
+    expect(jd.brandId).toBe("b_jd");
+  });
+  it("บัญชีนอกระบบ: รู้แค่ยอดที่ตัด · ไม่มีค่าแอดให้เทียบ", () => {
+    const off = m.rows.find((r) => r.external_account_id === "999000999");
+    expect(off.bridge).toEqual({ spend: null, afterMonth: null, fromPrev: 0, unmatched: 0, vatCharged: 0, offSystem: 363.22, charged: 363.22 });
+    expect(off.billedShare).toBeNull();
+  });
+  it("ภาพรวม = ผลรวมของทุกแถว", () => {
+    expect(m.bridge.charged).toBe(130363.22);
+    expect(m.billedShare).toBeCloseTo(129745 / 150807.37, 6);
+  });
+});
+
+describe("ควรทำ (คอลัมน์เดียวกับตารางแบรนด์หน้าภาพรวม)", () => {
+  const charge = (account, date, amount, reference) => ({ external_account_id: account, charge_date: date, amount, reference, source: "meta_api", raw: { kind: "charge" } });
+  it("ปกติ = ตามรอบตัดบัตร · ตรวจแล้ว = ตรวจแล้ว · นอกระบบถูกตัด = เชื่อมบัญชี · ตัดเกิน = ตรวจใบเสร็จ", () => {
+    const base = build({ today: "2026-09-28" });
+    expect(base.rows[0].action).toEqual({ text: "ตามรอบตัดบัตร", tone: "zinc" });
+    const reviewed = build({ today: "2026-09-28", reviews: [{ external_account_id: "111000111", verdict: "match", statement_amount: 150807.37, created_at: "2026-09-28T01:00:00Z", reviewer: "อาร์ต" }] });
+    expect(reviewed.rows.find((r) => r.connected).action).toEqual({ text: "ตรวจแล้ว", tone: "emerald" });
+    const off = build({ today: "2026-09-28", charges: [charge("999000999", "2026-09-10", 363.22, "F1")] });
+    expect(off.rows.find((r) => !r.connected).action).toEqual({ text: "เชื่อมบัญชีเข้าระบบ", tone: "rose" });
+    const over = build({ today: "2026-09-28", charges: [charge("111000111", "2026-09-05", 100000, "C1"), charge("111000111", "2026-09-06", 150000, "C2")],   // เพดานถึง 6 ก.ย. = 100,010 → เกินแน่ 49,990
+      cards: [...base.rows.length ? [] : [], ...[
+        { brand_id: "b_jd", account_id: "111000111", campaign: "A", fact_date: "2026-09-05", metrics: { spend: 100000 } },
+        { brand_id: "b_jd", account_id: "111000111", campaign: "A", fact_date: "2026-09-06", metrics: { spend: 10 } },
+        { brand_id: "b_jd", account_id: "111000111", campaign: "A", fact_date: "2026-09-10", metrics: { spend: 10 } }]] });
+    expect(over.rows.find((r) => r.connected).action).toEqual({ text: "ตรวจใบเสร็จใน Billing hub", tone: "rose" });
+  });
+});
