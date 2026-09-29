@@ -27,7 +27,8 @@ import { loadPilotFacts } from "./useAdsData.js";
 import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
 import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
 import { ago, agoHours, creativeSourceRow, historyTimeline, lastClock, metaSourceRow, nextSyncAt, salesSourceRow, snapshotSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
-import { newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
+import { ALL_STEPS, newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
+import { LeaveGuard } from "./LeaveGuard.jsx";
 import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
 import { isSupabaseConfigured } from "../../../foundation/data/supabaseClient.js";
 import "./adsWorkspace.css";
@@ -270,7 +271,8 @@ export function SyncStatusView() {
     return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
   }, []);
   const syncable = metaAccounts.filter((row) => row.connectionId && row.connected);
-  const busy = Boolean(syncing) || reconciling || Boolean(salesBusy);
+  const [snapBusy, setSnapBusy] = useState(false);
+  const busy = Boolean(syncing) || reconciling || Boolean(salesBusy) || snapBusy;
 
   const reconcileNow = async () => {
     closeMenu();
@@ -411,26 +413,41 @@ export function SyncStatusView() {
       step("goals", out.goals.tone === "bad" ? "failed" : "done", out.goals.parts.join(" · "));
       results.push(out, { tone: out.goals.tone, parts: out.goals.parts });
     }
+    if (keys.includes("billing")) {
+      step("billing", "running", "กำลังเก็บยอดค้างทุกบัญชีแอดและรายการตัดบัตร");
+      const out = await runBilling();
+      step("billing", out.tone === "bad" ? "failed" : "done", out.text);
+      results.push({ tone: out.tone, parts: [`ยอดค้าง ${out.text}`] });
+    }
     const tone = results.some((item) => item.tone === "bad") ? "bad" : "ok";
     toast?.(`${tone === "bad" ? "ดึงเสร็จ แต่มีขั้นที่ไม่สำเร็จ" : "ดึงข้อมูลครบแล้ว"} · ${results.flatMap((item) => item.parts).join(" · ")}`, tone);
     reload();
     loadPilotFacts({ force: true });
   };
-  const syncAll = () => startRun(["facts", "creatives", "sales", "goals"], "all");
+  const syncAll = () => startRun(ALL_STEPS, "all");   // ชุดเดียวกับรอบอัตโนมัติ 09:00 (ดู ALL_STEPS)
+  /* กำลังดึงอยู่ = ห้ามเปลี่ยนหน้า (อาร์ต 29 ก.ย.) — นับทั้งงานที่วิ่งอยู่ และช่วงรอยต่อระหว่างขั้นของรอบที่ยังไม่จบ */
+  const locked = busy || Boolean(run && !runEnded(run));
   const syncNow = () => startRun(["facts", "creatives"], "ads");
   const syncSales = () => startRun(["sales", "goals"], "sales");
-  /* เก็บ snapshot บัญชีแอดเดี๋ยวนี้ (หน้า บิล & กระทบยอด) — ปกติ ads-cron ทำให้วันละครั้ง 09:00
-     ปุ่มนี้ไว้ตอนไม่อยากรอรอบ · โหลดสถานะใหม่หลังเสร็จเพื่อให้แถวในตารางอัปเดตทันที */
-  const snapshotNow = async () => {
+  /* ยอดค้างบัญชีแอด + รายการตัดบัตร (หน้าบิล) — ปกติ ads-cron ทำให้ทุกเช้า 09:00
+     ใช้ทั้งขั้นสุดท้ายของ "ดึงข้อมูลทั้งหมด" (29 ก.ย.: เดิมขาดขั้นนี้ ปุ่มจึงได้ข้อมูลไม่เท่ารอบ 9 โมง) และเมนูดึงยอดค้างเดี่ยวๆ */
+  const runBilling = async () => {
+    setSnapBusy(true);
     try {
       const { accounts, charges } = await apiClient.ads.snapshotAccounts();
-      // ปุ่มเดียวกันดึงรายการตัดบัตรจาก Meta ด้วย (29 ก.ย.) — บันทึกไม่สำเร็จต้องบอก ไม่เงียบ
-      if (charges && !charges.stored) toast?.(`เก็บยอดค้างบัญชีแอดแล้ว ${accounts} บัญชี · แต่รายการตัดบัตรบันทึกไม่สำเร็จ`, "bad");
-      else toast?.(`เก็บยอดค้างบัญชีแอดแล้ว ${accounts} บัญชี${charges ? ` · รายการตัดบัตร ${charges.rows} รายการ` : ""}`, "ok");
-      reload();
+      // บันทึกรายการตัดบัตรไม่สำเร็จต้องบอก ไม่เงียบ
+      if (charges && !charges.stored) return { tone: "bad", accounts, text: `${accounts} บัญชี · แต่รายการตัดบัตรบันทึกไม่สำเร็จ` };
+      return { tone: "ok", accounts, text: `${accounts} บัญชี${charges ? ` · รายการตัดบัตร ${charges.rows} รายการ` : ""}` };
     } catch (error) {
-      toast?.(adsErrorText(error, "เก็บยอดค้างบัญชีแอดไม่สำเร็จ"), "bad");
-    }
+      return { tone: "bad", accounts: null, text: adsErrorText(error, "เก็บยอดค้างบัญชีแอดไม่สำเร็จ") };
+    } finally { setSnapBusy(false); }
+  };
+  const snapshotNow = async () => {
+    closeMenu();
+    if (busy) return;
+    const out = await runBilling();
+    toast?.(out.accounts == null ? out.text : `เก็บยอดค้างบัญชีแอดแล้ว ${out.text}`, out.tone);
+    reload();
   };
 
   const progress = syncing ? syncing.phase === "plan" ? "กำลังวางแผนช่วงที่ต้องดึง…" : syncing.phase === "creatives" ? `กำลังดึง Creative ${syncing.done + 1}/${syncing.total} บัญชี…` : `กำลังดึงค่าแอด ${syncing.done}/${syncing.total} ช่วง…`
@@ -461,7 +478,7 @@ export function SyncStatusView() {
         <div><h1>สถานะ Sync</h1><p>ข้อมูลแต่ละแหล่งมาครบ สด และเชื่อถือได้ไหม</p></div>
         <div className="sy-head-actions">
           <button type="button" className="sy-btn" onClick={reload} disabled={anyLoading} aria-busy={anyLoading}><RefreshCw size={14} className={anyLoading ? "spin" : ""} aria-hidden="true" />{anyLoading ? "กำลังตรวจ…" : "ตรวจใหม่"}</button>
-          {canSync && <button type="button" className="sy-btn primary" onClick={syncAll} disabled={busy} aria-busy={busy} title="ค่าแอด Meta + Creative + ยอดขายทุกแบรนด์ ในคลิกเดียว"><Download size={14} aria-hidden="true" />ดึงข้อมูลทั้งหมด</button>}
+          {canSync && <button type="button" className="sy-btn primary" onClick={syncAll} disabled={busy} aria-busy={busy} title="ค่าแอด Meta + Creative + ยอดขาย + เป้า + ยอดค้างบัญชี — ชุดเดียวกับรอบอัตโนมัติ 09:00"><Download size={14} aria-hidden="true" />ดึงข้อมูลทั้งหมด</button>}
           {canSync && <details className="sy-menu" ref={menuRef}>
             <summary className="sy-btn" aria-label="งานอื่น"><span>งานอื่น</span><ChevronDown size={14} aria-hidden="true" /></summary>
             {/* จัดกลุ่ม + บอกใต้ชื่อว่าแต่ละอันทำอะไร — ชื่ออย่างเดียวแยกไม่ออกว่า "ตรวจการเชื่อมต่อ" ต่างจาก "สำรวจแหล่งข้อมูล" ยังไง */}
@@ -502,6 +519,8 @@ export function SyncStatusView() {
           <span>{progress ?? <>ข้อมูลล่าสุด {lastData ? `${lastClock(lastData, now)} (${ago(lastData, now)})` : "—"} · ดึงค่าแอดรอบถัดไป {nextClock(nextSyncAt(oldestMetaSync, now), now)}</>}</span>
         </div>
       </div>
+      {locked && <p className="sy-lock" role="status"><AlertTriangle size={16} aria-hidden="true" />กำลังดึงข้อมูล — อย่าเปลี่ยนหน้า รีเฟรช หรือปิดหน้านี้จนกว่าจะเสร็จ</p>}
+      <LeaveGuard active={locked} />
       <SyncTimeline rows={stepRows(run)} headline={runHeadline(run)} onHide={runEnded(run) ? () => setRun(null) : null} />
       {issues.length > 0 && <ul className="sy-issues" aria-label="เรื่องที่ควรดู">{issues.map((issue) => <li key={issue.key} className={issue.level}>
         <span className={`sy-level ${issue.level}`}>{LEVEL[issue.level]}</span>

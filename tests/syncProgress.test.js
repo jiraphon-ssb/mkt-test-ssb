@@ -79,3 +79,14 @@ describe("ขั้นเป้าในไทม์ไลน์", () => {
     expect(runHeadline(run)).toEqual({ state: "bad", text: "ดึงเสร็จ แต่ไม่สำเร็จ 1/4 ขั้น — เป้าเดือนนี้" });
   });
 });
+
+/* 29 ก.ย. — ปุ่ม "ดึงข้อมูลทั้งหมด" ต้องได้ข้อมูลเท่ารอบ 09:00: เดิมขาดยอดค้างบัญชี + รายการตัดบัตร (หน้าบิล) */
+import { ALL_STEPS } from "../src/modules/marketing/ads/syncProgress.js";
+describe("ขั้นของปุ่มดึงข้อมูลทั้งหมด = งานของรอบ 09:00", () => {
+  it("5 ขั้น: ค่าแอด → Creative → ยอดขาย → เป้า → ยอดค้าง + รายการตัดบัตร", () => {
+    expect(ALL_STEPS).toEqual(["facts", "creatives", "sales", "goals", "billing"]);
+    const rows = stepRows(newRun(ALL_STEPS));
+    expect(rows.at(-1)).toMatchObject({ label: "ยอดค้าง + รายการตัดบัตร", step: 5 });
+    expect(rows.at(-1).sub).toContain("หน้าบิล");
+  });
+});

@@ -10,6 +10,8 @@ const factArgs = [];
 /* ผลของ sales-sync รอบเดียวกันมีทั้งยอดขายและเป้า (ระบบขายพี่ทัช + ระบบ TMK) */
 let snapshotResult = { accounts: 8 };
 let salesSyncResult = { written: 42, jk: { written: 14, error: null }, goals: { written: 3, error: null }, jkGoals: { written: 2, error: null } };
+/* ประตูหน่วงยอดขาย — ใช้จำลองช่วง "กำลังดึงอยู่" (29 ก.ย. กันเปลี่ยนหน้าระหว่างดึง) */
+const gates = { sales: null, snapshotCalls: 0 };
 const deferred = (key) => new Promise((resolve, reject) => { pending[key] = { resolve, reject }; });
 vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   recentSyncs: () => deferred("syncRuns"), connections: () => deferred("connections"), reconciliations: () => deferred("recons"),
@@ -17,8 +19,8 @@ vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   businessFacts: (args) => { factArgs.push(args); return deferred("facts"); }, salesGoals: () => deferred("goals"),
   goalOverrides: () => deferred("goalOverrides"), oauthStatus: () => deferred("oauth"),
   accountSnapshots: () => deferred("snapshots"),
-  snapshotAccounts: async () => snapshotResult,
-  salesSync: async () => salesSyncResult,
+  snapshotAccounts: async () => { gates.snapshotCalls += 1; return snapshotResult; },
+  salesSync: async () => { if (gates.sales) await gates.sales.promise; return salesSyncResult; },
 } } }));
 const auth = { demo: false, user: { role: "team_lead" } };
 vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => auth }));
@@ -329,5 +331,48 @@ describe("SyncStatusView — โหลดพังทั้งหน้า", () 
     const jk = screen.getByText("ยอดขาย JUNTAKARN").closest('[role="row"]');
     expect(within(jk).getByText("โหลดสถานะไม่สำเร็จ")).toBeTruthy();
     expect(jk.textContent).not.toMatch(/รอเชื่อมแหล่งข้อมูล|ยังไม่เคยดึง/);
+  });
+});
+
+
+/* 29 ก.ย. — อาร์ต: "กดดึงทั้งหมดต้องมาทั้งหมด (เท่ารอบ 9 โมง)" + "ระหว่างดึงห้ามเปลี่ยนหน้า / ต้องมีเตือน" */
+describe("SyncStatusView — ดึงข้อมูลทั้งหมด = ชุดเดียวกับรอบ 09:00 + กันเปลี่ยนหน้าระหว่างดึง", () => {
+  const settleAll = async () => {
+    await settle("syncRuns", []); await settle("connections", []); await settle("recons", []);
+    await settle("coverage", []); await settle("ticks", []); await settle("pipes", []);
+    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] });
+    await settle("snapshots", []);
+  };
+  beforeEach(() => { gates.snapshotCalls = 0; });   // เทสกลุ่มอื่นก็กดดึงยอดค้าง — นับใหม่ทุกข้อ
+  afterEach(() => { gates.sales = null; snapshotResult = { accounts: 8 }; });
+  /* ขั้นค่าแอดของรอบที่กดโหลดบัญชี + ช่วงที่เคยดึงใหม่ (ไม่มีช่วงให้ดึง = ผ่านไปขั้นถัดไป) */
+  const runLoads = async () => { await settle("connections", []); await settle("coverage", []); };
+
+  it("มีขั้น 'ยอดค้าง + รายการตัดบัตร' (หน้าบิล) · เรียกดึงยอดค้างจริง · บอกจำนวนบัญชีและรายการ", async () => {
+    snapshotResult = { accounts: 8, charges: { rows: 12, failedAccounts: 0, stored: true } };
+    show();
+    await settleAll();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /ดึงข้อมูลทั้งหมด/ })); });
+    await runLoads();
+    const timeline = screen.getByLabelText("ความคืบหน้าการดึงข้อมูล");
+    expect(within(timeline).getByText("ยอดค้าง + รายการตัดบัตร")).toBeTruthy();
+    expect(within(timeline).getByText(/8 บัญชี · รายการตัดบัตร 12 รายการ/)).toBeTruthy();
+    expect(gates.snapshotCalls).toBe(1);
+  });
+  it("ระหว่างดึง: แถบเตือนห้ามเปลี่ยนหน้า + รีเฟรช/ปิดแท็บต้องถาม · ดึงเสร็จ = หายทั้งคู่", async () => {
+    let open; gates.sales = { promise: new Promise((resolve) => { open = resolve; }) };
+    show();
+    await settleAll();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /ดึงข้อมูลทั้งหมด/ })); });
+    expect(screen.getByText(/อย่าเปลี่ยนหน้า รีเฟรช หรือปิดหน้านี้จนกว่าจะเสร็จ/)).toBeTruthy();
+    await runLoads();
+    const during = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(during);
+    expect(during.defaultPrevented).toBe(true);
+    await act(async () => { open(); });
+    expect(screen.queryByText(/อย่าเปลี่ยนหน้า รีเฟรช หรือปิดหน้านี้จนกว่าจะเสร็จ/)).toBeNull();
+    const after = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(after);
+    expect(after.defaultPrevented).toBe(false);
   });
 });

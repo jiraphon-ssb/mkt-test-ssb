@@ -6,13 +6,18 @@ export const STEP_LABEL = {
   creatives: "Creative Meta",
   sales: "ยอดขายทุกแบรนด์",
   goals: "เป้าเดือนนี้",
+  billing: "ยอดค้าง + รายการตัดบัตร",
 };
 export const STEP_SUB = {
   facts: "เติมช่วงวันที่ขาด + 3 วันล่าสุด",
   creatives: "รูปและข้อความโฆษณาของบัญชีที่ดึงสำเร็จ",
   sales: "ระบบขายพี่ทัช (TD · JD · TA) และระบบ TMK (JUNTAKARN)",
   goals: "เป้ายอด · งบแอด · เพดาน จากหน้าเป้าหมายของระบบขายและระบบ TMK",
+  billing: "ยอดค้างทุกบัญชีแอด + รายการที่ Meta ตัดบัตร (หน้าบิล)",
 };
+/* ปุ่ม "ดึงข้อมูลทั้งหมด" = งานดึงข้อมูลชุดเดียวกับรอบอัตโนมัติ 09:00 (ads-cron) — เพิ่มแหล่งใหม่ต้องเพิ่มทั้งสองที่
+   (ตรวจยอดกับ Meta / สำรวจแหล่งระบบขาย เป็นงานตรวจ ไม่ได้ดึงข้อมูลใหม่ — อยู่ในเมนูงานอื่น) */
+export const ALL_STEPS = ["facts", "creatives", "sales", "goals", "billing"];
 const STATE_LABEL = { waiting: "รอคิว", running: "กำลังทำ", done: "เสร็จ", failed: "ไม่สำเร็จ", skipped: "ข้าม" };
 const ENDED = ["done", "failed", "skipped"];
 const TONE = { waiting: "muted", running: "run", done: "ok", failed: "bad", skipped: "muted" };

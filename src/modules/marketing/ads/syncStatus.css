@@ -232,3 +232,7 @@
 .sy-inventory li small { color:var(--ink-soft); font-size:11px; line-height:1.5; }
 .sy-sales-tab .sy-sub { margin:22px 0 10px; font-size:13px; }
 .sy-sales-tab .sy-sub:first-of-type { margin-top:0; }
+
+/* ระหว่างดึงข้อมูล: เตือนห้ามเปลี่ยนหน้า (29 ก.ย.) — คู่กับ LeaveGuard ที่ดักคลิกลิงก์/รีเฟรช */
+.sy-lock { display:flex; align-items:center; gap:9px; margin:10px 0 0; padding:10px 14px; border:1px solid var(--warn-line,color-mix(in srgb,var(--warn) 45%,var(--line))); border-radius:10px; background:var(--warn-soft,color-mix(in srgb,var(--warn) 9%,transparent)); color:var(--warn-text); font-size:13px; font-weight:650; }
+.sy-lock > svg { flex:none; }
