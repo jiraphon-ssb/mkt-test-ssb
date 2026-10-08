@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 /* แถบที่มาของตัวเลข — สามชั้น: สรุป → ป้ายความสดรายแหล่ง → ที่มาของตัวเลข (พับไว้)
    ตัวสลับ "ของจริง / ตัวอย่าง" ถอดออกแล้ว เหลือป้ายเฉพาะโหมดเดโม */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AdsSourceControl, AdsSourceNotice } from "../src/modules/marketing/ads/AdsSourceControl.jsx";
 
-afterEach(cleanup);
+/* ชิป "เป้าเดือนนี้" เทียบเป้ากับเดือนปัจจุบันจากนาฬิกาเครื่อง — fixture ตั้งเป้าไว้เดือน ก.ย. 69
+   ถ้าไม่ตรึงเวลา เทสจะเขียววันนี้แล้วแดงเองเมื่อขึ้นเดือนใหม่ (เกิดขึ้นจริงตอนขึ้น ต.ค. 69)
+   เลือก 21 ก.ย. เพราะเป็นฉากที่เทสชุดนี้เขียนไว้เอง (ข้อมูลถึง 18 ก.ย. = เริ่มเก่าพอให้แถบขึ้น)
+   toFake: ["Date"] = ตรึงเฉพาะวันที่ ไม่แตะ timer ของ React/testing-library */
+beforeEach(() => { vi.useFakeTimers({ now: new Date("2026-09-21T10:00:00Z"), toFake: ["Date"] }); });
+afterEach(() => { vi.useRealTimers(); cleanup(); });
 const summary = { accounts: 4, from: "2026-06-18", to: "2026-09-18", lastSuccessAt: "2026-09-18T05:07:00Z", provisionalToday: true, empty: false };
 const ads = (patch = {}) => ({
   source: "meta_pilot", reload: () => {},

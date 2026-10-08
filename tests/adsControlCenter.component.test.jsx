@@ -6,6 +6,20 @@ import { MemoryRouter } from "react-router-dom";
 
 const auth = { demo: true, user: { role: "team_lead" } };
 vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => auth }));
+/* เครื่องนี้มี .env จริง → ถ้าไม่ mock หน้าตั้งค่าจะยิง Edge Function จริงตอนเทส
+   (ค้างจนหมดเวลา และผลเทสขึ้นกับเน็ต) — ตัดออกให้เทสเป็นของมันเองล้วนๆ */
+const oauthState = { authorizations: [], accounts: [], teamAccounts: [], isLead: true };
+vi.mock("../src/foundation/data/apiClient.js", () => ({
+  apiClient: {
+    ads: {
+      oauthStatus: async () => oauthState,
+      startOAuth: async () => "https://example.test/authorize",
+      disconnectOAuth: async () => ({ disconnected: true }),
+      connections: async () => [],
+      reconciliations: async () => [],
+    },
+  },
+}));
 const { AdsControlCenter } = await import("../src/modules/marketing/ads/AdsControlCenter.jsx");
 
 afterEach(() => { cleanup(); auth.user = { role: "team_lead" }; });
@@ -161,4 +175,33 @@ it("คำในแท็บบัญชีเป็นภาษาคนใช�
   expect(screen.getByRole("checkbox", { name: "ดึงข้อมูลบัญชีนี้" })).toBeTruthy();
   expect(text).not.toMatch(/เตรียมดึง|OAuth|Mapping|Spend ·/);
   expect(text).toContain("ค่าแอด · การแสดงผล · คนทัก");
+});
+
+/* 8 ต.ค. 69: เปิดเชื่อม Google Ads จริง — เดิมกล่อง OAuth ล็อกไว้ที่ Meta ตัวเดียว
+   ช่องทางอื่นขึ้นว่า "ยังไม่เปิดเชื่อมต่อแพลตฟอร์มนี้" ซึ่งไม่จริงแล้วสำหรับ Google */
+describe("AdsControlCenter — เชื่อมหลายช่องทาง", () => {
+  const open = () => render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} toast={() => {}} /></MemoryRouter>);
+
+  it("เลือก Google Ads แล้วมีปุ่มเชื่อมบัญชี ไม่ใช่ข้อความว่ายังไม่เปิด", async () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: /Google Ads/ }));
+    expect(await screen.findByRole("button", { name: /เชื่อมบัญชี/ })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/ยังไม่เปิดเชื่อมต่อแพลตฟอร์มนี้/);
+  });
+
+  it("ข้อความไม่พูดว่า Meta ตอนเลือก Google", async () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: /Google Ads/ }));
+    await screen.findByRole("button", { name: /เชื่อมบัญชี/ });
+    expect(document.querySelector(".acc-oauth").textContent).toContain("Google Ads");
+    expect(document.querySelector(".acc-oauth").textContent).not.toContain("Meta");
+  });
+
+  it("ChatGPT Ads ยังไม่มีปุ่มเชื่อม เพราะไม่มี API ให้ดึง — ต้องบอกว่าใช้การนำเข้าไฟล์", async () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: /ChatGPT Ads/ }));
+    await screen.findByText(/ยังไม่เปิดเชื่อมต่อแพลตฟอร์มนี้/);
+    expect(screen.queryByRole("button", { name: /เชื่อมบัญชี/ })).toBeNull();
+    expect(document.body.textContent).toMatch(/นำเข้าจากไฟล์/);
+  });
 });

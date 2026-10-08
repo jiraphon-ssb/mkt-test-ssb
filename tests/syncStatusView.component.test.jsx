@@ -19,6 +19,7 @@ vi.mock("../src/foundation/data/apiClient.js", () => ({ apiClient: { ads: {
   businessFacts: (args) => { factArgs.push(args); return deferred("facts"); }, salesGoals: () => deferred("goals"),
   goalOverrides: () => deferred("goalOverrides"), oauthStatus: () => deferred("oauth"),
   accountSnapshots: () => deferred("snapshots"),
+  importBatches: () => deferred("importBatches"),
   snapshotAccounts: async () => { gates.snapshotCalls += 1; return snapshotResult; },
   salesSync: async () => { if (gates.sales) await gates.sales.promise; return salesSyncResult; },
 } } }));
@@ -73,7 +74,7 @@ describe("SyncStatusView — โหลดเสร็จ", () => {
     await settle("pipes", [{ id: "s1", pipeline: "sales", status: "success", trigger_kind: "cron", started_at: "2026-09-17T02:07:00Z" }]);
     await settle("facts", []);
     await settleGoals([{ brand_id: "b_td", month: "2026-09-01", goal_source: "sale_goal", version: 2, sales_target: 1, ad_budget: 1, cpl: 1, roas: 1, pct_ads_new: 1, cac: 1, cpi: 1, inquiry_target: 1, leads_target: 1, deposits_target: 1, orders_target: 1 }]);
-    await settle("oauth", { authorizations: [{ id: "a1", status: "connected", expires_at: null, provider_user_name: "อาร์ต" }] }); await settle("snapshots", [{ external_account_id: "1", account_name: "JD1", account_status: 1, fetched_at: "2026-09-17T02:40:00Z" }]);
+    await settle("oauth", { authorizations: [{ id: "a1", status: "connected", expires_at: null, provider_user_name: "อาร์ต" }] }); await settle("snapshots", [{ external_account_id: "1", account_name: "JD1", account_status: 1, fetched_at: "2026-09-17T02:40:00Z" }]); await settle("importBatches", []);
 
     expect(screen.getByRole("status").textContent).toContain("ข้อมูลใช้ได้ · มี");
     const issues = screen.getByRole("list", { name: "เรื่องที่ควรดู" });
@@ -199,7 +200,7 @@ describe("SyncStatusView — ไทม์ไลน์มีขั้นเป้
   const settleAll = async () => {
     await settle("syncRuns", []); await settle("connections", []); await settle("recons", []);
     await settle("coverage", []); await settle("ticks", []); await settle("pipes", []);
-    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] });
+    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] }); await settle("importBatches", []);
   };
 
   it("ดึงยอดขายอย่างเดียว = 2 ขั้น (ยอดขาย · เป้า) พร้อมผลของแต่ละขั้น", async () => {
@@ -233,7 +234,7 @@ describe("SyncStatusView — ขั้นเป้าไม่โกหก", () 
   const settleAll = async () => {
     await settle("syncRuns", []); await settle("connections", []); await settle("recons", []);
     await settle("coverage", []); await settle("ticks", []); await settle("pipes", []);
-    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] });
+    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] }); await settle("importBatches", []);
   };
   const pullSales = async () => { await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /ดึงยอดขายเท่านั้น/ })); }); };
 
@@ -340,7 +341,7 @@ describe("SyncStatusView — ดึงข้อมูลทั้งหมด = 
   const settleAll = async () => {
     await settle("syncRuns", []); await settle("connections", []); await settle("recons", []);
     await settle("coverage", []); await settle("ticks", []); await settle("pipes", []);
-    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] });
+    await settle("facts", []); await settleGoals([], []); await settle("oauth", { authorizations: [] }); await settle("importBatches", []);
     await settle("snapshots", []);
   };
   beforeEach(() => { gates.snapshotCalls = 0; });   // เทสกลุ่มอื่นก็กดดึงยอดค้าง — นับใหม่ทุกข้อ
