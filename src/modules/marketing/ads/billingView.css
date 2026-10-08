@@ -16,6 +16,8 @@
 .bl-alert { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border:1px solid color-mix(in srgb,var(--bad) 45%,var(--line)); border-radius:10px; background:color-mix(in srgb,var(--bad) 8%,transparent); color:var(--bad-text); font-size:12.5px; }
 .mkt-root .bl-alert button { flex:none; min-height:34px; padding:6px 14px; border:1px solid color-mix(in srgb,var(--bad) 45%,var(--line)); border-radius:8px; background:var(--surface); color:var(--bad-text); font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
 .bl-notice { margin:0; padding:10px 14px; border:1px dashed var(--line); border-radius:10px; color:var(--ink-soft); font-size:12.5px; }
+/* ขอบเขตของหน้า — เส้นซ้ายสีเตือนให้สะดุดตาโดยไม่ตะโกนเท่า .bl-alert */
+.bl-scope { margin:4px 0 0; padding-left:8px; border-left:2px solid var(--warn); color:var(--ink-soft); font-size:12.5px; }
 
 /* 1) จ่ายไปเท่าไหร่ */
 .bl-sum { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }

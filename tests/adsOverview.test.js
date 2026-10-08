@@ -1042,3 +1042,18 @@ describe("สัดส่วนค่าแอดตามแบรนด์", (
     expect(s.rows).toEqual([]);
   });
 });
+
+/* 8 ต.ค.: ChatGPT ads เข้าระบบแล้ว — ถ้า normalizeAdPlatform ไม่รู้จักจะคืน null
+   แล้วค่าแอดก้อนนี้จะหายจากทุกหน้าที่แยกตามแพลตฟอร์ม (adChannelsByBrand ข้าม null ทิ้ง) */
+describe("normalizeAdPlatform — ChatGPT", () => {
+  it("รู้จักชื่อที่เป็นไปได้ของ ChatGPT ads", () => {
+    for (const raw of ["ChatGPT", "ChatGPT Ads", "OpenAI", "OpenAI Ads"]) {
+      expect(normalizeAdPlatform(raw)).toBe("ChatGPT Ads");
+    }
+  });
+  it("ของเดิมไม่เปลี่ยน", () => {
+    expect(normalizeAdPlatform("Meta Ads")).toBe("Meta Ads");
+    expect(normalizeAdPlatform("Google")).toBe("Google Ads");
+    expect(normalizeAdPlatform("ไม่รู้จัก")).toBe(null);
+  });
+});

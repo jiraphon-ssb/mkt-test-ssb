@@ -37,6 +37,15 @@ export const ADS_PROVIDERS = [
     leadEvents: ["orders"],
     doc: "https://open.shopee.com/",
   },
+  /* ChatGPT ads — OpenAI ยังไม่เปิด API ให้ดึงยอด (ที่มีคือ OAIQ pixel กับ Conversions API ซึ่งส่งข้อมูลเข้า ไม่ใช่ดึงออก)
+     ค่าแอดเข้าระบบทางการนำเข้าไฟล์เท่านั้น → metrics มีแค่ spend */
+  {
+    id: "openai", name: "ChatGPT Ads", color: "#10A37F", phase: 2,
+    accountPrefix: "", accountLabel: "Advertiser ID",
+    metrics: ["spend"],
+    leadEvents: [],
+    doc: "https://ads.openai.com",
+  },
 ];
 
 export const DEFAULT_SOURCE_CONFIG = {

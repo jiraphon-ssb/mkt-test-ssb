@@ -64,6 +64,7 @@ export function normalizeAdPlatform(raw) {
   if (["TikTok", "TikTok Ads"].includes(raw)) return "TikTok Ads";
   if (["Google", "Google Ads", "YouTube Ads"].includes(raw)) return "Google Ads";
   if (["Shopee", "Shopee Ads"].includes(raw)) return "Shopee Ads";
+  if (["ChatGPT", "ChatGPT Ads", "OpenAI", "OpenAI Ads"].includes(raw)) return "ChatGPT Ads";
   return null;
 }
 export function adPlatformOf(c) {

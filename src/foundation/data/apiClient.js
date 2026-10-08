@@ -2467,8 +2467,10 @@ const adsData = {
     const db = requireSupabase();
     const page = 1000;
     const query = (offset, opts = {}) => db.from("ad_daily_facts")
-      .select("connection_id,fact_date,level,campaign_id,campaign_name,ad_group_id,ad_group_name,ad_id,ad_name,spend,reach,impressions,clicks,link_clicks,leads,attributed_conversions,attributed_value,attribution_window", opts)
-      .eq("level", "ad").gte("fact_date", from).lte("fact_date", to)
+      .select("connection_id,fact_date,level,campaign_id,campaign_name,ad_group_id,ad_group_name,ad_id,ad_name,spend,reach,impressions,clicks,link_clicks,leads,attributed_conversions,attributed_value,attribution_window,import_batch_id", opts)
+      /* Meta เขียนเฉพาะ level='ad' · ค่าแอดที่นำเข้าจากไฟล์ (Google/ChatGPT) เขียน level='account'
+         → รับทั้งสองได้โดยไม่นับซ้ำ เพราะไม่มี provider ไหนเขียนทั้งสองระดับ */
+      .in("level", ["ad", "account"]).gte("fact_date", from).lte("fact_date", to)
       .order("fact_date").order("id").range(offset, offset + page - 1);
     const first = await query(0, { count: "exact" });
     if (first.error) throw first.error;
@@ -2529,6 +2531,37 @@ const adsData = {
     const { from, before } = chargeWindow(monthIso);
     const { data, error } = await db.from("ad_billing_charges").select("*")
       .gte("charge_date", from).lt("charge_date", before).order("charge_date");
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  /* ---- นำเข้าค่าแอดจากไฟล์ (Google Ads · ChatGPT ads) ----
+     เขียน ad_daily_facts ตรงไม่ได้ (grants ปิดไว้) — ทางเดียวคือ RPC ที่ตรวจ team_lead เอง */
+
+  /** บัญชีที่ป้อนข้อมูลด้วยไฟล์ ไม่ผ่าน OAuth — ทำเครื่องหมายไว้ที่ config.source เพื่อแยกจากบัญชีที่เชื่อมจริง */
+  async createFileConnection({ provider, brandId, accountId, accountName, currency = "THB", timezone = "Asia/Bangkok" }) {
+    const db = requireSupabase();
+    const { data, error } = await db.from("ad_connections").insert({
+      provider, brand_id: brandId, external_account_id: accountId,
+      account_name: accountName ?? "", currency, timezone,
+      status: "connected", config: { source: "file" },
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+  /** นำเข้าค่าแอด 1 ไฟล์ — upsert ด้วยคีย์เดิมของตาราง อัปซ้ำยอดไม่บวกซ้ำ */
+  async importFacts({ batch, rows }) {
+    const db = requireSupabase();
+    const { data, error } = await db.rpc("mkt_ads_import_facts", { p_batch: batch, p_rows: rows });
+    if (error) throw error;
+    return data;
+  },
+  /** ประวัติการนำเข้า — บอกว่าอัปล่าสุดเมื่อไร และใช้เตือนเมื่ออัปไฟล์เดิมซ้ำ */
+  async importBatches(connectionId = null) {
+    const db = requireSupabase();
+    let query = db.from("ad_import_batches").select("*").order("created_at", { ascending: false }).limit(50);
+    if (connectionId) query = query.eq("connection_id", connectionId);
+    const { data, error } = await query;
     if (error) throw error;
     return data ?? [];
   },

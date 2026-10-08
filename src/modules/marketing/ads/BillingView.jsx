@@ -10,7 +10,7 @@ import { useAuth } from "../../../foundation/auth/AuthContext.jsx";
 import { useAdsData } from "./useAdsData.js";
 import { apiClient } from "../../../foundation/data/apiClient.js";
 import { fmtNum } from "../dash/charts/theme.js";
-import { buildBillingModel, connectionsFromCards, reviewVerdict } from "./billingModel.js";
+import { buildBillingModel, connectionsFromCards, metaCardsOnly, reviewVerdict } from "./billingModel.js";
 import { billListCsv, billingHubUrl, buildBillList } from "./billList.js";
 import { BillSheet, ReceiptList } from "./BillReceipts.jsx";
 import { BrandMark } from "./BrandMark.jsx";
@@ -175,11 +175,13 @@ export function BillingView({ month: initialMonth }) {
   const spendState = ads.source !== "meta_pilot" ? "mock" : ads.pilot?.status === "ready" ? "ready" : ads.pilot?.status === "error" ? "error" : "loading";
   const spendKnown = spendState === "ready" && !outOfWindow;
   const today = isoToday();
+  /* เฉพาะ Meta — ค่าแอดช่องทางอื่นเข้าระบบทางไฟล์ ไม่มีรายการตัดบัตรให้กระทบยอดที่หน้านี้ */
+  const metaCards = useMemo(() => (spendKnown ? metaCardsOnly(ads.cards ?? []) : []), [ads.cards, spendKnown]);
   const model = useMemo(() => buildBillingModel({
-    month, cards: spendKnown ? ads.cards ?? [] : [], connections: connectionsFromCards(spendKnown ? ads.cards ?? [] : []),
+    month, cards: metaCards, connections: connectionsFromCards(metaCards),
     snapshots: remote.snapshots, reviews: remote.reviews, brands: data.brands ?? [], spendKnown,
     charges: remote.charges, today,
-  }), [month, ads.cards, remote, data.brands, spendKnown, today]);
+  }), [month, metaCards, remote, data.brands, spendKnown, today]);
   const allBills = useMemo(() => buildBillList({ month, charges: remote.charges, rows: model.rows, snapshots: remote.snapshots }),
     [month, remote.charges, remote.snapshots, model.rows]);
   /* ปุ่มกรอง = ทุกบัญชีของเดือน (แถวกระทบยอด + บัญชีที่มีบิล) — เดือนที่ยังไม่มีบิลก็ต้องเลือกบัญชีไปบันทึกผลตรวจได้ */
@@ -220,7 +222,13 @@ export function BillingView({ month: initialMonth }) {
   return <main className="aw bl">
     <section className="aw-toolbar" aria-label="เลือกรอบบิล">
       <header className="aw-header">
-        <div><h1>บิลค่าแอด</h1><p>ยอดที่ Meta ตัดบัตรจริง · ดึงใหม่ทุกเช้า {DAILY_RUN_LABEL}</p></div>
+        <div>
+          <h1>บิลค่าแอด</h1>
+          <p>ยอดที่ Meta ตัดบัตรจริง · ดึงใหม่ทุกเช้า {DAILY_RUN_LABEL}</p>
+          {/* ตั้งแต่มีค่าแอด Google/ChatGPT ในระบบ ต้องบอกว่าหน้านี้ไม่ได้รวม ไม่งั้นคนอ่านจะนึกว่าครบทั้งบัตร
+              เขียนเป็นภาษาคน ไม่พูดถึงวิธีที่ข้อมูลเข้าระบบ — กติกาเดิมของหน้านี้คือห้ามมีศัพท์ระบบ (billingView.component.test.jsx) */}
+          <p className="bl-scope">นับเฉพาะ <b>Meta</b> — ค่าแอด Google Ads และ ChatGPT Ads ไม่รวมอยู่ในหน้านี้</p>
+        </div>
         <div className="aw-header-actions">
           <div className="aw-presets bl-month" role="group" aria-label="เลือกรอบเดือน">
             <button type="button" aria-label="เดือนก่อนหน้า" onClick={() => setMonth((x) => shiftMonth(x, -1))}>‹</button>

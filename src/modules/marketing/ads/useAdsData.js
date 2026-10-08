@@ -36,7 +36,9 @@ export async function loadPilotFacts({ force = false } = {}) {
         apiClient.ads.salesGoals().catch(() => { goalsFailed = true; return []; }),                                                           // เป้าจากระบบขาย (เฟส 3) ยังไม่มีก็ใช้เป้าในหน้าตั้งค่า
         apiClient.ads.goalOverrides().catch(() => { goalsFailed = true; return []; }),                                                        // เป้าที่คนแก้เอง — อ่านไม่ได้ก็ยังใช้เป้าจากระบบขายได้
       ]);
-      publish({ status: "ready", facts, creatives, creativesFailed, salesFailed, goalsFailed, sales, salesGoals, goalOverrides, connections: (connections ?? []).filter((c) => c.provider === "meta"), error: null, loadedAt: new Date().toISOString() });
+      /* ส่ง connections ทุก provider — เดิมกรองเหลือ Meta ตรงนี้ ทำให้ค่าแอด Google/ChatGPT ถูกตัดทิ้งก่อนถึงหน้าจอ
+         จุดที่ต้องใช้เฉพาะ Meta (หน้าบิล & กระทบยอด) กรองเองที่ปลายทาง */
+      publish({ status: "ready", facts, creatives, creativesFailed, salesFailed, goalsFailed, sales, salesGoals, goalOverrides, connections: connections ?? [], error: null, loadedAt: new Date().toISOString() });
     } catch (error) {
       publish({ ...EMPTY, status: "error", error });
     } finally {

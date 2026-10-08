@@ -302,6 +302,13 @@ export function buildBillingModel({ month, cards = [], connections = [], snapsho
   return { month, rangeLabel, rows, totals, alerts, offSystemIdle, offSystemUnknown, pastMonth, current, bridge, billedShare };
 }
 
+/* หน้าบิลกระทบยอดกับการตัดบัตรของ Meta เท่านั้น (chargeMatch สร้างบนกติกาเพดานการตัดของ Meta)
+   ค่าแอด Google/ChatGPT เข้าระบบทางการนำเข้าไฟล์และไม่มีรายการตัดบัตรคู่กัน — ปล่อยเข้ามาแล้วจะขึ้นเป็นบัญชี
+   "นอกระบบ" ทั้งที่ไม่ผิด · การ์ดเก่าที่ไม่มีฟิลด์ source ถือว่าเป็น Meta (ก่อนมีหลาย provider มีแต่ Meta) */
+export function metaCardsOnly(cards = []) {
+  return cards.filter((cardRow) => (cardRow?.source ?? "meta") === "meta");
+}
+
 /** รายการบัญชีที่เชื่อม สกัดจาก cards (มี account_id + brand_id ติดมาแล้ว) — ไม่ต้องดึง ad_connections แยก */
 export function connectionsFromCards(cards = []) {
   const seen = new Map();

@@ -1,4 +1,4 @@
-import { metaResultLabel } from "./adsConnectorContract.js";
+import { ADS_PROVIDERS, metaResultLabel } from "./adsConnectorContract.js";
 
 /* ============================================================
    adsFacts — ยอดจริงจาก ad_daily_facts → "การ์ดแอด" รูปเดียวกับ mock (pure · มีเทส)
@@ -66,18 +66,26 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
     const spend = num(f.spend), leads = num(f.leads);
     const value = num(f.attributed_value);
     const campaign = f.campaign_name || f.campaign_id || null;
-    const resultEvent = connection.config?.leadEvent ?? "messaging_conversation_started_7d";
+    /* ชื่อแพลตฟอร์มต้องมาจาก provider ของ connection — เดิม hardcode Meta ทำให้ค่าแอด Google/ChatGPT
+       ถูกนับเป็นของ Meta ตอนแยกตามแพลตฟอร์ม · ผลลัพธ์แบบ Meta (messaging/lead) ไม่มีความหมายกับ provider อื่น */
+    const providerId = connection.provider ?? "meta";
+    const isMeta = providerId === "meta";
+    const platformName = ADS_PROVIDERS.find((p) => p.id === providerId)?.name ?? "Meta Ads";
+    const accountLevel = f.level === "account";
+    const resultEvent = isMeta ? (connection.config?.leadEvent ?? "messaging_conversation_started_7d") : null;
+    const resultLabel = isMeta ? metaResultLabel(resultEvent) : null;
     cards.push({
       id: `mf_${f.connection_id}_${f.fact_date}_${f.ad_id}`,
-      source: "meta",
-      ad_platform: "Meta Ads",
+      source: providerId,
+      ad_platform: platformName,
       track: "project",
       status: "measured",
       archived: true,
       brand_id: connection.brand_id,
       owner_id: null,
       pillar: null,
-      title: `ads — ${campaign ?? "ไม่ระบุแคมเปญ"}`,
+      // แถวจากไฟล์เป็นยอดรวมทั้งบัญชี ไม่ใช่แคมเปญที่ลืมใส่ชื่อ — ต้องอ่านแล้วไม่เข้าใจผิด
+      title: accountLevel ? `ads — ${platformName} ทั้งบัญชี` : `ads — ${campaign ?? "ไม่ระบุแคมเปญ"}`,
       campaign,
       campaign_id: f.campaign_id ?? "",
       ad_group: f.ad_group_name || f.ad_group_id || null,
@@ -88,16 +96,16 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
       connection_id: connection.id,
       currency: connection.currency ?? "THB",
       result_event: resultEvent,
-      result_label: metaResultLabel(resultEvent),
+      result_label: resultLabel,
       fact_date: f.fact_date,
       provisional: f.fact_date === today,
       is_realtime: false,
       plan_confirmed: true,
-      brief: { channels: ["Meta Ads"], publish_at: null, format: null },
+      brief: { channels: [platformName], publish_at: null, format: null },
       metrics: {
         spend, impressions: num(f.impressions), reach: num(f.reach), clicks: num(f.clicks), link_clicks: num(f.link_clicks),
         leads, conversions: leads, orders: null, engagement: null,
-        result_event: resultEvent, result_label: metaResultLabel(resultEvent),
+        result_event: resultEvent, result_label: resultLabel,
         cpl: spend != null && leads > 0 ? spend / leads : null,
         // Meta ไม่ส่ง action_values ที่เป็นศูนย์ → บัญชีที่วัด purchase ได้ แถวที่ไม่มี = 0 · บัญชีที่ไม่เคยมี = ไม่รู้ (null)
         revenue: value ?? (tracksValue.has(f.connection_id) ? 0 : null),

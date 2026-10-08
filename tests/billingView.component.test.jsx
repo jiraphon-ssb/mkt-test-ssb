@@ -69,6 +69,17 @@ describe("1) จ่ายไปเท่าไหร่ + ปกติไหม"
     expect(screen.queryByText(/นำเข้า|Payment activity/)).toBeNull();
     expect(document.body.textContent).not.toMatch(/statement|snapshot|ads-cron/i);
   });
+  /* 8 ต.ค.: ค่าแอด Google/ChatGPT อยู่ในระบบแล้วแต่หน้านี้ไม่ได้รวม — ต้องเขียนไว้บนจอ
+     ไม่งั้นคนอ่านจะนึกว่ายอดนี้ครบทั้งบัตร ซึ่งเป็นต้นเหตุที่เสียเวลาไล่หาบิลที่หาไม่เจอมาแล้ว */
+  it("บอกบนจอว่านับเฉพาะ Meta และ Google/ChatGPT ไม่รวมอยู่ด้วย", async () => {
+    show();
+    await screen.findByRole("heading", { level: 1, name: "บิลค่าแอด" });
+    const scope = document.querySelector(".bl-scope");
+    expect(scope).toBeTruthy();
+    expect(scope.textContent).toMatch(/นับเฉพาะ\s*Meta/);
+    expect(scope.textContent).toContain("Google Ads");
+    expect(scope.textContent).toContain("ChatGPT Ads");
+  });
   it("มีรายการตัด: ยอดที่ Meta ตัด + จำนวนใบเสร็จ + VAT ภ.พ.36 จากยอดที่จ่าย · ไม่มีเรื่อง = ทุกอย่างปกติ", async () => {
     state.charges = [bill("111000111", "2026-09-05", 150807.37, "T1")];
     show();

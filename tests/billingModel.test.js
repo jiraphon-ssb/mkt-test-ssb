@@ -1,7 +1,7 @@
 /* โมเดลหน้า บิล & กระทบยอด (spec docs/superpowers/specs/2026-09-22-billing-recon.md)
    ตัวเลขเก็บดิบ (UI จัดรูป 2 ตำแหน่งไม่ปัด) · สถานะ exception-based · fixture ใช้เลขบัญชีสมมุติ */
 import { describe, expect, it } from "vitest";
-import { MATCH_PCT, MINOR_PCT, VAT_RATE, buildBillingModel, connectionsFromCards, reviewVerdict } from "../src/modules/marketing/ads/billingModel.js";
+import { MATCH_PCT, MINOR_PCT, VAT_RATE, buildBillingModel, connectionsFromCards, metaCardsOnly, reviewVerdict } from "../src/modules/marketing/ads/billingModel.js";
 
 const card = (account, campaign, day, spend) => ({
   brand_id: "b_jd", account_id: account, campaign, fact_date: `2026-09-${day}`,
@@ -391,5 +391,28 @@ describe("ควรทำ (คอลัมน์เดียวกับตา�
         { brand_id: "b_jd", account_id: "111000111", campaign: "A", fact_date: "2026-09-06", metrics: { spend: 10 } },
         { brand_id: "b_jd", account_id: "111000111", campaign: "A", fact_date: "2026-09-10", metrics: { spend: 10 } }]] });
     expect(over.rows.find((r) => r.connected).action).toEqual({ text: "ตรวจใบเสร็จใน Billing hub", tone: "rose" });
+  });
+});
+
+/* 8 ต.ค.: ค่าแอด Google / ChatGPT เข้าระบบแล้ว (นำเข้าจากไฟล์) แต่หน้านี้กระทบยอดกับการตัดบัตรของ Meta เท่านั้น
+   ถ้าปล่อยเข้ามา บัญชีของ 2 ช่องทางนั้นจะโผล่ในตารางโดยไม่มี snapshot และไม่มีรายการตัดบัตร → ติดป้ายว่าผิดปกติทั้งที่ไม่ผิด */
+describe("metaCardsOnly — ขอบเขตของหน้าบิล", () => {
+  const mixed = [
+    { source: "meta", account_id: "act_111", brand_id: "b_td", fact_date: "2026-09-01", metrics: { spend: 100 } },
+    { source: "google", account_id: "g-222", brand_id: "b_td", fact_date: "2026-09-01", metrics: { spend: 50 } },
+    { source: "openai", account_id: "o-333", brand_id: "b_td", fact_date: "2026-09-01", metrics: { spend: 25 } },
+  ];
+
+  it("เหลือเฉพาะการ์ดของ Meta", () => {
+    expect(metaCardsOnly(mixed).map((c) => c.account_id)).toEqual(["act_111"]);
+  });
+
+  it("บัญชีของ Google/ChatGPT ไม่กลายเป็นแถวในตารางกระทบยอด", () => {
+    expect(connectionsFromCards(metaCardsOnly(mixed)).map((c) => c.external_account_id)).toEqual(["111"]);
+  });
+
+  it("การ์ดที่ไม่มีฟิลด์ source (ข้อมูลเก่า) ยังนับเป็น Meta ไม่หายไปเงียบๆ", () => {
+    const legacy = [{ account_id: "act_999", brand_id: "b_jd", fact_date: "2026-09-01", metrics: { spend: 10 } }];
+    expect(metaCardsOnly(legacy)).toHaveLength(1);
   });
 });

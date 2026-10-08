@@ -8,7 +8,15 @@ describe("ads connector contract", () => {
     expect(metaResultLabel("unknown")).toBe("ผลลัพธ์จาก Meta");
   });
   it("defines every planned provider once", () => {
-    expect(ADS_PROVIDERS.map((provider) => provider.id)).toEqual(["meta", "google", "tiktok", "shopee"]);
+    expect(ADS_PROVIDERS.map((provider) => provider.id)).toEqual(["meta", "google", "tiktok", "shopee", "openai"]);
+  });
+  /* 8 ต.ค.: ChatGPT ads ไม่มี API ดึงยอด — ค่าแอดเข้าทางไฟล์อย่างเดียว
+     ถ้าวันหนึ่งมีคนใส่ metrics/leadEvents ให้ provider นี้ แปลว่าสมมติฐานเปลี่ยน ต้องกลับไปอ่าน spec ก่อน */
+  it("ChatGPT ads ประกาศว่ามีแค่ยอดเงิน ไม่มีผลลัพธ์", () => {
+    const openai = ADS_PROVIDERS.find((provider) => provider.id === "openai");
+    expect(openai.name).toBe("ChatGPT Ads");
+    expect(openai.metrics).toEqual(["spend"]);
+    expect(openai.leadEvents).toEqual([]);
   });
 
   it("requires Meta account prefix and locale", () => {

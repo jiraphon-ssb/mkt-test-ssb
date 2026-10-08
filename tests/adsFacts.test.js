@@ -109,3 +109,47 @@ describe("adsSourceAccess — ใครเห็นยอดจริง ใค�
     expect(adsSourceAccess({ demo: false, role: null, stored: "meta_pilot" })).toEqual({ source: "mock", canSwitch: false, canPreview: false });
   });
 });
+
+/* 8 ต.ค.: ค่าแอดจาก Google / ChatGPT เข้าระบบทางไฟล์ เป็นแถวระดับบัญชี (level='account')
+   เดิมการ์ดทุกใบติดป้าย Meta ตายตัว → ค่าแอดช่องทางอื่นถูกนับเป็นของ Meta ตอนแยกตามแพลตฟอร์ม */
+describe("factsToAdCards — หลาย provider", () => {
+  const c = (id, provider) => conn({ id, provider, external_account_id: `x_${id}`, brand_id: "teamdee" });
+  const accFact = (connId, date, spend) => fact({
+    connection_id: connId, fact_date: date, level: "account", spend,
+    campaign_id: "", campaign_name: "", ad_group_id: "", ad_group_name: "", ad_id: "", ad_name: "",
+    impressions: null, reach: null, clicks: null, link_clicks: null, leads: null,
+  });
+
+  it("แถวระดับบัญชีของ Google กลายเป็นการ์ดที่ติดป้าย Google Ads", () => {
+    const cards = factsToAdCards([accFact("c1", "2026-10-01", 1234.5)], [c("c1", "google")], { today: "2026-10-02" });
+    expect(cards).toHaveLength(1);
+    expect(cards[0].source).toBe("google");
+    expect(cards[0].ad_platform).toBe("Google Ads");
+    expect(cards[0].brief.channels).toEqual(["Google Ads"]);
+    expect(cards[0].metrics.spend).toBe(1234.5);
+  });
+
+  it("ChatGPT ads ติดป้าย ChatGPT Ads", () => {
+    const cards = factsToAdCards([accFact("c2", "2026-10-01", 600)], [c("c2", "openai")], { today: "2026-10-02" });
+    expect(cards[0].source).toBe("openai");
+    expect(cards[0].ad_platform).toBe("ChatGPT Ads");
+  });
+
+  it("แถวระดับบัญชีบอกบนหัวการ์ดว่าเป็นยอดทั้งบัญชี ไม่ใช่แคมเปญที่ไม่ระบุชื่อ", () => {
+    const [card] = factsToAdCards([accFact("c3", "2026-10-01", 10)], [c("c3", "google")], { today: "2026-10-02" });
+    expect(card.title).toBe("ads — Google Ads ทั้งบัญชี");
+  });
+
+  it("ผลลัพธ์แบบ Meta ไม่ไปติดกับ provider อื่น", () => {
+    const [card] = factsToAdCards([accFact("c4", "2026-10-01", 10)], [c("c4", "openai")], { today: "2026-10-02" });
+    expect(card.result_event).toBe(null);
+    expect(card.result_label).toBe(null);
+  });
+
+  it("Meta ยังเป็น Meta Ads เหมือนเดิม (ไม่ถอยหลัง)", () => {
+    const [card] = factsToAdCards([fact()], [conn()], { today: "2026-09-14" });
+    expect(card.source).toBe("meta");
+    expect(card.ad_platform).toBe("Meta Ads");
+    expect(card.result_label).toBe("การสนทนาผ่านข้อความที่เริ่มต้น");
+  });
+});
