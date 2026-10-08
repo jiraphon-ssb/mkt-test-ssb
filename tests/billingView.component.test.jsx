@@ -65,7 +65,7 @@ describe("1) จ่ายไปเท่าไหร่ + ปกติไหม"
     show();
     await screen.findByRole("heading", { level: 1, name: "บิลค่าแอด" });
     await waitFor(() => expect(paid()).toBe("—"));
-    expect(screen.getByText(/ยังไม่มีรายการตัดบัตร · ดึงทุกเช้า 09:00/)).toBeTruthy();
+    expect(screen.getByText(/ยังไม่มีรายการตัดบัตร · ดึงทุกเช้า 07:30/)).toBeTruthy();
     expect(screen.queryByText(/นำเข้า|Payment activity/)).toBeNull();
     expect(document.body.textContent).not.toMatch(/statement|snapshot|ads-cron/i);
   });

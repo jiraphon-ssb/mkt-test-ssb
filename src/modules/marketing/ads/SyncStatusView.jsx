@@ -492,7 +492,7 @@ export function SyncStatusView() {
         <div><h1>สถานะ Sync</h1><p>ข้อมูลแต่ละแหล่งมาครบ สด และเชื่อถือได้ไหม</p></div>
         <div className="sy-head-actions">
           <button type="button" className="sy-btn" onClick={reload} disabled={anyLoading} aria-busy={anyLoading}><RefreshCw size={14} className={anyLoading ? "spin" : ""} aria-hidden="true" />{anyLoading ? "กำลังตรวจ…" : "ตรวจใหม่"}</button>
-          {canSync && <button type="button" className="sy-btn primary" onClick={syncAll} disabled={busy} aria-busy={busy} title="ค่าแอด Meta + Creative + ยอดขาย + เป้า + ยอดค้างบัญชี — ชุดเดียวกับรอบอัตโนมัติ 09:00"><Download size={14} aria-hidden="true" />ดึงข้อมูลทั้งหมด</button>}
+          {canSync && <button type="button" className="sy-btn primary" onClick={syncAll} disabled={busy} aria-busy={busy} title={`ค่าแอด Meta + Creative + ยอดขาย + เป้า + ยอดค้างบัญชี — ชุดเดียวกับรอบอัตโนมัติ ${DAILY_RUN_LABEL}`}><Download size={14} aria-hidden="true" />ดึงข้อมูลทั้งหมด</button>}
           {canSync && <details className="sy-menu" ref={menuRef}>
             <summary className="sy-btn" aria-label="งานอื่น"><span>งานอื่น</span><ChevronDown size={14} aria-hidden="true" /></summary>
             {/* จัดกลุ่ม + บอกใต้ชื่อว่าแต่ละอันทำอะไร — ชื่ออย่างเดียวแยกไม่ออกว่า "ตรวจการเชื่อมต่อ" ต่างจาก "สำรวจแหล่งข้อมูล" ยังไง */}

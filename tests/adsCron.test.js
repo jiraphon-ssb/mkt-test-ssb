@@ -98,10 +98,11 @@ describe("planReconcileTargets — ตรวจยอดอัตโนมัต
   it("ข้อมูลครบ + สายพอ + วันนี้ยังไม่ได้ตรวจ = ตรวจ", () => {
     expect(target({ connections: [conn("c1")], runs: [run("c1")] })).toEqual(["c1"]);
   });
-  // 28 ก.ย.: รอบดึงย้ายเป็น 09:00 (แอดเปิด 07:00–07:30)
-  it("ก่อน 9 โมง = ยังไม่ตรวจ · 9 โมงเป็นต้นไป = ตรวจ (รอบดึงวันละครั้งอยู่ 09:00)", () => {
-    expect(target({ connections: [conn("c1")], runs: [run("c1")], hourOf: () => 8 })).toEqual([]);
-    expect(target({ connections: [conn("c1")], runs: [run("c1")], hourOf: () => 9 })).toEqual(["c1"]);
+  // 8 ต.ค.: รอบดึงย้ายเป็น 07:30 (ทุกแหล่งต้องเสร็จก่อน 08:30) — ประตูเวลาใช้ชั่วโมงของรอบแรก
+  it("ก่อนชั่วโมงของรอบเช้า = ยังไม่ตรวจ · ตั้งแต่ชั่วโมงนั้น = ตรวจ (รอบดึงวันละครั้งเริ่ม 07:30)", () => {
+    expect(target({ connections: [conn("c1")], runs: [run("c1")], hourOf: () => 6 })).toEqual([]);
+    expect(target({ connections: [conn("c1")], runs: [run("c1")], hourOf: () => 7 })).toEqual(["c1"]);
+    expect(target({ connections: [conn("c1")], runs: [run("c1")], hourOf: () => 8 })).toEqual(["c1"]);   // รอบเก็บตก 08:00–08:20
   });
   it("ตรวจไปแล้ววันนี้ = ไม่ตรวจซ้ำ · ของเมื่อวาน = ตรวจใหม่", () => {
     expect(target({ connections: [conn("c1")], runs: [run("c1"), recon("c1")] })).toEqual([]);
@@ -162,13 +163,14 @@ describe("planCreativeTargets — รีเฟรชรูป/ข้อควา
   });
 });
 
-describe("salesDue — ดึงยอดขายจริงวันละครั้ง 09:00", () => {
-  it("ตั้งแต่ 9 โมงและวันนี้ยังไม่ได้ดึง = ดึง", () => {
+describe("salesDue — ดึงยอดขายจริงวันละครั้ง รอบเช้า 07:30", () => {
+  it("ตั้งแต่ชั่วโมงของรอบเช้าและวันนี้ยังไม่ได้ดึง = ดึง", () => {
     expect(salesDue({ lastAt: "2026-09-15T23:00:00.000Z", now: NOW, hour: 17, today: "2026-09-16" })).toBe(true);
-    expect(salesDue({ lastAt: null, now: NOW, hour: 9, today: "2026-09-16" })).toBe(true);
+    expect(salesDue({ lastAt: null, now: NOW, hour: 7, today: "2026-09-16" })).toBe(true);
+    expect(salesDue({ lastAt: null, now: NOW, hour: 8, today: "2026-09-16" })).toBe(true);   // รอบเก็บตก 08:00–08:20 ต้องดึงได้ ไม่งั้นพลาดเส้นตาย 08:30
   });
-  it("ก่อน 9 โมง = ยังไม่ดึง · ดึงไปแล้ววันนี้ = ไม่ดึงซ้ำ", () => {
-    expect(salesDue({ lastAt: null, now: NOW, hour: 8, today: "2026-09-16" })).toBe(false);
+  it("ก่อนชั่วโมงของรอบเช้า = ยังไม่ดึง · ดึงไปแล้ววันนี้ = ไม่ดึงซ้ำ", () => {
+    expect(salesDue({ lastAt: null, now: NOW, hour: 6, today: "2026-09-16" })).toBe(false);
     expect(salesDue({ lastAt: "2026-09-16T03:00:00.000Z", now: NOW, hour: 17, today: "2026-09-16" })).toBe(false);
   });
   it("ดึงไม่สำเร็จ = ลองใหม่ได้อีกครั้งเดียวในรอบเก็บตก ไม่ยิงระบบขายซ้ำหลายรอบ", () => {

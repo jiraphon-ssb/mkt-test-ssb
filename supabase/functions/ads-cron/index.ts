@@ -77,7 +77,8 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
   };
 
   const [connectionsResult, runsResult] = await Promise.all([
-    db.from("ad_connections").select("id,status,timezone,config,authorization_id,last_success_at").eq("provider", "meta"),
+    // บัญชีที่ป้อนข้อมูลด้วยไฟล์ (config.source = 'file') ไม่มี authorization จึงไม่อยู่ในชุดนี้ — กรองออกด้านล่าง
+    db.from("ad_connections").select("id,provider,status,timezone,config,authorization_id,last_success_at").in("provider", ["meta", "google"]),
     loadRuns(),
   ]);
   const loadError = connectionsResult.error ?? runsResult.error;
@@ -87,7 +88,10 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
     return json(request, { error: "CRON_LOAD_FAILED" }, 502);
   }
 
-  const connections = connectionsResult.data ?? [];
+  /* ดึงค่าแอดอัตโนมัติทุกช่องทางที่เชื่อมผ่าน API (เดิมเฉพาะ Meta — Google ที่เชื่อมแล้วจะไม่ถูกดึงรายวันเลย)
+     งานที่เป็นของ Meta โดยเฉพาะ (ตรวจยอด · ภาพครีเอทีฟ) ใช้ metaConnections */
+  const connections = (connectionsResult.data ?? []).filter((c) => (c.config as { source?: string } | null)?.source !== "file");
+  const metaConnections = connections.filter((c) => c.provider === "meta");
   const runs = runsResult.data ?? [];
   // ค่า "ดึงทุก X ชม." ในหน้าตั้งค่าเลิกใช้แล้ว (ค่าเก่าใน mkt_settings ยังอยู่แต่ไม่มีใครอ่าน) — บันทึก 24 ลงประวัติรอบ
   const syncEveryHours = 24;
@@ -137,14 +141,14 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
     if (stopped.has(job.connectionId)) continue;
     const result: JobResult = { ...job, ...(await call("ads-sync", job)) };
     sync.push(result);
-    if (!result.ok && ["META_TOKEN_INVALID", "AUTHORIZATION_NOT_READY", "CONNECTION_NOT_READY", "META_RATE_LIMIT"].includes(String(result.code))) {
+    if (!result.ok && ["META_TOKEN_INVALID", "TOKEN_EXPIRED", "AUTHORIZATION_NOT_READY", "CONNECTION_NOT_READY", "META_RATE_LIMIT", "QUOTA_EXCEEDED", "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION"].includes(String(result.code))) {
       stopped.add(job.connectionId);
     }
   }
 
   // ตรวจยอดหลังดึง: ใช้ประวัติ run ที่รวมผลของรอบนี้แล้ว ไม่งั้นบัญชีที่เพิ่งเติมช่องว่างครบจะถูกมองว่ายังขาด
   const { data: freshRuns } = await loadRuns();
-  const targets = planReconcileTargets({ connections, runs: freshRuns ?? runs, now, todayOf, hourOf, max: MAX_RECONCILE });
+  const targets = planReconcileTargets({ connections: metaConnections, runs: freshRuns ?? runs, now, todayOf, hourOf, max: MAX_RECONCILE });
   const reconcile: JobResult[] = [];
   for (const connectionId of targets) reconcile.push({ connectionId, ...(await call("ads-reconcile", { connectionId })) });
 
@@ -174,13 +178,13 @@ async function runTick(request: Request, db: ReturnType<typeof adminClient>, cra
      ขอบเขต: ยิงครั้งเดียวต่อรอบ ไม่ไล่ nextCursor ต่อ — ads-creatives เรียงตามค่าแอดอยู่แล้ว ครั้งเดียวจึงได้ตัวที่คนดูจริง
      บัญชีใหญ่ที่ไม่จบใน 90 วิ ส่วนที่เหลือยังต้องกดปุ่มรีเฟรชในหน้า Creative เอง */
   const refreshedAt: Record<string, string | null> = {};
-  for (const connection of connections) {
+  for (const connection of metaConnections) {
     const { data } = await db.from("ad_creatives").select("media_refreshed_at")
       .eq("connection_id", connection.id).not("media_refreshed_at", "is", null)
       .order("media_refreshed_at", { ascending: false }).limit(1).maybeSingle();
     refreshedAt[connection.id] = data?.media_refreshed_at ?? null;
   }
-  const creativeTargets = planCreativeTargets({ connections, refreshedAt, now, max: MAX_CREATIVE })
+  const creativeTargets = planCreativeTargets({ connections: metaConnections, refreshedAt, now, max: MAX_CREATIVE })
     .filter((connectionId) => !stopped.has(connectionId));
   const creatives: JobResult[] = [];
   for (const connectionId of creativeTargets) creatives.push({ connectionId, ...(await call("ads-creatives", { connectionId })) });

@@ -287,14 +287,21 @@ describe("20260923090000_ads_cron_daily — ตาราง pg_cron วันล
   });
 });
 
-/* 28 ก.ย.: อาร์ตย้ายรอบดึงเป็น 09:00 ไทย (แอดเปิด 07:00–07:30) — migration ล่าสุดต้องตรงกับ DAILY_CRON_EXPR */
-describe("20260928090000_ads_cron_9am — ย้ายรอบดึงเป็น 09:00", () => {
-  const sql = read("supabase/migrations/20260928090000_ads_cron_9am.sql");
-  it("ใช้นิพจน์เดียวกับ DAILY_CRON_EXPR · ถอด job เดิมก่อน · บอกวิธีย้อนกลับ", async () => {
-    const { DAILY_CRON_EXPR } = await import("../supabase/functions/_shared/dailySchedule.js");
-    expect(sql).toContain(`cron.schedule('ads-sync-tick', '${DAILY_CRON_EXPR}'`);
-    expect(sql.indexOf("cron.unschedule('ads-sync-tick')")).toBeLessThan(sql.indexOf("cron.schedule("));
+/* 8 ต.ค.: อาร์ตย้ายรอบดึงเป็น 07:30 ไทย (ทุกแหล่งต้องเสร็จก่อน 08:30 เพราะ 09:00 ส่งรายงาน)
+   migration ล่าสุดของตารางเวลาต้องตรงกับ DAILY_CRON_EXPRS — เดิม (28 ก.ย.) เป็น 09:00 job เดียว */
+describe("20261008160000_ads_cron_0730 — ย้ายรอบดึงเป็น 07:30", () => {
+  const sql = read("supabase/migrations/20261008160000_ads_cron_0730.sql");
+  it("ตั้ง job ครบทุกนิพจน์ของ DAILY_CRON_EXPRS · ถอด job เดิมก่อน · บอกวิธีย้อนกลับ", async () => {
+    const { DAILY_CRON_EXPRS } = await import("../supabase/functions/_shared/dailySchedule.js");
+    const scheduled = [...sql.matchAll(/^select cron\.schedule\('([a-z0-9-]+)', '([^']+)'/gm)].map((match) => match[2]);
+    expect(scheduled).toEqual(DAILY_CRON_EXPRS);
+    const firstSchedule = sql.search(/^select cron\.schedule\(/m);
+    expect(sql.search(/^select cron\.unschedule\('ads-sync-tick'\)/m)).toBeLessThan(firstSchedule);
     expect(sql).toMatch(/ย้อนกลับ/);
+  });
+  it("ไม่เหลือ job ของรอบ 09:00 เดิมค้างไว้ยิงซ้ำ", () => {
+    const jobs = [...sql.matchAll(/^select cron\.schedule\('([a-z0-9-]+)'/gm)].map((match) => match[1]);
+    for (const job of jobs) expect(sql).toMatch(new RegExp(`^select cron\\.unschedule\\('${job}'\\)`, "m"));
   });
 });
 

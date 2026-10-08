@@ -201,7 +201,7 @@ describe("CreativeLibraryView — สูตรและที่มา", () => {
     expect(document.querySelector(".cl-formats .aw-key")).toBeNull();
     const notes = screen.getByText("สูตรและที่มา").closest("details");
     expect(notes.open).toBe(false);
-    expect(notes.textContent).toMatch(/CTR ลิงก์.*ROAS.*รูปแบบมาจาก Meta.*09:00/s);
+    expect(notes.textContent).toMatch(/CTR ลิงก์.*ROAS.*รูปแบบมาจาก Meta.*07:30/s);
   });
 });
 

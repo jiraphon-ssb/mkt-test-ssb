@@ -107,3 +107,12 @@
 ## ขอบเขตรุ่นแรก
 
 รุ่นแรกเปิด Meta Ads เพียง provider เดียว ใช้ข้อมูลจำลองสำหรับ provider อื่น และยังไม่เปิดการแก้ campaign หรือ budget ที่บัญชีจริง หน้าเว็บอ่านอย่างเดียวจนกว่าจะมี audit log, permission และขั้นยืนยันคำสั่งครบ
+
+## ข้อตกลงกับ SSB PLATFORM (8 ต.ค. 2569)
+
+ท่อ `ads-sync` ฝั่ง platform อ่าน `ad_daily_facts` ตรง (ต้องใช้ชื่อบัญชีแอดรายบัญชี) โดยกรอง `level in ('ad','account')`
+และกันนับซ้ำเอง: บัญชี×วันที่มีระดับ `account` ใช้ระดับนั้น
+
+- **ก่อนให้ provider ใดเขียนเฉพาะระดับ `campaign` หรือ `ad_group` ต้องแจ้งฝั่ง platform ก่อน** ไม่งั้นค่าแอดของ provider นั้นหายฝั่งเขาโดยไม่ error — มีเทสกันไว้ที่ `tests/adsLevelContract.test.js`
+- แมปแบรนด์ฝั่ง platform: `b_td` = TD · `b_jk` = JD (JK Design) · `b_ta` = TA · `b_jt` = JK (JUNTAKARN) — รหัส `JK` ฝั่งเขาคือ JUNTAKARN ไม่ใช่ `b_jk`
+- view `ad_spend_daily` ใช้กติกากันซ้ำเดียวกัน (account > campaign > ad_group > ad) สำหรับผู้ใช้ที่ไม่ต้องการรายบัญชี
