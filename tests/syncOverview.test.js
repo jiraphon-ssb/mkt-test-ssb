@@ -2,7 +2,7 @@
    กติกาหลัก: ระหว่างโหลดห้ามบอกว่า "ยังไม่มี/ยังไม่เชื่อม" (บั๊กบน production 17 ก.ย.) */
 import { describe, expect, it } from "vitest";
 import {
-  ago, agoHours, creativeSourceRow, historyTimeline, metaSourceRow, nextCronAt, nextSyncAt, salesSourceRow, syncIssues, syncVerdict, snapshotSourceRow,
+  ago, agoHours, creativeSourceRow, fileImportSourceRow, historyTimeline, metaSourceRow, nextCronAt, nextSyncAt, salesSourceRow, syncIssues, syncVerdict, snapshotSourceRow,
 } from "../src/modules/marketing/ads/syncOverview.js";
 
 const NOW = Date.parse("2026-09-17T03:00:00Z");   // 10:00 เวลาไทย
@@ -258,5 +258,47 @@ describe("หลังเที่ยงคืน", () => {
     expect(lastClock("2026-09-27T22:20:00Z", new Date("2026-09-28T03:00:00Z"))).toBe("05:20");            // 28 ก.ย. 05:20 น. ไทย · ตอนนี้ 10:00 น.
     expect(lastClock("2026-09-26T22:20:00Z", new Date("2026-09-27T17:40:00Z"))).toBe("27 ก.ย. 05:20");    // ตอนนี้ 28 ก.ย. 00:40 น.
     expect(lastClock(null, new Date())).toBe("—");
+  });
+});
+
+/* 8 ต.ค. 69: ค่าแอด ChatGPT เข้าระบบด้วยการอัปไฟล์ ไม่มี cron คอยดึงให้
+   แถวนี้จึงต้องบอกว่า "ค้างอัปมากี่วัน" ไม่งั้นข้อมูลขาดไปเงียบๆ โดยไม่มีใครรู้ */
+describe("fileImportSourceRow", () => {
+  const conn = { id: "c1", provider: "openai", account_name: "TEAMDEE ChatGPT", brand_name: "TEAMDEE" };
+  const batch = (day, cid = "c1") => ({ connection_id: cid, created_at: `${day}T03:00:00Z`, date_to: day, spend_total: 100 });
+  const NOW = Date.parse("2026-10-08T04:00:00Z");
+
+  it("ยังไม่มีบัญชีแบบไฟล์เลย = ไม่ต้องขึ้นแถวนี้", () => {
+    expect(fileImportSourceRow({ connections: [], batches: [], now: NOW })).toBe(null);
+  });
+
+  it("มีบัญชีแต่ยังไม่เคยอัป = รอข้อมูล ไม่ใช่ error", () => {
+    const row = fileImportSourceRow({ connections: [conn], batches: [], now: NOW });
+    expect(row.state).toBe("waiting");
+    expect(row.stateLabel).toMatch(/ยังไม่เคยนำเข้า/);
+  });
+
+  it("อัปเมื่อวาน = ปกติ", () => {
+    const row = fileImportSourceRow({ connections: [conn], batches: [batch("2026-10-07")], now: NOW });
+    expect(row.state).toBe("ok");
+  });
+
+  it("ค้างเกินเกณฑ์ = เตือนพร้อมบอกจำนวนวัน", () => {
+    const row = fileImportSourceRow({ connections: [conn], batches: [batch("2026-09-25")], now: NOW });
+    expect(row.state).toBe("warn");
+    expect(row.stateLabel).toMatch(/13 วัน/);
+  });
+
+  it("หลายบัญชี ถือเอาบัญชีที่ค้างนานสุดเป็นสถานะรวม", () => {
+    const row = fileImportSourceRow({
+      connections: [conn, { ...conn, id: "c2", account_name: "JK ChatGPT" }],
+      batches: [batch("2026-10-07", "c1"), batch("2026-09-20", "c2")], now: NOW,
+    });
+    expect(row.state).toBe("warn");
+    expect(row.sub).toBe("2 บัญชี");
+  });
+
+  it("ยังโหลดไม่เสร็จ = ห้ามสรุปว่ายังไม่เคยอัป (กติกาเดียวกับแถวอื่น)", () => {
+    expect(fileImportSourceRow({ connections: [conn], batches: [], ready: false, now: NOW }).state).toBe("loading");
   });
 });

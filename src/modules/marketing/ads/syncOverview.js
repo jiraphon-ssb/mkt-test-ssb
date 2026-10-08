@@ -65,6 +65,43 @@ export function metaSourceRow({ accounts = [], ready = true, now = Date.now() } 
   };
 }
 
+/* ค่าแอดที่เข้าระบบด้วยการอัปไฟล์ (ChatGPT ads) — ไม่มี cron ดึงให้ คนต้องอัปเอง
+   เกินกี่วันถึงเตือน: 7 วัน = หนึ่งรอบสัปดาห์ ถ้าเกินนี้แปลว่าลืม ไม่ใช่แค่ยังไม่ถึงรอบ */
+const FILE_STALE_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+/** คืน null เมื่อไม่มีบัญชีแบบไฟล์เลย — จะได้ไม่ขึ้นแถวเปล่าให้คนที่ไม่ได้ใช้ช่องทางนี้ */
+export function fileImportSourceRow({ connections = [], batches = [], ready = true, now = Date.now() } = {}) {
+  if (connections.length === 0) return null;
+  const base = { key: "fileimport", name: "ค่าแอดที่นำเข้าจากไฟล์", icon: "upload", sub: `${connections.length} บัญชี` };
+  if (!ready) return loadingRow(base);
+
+  const latestOf = (connectionId) => batches
+    .filter((batch) => batch.connection_id === connectionId)
+    .map((batch) => Date.parse(batch.created_at))
+    .filter(Number.isFinite).sort().at(-1) ?? null;
+
+  const times = connections.map((connection) => latestOf(connection.id));
+  const never = times.filter((time) => time === null).length;
+  const oldest = times.filter(Boolean).sort()[0] ?? null;
+  const newest = times.filter(Boolean).sort().at(-1) ?? null;
+  const staleDays = oldest ? Math.floor((now - oldest) / DAY_MS) : null;
+
+  if (never === connections.length) {
+    return { ...base, state: "waiting", stateLabel: "ยังไม่เคยนำเข้า",
+      hint: "อัปไฟล์จาก Ads Manager ที่การ์ดด้านล่าง", fresh: null, complete: null };
+  }
+  const stale = never > 0 || (staleDays != null && staleDays > FILE_STALE_DAYS);
+  return {
+    ...base,
+    state: stale ? "warn" : "ok",
+    stateLabel: never > 0 ? `ยังไม่เคยนำเข้า ${never} บัญชี` : stale ? `ค้างอัป ${staleDays} วัน` : "ปกติ",
+    hint: stale ? "อัปไฟล์รอบใหม่ที่การ์ดด้านล่าง" : null,
+    fresh: { text: newest ? ago(new Date(newest).toISOString(), now) : "ยังไม่เคยนำเข้า", sub: "คนอัปเอง · ไม่มีรอบดึงอัตโนมัติ" },
+    complete: { text: `นำเข้าแล้ว ${batches.length} ไฟล์`, sub: never > 0 ? `${never} บัญชียังไม่มีข้อมูล` : null },
+  };
+}
+
 /** ยอดขาย TD · JD · TA จากระบบขาย */
 export function salesSourceRow({ runs = [], facts = [], ready = true, today, now = Date.now() } = {}) {
   const base = { key: "sales", name: "ยอดขาย TD · JD · TA", sub: "ระบบขาย", icon: "sales" };

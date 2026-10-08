@@ -18,12 +18,15 @@ import { CreativeRulesEditor } from "../creatives/CreativeRulesEditor.jsx";
 import { GoalSettingsPanel } from "./GoalSettingsPanel.jsx";
 import { incompleteRules, normalizeCreativeRules, ruleTitle } from "../creatives/creativeRules.js";
 
+/* ช่องทางที่เปิดใช้จริงแล้ว — Google เปิด 8 ต.ค. 69 หลังต่อ Google Ads API ได้ */
+const READY_SOURCES = new Set(["meta", "google"]);
 const SOURCE_DETAILS = {
   /* ภาษาคนใช้ ไม่ใช่ชื่อ field ของ API (ตรวจรอบ 28 ก.ย.) */
   meta: "ค่าแอด · การแสดงผล · คนทัก",
   google: "ค่าแอด · คนเข้าเว็บ · คอนเวอร์ชัน",
   tiktok: "ค่าแอด · วิดีโอ · Lead",
   shopee: "ค่าแอด · ออเดอร์ · ยอดขาย",
+  openai: "ค่าแอด (นำเข้าจากไฟล์)",
 };
 
 /* ดึงวันละครั้ง 09:00 — ต่ำกว่า 26/50 ชม. ไม่มีผล (adsDataHealth ยกเป็นขั้นต่ำ) */
@@ -38,9 +41,13 @@ function SourceCard({ source, active, onSelect }) {
   return <button type="button" className={`acc-source ${active ? "active" : ""}`} onClick={onSelect}>
     <span className="acc-source-mark" style={{ background: source.color }}><Database size={17} /></span>
     <span><strong>{source.name}</strong><small>{SOURCE_DETAILS[source.id]}</small></span>
-    <span className={`acc-state ${source.id === "meta" ? "ready" : ""}`}>{source.id === "meta" ? "เริ่มที่นี่" : "ลำดับถัดไป"}</span>
+    <span className={`acc-state ${READY_SOURCES.has(source.id) ? "ready" : ""}`}>{READY_SOURCES.has(source.id) ? "เชื่อมได้แล้ว" : "ลำดับถัดไป"}</span>
   </button>;
 }
+
+/* ช่องทางที่เชื่อมด้วย OAuth ได้จริงแล้ว — ChatGPT ads ไม่มี API ให้ดึง จึงไม่อยู่ในชุดนี้ (ใช้การนำเข้าไฟล์แทน) */
+const OAUTH_PROVIDERS = new Set(["meta", "google"]);
+const PROVIDER_NAME = Object.fromEntries(ADS_PROVIDERS.map((item) => [item.id, item.name]));
 
 function Connections({ brands, config, setConfig, toast, isLead }) {
   const [sourceId, setSourceId] = useState("meta");
@@ -56,32 +63,33 @@ function Connections({ brands, config, setConfig, toast, isLead }) {
     mappings: { ...current.mappings, [sourceId]: { ...mappings, [brandId]: { ...mappings[brandId], ...patch } } },
   }));
 
-  const loadOAuth = async () => {
+  /* โหลดสถานะของ provider ที่เลือกอยู่ — เดิมล็อกไว้ที่ meta ตายตัว พอเพิ่ม Google แล้วจะอ่านสถานะผิดบัญชี */
+  const loadOAuth = async (provider = sourceId) => {
     setOauth((current) => ({ ...current, loading: true, error: null }));
     try {
-      const result = await apiClient.ads.oauthStatus("meta");
+      const result = await apiClient.ads.oauthStatus(provider);
       setOauth({ loading: false, authorizations: result.authorizations, accounts: result.accounts, teamAccounts: result.teamAccounts, error: null });
     } catch (error) {
-      setOauth({ loading: false, authorizations: [], accounts: [], teamAccounts: [], error: adsErrorText(error, "ตรวจสถานะการเชื่อม Meta ไม่สำเร็จ") });
+      setOauth({ loading: false, authorizations: [], accounts: [], teamAccounts: [], error: adsErrorText(error, `ตรวจสถานะการเชื่อม ${PROVIDER_NAME[provider] ?? provider} ไม่สำเร็จ`) });
     }
   };
-  useEffect(() => { loadOAuth(); }, []);
-  const connectMeta = async () => {
+  useEffect(() => { if (OAUTH_PROVIDERS.has(sourceId)) loadOAuth(sourceId); }, [sourceId]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const connectProvider = async () => {
     try {
       const returnTo = `${window.location.pathname}?panel=settings&tab=sources`;
-      window.location.assign(await apiClient.ads.startOAuth("meta", returnTo));
-    } catch (error) { toast?.(adsErrorText(error, "เริ่มเชื่อม Meta ไม่สำเร็จ"), "bad"); }
+      window.location.assign(await apiClient.ads.startOAuth(sourceId, returnTo));
+    } catch (error) { toast?.(adsErrorText(error, `เริ่มเชื่อม ${source.name} ไม่สำเร็จ`), "bad"); }
   };
   const disconnectMeta = async () => {
     const authorization = oauth.authorizations[0];
     if (!authorization) return;
     try {
       await apiClient.ads.disconnectOAuth(authorization.id, true);
-      await loadOAuth();
-      toast?.("ยกเลิกการเชื่อมต่อ Meta แล้ว", "ok");
+      await loadOAuth(sourceId);
+      toast?.(`ยกเลิกการเชื่อมต่อ ${source.name} แล้ว`, "ok");
     } catch (error) { toast?.(adsErrorText(error, "ยกเลิกการเชื่อมต่อไม่สำเร็จ"), "bad"); }
   };
-  const metaConnected = oauth.authorizations.some((item) => item.status === "connected");
+  const providerConnected = oauth.authorizations.some((item) => item.status === "connected");
   /* team_lead ผูกบัญชีที่สมาชิกคนไหนเชื่อมไว้ก็ได้ · สมาชิกเห็นเฉพาะบัญชีจาก Meta ของตัวเอง */
   const mappable = isLead ? oauth.teamAccounts : oauth.accounts;
   const accountById = new Map(mappable.map((account) => [account.external_account_id, account]));
@@ -92,14 +100,14 @@ function Connections({ brands, config, setConfig, toast, isLead }) {
     </section>
     <section className="acc-sheet">
       <header className="acc-sheet-head"><div><span className="acc-kicker">บัญชีและแบรนด์</span><h2>{source.name}</h2><p>ใส่บัญชีและจับคู่กับแบรนด์ให้ถูกต้อง</p></div><a href={source.doc} target="_blank" rel="noreferrer">เอกสาร API <ExternalLink size={14} /></a></header>
-      {sourceId === "meta" ? <div className={`acc-oauth ${metaConnected ? "connected" : ""}`}>
+      {OAUTH_PROVIDERS.has(sourceId) ? <div className={`acc-oauth ${providerConnected ? "connected" : ""}`}>
         <span className="acc-oauth-icon">{oauth.loading ? <LoaderCircle className="spin" size={18} /> : <Link2 size={18} />}</span>
-        <span className="acc-oauth-copy"><strong>{oauth.loading ? "กำลังตรวจสถานะ…" : metaConnected ? "เชื่อม Meta Ads แล้ว" : "เชื่อม Meta Ads แบบอ่านอย่างเดียว"}</strong><small>{oauth.error ? oauth.error : metaConnected ? `Meta ของคุณเข้าถึง ${oauth.accounts.length} บัญชี · สิทธิ์ ads_read${isLead ? ` · บัญชีจากทั้งทีม ${oauth.teamAccounts.length}` : ""}` : isLead && oauth.teamAccounts.length ? `สมาชิกเชื่อมไว้แล้ว ${oauth.teamAccounts.length} บัญชี · เชื่อม Meta ของคุณเพิ่มได้` : "สมาชิกทีมทุกคนเชื่อม Meta ของตัวเองได้ · ระบบอ่านรายงานได้อย่างเดียว แก้โฆษณาหรืองบไม่ได้"}</small></span>
-        {!oauth.loading && (metaConnected
+        <span className="acc-oauth-copy"><strong>{oauth.loading ? "กำลังตรวจสถานะ…" : providerConnected ? `เชื่อม ${source.name} แล้ว` : `เชื่อม ${source.name} แบบอ่านอย่างเดียว`}</strong><small>{oauth.error ? oauth.error : providerConnected ? `เข้าถึง ${oauth.accounts.length} บัญชี · อ่านรายงานอย่างเดียว${isLead && oauth.teamAccounts.length ? ` · บัญชีจากทั้งทีม ${oauth.teamAccounts.length}` : ""}` : isLead && oauth.teamAccounts.length ? `สมาชิกเชื่อมไว้แล้ว ${oauth.teamAccounts.length} บัญชี · เชื่อมของคุณเพิ่มได้` : `สมาชิกทีมทุกคนเชื่อม ${source.name} ของตัวเองได้ · ระบบอ่านรายงานได้อย่างเดียว แก้โฆษณาหรืองบไม่ได้`}</small></span>
+        {!oauth.loading && (providerConnected
           ? <button type="button" className="acc-oauth-disconnect" onClick={disconnectMeta}><LogOut size={14} /> ยกเลิก</button>
-          : <button type="button" className="acc-oauth-connect" onClick={connectMeta}><Link2 size={14} /> เชื่อมบัญชี</button>)}
+          : <button type="button" className="acc-oauth-connect" onClick={connectProvider}><Link2 size={14} /> เชื่อมบัญชี</button>)}
       </div> : <div className="acc-callout"><CircleAlert size={17} /><span>ยังไม่เปิดเชื่อมต่อแพลตฟอร์มนี้ · บันทึก mapping เตรียมไว้ได้</span></div>}
-      {sourceId === "meta" && !oauth.loading && needsPostScopeReconnect(oauth.authorizations) && <div className="acc-callout acc-callout--action" role="status"><CircleAlert size={17} /><span><b>เชื่อม Meta ใหม่อีกครั้งเพื่อแสดงภาพโฆษณาจริง</b> · โฆษณาแบบบูสต์โพสต์เพจต้องใช้สิทธิ์อ่านเพจ (อ่านอย่างเดียว) ตอนนี้การ์ดจึงเป็นรูปโปรไฟล์เพจ · ตอนเชื่อม ให้กดยืนยันสิทธิ์เพจทุกเพจที่ยิงแอด และยืนยัน Business ที่เป็นเจ้าของเพจด้วย (เพจใต้ Business Manager ไม่โผล่ถ้าไม่ยืนยัน)</span><button type="button" className="acc-oauth-connect" onClick={connectMeta}><Link2 size={14} /> เชื่อมใหม่</button></div>}
+      {sourceId === "meta" && !oauth.loading && needsPostScopeReconnect(oauth.authorizations) && <div className="acc-callout acc-callout--action" role="status"><CircleAlert size={17} /><span><b>เชื่อม Meta ใหม่อีกครั้งเพื่อแสดงภาพโฆษณาจริง</b> · โฆษณาแบบบูสต์โพสต์เพจต้องใช้สิทธิ์อ่านเพจ (อ่านอย่างเดียว) ตอนนี้การ์ดจึงเป็นรูปโปรไฟล์เพจ · ตอนเชื่อม ให้กดยืนยันสิทธิ์เพจทุกเพจที่ยิงแอด และยืนยัน Business ที่เป็นเจ้าของเพจด้วย (เพจใต้ Business Manager ไม่โผล่ถ้าไม่ยืนยัน)</span><button type="button" className="acc-oauth-connect" onClick={connectProvider}><Link2 size={14} /> เชื่อมใหม่</button></div>}
       <details className="acc-source-options"><summary>ตัวเลือกการดึงข้อมูล</summary><div className="acc-source-config">
         <div className="acc-source-fixed"><span>ดึงอัตโนมัติ</span><b>วันละครั้ง · {DAILY_RUN_LABEL}</b><small>เวลาไทย · กดดึงเองได้ที่หน้า Sync</small></div>
         <label><span>ย้อนหลัง</span><Dropdown className="dd--block" ariaLabel="ย้อนหลัง" options={[["30", "30 วัน"], ["90", "90 วัน"], ["180", "180 วัน"]]} value={String(sourceConfig.backfillDays)} onChange={(value) => updateSource({ backfillDays: Number(value) })} /></label>

@@ -441,3 +441,40 @@
 /* ช่วงเริ่มก่อนวันแรกที่มีค่าแอด — สไตล์อยู่ในไฟล์ของหน้านี้เอง (รีวิวโค้ด 28 ก.ย.: เดิมยืมคลาสของหน้าบิล
    ซึ่งโหลดแยก ถ้ายังไม่เคยเปิดหน้าบิล กล่องเตือนนี้ขึ้นเป็นย่อหน้าเปล่า) · เป็นคำเตือน (ข้อมูลไม่ครบ) ไม่ใช่ความผิดพลาด */
 .aw-partial-spend { margin:0 0 14px; padding:10px 14px; border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line)); border-radius:10px; background:color-mix(in srgb,var(--warn) 8%,transparent); color:var(--warn-text,var(--ink)); font-size:12.5px; line-height:1.5; }
+
+/* ---------- นำเข้าค่าแอดจากไฟล์ (8 ต.ค. 69) ---------- */
+.mkt-root .imp { border:1px solid var(--line); border-radius:12px; padding:14px 16px; display:grid; gap:12px; }
+.mkt-root .imp-head { display:flex; align-items:center; gap:8px; }
+.mkt-root .imp-head h3 { margin:0; font-size:var(--fs-md); }
+.mkt-root .imp-head small { margin-left:auto; color:var(--ink-soft); font-size:12px; }
+.mkt-root .imp-empty { margin:0; color:var(--ink-soft); font-size:13px; }
+.mkt-root .imp-pick { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; }
+.mkt-root .imp-field { display:grid; gap:4px; font-size:12.5px; color:var(--ink-soft); }
+.mkt-root .imp-file { position:relative; }
+.mkt-root .imp-file input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.mkt-root .imp-file span { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:13px; }
+.mkt-root .imp-file:hover span { border-color:var(--accent); }
+.mkt-root .imp-file input:focus-visible + span { outline:2px solid var(--accent); outline-offset:2px; }
+
+.mkt-root .imp-review { border:1px solid var(--line); border-radius:10px; padding:12px 14px; display:grid; gap:10px; background:var(--surface-2, transparent); }
+.mkt-root .imp-review h4 { margin:0; font-size:13px; }
+.mkt-root .imp-sum { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin:0; }
+.mkt-root .imp-sum dt { font-size:11.5px; color:var(--ink-soft); }
+.mkt-root .imp-sum dd { margin:0; font-size:14px; font-variant-numeric:tabular-nums; }
+.mkt-root .imp-total { font-weight:600; }
+.mkt-root .imp-note { margin:0; font-size:12px; color:var(--ink-soft); }
+.mkt-root .imp-warn { margin:0; display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--warn); }
+.mkt-root .imp-actions { display:flex; gap:8px; }
+.mkt-root .imp-confirm { border:0; border-radius:8px; padding:8px 14px; background:var(--accent); color:#fff; font-size:13px; }
+.mkt-root .imp-cancel { border:1px solid var(--line); border-radius:8px; padding:8px 14px; background:transparent; font-size:13px; }
+.mkt-root .imp-errors { margin:0; padding:10px 12px; border-left:2px solid var(--bad); color:var(--bad); font-size:12.5px; list-style:none; display:grid; gap:4px; }
+.mkt-root .imp-done { margin:0; padding-left:8px; border-left:2px solid var(--ok); color:var(--ink-soft); font-size:12.5px; }
+
+/* ---------- เพิ่มบัญชีที่ใช้ไฟล์ ---------- */
+.mkt-root .facc { display:grid; gap:14px; }
+.mkt-root .facc-field { display:grid; gap:4px; font-size:12.5px; color:var(--ink-soft); }
+.mkt-root .facc-field input { border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px; background:transparent; color:var(--ink); }
+.mkt-root .facc-field input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.mkt-root .facc-field small { color:var(--ink-soft); font-size:11.5px; }
+.mkt-root .facc-field code { font-family:ui-monospace,monospace; font-size:11px; }
+.mkt-root .facc-error { margin:0; padding-left:8px; border-left:2px solid var(--bad); color:var(--bad); font-size:12.5px; }

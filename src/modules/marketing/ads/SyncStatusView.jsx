@@ -25,8 +25,10 @@ import { monthsBackStart } from "../../../../supabase/functions/_shared/salesInv
 import { adsErrorText } from "./adsSyncMessages.js";
 import { loadPilotFacts } from "./useAdsData.js";
 import { AccessPanel, CoverageTable, CreativeRunsPanel, GoalMatrix, InventoryList, SalesCheckResult } from "./SalesSyncPanels.jsx";
+import { ImportSpendPanel } from "./ImportSpendPanel.jsx";
+import { FileAccountDialog } from "./FileAccountDialog.jsx";
 import { SALES_BRAND_IDS, jkSourceRow, JK_BRAND_ID, backfillRanges, goalGaps, latestBy } from "./syncSources.js";
-import { ago, agoHours, creativeSourceRow, historyTimeline, lastClock, metaSourceRow, nextSyncAt, salesSourceRow, snapshotSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
+import { ago, agoHours, creativeSourceRow, fileImportSourceRow, historyTimeline, lastClock, metaSourceRow, nextSyncAt, salesSourceRow, snapshotSourceRow, syncIssues, syncVerdict } from "./syncOverview.js";
 import { ALL_STEPS, newRun, runEnded, runHeadline, setStep, stepRows } from "./syncProgress.js";
 import { LeaveGuard } from "./LeaveGuard.jsx";
 import { mergeGoals, mergedGoalRows } from "./goalOverrides.js";
@@ -193,6 +195,8 @@ export function SyncStatusView() {
     oauth: () => apiClient.ads.oauthStatus(),
     // RLS อ่านได้เฉพาะ team_lead — คนอื่นไม่ยิงเลย (แถวจะบอก "เฉพาะหัวหน้าทีม" ตรงๆ)
     snapshots: !demo && user?.role === "team_lead" ? () => apiClient.ads.accountSnapshots() : null,
+    // ประวัติการนำเข้าไฟล์ (ChatGPT ads) — ใช้บอกว่าอัปล่าสุดเมื่อไร และเตือนเมื่ออัปไฟล์เดิมซ้ำ
+    importBatches: !demo ? () => apiClient.ads.importBatches() : null,
   });
   useEffect(() => { reload(); }, [reload, canSync, demo]);
   const ready = (...keys) => keys.every((key) => res[key]?.settled);
@@ -208,6 +212,12 @@ export function SyncStatusView() {
     const missing = new Map((dbConnections ?? []).map((c) => [c.id, missingDaysOf(coverageRuns.filter((r) => r.connection_id === c.id), todayInTimeZone(new Date(), c.timezone), c.config?.backfillDays)]));
     return applyReconciliation(applyCoverage(merged, missing), latestReconcileByConnection(res.recons?.data ?? []));
   }, [saved, dbConnections, res.coverage?.data, res.recons?.data]);
+  /* บัญชีที่ป้อนข้อมูลด้วยไฟล์ — ไม่ผ่าน OAuth จึงไม่อยู่ใน config/mapping ปกติ ติดชื่อแบรนด์ให้อ่านง่าย */
+  const fileConnections = useMemo(() => {
+    const brandName = new Map(brands.map((brand) => [brand.id, brand.name]));
+    return (res.connections?.data ?? []).filter((c) => c.config?.source === "file")
+      .map((c) => ({ ...c, brand_name: brandName.get(c.brand_id) ?? "" }));
+  }, [res.connections?.data, brands]);
   const accounts = useMemo(() => syncAccountRows(config, brands), [config, brands]);
   const metaAccounts = accounts.filter((row) => row.providerId === "meta");
   const ticks = useMemo(() => normalizeCronTicks(dataOf("ticks", [])), [res.ticks?.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -218,6 +228,8 @@ export function SyncStatusView() {
   const goals = useMemo(() => mergedGoalRows(mergeGoals(dataOf("goals", []), dataOf("goalOverrides", []))), [res.goals?.data, res.goalOverrides?.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const authorizations = res.oauth?.data?.authorizations ?? [];
   const now = Date.now();
+  const importBatches = dataOf("importBatches", []);
+  const [addFileAccount, setAddFileAccount] = useState(false);
 
   const rows = {
     meta: metaSourceRow({ accounts: metaAccounts, ready: ready("connections", "coverage", "recons"), now }),
@@ -225,6 +237,8 @@ export function SyncStatusView() {
     sales: salesSourceRow({ runs: pipes, facts, ready: ready("pipes", "facts"), today, now }),
     snapshots: snapshotSourceRow({ snapshots: res.snapshots?.data ?? [], ready: ready("snapshots"),
       allowed: !demo && user?.role === "team_lead", now }),
+    // null เมื่อยังไม่มีบัญชีแบบไฟล์ — ไม่ขึ้นแถวเปล่าให้คนที่ไม่ได้ใช้ช่องทางนี้
+    fileImport: fileImportSourceRow({ connections: fileConnections, batches: importBatches, ready: ready("connections", "importBatches"), now }),
   };
   // โหลดส่วนไหนไม่สำเร็จ = บอกที่แถวนั้น ไม่ปล่อยให้ดูเหมือนไม่มีข้อมูล
   const failedLoad = (keys, row) => keys.some((key) => res[key]?.error && res[key]?.data == null) ? { ...row, state: "bad", stateLabel: "โหลดสถานะไม่สำเร็จ", hint: "กดตรวจใหม่", fresh: null, complete: null, loadFailed: true } : row;
@@ -558,9 +572,27 @@ export function SyncStatusView() {
         {waitingBrands.map((brand) => <SourceRow key={brand.id} row={{ key: brand.id, name: `ยอดขาย ${brand.name}`, icon: "sales", state: "waiting", stateLabel: "รอเชื่อมแหล่งข้อมูล", fresh: null, complete: null, hint: "ค่าแอด Meta ยังดึงตามปกติ" }} />)}
         {/* snapshot บัญชีแอด (หน้า บิล & กระทบยอด) — กดแล้วไปหน้าบิลตรงๆ ไม่ใช่แท็บในหน้านี้ */}
         <SourceRow row={rows.snapshots} onOpen={() => navigate("/mkt/ads/billing")} />
+        {rows.fileImport && <SourceRow row={rows.fileImport} onOpen={() => setTab("fileimport")} />}
       </div>
       {unusedProviders.length > 0 && <p className="sy-note">ยังไม่ใช้: {unusedProviders.join(" · ")}</p>}
     </section>
+
+    {/* ChatGPT ads ไม่มี API ให้ดึง — ค่าแอดเข้าระบบทางไฟล์เท่านั้น การ์ดนี้จึงอยู่คู่กับแหล่งข้อมูลอื่น */}
+    {canSync && <section className="sy-card" aria-labelledby="sy-import-title">
+      <header className="sy-card-head">
+        <h2 id="sy-import-title">นำเข้าค่าแอดจากไฟล์</h2>
+        <button type="button" className="sy-ghost" onClick={() => setAddFileAccount(true)}>เพิ่มบัญชี</button>
+      </header>
+      <ImportSpendPanel
+        connections={fileConnections}
+        batches={importBatches}
+        importedBy={user?.id ?? null}
+        onImported={() => reload()}
+      />
+    </section>}
+    {addFileAccount && <FileAccountDialog brands={brands}
+      onClose={() => setAddFileAccount(false)}
+      onCreated={() => { setAddFileAccount(false); reload(); }} />}
 
     <section className="sy-card" aria-label="รายละเอียด">
       <div className="sy-tabs" role="tablist" aria-label="รายละเอียดแต่ละเรื่อง" onKeyDown={(e) => {
