@@ -205,3 +205,20 @@ describe("AdsControlCenter — เชื่อมหลายช่องทา�
     expect(document.body.textContent).toMatch(/นำเข้าจากไฟล์/);
   });
 });
+
+/* 8 ต.ค. เย็น: เชื่อม Google แล้วระบบรู้จักบัญชีทั้งหมดอยู่แล้ว แต่ช่อง Customer ID
+   ยังให้พิมพ์เอง เพราะรายการบัญชีเปิดไว้ให้ Meta อย่างเดียว — พิมพ์ผิดแล้วหาสาเหตุยาก */
+describe("AdsControlCenter — เลือกบัญชีจากที่เชื่อมแล้ว", () => {
+  const withAccounts = [{ external_account_id: "1234567890", account_name: "TEAMDEE - Search", authorization_id: "a1" }];
+  it("Google: ช่องรหัสบัญชีผูกกับรายการบัญชีที่ค้นเจอ ไม่ต้องพิมพ์เอง", async () => {
+    oauthState.accounts = withAccounts; oauthState.teamAccounts = withAccounts;
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} toast={() => {}} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /Google Ads/ }));
+    await screen.findByRole("button", { name: /เชื่อมบัญชี|ยกเลิก/ });
+    const list = document.querySelector("datalist#google-oauth-accounts");
+    expect(list).toBeTruthy();
+    expect(list.querySelector("option").value).toBe("1234567890");
+    expect(document.querySelector('.acc-mapping-row input[list="google-oauth-accounts"]')).toBeTruthy();
+    oauthState.accounts = []; oauthState.teamAccounts = [];
+  });
+});
