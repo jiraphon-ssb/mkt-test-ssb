@@ -406,3 +406,23 @@ describe("0016_ad_spend_daily_view", () => {
   });
   it("มีวิธีย้อนกลับ", () => { expect(sql).toMatch(/drop view if exists public\.ad_spend_daily/); });
 });
+
+/* ฝั่ง SSB PLATFORM ทักท้วง 0016 สองข้อ (8 ต.ค. 69) — ถูกทั้งคู่ */
+describe("0017_ad_spend_daily_dedupe", () => {
+  const sql = read("src/supabase/migrations/0017_ad_spend_daily_dedupe.sql");
+  const executable = sql.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n");
+  it("ต่อบัญชี×วัน ใช้ระดับเดียว — ไม่บวกข้ามระดับ", () => {
+    expect(executable).toMatch(/partition by f\.connection_id, f\.fact_date/);
+    expect(executable).toMatch(/where r\.level_rank = r\.best_rank/);
+  });
+  it("ลำดับระดับ: account ชนะ campaign ชนะ ad_group ชนะ ad", () => {
+    expect(executable).toMatch(/when 'account' then 1 when 'campaign' then 2 when 'ad_group' then 3 else 4/);
+  });
+  it("ไม่กรองสถานะบัญชี — ปิดบัญชีแล้วค่าแอดย้อนหลังต้องไม่หาย", () => {
+    expect(executable).not.toMatch(/status/);
+  });
+  it("แถวที่ไม่รู้ค่าแอดไม่เข้าแข่งระดับ และ RLS ยังบังคับใช้", () => {
+    expect(executable).toMatch(/where f\.spend is not null/);
+    expect(executable).toMatch(/with \(security_invoker = on\)/);
+  });
+});
