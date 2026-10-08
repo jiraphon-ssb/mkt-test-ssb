@@ -67,6 +67,19 @@ export function normalizeAdPlatform(raw) {
   if (["ChatGPT", "ChatGPT Ads", "OpenAI", "OpenAI Ads"].includes(raw)) return "ChatGPT Ads";
   return null;
 }
+/* ป้ายบอกฐานของตัวเลข — เดิมเขียน "Meta" ตายตัวตั้งแต่ยุคที่มีช่องทางเดียว
+   ตั้งแต่ค่าแอด Google/ChatGPT เข้าระบบ ยอดพวกนี้รวมทุกช่องทางแล้ว ป้ายเดิมจึงกลายเป็นคำโกหก
+   ช่องทางเดียว = บอกชื่อช่องทางนั้นตรงๆ · หลายช่องทาง = บอกว่ารวมทุกช่องทาง */
+const spendChannels = (head) => (head?.channels ?? []).filter((c) => c?.spend > 0).map((c) => c.key ?? c.name).filter(Boolean);
+export function spendBasisNote(head) {
+  const names = spendChannels(head);
+  return names.length === 1 ? `คิดจากค่าแอด ${names[0]}` : "คิดจากค่าแอดทุกช่องทาง";
+}
+export function spendBasisTitle(head) {
+  const names = spendChannels(head);
+  return names.length === 1 ? `งบโฆษณา ${names[0]}` : "งบโฆษณาทุกช่องทาง";
+}
+
 export function adPlatformOf(c) {
   return normalizeAdPlatform(c.ad_platform ?? c.brief?.ad_platform ?? c.brief?.channels?.[0] ?? null);
 }

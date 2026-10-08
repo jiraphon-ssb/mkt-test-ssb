@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Settings2 } from 'lucide-react';
 import { BrandMark } from './BrandMark.jsx';
 import { fmtMoney, fmtPct, fmtNum, fmtInt } from '../dash/charts/theme.js';
-import { change, share } from '../adsOverview.js';
+import { change, share, spendBasisNote, spendBasisTitle } from '../adsOverview.js';
 import './adsWorkspace.css';
 import { WorkspaceTrends } from './WorkspaceTrends.jsx';
 import { AdsControlCenter } from './AdsControlCenter.jsx';
@@ -373,7 +373,7 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
       {/* ลำดับ: ประสิทธิภาพก่อนงบ (อาร์ตสั่งสลับ 21 ก.ย. ค่ำ) */}
       <div className="aw-middle">
         <section className="aw-panel aw-efficiency">
-          <div className="aw-section-label">ประสิทธิภาพ{real && <span className="zinc">คิดจากค่าแอด Meta</span>}</div>
+          <div className="aw-section-label">ประสิทธิภาพ{real && <span className="zinc">{spendBasisNote(head)}</span>}</div>
           <div className="aw-metrics">
             <Metric name="ROAS" sub="เดือนนี้" value={roas == null || spendFrom(v, ads) ? '—' : `${fmtNum(roas, 2)}×`}
               goal={spendFrom(v, ads) ? null : goals?.roas} metric="roas" empty={spendFrom(v, ads) ? 'ค่าแอดในช่วงนี้ไม่ครบ' : roas == null ? noSales(head) : null}
@@ -385,7 +385,7 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
         </section>
 
         <section className="aw-panel">
-          <div className="aw-section-label">{real ? 'งบโฆษณา Meta' : 'งบโฆษณา'} {head.budget == null && real
+          <div className="aw-section-label">{real ? spendBasisTitle(head) : 'งบโฆษณา'} {head.budget == null && real
             ? <span className="zinc">ยังไม่ตั้งเป้างบ</span>
             : <Flag flag={paceFlag(p2?.budget?.state, 'spend')}/>}</div>
           <div className="aw-card-grid">

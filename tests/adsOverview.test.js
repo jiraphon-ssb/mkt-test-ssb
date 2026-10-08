@@ -2,6 +2,7 @@ import { actionLabel as actionLabelOf } from "../src/modules/marketing/creatives
 import { describe, it, expect } from "vitest";
 import {
   adsByBrandChannel, adsByChannel, adsChannelList, adsCompanyPaceChart, adsCompanySummary, adsSpendShareByBrand, adsDecisionRows, adsFunnel, adsKpis, adsWeekly,
+  spendBasisNote, spendBasisTitle,
   adsCreativeRows, adsDailyRevenue, adsDailySeries, fillDailySeries, adsMetricBoard, adsSalePipeline, adsSalesPace, decideAction, adsSalesVsTarget, budgetOf, deliveryOf, revenuePace, budgetPace, change, filterByChannel, normalizeAdPlatform, paceGroup, paceStatus, revenueBasisCards, roasOf, salesTargetOf, share,
 } from "../src/modules/marketing/adsOverview.js";
 
@@ -1055,5 +1056,23 @@ describe("normalizeAdPlatform — ChatGPT", () => {
     expect(normalizeAdPlatform("Meta Ads")).toBe("Meta Ads");
     expect(normalizeAdPlatform("Google")).toBe("Google Ads");
     expect(normalizeAdPlatform("ไม่รู้จัก")).toBe(null);
+  });
+});
+
+/* 8 ต.ค. เย็น (เจอบนหน้าจริง): ยอดค่าแอดรวม ChatGPT เข้าไปแล้ว (94,342.04 + 436.13 = 94,778.17)
+   แต่ป้ายยังเขียน "คิดจากค่าแอด Meta" — ตัวเลขถูก คำอธิบายผิด ซึ่งอันตรายกว่าตัวเลขผิดเพราะคนเชื่อ */
+describe("ป้ายบอกฐานของค่าแอด", () => {
+  const head = (channels) => ({ channels });
+  it("ช่องทางเดียว = บอกชื่อช่องทางนั้น (ของเดิมไม่เปลี่ยน)", () => {
+    expect(spendBasisNote(head([{ key: "Meta Ads", spend: 100 }]))).toBe("คิดจากค่าแอด Meta Ads");
+    expect(spendBasisTitle(head([{ key: "Meta Ads", spend: 100 }]))).toBe("งบโฆษณา Meta Ads");
+  });
+  it("หลายช่องทาง = ไม่อ้างชื่อใดชื่อหนึ่ง", () => {
+    const many = head([{ key: "Meta Ads", spend: 100 }, { key: "ChatGPT Ads", spend: 436.13 }]);
+    expect(spendBasisNote(many)).toBe("คิดจากค่าแอดทุกช่องทาง");
+    expect(spendBasisTitle(many)).toBe("งบโฆษณาทุกช่องทาง");
+  });
+  it("ช่องทางที่ยังไม่มีค่าแอดไม่นับ — เชื่อมไว้เฉยๆ ไม่ทำให้ป้ายเปลี่ยน", () => {
+    expect(spendBasisNote(head([{ key: "Meta Ads", spend: 100 }, { key: "ChatGPT Ads", spend: 0 }]))).toBe("คิดจากค่าแอด Meta Ads");
   });
 });
