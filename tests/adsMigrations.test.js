@@ -320,3 +320,44 @@ describe("0014_ad_creative_status", () => {
     expect(sql).toContain("^[A-Z_]{1,40}$");
   });
 });
+
+/* 8 ต.ค.: นำเข้าค่าแอดจากไฟล์ (Google Ads · ChatGPT ads)
+   spec: docs/superpowers/specs/2026-10-08-ads-multi-provider-import-design.md
+   เขียนได้ทางเดียวคือ RPC — ตารางต้องปิดสิทธิ์เขียนตรงเหมือน pattern 0013 */
+describe("0015_ads_file_import", () => {
+  const sql = read("src/supabase/migrations/0015_ads_file_import.sql");
+  it("เพิ่ม provider openai โดยไม่ลบของเดิม", () => {
+    expect(sql).toMatch(/check \(provider in \('meta','google','tiktok','shopee','openai'\)\)/);
+  });
+  it("ไม่เดาชื่อ constraint — ค้นจาก pg_constraint ก่อนลบ (ฐานจริงอาจชื่อไม่ตรง)", () => {
+    expect(sql).toMatch(/from pg_constraint/i);
+    expect(sql).toMatch(/pg_get_constraintdef\(oid\) ilike '%provider%'/i);
+    // ส่วนที่รันจริง (ตัดคอมเมนต์วิธีย้อนกลับออกก่อน) ต้องไม่มีการลบด้วยชื่อตายตัว
+    const executable = sql.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n");
+    expect(executable).not.toMatch(/drop constraint if exists ad_connections_provider_check/);
+  });
+  it("สร้าง ad_import_batches พร้อม file_hash ที่ห้ามซ้ำ", () => {
+    expect(sql).toMatch(/create table if not exists ad_import_batches/);
+    expect(sql).toMatch(/file_hash text not null unique/);
+  });
+  it("ผูกแถวค่าแอดกลับไปหาไฟล์ได้ และลบไฟล์แล้วแถวไม่หาย", () => {
+    expect(sql).toMatch(/alter table ad_daily_facts add column if not exists import_batch_id uuid/);
+    expect(sql).toMatch(/references ad_import_batches\(id\) on delete set null/);
+  });
+  it("RPC ตรวจ team_lead เอง และเป็น security definer", () => {
+    expect(sql).toMatch(/create or replace function mkt_ads_import_facts/);
+    expect(sql).toMatch(/security definer/);
+    expect(sql).toMatch(/mkt_is_team_lead\(\)/);
+  });
+  it("ปิดสิทธิ์เขียนตรงตาราง เขียนได้ทางเดียวคือ RPC", () => {
+    expect(sql).toMatch(/revoke insert, update, delete, truncate on public\.ad_import_batches\s+from anon, authenticated;/);
+  });
+  it("เก็บบัญชีผู้จัดการของ Google ได้ — ไม่งั้นบัญชีลูกใต้ MCC เรียกไม่ได้เลย", () => {
+    expect(sql).toMatch(/add column if not exists login_customer_id text/);
+    expect(sql).toMatch(/add column if not exists is_manager boolean not null default false/);
+  });
+  it("มีวิธีย้อนกลับเขียนไว้ในหัวไฟล์ ครอบของใหม่ทุกชิ้น", () => {
+    expect(sql).toMatch(/rollback:/i);
+    expect(sql).toMatch(/drop column if exists login_customer_id/);
+  });
+});
