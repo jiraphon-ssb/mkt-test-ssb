@@ -381,3 +381,28 @@ describe("0015_ads_file_import", () => {
     expect(sql).toMatch(/drop column if exists login_customer_id/);
   });
 });
+
+/* 8 ต.ค. 69: ท่อให้ระบบอื่นดึงค่าแอด — เจอจริงว่าถ้าปล่อยให้ query ตารางดิบ
+   แล้วกรอง level เดียว จะได้ยอดขาดเกือบทั้งหมดโดยไม่ error (฿436.13 จาก ฿612,587.66) */
+describe("0016_ad_spend_daily_view", () => {
+  const sql = read("src/supabase/migrations/0016_ad_spend_daily_view.sql");
+  it("รวมทุก level — ไม่กรอง level ทิ้ง", () => {
+    expect(sql).toMatch(/create or replace view public\.ad_spend_daily/);
+    expect(sql).not.toMatch(/where[^;]*level\s*=/i);
+  });
+  it("แยกตามแบรนด์ · ช่องทาง · วัน และบอกสกุลเงินมาด้วย", () => {
+    expect(sql).toMatch(/group by f\.fact_date, c\.brand_id, c\.provider, c\.currency/);
+  });
+  it("ไม่นับบัญชีที่ปิดไปแล้ว และไม่นับแถวที่ไม่รู้ค่าแอด", () => {
+    expect(sql).toMatch(/c\.status <> 'disabled'/);
+    expect(sql).toMatch(/f\.spend is not null/);
+  });
+  it("security_invoker เปิด — RLS ของตารางต้นทางยังบังคับใช้ ไม่เปิดช่องอ่านทะลุ", () => {
+    expect(sql).toMatch(/with \(security_invoker = on\)/);
+  });
+  it("ไม่ให้สิทธิ์ anon", () => {
+    expect(sql).toMatch(/grant select on public\.ad_spend_daily to authenticated, service_role;/);
+    expect(sql).not.toMatch(/to anon/);
+  });
+  it("มีวิธีย้อนกลับ", () => { expect(sql).toMatch(/drop view if exists public\.ad_spend_daily/); });
+});
