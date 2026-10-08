@@ -2538,16 +2538,19 @@ const adsData = {
   /* ---- นำเข้าค่าแอดจากไฟล์ (Google Ads · ChatGPT ads) ----
      เขียน ad_daily_facts ตรงไม่ได้ (grants ปิดไว้) — ทางเดียวคือ RPC ที่ตรวจ team_lead เอง */
 
-  /** บัญชีที่ป้อนข้อมูลด้วยไฟล์ ไม่ผ่าน OAuth — ทำเครื่องหมายไว้ที่ config.source เพื่อแยกจากบัญชีที่เชื่อมจริง */
+  /** บัญชีที่ป้อนข้อมูลด้วยไฟล์ ไม่ผ่าน OAuth
+      เขียน ad_connections ตรงจากเบราว์เซอร์ไม่ได้ (0010 ปิดสิทธิ์ไว้ กันการชี้ connection ไปที่
+      authorization ของคนอื่น) จึงผ่าน RPC ที่ตรวจ team_lead เองและไม่รับ authorization_id */
   async createFileConnection({ provider, brandId, accountId, accountName, currency = "THB", timezone = "Asia/Bangkok" }) {
     const db = requireSupabase();
-    const { data, error } = await db.from("ad_connections").insert({
-      provider, brand_id: brandId, external_account_id: accountId,
-      account_name: accountName ?? "", currency, timezone,
-      status: "connected", config: { source: "file" },
-    }).select().single();
+    const { data, error } = await db.rpc("mkt_ads_file_connection_add", {
+      p_entry: {
+        provider, brand_id: brandId, external_account_id: accountId,
+        account_name: accountName ?? "", currency, timezone,
+      },
+    });
     if (error) throw error;
-    return data;
+    return { id: data };
   },
   /** นำเข้าค่าแอด 1 ไฟล์ — upsert ด้วยคีย์เดิมของตาราง อัปซ้ำยอดไม่บวกซ้ำ */
   async importFacts({ batch, rows }) {

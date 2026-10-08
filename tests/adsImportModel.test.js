@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { buildImportPayload, fileHashOf, importPreview } from "../src/modules/marketing/ads/importModel.js";
 
-const base = { provider: "google", connectionId: "c1", fileName: "report.csv", fileHash: "abc123", importedBy: "p1" };
+const base = { provider: "google", connectionId: "c1", fileName: "report.csv", fileHash: "abc123" };
 const rows = [{ fact_date: "2026-10-01", spend: 100.5 }, { fact_date: "2026-10-02", spend: 200.25 }];
 
 describe("buildImportPayload", () => {
@@ -56,5 +56,15 @@ describe("fileHashOf", () => {
   });
   it("ไฟล์ต่างกันได้คนละลายนิ้วมือ", async () => {
     expect(await fileHashOf("a,b\n1,2\n")).not.toBe(await fileHashOf("a,b\n1,3\n"));
+  });
+});
+
+/* security review 8 ต.ค.: เดิมส่ง imported_by มาจากเบราว์เซอร์ = ปลอมชื่อคนนำเข้าได้
+   แถว ad_import_batches เป็นหลักฐานชิ้นเดียวว่าใครดันค่าแอดก้อนไหนเข้าระบบ */
+describe("buildImportPayload — ไม่รับคนทำจาก client", () => {
+  it("payload ไม่มี imported_by เลย (ฝั่ง RPC ผูกจาก auth.uid() เอง)", () => {
+    const { batch } = buildImportPayload({ ...base, rows, importedBy: "ปลอมเป็นคนอื่น" });
+    expect(batch.imported_by).toBeUndefined();
+    expect(Object.keys(batch)).not.toContain("imported_by");
   });
 });

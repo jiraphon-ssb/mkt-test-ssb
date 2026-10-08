@@ -16,7 +16,8 @@ const dayList = (from, to) => {
 };
 
 /** แถวที่แกะได้ + ข้อมูลไฟล์ → { batch, rows } ที่ส่งเข้า RPC ได้ตรงๆ */
-export function buildImportPayload({ provider, connectionId, fileName, fileHash, importedBy, rows }) {
+/* ไม่มี importedBy — ฝั่ง RPC ผูกคนทำจาก auth.uid() เอง (ปลอมจาก client ไม่ได้) */
+export function buildImportPayload({ provider, connectionId, fileName, fileHash, rows }) {
   if (!Array.isArray(rows) || rows.length === 0) throw new Error("ไม่มีแถวให้นำเข้า");
   const dates = rows.map((r) => r.fact_date).sort();
   return {
@@ -29,7 +30,6 @@ export function buildImportPayload({ provider, connectionId, fileName, fileHash,
       date_to: dates[dates.length - 1],
       row_count: rows.length,
       spend_total: money2(rows.reduce((n, r) => n + Number(r.spend), 0)),
-      imported_by: importedBy ?? null,
     },
     rows: rows.map((r) => ({ fact_date: r.fact_date, spend: r.spend })),
   };

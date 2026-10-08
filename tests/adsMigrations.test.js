@@ -356,6 +356,26 @@ describe("0015_ads_file_import", () => {
     expect(sql).toMatch(/add column if not exists login_customer_id text/);
     expect(sql).toMatch(/add column if not exists is_manager boolean not null default false/);
   });
+  /* security review 8 ต.ค.: กติกาเดียวกับ mkt_billing_review_add (0011) — คนทำต้องมาจาก auth.uid()
+     ไม่ใช่จาก payload ไม่งั้นปลอมชื่อคนนำเข้าได้ และหลักฐานว่าใครดันค่าแอดเข้าระบบใช้ไม่ได้ */
+  it("ผูกคนนำเข้าจาก auth.uid() ฝั่ง server ไม่รับจาก client", () => {
+    expect(sql).toMatch(/where p\.auth_user_id = \(select auth\.uid\(\)\)/);
+    expect(sql).not.toMatch(/p_batch->>'imported_by'/);
+  });
+  it("แถวที่วันหลุดนอกช่วงที่ประกาศ = ปฏิเสธทั้งไฟล์ ไม่เขียนทับวันที่ไม่ได้ตั้งใจ", () => {
+    expect(sql).toMatch(/นอกช่วง/);
+  });
+  /* 0010 ปิด insert ตรงบน ad_connections ของทุก role ฝั่งเบราว์เซอร์ → บัญชีแบบไฟล์ต้องมี RPC ของตัวเอง
+     (เดิมโค้ดหน้าบ้าน insert ตรง ซึ่งจะได้ 42501 ตอนใช้งานจริงทั้งที่เทสผ่าน เพราะเทส mock ไว้) */
+  it("มี RPC สร้างบัญชีแบบไฟล์ ที่ตรวจ team_lead เองและไม่รับ authorization_id จาก client", () => {
+    expect(sql).toMatch(/create or replace function mkt_ads_file_connection_add/);
+    expect(sql).toMatch(/security definer/);
+    expect(sql).not.toMatch(/p_entry->>'authorization_id'/);
+  });
+  it("ปิดสิทธิ์เรียกฟังก์ชันจาก public ด้วย ไม่ใช่แค่ anon (Postgres ให้ EXECUTE กับ PUBLIC เป็นค่าตั้งต้น)", () => {
+    expect(sql).toMatch(/revoke all on function mkt_ads_import_facts\(jsonb, jsonb\) from public, anon;/);
+    expect(sql).toMatch(/revoke all on function mkt_ads_file_connection_add\(jsonb\) from public, anon;/);
+  });
   it("มีวิธีย้อนกลับเขียนไว้ในหัวไฟล์ ครอบของใหม่ทุกชิ้น", () => {
     expect(sql).toMatch(/rollback:/i);
     expect(sql).toMatch(/drop column if exists login_customer_id/);

@@ -586,7 +586,6 @@ export function SyncStatusView() {
       <ImportSpendPanel
         connections={fileConnections}
         batches={importBatches}
-        importedBy={user?.id ?? null}
         onImported={() => reload()}
       />
     </section>}

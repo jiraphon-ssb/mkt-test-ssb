@@ -14,7 +14,7 @@ import { dayTh, money } from "./billFormat.js";
 
 const PROVIDER_LABEL = { openai: "ChatGPT Ads", google: "Google Ads" };
 
-export function ImportSpendPanel({ connections = [], batches = [], importFn, loadExisting, importedBy = null, onImported }) {
+export function ImportSpendPanel({ connections = [], batches = [], importFn, loadExisting, onImported }) {
   const runImport = importFn ?? apiClient.ads.importFacts;
   const fetchExisting = loadExisting ?? (async () => []);
   const [connectionId, setConnectionId] = useState(connections[0]?.id ?? "");
@@ -59,7 +59,7 @@ export function ImportSpendPanel({ connections = [], batches = [], importFn, loa
     try {
       const payload = buildImportPayload({
         provider: connection.provider, connectionId: connection.id,
-        fileName: staged.fileName, fileHash: staged.hash, importedBy, rows: staged.rows,
+        fileName: staged.fileName, fileHash: staged.hash, rows: staged.rows,
       });
       const result = await runImport(payload);
       setDone(result); setStaged(null);

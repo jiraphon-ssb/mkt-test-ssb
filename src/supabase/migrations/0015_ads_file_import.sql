@@ -10,6 +10,7 @@
 --
 -- rollback:
 --   drop function if exists mkt_ads_import_facts(jsonb, jsonb);
+--   drop function if exists mkt_ads_file_connection_add(jsonb);
 --   drop index if exists ad_daily_facts_import_batch_idx;
 --   alter table ad_daily_facts drop column if exists import_batch_id;
 --   drop table if exists ad_import_batches;
@@ -73,13 +74,20 @@ comment on column ad_authorized_accounts.login_customer_id is 'Google: บัญ
 comment on column ad_authorized_accounts.is_manager is 'Google: บัญชีผู้จัดการ (MCC) — ยิงรายงานไม่ได้ ใช้เป็นทางผ่านอย่างเดียว';
 
 -- 4) ทางเขียนทางเดียว
--- p_batch: {provider, connection_id, file_name, file_hash, date_from, date_to, row_count, spend_total, imported_by}
+-- p_batch: {provider, connection_id, file_name, file_hash, date_from, date_to, row_count, spend_total}
+-- imported_by ผูกจาก auth.uid() ฝั่ง server เสมอ ไม่รับจาก client
+-- (security review 22 ก.ย. ของ mkt_billing_review_add: รับจาก client = ปลอมชื่อคนทำได้ ทำลาย non-repudiation
+--  แถวนี้เป็นหลักฐานชิ้นเดียวว่าใครดันค่าแอดก้อนไหนเข้าระบบ — ad_daily_facts.import_batch_id ชี้มาที่นี่)
 -- p_rows : [{fact_date, spend}] — ระดับบัญชีเท่านั้น campaign/ad_group/ad ใช้ค่าว่างตาม default ของตาราง
 create or replace function mkt_ads_import_facts(p_batch jsonb, p_rows jsonb)
 returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
   v_connection uuid := (p_batch->>'connection_id')::uuid;
+  v_actor text;
+  v_from date := (p_batch->>'date_from')::date;
+  v_to date := (p_batch->>'date_to')::date;
+  v_outside integer;
   v_batch_id uuid;
   v_before integer;
   v_after integer;
@@ -92,6 +100,15 @@ begin
     raise exception 'ไม่มีแถวให้นำเข้า' using errcode = '22023';
   end if;
 
+  -- แถวที่หลุดนอกช่วงวันที่ประกาศไว้ = เขียนทับวันที่ไม่ได้ตั้งใจ (กติกาเดียวกับ ads_replace_daily_facts)
+  select count(*) into v_outside from jsonb_array_elements(p_rows) as r
+   where (r->>'fact_date')::date < v_from or (r->>'fact_date')::date > v_to;
+  if v_outside > 0 then
+    raise exception 'มี % แถวที่วันอยู่นอกช่วง % ถึง %', v_outside, v_from, v_to using errcode = '22023';
+  end if;
+
+  select p.id into v_actor from public.mkt_profile p where p.auth_user_id = (select auth.uid());
+
   insert into public.ad_import_batches
     (provider, connection_id, file_name, file_hash, date_from, date_to, row_count, spend_total, imported_by)
   values (
@@ -99,11 +116,11 @@ begin
     v_connection,
     coalesce(p_batch->>'file_name', ''),
     p_batch->>'file_hash',
-    (p_batch->>'date_from')::date,
-    (p_batch->>'date_to')::date,
+    v_from,
+    v_to,
     coalesce((p_batch->>'row_count')::integer, 0),
     coalesce((p_batch->>'spend_total')::numeric, 0),
-    p_batch->>'imported_by'
+    v_actor
   )
   returning id into v_batch_id;
 
@@ -127,7 +144,42 @@ begin
 end;
 $$;
 
+-- 5) สร้างบัญชีที่ป้อนข้อมูลด้วยไฟล์
+-- 0010 ปิดสิทธิ์ insert ตรงบน ad_connections ของทุก role ฝั่งเบราว์เซอร์ไว้ (กันการชี้ connection
+-- ไปที่ authorization ของคนอื่น) — บัญชีแบบไฟล์จึงต้องมีทางเขียนของตัวเองที่ตรวจสิทธิ์เอง
+-- ไม่รับ authorization_id จาก client เด็ดขาด: บัญชีแบบไฟล์ไม่ผูกกับ OAuth ของใครทั้งนั้น
+create or replace function mkt_ads_file_connection_add(p_entry jsonb)
+returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare v_id uuid;
+begin
+  if not public.mkt_is_team_lead() then
+    raise exception 'เพิ่มบัญชีได้เฉพาะ Team Lead' using errcode = '42501';
+  end if;
+  if coalesce(p_entry->>'provider', '') not in ('google','openai') then
+    raise exception 'บัญชีแบบไฟล์รองรับเฉพาะ google กับ openai' using errcode = '22023';
+  end if;
+  insert into public.ad_connections
+    (provider, brand_id, external_account_id, account_name, currency, timezone, status, config, authorization_id)
+  values (
+    p_entry->>'provider',
+    p_entry->>'brand_id',
+    p_entry->>'external_account_id',
+    coalesce(p_entry->>'account_name', ''),
+    coalesce(p_entry->>'currency', 'THB'),
+    coalesce(p_entry->>'timezone', 'Asia/Bangkok'),
+    'connected',
+    jsonb_build_object('source', 'file'),
+    null
+  )
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
 revoke insert, update, delete, truncate on public.ad_import_batches
   from anon, authenticated;
-revoke all on function mkt_ads_import_facts(jsonb, jsonb) from anon;
+revoke all on function mkt_ads_import_facts(jsonb, jsonb) from public, anon;
 grant execute on function mkt_ads_import_facts(jsonb, jsonb) to authenticated;
+revoke all on function mkt_ads_file_connection_add(jsonb) from public, anon;
+grant execute on function mkt_ads_file_connection_add(jsonb) to authenticated;
