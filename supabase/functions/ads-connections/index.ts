@@ -13,21 +13,22 @@ Deno.serve(async (request) => {
     const body = await request.json().catch(() => ({}));
     const mappings = body?.mappings && typeof body.mappings === "object" && !Array.isArray(body.mappings) ? body.mappings : null;
     if (!mappings || Object.keys(mappings).length > 200) return json(request, { error: "MAPPINGS_INVALID" }, 400);
+    const provider = body?.provider === "google" ? "google" : "meta";   // ค่าเริ่มต้น meta = พฤติกรรมเดิมของผู้เรียกที่ไม่ส่ง provider
 
     // บัญชีจาก OAuth ของทุกคนในทีมที่ยังใช้ได้ (สมาชิกเชื่อมเอง · team_lead ผูกกับแบรนด์) — token ของผู้บันทึกได้ก่อนถ้าซ้ำ
     const { data: authorizations, error: authError } = await db.from("ad_provider_authorizations")
-      .select("id,user_id,status,expires_at,last_verified_at").eq("provider", "meta").eq("status", "connected");
+      .select("id,user_id,status,expires_at,last_verified_at").eq("provider", provider).eq("status", "connected");
     if (authError) throw authError;
     const liveIds = (authorizations ?? []).map((a) => a.id);
     const { data: accounts, error: accountError } = liveIds.length
-      ? await db.from("ad_authorized_accounts").select("authorization_id,external_account_id,account_name,account_status,currency,timezone").in("authorization_id", liveIds)
+      ? await db.from("ad_authorized_accounts").select("authorization_id,external_account_id,account_name,account_status,currency,timezone,login_customer_id,is_manager").in("authorization_id", liveIds)
       : { data: [], error: null };
     if (accountError) throw accountError;
     const teamAccounts = liveTeamAccounts(accounts ?? [], authorizations ?? [], { callerUserId: user.id, activeUserIds: await activeMemberUserIds(db) });
-    const { data: existing, error: existingError } = await db.from("ad_connections").select("id,provider,brand_id,external_account_id,status").eq("provider", "meta");
+    const { data: existing, error: existingError } = await db.from("ad_connections").select("id,provider,brand_id,external_account_id,status,config").eq("provider", provider);
     if (existingError) throw existingError;
 
-    const plan = planConnections({ mappings, source: body.source ?? {}, authorizedAccounts: teamAccounts, existing: existing ?? [] });
+    const plan = planConnections({ provider, mappings, source: body.source ?? {}, authorizedAccounts: teamAccounts, existing: existing ?? [] });
     if (plan.upserts.length) {
       const { error } = await db.from("ad_connections").upsert(plan.upserts, { onConflict: "provider,external_account_id" });
       if (error) throw error;
@@ -36,7 +37,7 @@ Deno.serve(async (request) => {
       const { error } = await db.from("ad_connections").update({ status: "disabled" }).in("id", plan.disable);
       if (error) throw error;
     }
-    const { data: connections, error: listError } = await db.from("ad_connections").select(CONNECTION_FIELDS).eq("provider", "meta").neq("status", "disabled");
+    const { data: connections, error: listError } = await db.from("ad_connections").select(CONNECTION_FIELDS).eq("provider", provider).neq("status", "disabled");
     if (listError) throw listError;
     return json(request, { connections: connections ?? [], errors: plan.errors, disabled: plan.disable });
   } catch (error) {

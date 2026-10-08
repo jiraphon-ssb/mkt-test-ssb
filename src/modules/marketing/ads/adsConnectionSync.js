@@ -1,13 +1,15 @@
 /* หน้าตั้งค่า ↔ Edge Function ads-connections: เลือก mapping ที่ต้องส่ง และใส่ผลกลับเข้า settings.ads_control */
 import { OAUTH_SCOPES } from "./metaCreativeContract.js";
 
-export function enabledMetaMappings(config = {}) {
-  return Object.fromEntries(Object.entries(config.mappings?.meta ?? {})
+/** mapping ที่เปิดใช้จริงของช่องทางหนึ่ง (ค่าเริ่มต้น meta = พฤติกรรมเดิมของผู้เรียกที่ไม่ส่ง provider) */
+export function enabledMappings(config = {}, provider = "meta") {
+  return Object.fromEntries(Object.entries(config.mappings?.[provider] ?? {})
     .filter(([, row]) => row?.enabled && String(row.accountId ?? "").trim()));
 }
+export const enabledMetaMappings = (config = {}) => enabledMappings(config, "meta");
 
-export function applyConnectionResult(config = {}, result = {}) {
-  const meta = { ...(config.mappings?.meta ?? {}) };
+export function applyConnectionResult(config = {}, result = {}, provider = "meta") {
+  const meta = { ...(config.mappings?.[provider] ?? {}) };
   const disabled = new Set(result.disabled ?? []);
   for (const [brandId, row] of Object.entries(meta)) {
     if (row?.connectionId && disabled.has(row.connectionId)) {
@@ -26,7 +28,7 @@ export function applyConnectionResult(config = {}, result = {}) {
   for (const error of result.errors ?? []) {
     if (meta[error.brandId]) meta[error.brandId] = { ...meta[error.brandId], connectionError: error.code };
   }
-  return { ...config, mappings: { ...(config.mappings ?? {}), meta } };
+  return { ...config, mappings: { ...(config.mappings ?? {}), [provider]: meta } };
 }
 
 /** ดึงข้อมูลทีละบัญชี (Edge Function รันครั้งละบัญชี · กันชน rate limit ของ Meta) — บัญชีที่พังไม่หยุดคิว */

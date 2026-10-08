@@ -259,3 +259,55 @@ describe("needsPostScopeReconnect — ต้องเชื่อม Meta ให
     expect(needsPostScopeReconnect([])).toBe(false);
   });
 });
+
+/* 8 ต.ค. 69: เปิดเชื่อม Google Ads — ทั้งสายผูกบัญชีเคยเป็นของ Meta ล้วน
+   (provider hardcode · รหัสบัญชีต้องขึ้นต้น act_ · ปิดเฉพาะแถว provider=meta)
+   ถ้าไม่รื้อ กดบันทึก mapping ของ Google แล้วไม่เกิด ad_connections เลย — ผ่านเงียบๆ แล้วไม่มีอะไรดึงข้อมูล */
+describe("planConnections — Google Ads", () => {
+  const googleAccounts = [
+    { authorization_id: "g-1", external_account_id: "1234567890", account_name: "TEAMDEE - Search", currency: "THB", timezone: "Asia/Bangkok", account_status: null, login_customer_id: "9998887776", is_manager: false },
+    { authorization_id: "g-1", external_account_id: "5550001112", account_name: "MCC", currency: "THB", timezone: "Asia/Bangkok", account_status: null, login_customer_id: null, is_manager: true },
+  ];
+  const plan = (mappings, existing = []) => planConnections({ provider: "google", mappings, source: {}, authorizedAccounts: googleAccounts, existing });
+
+  it("รหัสบัญชีเป็นตัวเลขล้วน และบันทึกเป็น provider google", () => {
+    const out = plan({ teamdee: { accountId: "1234567890", enabled: true } });
+    expect(out.errors).toEqual([]);
+    expect(out.upserts[0]).toMatchObject({ provider: "google", external_account_id: "1234567890", brand_id: "teamdee" });
+  });
+
+  it("บัญชีผู้จัดการ (MCC) ผูกไม่ได้ — ไม่มีค่าแอดของตัวเอง", () => {
+    const out = plan({ teamdee: { accountId: "5550001112", enabled: true } });
+    expect(out.upserts).toEqual([]);
+    expect(out.errors[0].code).toBe("GOOGLE_MANAGER_ACCOUNT");
+  });
+
+  it("จำบัญชีผู้จัดการที่ต้องเรียกผ่านไว้ใน config — ขาดแล้วบัญชีลูกดึงข้อมูลไม่ได้เลย", () => {
+    expect(plan({ teamdee: { accountId: "1234567890", enabled: true } }).upserts[0].config.loginCustomerId).toBe("9998887776");
+  });
+
+  it("รหัสแบบ Meta (act_) ใช้กับ Google ไม่ได้", () => {
+    expect(plan({ teamdee: { accountId: "act_111", enabled: true } }).errors[0].code).toBe("ACCOUNT_ID_INVALID");
+  });
+
+  it("ปิดเฉพาะบัญชี Google ที่เลิก map — ไม่ไปแตะของ Meta และไม่แตะบัญชีที่ป้อนด้วยไฟล์", () => {
+    const existing = [
+      { id: "c-google", provider: "google", external_account_id: "7777777777", status: "connected", config: {} },
+      { id: "c-meta", provider: "meta", external_account_id: "act_111", status: "connected", config: {} },
+      { id: "c-file", provider: "google", external_account_id: "8888888888", status: "connected", config: { source: "file" } },
+    ];
+    expect(plan({ teamdee: { accountId: "1234567890", enabled: true } }, existing).disable).toEqual(["c-google"]);
+  });
+});
+
+describe("applyConnectionResult — แยกตาม provider", () => {
+  it("ผลของ Google ลงช่อง mappings.google ไม่ไปทับของ Meta", () => {
+    const config = { mappings: { meta: { teamdee: { accountId: "act_111", enabled: true } }, google: { teamdee: { accountId: "1234567890", enabled: true } } } };
+    const out = applyConnectionResult(config, {
+      connections: [{ id: "c9", brand_id: "teamdee", external_account_id: "1234567890", status: "connected", last_success_at: null, last_error_code: null }],
+      errors: [], disabled: [],
+    }, "google");
+    expect(out.mappings.google.teamdee.connectionId).toBe("c9");
+    expect(out.mappings.meta.teamdee).toEqual({ accountId: "act_111", enabled: true });
+  });
+});

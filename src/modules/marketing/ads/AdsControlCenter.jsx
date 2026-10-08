@@ -12,7 +12,7 @@ import { Dropdown } from "../ui/Dropdown.jsx";
 import { ADS_PROVIDERS, DEFAULT_SOURCE_CONFIG, metaResultLabel, validateAdsConnection } from "./adsConnectorContract.js";
 import { DAILY_MISSING_HOURS, DAILY_STALE_HOURS, adsDataHealth, reconciliationRows } from "./adsDataHealth.js";
 import { oauthResultMessage, stripOAuthParams } from "./adsOAuthResult.js";
-import { applyConnectionResult, applyReconciliation, enabledMetaMappings, latestReconcileByConnection, needsPostScopeReconnect } from "./adsConnectionSync.js";
+import { applyConnectionResult, applyReconciliation, enabledMappings, latestReconcileByConnection, needsPostScopeReconnect } from "./adsConnectionSync.js";
 import { adsErrorText } from "./adsSyncMessages.js";
 import { CreativeRulesEditor } from "../creatives/CreativeRulesEditor.jsx";
 import { GoalSettingsPanel } from "./GoalSettingsPanel.jsx";
@@ -226,17 +226,27 @@ export function AdsControlCenter({ brands, saved, onSave, toast, ads = null }) {
       const names = pending.map((rule) => `"${rule.name?.trim() || ruleTitle({ ...rule, value: null })}"`).join(" · ");
       toast?.(`บันทึกแล้ว · กฎคัดครีเอทีฟ ${names} ยังไม่ใส่ค่าเกณฑ์ จึงยังไม่ถูกใช้กรอง`, "bad");
     }
-    const meta = next.mappings?.meta ?? {};
-    const touchesMeta = Object.keys(enabledMetaMappings(next)).length > 0 || Object.values(meta).some((row) => row?.connectionId);
-    if (demo || !touchesMeta) { if (!pending.length) toast?.("บันทึกการตั้งค่าค่าแอดแล้ว", "ok"); return; }
-    setLinking(true);
+    /* ผูกบัญชีทีละช่องทางที่เชื่อมด้วย OAuth — เดิมทำเฉพาะ Meta ทำให้บันทึก mapping ของ Google
+       แล้วไม่เกิด ad_connections เลย (กดบันทึกผ่าน แต่ไม่มีอะไรดึงข้อมูลให้) */
+    let merged = next;
+    const linked = [];
+    for (const providerId of OAUTH_PROVIDERS) {
+      const rows = merged.mappings?.[providerId] ?? {};
+      const touches = Object.keys(enabledMappings(merged, providerId)).length > 0 || Object.values(rows).some((row) => row?.connectionId);
+      if (!touches) continue;
+      if (!linked.length) setLinking(true);
+      const result = await apiClient.ads.saveConnections(rows, merged.sources?.[providerId] ?? {}, providerId);
+      merged = applyConnectionResult(merged, result, providerId);
+      const ready = Object.values(merged.mappings?.[providerId] ?? {}).filter((row) => row?.enabled && row.connectionId && !row.connectionError).length;
+      linked.push({ name: PROVIDER_NAME[providerId] ?? providerId, ready, errors: result.errors.length });
+    }
+    if (demo || linked.length === 0) { if (!pending.length) toast?.("บันทึกการตั้งค่าค่าแอดแล้ว", "ok"); return; }
     try {
-      const result = await apiClient.ads.saveConnections(meta, next.sources?.meta ?? {});
-      const merged = applyConnectionResult(next, result);
       setConfig((current) => ({ ...current, mappings: merged.mappings }));
       onSave({ ...next, mappings: merged.mappings });
-      const ready = Object.values(merged.mappings.meta ?? {}).filter((row) => row?.enabled && row.connectionId && !row.connectionError).length;
-      toast?.(result.errors.length ? `บันทึกแล้ว · ผูกบัญชี Meta ได้ ${ready} · มีปัญหา ${result.errors.length} แบรนด์` : `บันทึกแล้ว · ผูกบัญชี Meta พร้อมดึงข้อมูล ${ready} แบรนด์`, result.errors.length ? "bad" : "ok");
+      const problems = linked.reduce((n, item) => n + item.errors, 0);
+      const detail = linked.map((item) => `${item.name} ${item.ready}`).join(" · ");
+      toast?.(problems ? `บันทึกแล้ว · ผูกบัญชีได้ ${detail} · มีปัญหา ${problems} แบรนด์` : `บันทึกแล้ว · ผูกบัญชีพร้อมดึงข้อมูล ${detail}`, problems ? "bad" : "ok");
     } catch (error) {
       toast?.(`บันทึกค่าแล้ว แต่ผูกบัญชีกับระบบดึงข้อมูลไม่สำเร็จ · ${adsErrorText(error, "ลองบันทึกอีกครั้ง")}`, "bad");
     } finally {
