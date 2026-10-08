@@ -30,6 +30,16 @@ const TEXT = {
   AD_NOT_FOUND: "ไม่พบโฆษณานี้ในข้อมูลของบัญชี กดดึงข้อมูลใหม่ก่อน",
   PREVIEW_FORMAT_INVALID: "รูปแบบตัวอย่างไม่รองรับ",
   PREVIEW_UNAVAILABLE: "Meta ไม่ส่งตัวอย่างของโฆษณานี้ (อาจถูกลบหรือไม่รองรับตำแหน่งนี้) ลองรูปแบบอื่น",
+
+  /* Google Ads — บอกให้รู้ว่าต้องไปทำอะไรต่อ ไม่ใช่แค่บอกว่าพัง */
+  CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION: "โปรเจกต์ Google Cloud ยังไม่ได้รับอนุมัติให้ใช้กับบัญชีจริง — ไปขอ Basic access ที่หน้า Google Ads API ใน Cloud Console ก่อน",
+  NOT_PERMITTED: "บัญชีที่เชื่อมไม่มีสิทธิ์อ่านบัญชีโฆษณานี้ — ตรวจว่าผู้ที่กดเชื่อมมีสิทธิ์ในบัญชี Google Ads นั้นจริง",
+  TOKEN_EXPIRED: "สิทธิ์ Google หมดอายุหรือถูกยกเลิก ต้องเชื่อมบัญชีใหม่",
+  QUOTA_EXCEEDED: "Google จำกัดจำนวนคำขอชั่วคราว ระบบจะลองใหม่ให้เอง",
+  GOOGLE_UNAVAILABLE: "Google ขัดข้องชั่วคราว ลองใหม่ภายหลัง",
+  GOOGLE_ERROR: "Google ปฏิเสธคำขอ ตรวจรหัสบัญชี (Customer ID) และสิทธิ์",
+  GOOGLE_ROW_INVALID: "ข้อมูลจาก Google ผิดรูป ยังไม่ได้บันทึกยอด",
+  GOOGLE_MANAGER_ACCOUNT: "บัญชีนี้เป็นบัญชีผู้จัดการ (MCC) ซึ่งไม่มีค่าแอดของตัวเอง — เลือกบัญชีลูกที่ยิงโฆษณาจริงแทน",
   META_TOO_MUCH_DATA: "Meta ขอให้ลดปริมาณข้อมูลต่อคำขอ ลองดึงช่วงสั้นลง",
   ACCOUNT_NOT_AUTHORIZED: "บัญชีนี้ไม่อยู่ในบัญชีที่คุณเชื่อม OAuth",
   ACCOUNT_MAPPED_TWICE: "บัญชีเดียวกันผูกหลายแบรนด์ ยอดจะนับซ้ำ",
