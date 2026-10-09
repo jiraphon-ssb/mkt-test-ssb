@@ -81,3 +81,24 @@ describe("ImportSpendPanel", () => {
     expect(document.querySelector('input[type="file"]')).toBeNull();
   });
 });
+
+/* 9 ต.ค. 69: ไฟล์ Google บอกสกุลเงินมาด้วย — ไม่ตรงกับบัญชีต้องปฏิเสธ ไม่แปลงค่าเงินเอง */
+describe("ImportSpendPanel — Google Ads", () => {
+  const G = "รายงานแคมเปญ\n1 - 2 ต.ค.\nวัน,สถานะของแคมเปญ,แคมเปญ,รหัสสกุลเงิน,ค่าใช้จ่าย\n"
+    + "2026-10-01,เปิดใช้อยู่,TD Search,THB,100.00\n2026-10-01,ทั้งหมด: แคมเปญ, --,THB,100.00\n,ทั้งหมด: บัญชี,,THB,100.00\n";
+  const gconn = (currency) => ({ id: "g-1", provider: "google", external_account_id: "1234567890", account_name: "TD Google", brand_name: "TEAMDEE", currency });
+
+  it("สกุลเงินตรงกัน = ขึ้นสรุป และไม่นับแถวสรุปของไฟล์ซ้ำ", async () => {
+    open({ connections: [gconn("THB")] });
+    await pickFile(G, "google.csv");
+    const box = await screen.findByRole("group", { name: /ตรวจก่อนนำเข้า/ });
+    expect(box.textContent).toContain("฿100.00");
+  });
+
+  it("สกุลเงินไม่ตรงกับบัญชี = ปฏิเสธทั้งไฟล์ กดยืนยันไม่ได้", async () => {
+    open({ connections: [gconn("USD")] });
+    await pickFile(G, "google.csv");
+    expect(await screen.findByText(/สกุลเงิน THB แต่บัญชีตั้งไว้เป็น USD/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /ยืนยันนำเข้า/ })).toBeNull();
+  });
+});

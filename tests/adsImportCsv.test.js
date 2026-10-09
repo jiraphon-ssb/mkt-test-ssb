@@ -79,3 +79,36 @@ describe("parseSpendCsv — กติกากันตัวเลขเพี�
     expect(out.errors[0]).toMatch(/ยังไม่รองรับ/);
   });
 });
+
+/* 9 ต.ค. 69: ไฟล์รายงานแคมเปญรายวันจริงจาก Google Ads (TEAMDEE 1–8 ต.ค.)
+   กับดักของไฟล์นี้: มีแถวสรุปซ้อนหลายชุด (ทั้งหมด: แคมเปญ / บัญชี / การค้นหา / ประสิทธิภาพสูงสุด) แยกรายวันด้วย
+   รวมทุกแถวตามวันตรงๆ จะได้ยอดราว 4 เท่าของจริง (฿5,770.00) */
+describe("parseSpendCsv — ไฟล์จริงจาก Google Ads", () => {
+  const out = parseSpendCsv(fixture("google-teamdee-daily.csv"), "google", { today: "2026-10-09" });
+
+  it("ยอดรวมเท่ากับที่ไฟล์สรุปไว้เอง (฿5,770.00) — ไม่นับแถวสรุปซ้ำ", () => {
+    expect(out.errors).toEqual([]);
+    expect(Math.round(out.rows.reduce((n, r) => n + r.spend, 0) * 100) / 100).toBe(5770);
+  });
+
+  it("ได้ 8 วัน ยอดรายวันตรงกับแถว 'ทั้งหมด: บัญชี' ของวันนั้น", () => {
+    expect(out.rows).toEqual([
+      { fact_date: "2026-10-01", spend: 970.12 }, { fact_date: "2026-10-02", spend: 1051.83 },
+      { fact_date: "2026-10-03", spend: 1109.85 }, { fact_date: "2026-10-04", spend: 957.91 },
+      { fact_date: "2026-10-05", spend: 688.78 }, { fact_date: "2026-10-06", spend: 333.63 },
+      { fact_date: "2026-10-07", spend: 283.94 }, { fact_date: "2026-10-08", spend: 373.94 },
+    ]);
+  });
+
+  it("บอกสกุลเงินจากไฟล์ และยอดสรุปของไฟล์ไว้ให้ตรวจ", () => {
+    expect(out.currency).toBe("THB");
+    expect(out.fileTotal).toBe(5770);
+  });
+
+  it("ยอดที่แกะได้ไม่เท่ายอดสรุปของไฟล์ = ปฏิเสธทั้งไฟล์ (แปลว่ารูปแบบไฟล์เปลี่ยนจนเราอ่านผิด)", () => {
+    const tampered = fixture("google-teamdee-daily.csv").replace("9.50%,970.12\n2026-10-02,หยุดชั่วคราว", "9.50%,1970.12\n2026-10-02,หยุดชั่วคราว");
+    const bad = parseSpendCsv(tampered, "google", { today: "2026-10-09" });
+    expect(bad.rows).toEqual([]);
+    expect(bad.errors.join(" ")).toMatch(/ไม่ตรงกับยอดรวมของไฟล์/);
+  });
+});

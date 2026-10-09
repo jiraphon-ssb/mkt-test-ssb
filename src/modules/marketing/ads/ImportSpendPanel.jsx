@@ -40,6 +40,12 @@ export function ImportSpendPanel({ connections = [], batches = [], importFn, loa
     try {
       const text = await file.text();
       const parse = parseSpendCsv(text, connection.provider);
+      /* สกุลเงินในไฟล์ไม่ตรงกับบัญชี = ปฏิเสธทั้งไฟล์ ไม่แปลงค่าเงินเอง (ไฟล์ที่ไม่บอกสกุลเงิน เช่นของ ChatGPT ตรวจไม่ได้ ยึดตามบัญชี) */
+      if (parse.currency && connection.currency && parse.currency !== connection.currency) {
+        setStaged({ fileName: file.name, rows: [], hash: null, preview: null, seenBefore: null,
+          parse: { ...parse, rows: [], errors: [`ไฟล์นี้เป็นสกุลเงิน ${parse.currency} แต่บัญชีตั้งไว้เป็น ${connection.currency} — ไม่นำเข้า เพราะระบบไม่แปลงค่าเงินเอง`] } });
+        return;
+      }
       if (parse.rows.length === 0) { setStaged({ fileName: file.name, parse, rows: [], hash: null, preview: null, seenBefore: null }); return; }
       const hash = await fileHashOf(text);
       const existing = await fetchExisting(connection.id, parse.rows[0].fact_date, parse.rows[parse.rows.length - 1].fact_date);
@@ -80,7 +86,7 @@ export function ImportSpendPanel({ connections = [], batches = [], importFn, loa
       <label className="imp-field">
         <span>บัญชี</span>
         <Dropdown className="dd--block" ariaLabel="บัญชีที่จะนำเข้า"
-          options={connections.map((item) => [item.id, item.brand_name ? `${item.brand_name} · ${item.account_name}` : item.account_name])}
+          options={connections.map((item) => [item.id, [PROVIDER_LABEL[item.provider] ?? item.provider, item.brand_name, item.account_name].filter(Boolean).join(" · ")])}
           value={connection?.id ?? ""} onChange={(value) => { setConnectionId(value); setStaged(null); setDone(null); }} />
       </label>
       <label className="imp-file">

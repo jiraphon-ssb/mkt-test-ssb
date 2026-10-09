@@ -54,3 +54,21 @@ describe("FileAccountDialog", () => {
     expect(screen.getByRole("button", { name: /บันทึก/ }).disabled).toBe(true);
   });
 });
+
+/* 9 ต.ค. 69: นำเข้าไฟล์ Google Ads ได้ระหว่างที่ยังไม่ได้เชื่อม API */
+describe("FileAccountDialog — Google Ads", () => {
+  it("เลือก Google แล้วรหัสบัญชีถูกเก็บเป็นตัวเลขล้วน (ตัดขีด) ให้ตรงกับที่การเชื่อม API ใช้", async () => {
+    const createFn = vi.fn().mockResolvedValue({ id: "g1" });
+    open({ createFn });
+    fireEvent.click(screen.getByRole("button", { name: "Google Ads" }));
+    fireEvent.change(screen.getByLabelText(/Customer ID/), { target: { value: "123-456-7890" } });
+    fireEvent.click(screen.getByRole("button", { name: /บันทึก/ }));
+    await waitFor(() => expect(createFn.mock.calls[0][0]).toMatchObject({ provider: "google", accountId: "1234567890" }));
+  });
+  it("Google: พิมพ์แต่ตัวอักษรไม่มีตัวเลข = บันทึกไม่ได้", () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Google Ads" }));
+    fireEvent.change(screen.getByLabelText(/Customer ID/), { target: { value: "teamdee" } });
+    expect(screen.getByRole("button", { name: /บันทึก/ }).disabled).toBe(true);
+  });
+});
