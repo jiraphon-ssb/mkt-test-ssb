@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /* หน้าตั้งค่าข้อมูลโฆษณา — แท็บเป้าของเราถอดแล้ว (แผน 2026-09-17 ข้อ 4) เป้าทั้งหมดใช้ของระบบขาย */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const auth = { demo: true, user: { role: "team_lead" } };
@@ -9,10 +9,11 @@ vi.mock("../src/foundation/auth/AuthContext.jsx", () => ({ useAuth: () => auth }
 /* เครื่องนี้มี .env จริง → ถ้าไม่ mock หน้าตั้งค่าจะยิง Edge Function จริงตอนเทส
    (ค้างจนหมดเวลา และผลเทสขึ้นกับเน็ต) — ตัดออกให้เทสเป็นของมันเองล้วนๆ */
 const oauthState = { authorizations: [], accounts: [], teamAccounts: [], isLead: true };
+const oauthImpl = { fn: null };   // เทสที่ต้องคุมจังหวะคำตอบรายช่องทาง ใส่ฟังก์ชันตรงนี้
 vi.mock("../src/foundation/data/apiClient.js", () => ({
   apiClient: {
     ads: {
-      oauthStatus: async () => oauthState,
+      oauthStatus: (provider) => (oauthImpl.fn ? oauthImpl.fn(provider) : Promise.resolve(oauthState)),
       startOAuth: async () => "https://example.test/authorize",
       disconnectOAuth: async () => ({ disconnected: true }),
       connections: async () => [],
@@ -22,7 +23,7 @@ vi.mock("../src/foundation/data/apiClient.js", () => ({
 }));
 const { AdsControlCenter } = await import("../src/modules/marketing/ads/AdsControlCenter.jsx");
 
-afterEach(() => { cleanup(); auth.user = { role: "team_lead" }; });
+afterEach(() => { cleanup(); auth.user = { role: "team_lead" }; oauthImpl.fn = null; });
 const brands = [{ id: "b_td", name: "TEAMDEE" }];
 
 describe("AdsControlCenter", () => {
@@ -220,5 +221,25 @@ describe("AdsControlCenter — เลือกบัญชีจากที่�
     expect(list.querySelector("option").value).toBe("1234567890");
     expect(document.querySelector('.acc-mapping-row input[list="google-oauth-accounts"]')).toBeTruthy();
     oauthState.accounts = []; oauthState.teamAccounts = [];
+  });
+});
+
+/* 9 ต.ค. 69 (เกิดบนหน้าจริง): การ์ด Google ขึ้น "เชื่อมแล้ว · เข้าถึง 8 บัญชี" ทั้งที่ไม่เคยเชื่อม Google
+   8 บัญชีนั้นเป็นของ Meta — คำตอบของ Meta ที่ขอไว้ตอนเปิดหน้ากลับมาช้ากว่าคำตอบของ Google แล้วเขียนทับ
+   อันตรายกว่าแค่โชว์ผิด: ปุ่ม "ยกเลิก" ใต้การ์ด Google จะไปยกเลิกการเชื่อม Meta */
+describe("AdsControlCenter — คำตอบเก่าต้องไม่ทับสถานะของช่องทางที่เลือกอยู่", () => {
+  it("คำตอบของ Meta ที่มาช้า ไม่ทำให้การ์ด Google ขึ้นว่าเชื่อมแล้ว", async () => {
+    let releaseMeta;
+    const metaConnected = { authorizations: [{ id: "m1", status: "connected" }], accounts: Array.from({ length: 8 }, (_, i) => ({ external_account_id: `act_${i}`, authorization_id: "m1" })), teamAccounts: [], isLead: true };
+    oauthImpl.fn = (provider) => provider === "meta"
+      ? new Promise((resolve) => { releaseMeta = () => resolve(metaConnected); })
+      : Promise.resolve({ authorizations: [], accounts: [], teamAccounts: [], isLead: true });
+    render(<MemoryRouter><AdsControlCenter brands={brands} saved={{}} onSave={() => {}} toast={() => {}} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /Google Ads/ }));
+    await screen.findByRole("button", { name: /เชื่อมบัญชี/ });      // Google ตอบแล้ว: ยังไม่เชื่อม
+    await act(async () => { releaseMeta(); });                        // คำตอบของ Meta ตามมาทีหลัง
+    expect(screen.queryByRole("button", { name: /ยกเลิก$/ })).toBeNull();
+    expect(document.querySelector(".acc-oauth").textContent).not.toMatch(/เข้าถึง 8 บัญชี/);
+    expect(screen.getByRole("button", { name: /เชื่อมบัญชี/ })).toBeTruthy();
   });
 });

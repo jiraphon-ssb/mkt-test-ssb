@@ -59,10 +59,14 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
   const creativeByAd = new Map(creatives.map((row) => [`${row.connection_id}|${row.external_ad_id}`, row]));
   const tracksValue = new Set(facts.filter((f) => f.attributed_value != null).map((f) => f.connection_id));
   const tracksPurchases = new Set(facts.filter((f) => f.attributed_conversions != null).map((f) => f.connection_id));
+  /* บัญชี×วันเดียวกันมีได้ทั้งระดับบัญชี (ยอดจากไฟล์) และระดับโฆษณา (ยอดจาก API) เมื่อบัญชีที่เคยลงไฟล์ถูกเชื่อม API ทีหลัง
+     เป็นเงินก้อนเดียวกัน — มีระดับโฆษณาแล้วให้ใช้ระดับโฆษณา (ได้รายละเอียดแคมเปญ) และไม่นับแถวระดับบัญชีของวันนั้นซ้ำ */
+  const hasAdLevel = new Set(facts.filter((f) => f.level !== "account").map((f) => `${f.connection_id}|${f.fact_date}`));
   const cards = [];
   for (const f of facts) {
     const connection = live.get(f.connection_id);
     if (!connection || !ISO.test(f.fact_date ?? "")) continue;
+    if (f.level === "account" && hasAdLevel.has(`${f.connection_id}|${f.fact_date}`)) continue;
     const spend = num(f.spend), leads = num(f.leads);
     const value = num(f.attributed_value);
     const campaign = f.campaign_name || f.campaign_id || null;

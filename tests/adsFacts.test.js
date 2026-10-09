@@ -153,3 +153,29 @@ describe("factsToAdCards — หลาย provider", () => {
     expect(card.result_label).toBe("การสนทนาผ่านข้อความที่เริ่มต้น");
   });
 });
+
+/* 9 ต.ค. 69: บัญชี Google ของ TEAMDEE ลงยอดจากไฟล์ไว้ก่อน (ระดับบัญชี) แล้วจะเชื่อม API ทีหลัง (ระดับโฆษณา)
+   บัญชี×วันเดียวกันจึงมีได้ทั้งสองระดับ — เป็นเงินก้อนเดียวกัน ห้ามบวกกัน */
+describe("factsToAdCards — บัญชี×วันที่มีทั้งระดับบัญชีและระดับโฆษณา", () => {
+  const g = conn({ id: "g1", provider: "google", external_account_id: "1234567890" });
+  const acc = (date, spend) => fact({ connection_id: "g1", fact_date: date, level: "account", spend, campaign_id: "", campaign_name: "", ad_group_id: "", ad_group_name: "", ad_id: "", ad_name: "" });
+  const ad = (date, adId, spend) => fact({ connection_id: "g1", fact_date: date, level: "ad", ad_id: adId, spend });
+  const total = (cards) => cards.reduce((n, card) => n + card.metrics.spend, 0);
+
+  it("วันที่มีแถวระดับโฆษณาแล้ว ไม่นับแถวระดับบัญชีของวันนั้นซ้ำ", () => {
+    const cards = factsToAdCards([acc("2026-10-06", 333.63), ad("2026-10-06", "a1", 200), ad("2026-10-06", "a2", 133.63)], [g], { today: "2026-10-09" });
+    expect(cards).toHaveLength(2);
+    expect(total(cards)).toBeCloseTo(333.63, 2);
+  });
+
+  it("วันที่มีแต่ระดับบัญชี (ยังไม่มีข้อมูลจาก API) ยังนับตามปกติ", () => {
+    const cards = factsToAdCards([acc("2026-10-05", 688.78), acc("2026-10-06", 333.63), ad("2026-10-06", "a1", 333.63)], [g], { today: "2026-10-09" });
+    expect(total(cards)).toBeCloseTo(688.78 + 333.63, 2);
+  });
+
+  it("แยกตามบัญชี — ระดับโฆษณาของบัญชีอื่นไม่ทำให้แถวระดับบัญชีของอีกบัญชีหาย", () => {
+    const other = conn({ id: "m1" });
+    const cards = factsToAdCards([acc("2026-10-06", 333.63), fact({ connection_id: "m1", fact_date: "2026-10-06", spend: 50 })], [g, other], { today: "2026-10-09" });
+    expect(total(cards)).toBeCloseTo(383.63, 2);
+  });
+});

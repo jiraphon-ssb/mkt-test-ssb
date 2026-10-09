@@ -1,5 +1,5 @@
 import { fmtMoney, fmtNum, fmtPct } from "../dash/charts/theme.js";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { sourceChips } from "./adsSourceStrip.js";
 import { DAILY_RUN_LABEL } from "../../../../supabase/functions/_shared/dailySchedule.js";
@@ -64,12 +64,20 @@ function Connections({ brands, config, setConfig, toast, isLead }) {
   }));
 
   /* โหลดสถานะของ provider ที่เลือกอยู่ — เดิมล็อกไว้ที่ meta ตายตัว พอเพิ่ม Google แล้วจะอ่านสถานะผิดบัญชี */
+  /* คำตอบที่ไม่ใช่ของคำขอล่าสุดต้องทิ้ง — เคยเกิดจริง 8 ต.ค. 69: เปิดหน้า (ขอสถานะ Meta) แล้วกดการ์ด Google
+     คำตอบของ Meta กลับมาช้ากว่าของ Google เลยเขียนทับ การ์ด Google ขึ้น "เชื่อมแล้ว 8 บัญชี" ทั้งที่ไม่เคยเชื่อม
+     และปุ่ม "ยกเลิก" ใต้การ์ดนั้นจะไปยกเลิกการเชื่อม Meta
+     สลับช่องทางแล้วล้างสถานะเดิมทันที ไม่โชว์ของช่องทางก่อนหน้าระหว่างรอ */
+  const oauthRequest = useRef(0);
   const loadOAuth = async (provider = sourceId) => {
-    setOauth((current) => ({ ...current, loading: true, error: null }));
+    const requestId = ++oauthRequest.current;
+    setOauth({ loading: true, authorizations: [], accounts: [], teamAccounts: [], error: null });
     try {
       const result = await apiClient.ads.oauthStatus(provider);
+      if (requestId !== oauthRequest.current) return;
       setOauth({ loading: false, authorizations: result.authorizations, accounts: result.accounts, teamAccounts: result.teamAccounts, error: null });
     } catch (error) {
+      if (requestId !== oauthRequest.current) return;
       setOauth({ loading: false, authorizations: [], accounts: [], teamAccounts: [], error: adsErrorText(error, `ตรวจสถานะการเชื่อม ${PROVIDER_NAME[provider] ?? provider} ไม่สำเร็จ`) });
     }
   };
