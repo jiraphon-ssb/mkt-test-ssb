@@ -179,3 +179,13 @@ describe("factsToAdCards — บัญชี×วันที่มีทั้�
     expect(total(cards)).toBeCloseTo(383.63, 2);
   });
 });
+
+/* ข้อมูลจากไฟล์อัปโหลดมาเป็นรอบ ไม่ได้ดึงทุกเช้า — การ์ดต้องรู้ว่ามาจากไฟล์ จังหวะงบจะได้นับถึงวันที่ไฟล์มีจริง (ตรวจ 10 พ.ย.) */
+describe("factsToAdCards — บอกว่าแถวมาจากไฟล์", () => {
+  it("บัญชีไฟล์ (config.source = file) → file_import = true · บัญชี API → false", () => {
+    const [fileCard] = factsToAdCards([fact({ connection_id: "g1", level: "account", ad_id: "" })], [conn({ id: "g1", provider: "google", config: { source: "file" } })], { today: "2026-11-10" });
+    const [apiCard] = factsToAdCards([fact()], [conn()], { today: "2026-11-10" });
+    expect(fileCard.file_import).toBe(true);
+    expect(apiCard.file_import).toBe(false);
+  });
+});

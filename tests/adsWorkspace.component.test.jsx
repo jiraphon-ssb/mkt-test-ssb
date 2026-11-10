@@ -498,3 +498,16 @@ it("เดือนนี้วันที่ 1 (ยังไม่มีข้
   expect(container.querySelector(".aw-today-pending").textContent).toContain("ข้อมูลของ 1 ต.ค. 2569 ยังไม่เข้า");
   expect(container.querySelector(".aw-hero")).toBeNull();
 });
+
+/* ตรวจ 10 พ.ย.: ไฟล์ Google / ChatGPT มีถึงวันที่ 5 — การ์ดงบรวมของแบรนด์ยังนับจังหวะถึงเมื่อวาน ต้องบอกว่าช่องทางไหนข้อมูลยังไม่ครบ */
+it("กล่องงบของแบรนด์บอกช่องทางที่ข้อมูลไฟล์ค้าง", () => {
+  const td = { ...brands[0], channels: [{ key: "Meta Ads", dataThrough: null }, { key: "Google Ads", dataThrough: "2026-11-05" }, { key: "ChatGPT Ads", dataThrough: "2026-11-05" }] };
+  const { container } = render(<MemoryRouter><AdsWorkspace v={model({ brands: [td, brands[1]] })} ads={ads()} controls={null} selected="b_td" onSelect={() => {}}
+    ChannelCard={() => null} SalePipeline={() => null} settings={{}} updateAdsControl={() => {}} toast={() => {}} /></MemoryRouter>);
+  expect(container.querySelector(".aw-file-stale").textContent).toBe("Google Ads · ChatGPT Ads ข้อมูลจากไฟล์มีถึง 5 พ.ย. — จังหวะงบรวมยังต่ำกว่าจริงจนกว่าจะอัปโหลดวันที่เหลือ");
+});
+it("ไม่มีช่องทางที่ไฟล์ค้าง = ไม่มีป้าย", () => {
+  const { container } = render(<MemoryRouter><AdsWorkspace v={model()} ads={ads()} controls={null} selected="b_td" onSelect={() => {}}
+    ChannelCard={() => null} SalePipeline={() => null} settings={{}} updateAdsControl={() => {}} toast={() => {}} /></MemoryRouter>);
+  expect(container.querySelector(".aw-file-stale")).toBeNull();
+});

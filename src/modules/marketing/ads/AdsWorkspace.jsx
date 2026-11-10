@@ -280,6 +280,11 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
     pctAds: s.pctAds !== undefined ? s.pctAds : share(s.spend, s.revenue), channels: [],
   } : null);
   const p2 = picked ? picked.pace2 : v.overallPace;
+  /* ช่องทางที่ข้อมูลจากไฟล์ยังไม่ถึงวันที่ใช้คิดจังหวะ (ตรวจ 10 พ.ย.) — การ์ดแพลตฟอร์มคิดถึงวันที่ไฟล์มีแล้ว
+     แต่งบรวมของแบรนด์ยังนับถึงเมื่อวาน ต้องบอกว่ายอดรวมขาดวันไหน · ภาพรวม = รวมทุกแบรนด์ที่เห็น */
+  const fileStale = (picked ? [picked] : v.brands).flatMap((b) => b.channels ?? []).filter((c) => c.dataThrough);
+  const fileStaleNames = [...new Set(fileStale.map((c) => c.key))];
+  const fileStaleThrough = fileStale.map((c) => c.dataThrough).sort()[0] ?? null;
   const pipeline = overview ? v.overallPipeline : v.pipelines[picked.id];
   const goals = overview ? v.goals?.overall : v.goals?.byBrand?.[picked?.id];
   const roas = pipeline?.items.find(x => x.key === 'roas')?.value;
@@ -404,6 +409,7 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
           {/* ค่าแอดดึงวันละครั้งตอนเช้า — หัวหน้าบอก "1 – 27 ก.ย." แต่ค่าแอดมีถึงเมื่อวาน ต้องบอกตรงนี้ (ทดสอบแบบผู้ใช้จริง 27 ก.ย.) */}
           {p2?.budget?.reason === 'stale' ? <p className="aw-key">ค่าแอดมีถึง {thDay(v.spendThrough)} — ยังตัดสินจังหวะงบไม่ได้</p>
             : v.spendThrough && v.spendThrough < localIso(new Date()) && <p className="aw-through">ค่าแอดถึง {thDay(v.spendThrough)} (ดึงวันละครั้งตอนเช้า)</p>}
+          {fileStaleThrough && <p className="aw-file-stale">{fileStaleNames.join(' · ')} ข้อมูลจากไฟล์มีถึง {thDay(fileStaleThrough)} — จังหวะงบรวมยังต่ำกว่าจริงจนกว่าจะอัปโหลดวันที่เหลือ</p>}
         </section>
         {cashNow && <CashPanel c={cashNow}/>}
       </div>

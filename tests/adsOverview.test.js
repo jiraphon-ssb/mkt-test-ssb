@@ -1076,3 +1076,41 @@ describe("ป้ายบอกฐานของค่าแอด", () => {
     expect(spendBasisNote(head([{ key: "Meta Ads", spend: 100 }, { key: "ChatGPT Ads", spend: 0 }]))).toBe("คิดจากค่าแอด Meta Ads");
   });
 });
+
+/* ตรวจ 10 พ.ย.: ไฟล์ Google / ChatGPT มีถึงวันที่ 5 แต่การ์ดคิดจังหวะถึง 9 พ.ย. (หาร 9 วัน) → "ใช้ช้ากว่าแผน" เกินจริง
+   แพลตฟอร์มที่ข้อมูลมาจากไฟล์ล้วน ต้องคิดจังหวะถึงวันสุดท้ายที่ไฟล์มี · เหลือเวลายังนับจากวันจริง */
+describe("adsByBrandChannel — จังหวะแพลตฟอร์มที่ข้อมูลจากไฟล์ค้าง", () => {
+  const NOV = { start: "2026-11-01T00:00:00.000Z", end: "2026-11-10T00:00:00.000Z" };
+  const at = (day) => `2026-11-${String(day).padStart(2, "0")}T05:00:00.000Z`;
+  const adCard = (id, channel, day, spend, file) => card({ id, brief: brief({ channels: [channel], publish_at: at(day) }), ad_platform: channel, fact_date: `2026-11-${String(day).padStart(2, "0")}`, file_import: file, metrics: metrics({ spend, leads: 0, measured_at: at(day) }) });
+  const cards = [
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => adCard(`m${d}`, "Meta Ads", d, 1000, false)),
+    ...[1, 2, 3, 4, 5].map((d) => adCard(`g${d}`, "Google Ads", d, 300, true)),
+  ];
+  const budgets = [
+    { brand_id: "b_td", channel: "Meta Ads", month: "2026-11", amount: 30000 },
+    { brand_id: "b_td", channel: "Google Ads", month: "2026-11", amount: 30000 },
+  ];
+  const [brand] = adsByBrandChannel(cards, NOV, [{ id: "b_td", name: "TEAMDEE" }], budgets, "2026-11-09");
+  const google = brand.channels.find((c) => c.key === "Google Ads");
+  const meta = brand.channels.find((c) => c.key === "Meta Ads");
+  it("Google (ไฟล์ถึง 5 พ.ย.) คิดจังหวะถึงวันที่ 5 ไม่ใช่วันที่ 9", () => {
+    expect(google.dataThrough).toBe("2026-11-05");
+    expect(google.pace.expectedSpend).toBeCloseTo(30000 * 5 / 30);
+    expect(google.pace.average).toBeCloseTo(300);
+    expect(google.pace.forecast).toBeCloseTo(9000);
+  });
+  it("เหลือเวลายังนับจากวันจริง (9 พ.ย. → 21 วัน) ไม่ใช่จากวันที่ไฟล์ค้าง", () => {
+    expect(google.pace.daysLeft).toBe(21);
+  });
+  it("Meta (ดึงทุกวัน) คิดถึงวันที่ 9 ตามเดิม · ไม่มีป้ายข้อมูลค้าง", () => {
+    expect(meta.dataThrough).toBeNull();
+    expect(meta.pace.expectedSpend).toBeCloseTo(30000 * 9 / 30);
+  });
+  it("ไฟล์ที่มาถึงวันอ้างอิงแล้ว ไม่ต้องเลื่อน", () => {
+    const fresh = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => adCard(`f${d}`, "Google Ads", d, 300, true));
+    const [b] = adsByBrandChannel(fresh, NOV, [{ id: "b_td", name: "TEAMDEE" }], budgets, "2026-11-09");
+    expect(b.channels[0].dataThrough).toBeNull();
+    expect(b.channels[0].pace.expectedSpend).toBeCloseTo(9000);
+  });
+});

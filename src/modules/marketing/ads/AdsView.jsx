@@ -114,11 +114,17 @@ export function SalePipeline({ items, worstKey = null, row = false, title = true
   );
 }
 
-function forecastNote(pace) {
+/* "พอดีงบ" ใช้เฉพาะเมื่อคาดสิ้นเดือนห่างงบไม่เกิน 5% — เดิมต่ำกว่างบเท่าไรก็ขึ้น "พอดีงบ"
+   (ตรวจ 10 พ.ย.: Google คาดใช้ ฿7,426 จากงบ ฿27,300 แต่ขึ้น "คาดพอดีงบ · เหลือ ฿19,873") */
+const FIT_BUDGET_BAND = 0.05;
+function forecastNote(pace, budget) {
   if (pace.forecastOver == null) return `คาดสิ้นเดือน ${fmtMoney(pace.forecast)}`;
   if (pace.forecastOver > 0) return `คาดเกินงบ ${fmtMoney(pace.forecastOver)}`;
-  return `คาดพอดีงบ · เหลือ ${fmtMoney(-pace.forecastOver)}`;
+  const fits = budget > 0 && -pace.forecastOver <= budget * FIT_BUDGET_BAND;
+  return `${fits ? "คาดพอดีงบ" : "คาดใช้ไม่ถึงงบ"} · เหลือ ${fmtMoney(-pace.forecastOver)}`;
 }
+
+const thDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 
 function Sparkline({ values, tone = "zinc", lower = false, word = true }) {
   const pts = values.map((v, i) => ({ v, i })).filter((p) => p.v != null && Number.isFinite(p.v));
@@ -173,7 +179,7 @@ function ChannelCardRange({ c, real = false }) {
 }
 
 /** real = ข้อมูลจริง: ไม่แสดง %Ads (Meta) — Meta แทบไม่เห็นยอดขายของธุรกิจทักแชท ตัวเลขนี้ขึ้น 130% ข้าง %Ads จริง 24% ทำคนงง (ทดสอบแบบผู้ใช้จริง 27 ก.ย.) */
-export function ChannelCard({ c, monthView = true, real = false, asOfText = "วันนี้" }) {    // export ให้เทสระดับหน้าจอเรียกตรงได้
+export function ChannelCard({ c, monthView = true, real = false, asOfText: pageAsOf = "วันนี้" }) {    // export ให้เทสระดับหน้าจอเรียกตรงได้
   const [openDetail, setOpenDetail] = useState(false);
   const meta = platformMeta(c.key);
   if (!monthView) return <ChannelCardRange c={c} real={real} />;
@@ -184,12 +190,15 @@ export function ChannelCard({ c, monthView = true, real = false, asOfText = "ว
   const state = trendPaceState({ ratio, direction: "spend", overTarget: c.pace.remaining != null && c.pace.remaining < 0 });
   const tone = paceTone(state);
   const flag = paceFlag(state, "spend");
+  /* ข้อมูลจากไฟล์ค้าง → จังหวะคิดถึงวันที่ไฟล์มี ป้ายวันที่ต้องตรงกับเลขที่ใช้คิด (ตรวจ 10 พ.ย.) */
+  const asOfText = c.dataThrough ? thDay(c.dataThrough) : pageAsOf;
   return (
     <div className="ads-chan-card" style={{ borderTopColor: meta.color }}>
       <div className="ads-chan-head">
         <span className="ads-chan-name"><PlatformIcon channel={c.key} size={15} /><b>{c.key}</b></span>
         {flag && <span className={`aw-flag aw-flag--${flag.tone}`}>{flag.text}</span>}
       </div>
+      {c.dataThrough && <p className="ads-chan-stale">ข้อมูลถึง {thDay(c.dataThrough)} · ยังไม่ได้อัปโหลดไฟล์วันหลังจากนั้น</p>}
       {/* สองคอลัมน์แบบ hero (อาร์ตเคาะ 21 ก.ย. ค่ำ): เนื้อหาซ้าย · คอลัมน์ pace ขวาใช้หน้าปัดใหญ่
           พร้อมประโยคเงินใต้หน้าปัด — เรื่องจังหวะทั้งหมดอยู่ที่เดียว ไม่กระจายเป็นเศษประโยคท้ายการ์ด */}
       <div className="ads-chan-main">
@@ -197,8 +206,14 @@ export function ChannelCard({ c, monthView = true, real = false, asOfText = "ว
           <div>
             <span className="ads-chan-num">
               <b className="aw-metric-num mono">{fmtMoney(c.spend)}{c.budget != null && <small> / {fmtMoney(c.budget)}</small>}</b>
-              {/* งบระดับช่องทางไม่ได้มีใครกรอก — ระบบแบ่งจากงบของแบรนด์ตามสัดส่วนแผนก่อนหน้า */}
-              <InfoTip label={`งบ ${c.key}`} lines={[c.budget != null ? "งบแพลตฟอร์ม = แบ่งจากงบของแบรนด์ตามสัดส่วนแผนก่อนหน้า ไม่ใช่งบที่ตั้งรายแพลตฟอร์ม" : "ยังไม่ตั้งงบแบรนด์ จึงยังแบ่งงบให้แพลตฟอร์มนี้ไม่ได้", c.pace.used != null ? `ใช้ไป ${fmtPct(c.pace.used)} ของงบ` : null]}/>
+              {/* ข้อมูลจริง: งบมาจากเป้าเดือนของระบบขาย ตั้งรายแพลตฟอร์ม (หรือ % ของงบโฆษณา) · ข้อมูลสาธิต: แบ่งจากงบแบรนด์ตามสัดส่วนเดิม */}
+              <InfoTip label={`งบ ${c.key}`} lines={[
+                real
+                  ? (c.budget != null ? `งบที่ตั้งให้ ${c.key} ในเป้าเดือนของระบบขาย` : `ยังไม่ได้ตั้งงบ ${c.key} ในเป้าเดือนของระบบขาย`)
+                  : (c.budget != null ? "งบแพลตฟอร์ม = แบ่งจากงบของแบรนด์ตามสัดส่วนแผนก่อนหน้า ไม่ใช่งบที่ตั้งรายแพลตฟอร์ม" : "ยังไม่ตั้งงบแบรนด์ จึงยังแบ่งงบให้แพลตฟอร์มนี้ไม่ได้"),
+                c.pace.used != null ? `ใช้ไป ${fmtPct(c.pace.used)} ของงบ` : null,
+                c.dataThrough ? `ข้อมูลจากไฟล์มีถึง ${thDay(c.dataThrough)} — จังหวะคิดถึงวันนั้น อัปโหลดไฟล์วันที่เหลือแล้วตัวเลขจะขยับ` : null,
+              ]}/>
             </span>
 
             {c.budget != null ? (
@@ -231,7 +246,7 @@ export function ChannelCard({ c, monthView = true, real = false, asOfText = "ว
             {c.pace.vsPace != null && <p className="aw-decide aw-decide--left">
               <b className={c.pace.vsPace > 0 ? "ads-over" : "ads-good"}>
                 {c.pace.vsPace > 0 ? `ใช้เร็วกว่าจังหวะ ${fmtMoney(c.pace.vsPace)}` : `ใช้ช้ากว่าจังหวะ ${fmtMoney(-c.pace.vsPace)}`}</b>
-              <span> · {forecastNote(c.pace)}</span>
+              <span> · {forecastNote(c.pace, c.budget)}</span>
             </p>}
           </div>
 

@@ -73,3 +73,40 @@ it("ข้อมูลจริง: การ์ดแพลตฟอร์ม�
   cleanup();
   expect(render(<ChannelCard c={c} />).container.textContent).toContain("%Ads (Meta)");
 });
+
+/* ตรวจ 10 พ.ย. (ภาพการ์ด Google / ChatGPT ของ TEAMDEE) */
+describe("การ์ดแพลตฟอร์ม — ตรวจ 10 พ.ย.", () => {
+  const under = { ...pace, used: 2228.01 / 27300, expected: 9 / 30, expectedSpend: 8190, vsPace: -5961.99,
+    remaining: 25071.99, average: 247.56, forecast: 7426.70, forecastOver: -19873.30, daysLeft: 21 };
+  const g = { ...c, key: "Google Ads", spend: 2228.01, budget: 27300, pace: under };
+  it("คาดใช้ต่ำกว่างบมาก ต้องไม่พูดว่า 'คาดพอดีงบ'", () => {
+    const { container } = render(<ChannelCard c={g} real asOfText="9 พ.ย." />);
+    const decide = container.querySelector(".aw-decide").textContent;
+    expect(decide).not.toContain("พอดีงบ");
+    expect(decide).toContain("คาดใช้ไม่ถึงงบ · เหลือ ฿19,873.30");
+  });
+  it("คาดสิ้นเดือนใกล้งบ (ต่างไม่เกิน 5%) = คาดพอดีงบ", () => {
+    const near = { ...g, pace: { ...under, forecast: 26500, forecastOver: -800 } };
+    const { container } = render(<ChannelCard c={near} real asOfText="9 พ.ย." />);
+    expect(container.querySelector(".aw-decide").textContent).toContain("คาดพอดีงบ · เหลือ ฿800.00");
+  });
+  it("ข้อมูลจริง: คำอธิบายงบบอกว่ามาจากเป้าระบบขายรายแพลตฟอร์ม ไม่ใช่การแบ่งตามสัดส่วนเดิม", () => {
+    render(<ChannelCard c={g} real asOfText="9 พ.ย." />);
+    fireEvent.click(screen.getByRole("button", { name: "รายละเอียด งบ Google Ads" }));
+    const tip = screen.getByRole("tooltip").textContent;
+    expect(tip).toContain("งบที่ตั้งให้ Google Ads ในเป้าเดือนของระบบขาย");
+    expect(tip).not.toContain("แบ่งจากงบของแบรนด์");
+  });
+  it("ข้อมูลไฟล์ค้าง: ป้ายจังหวะใช้วันที่ไฟล์มี และบอกว่าข้อมูลถึงวันไหน", () => {
+    const stale = { ...g, dataThrough: "2026-11-05", pace: { ...under, expectedSpend: 4550 } };
+    const { container } = render(<ChannelCard c={stale} real asOfText="9 พ.ย." />);
+    const facts = container.querySelector(".aw-facts").textContent;
+    expect(facts).toContain("ควรใช้ถึง 5 พ.ย.");
+    expect(facts).not.toContain("9 พ.ย.");
+    expect(container.querySelector(".ads-chan-stale").textContent).toContain("ข้อมูลถึง 5 พ.ย.");
+  });
+  it("ไม่ค้าง = ไม่มีป้ายข้อมูลถึง", () => {
+    const { container } = render(<ChannelCard c={g} real asOfText="9 พ.ย." />);
+    expect(container.querySelector(".ads-chan-stale")).toBeNull();
+  });
+});

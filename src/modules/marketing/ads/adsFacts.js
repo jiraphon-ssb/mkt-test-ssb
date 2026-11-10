@@ -98,6 +98,8 @@ export function factsToAdCards(facts = [], connections = [], { today, creatives 
       creative_data: creativeAssetFromRow(creativeByAd.get(`${f.connection_id}|${f.ad_id}`)),
       account_id: connection.external_account_id,
       connection_id: connection.id,
+      // บัญชีที่ป้อนยอดด้วยไฟล์ — ข้อมูลมาเป็นรอบ ไม่ได้มาทุกเช้า (จังหวะงบต้องนับถึงวันที่ไฟล์มีจริง)
+      file_import: connection.config?.source === "file",
       currency: connection.currency ?? "THB",
       result_event: resultEvent,
       result_label: resultLabel,

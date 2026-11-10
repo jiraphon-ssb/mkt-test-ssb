@@ -481,3 +481,13 @@
 .mkt-root .facc-providers { display:flex; gap:6px; }
 .mkt-root .facc-providers button { flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; background:transparent; color:var(--ink-soft); font-size:13px; }
 .mkt-root .facc-providers button.on { border-color:var(--accent); color:var(--ink); }
+
+/* ตรวจ 10 พ.ย. — การ์ดแพลตฟอร์ม
+   ปุ่ม (i) ต้องติดท้ายตัวเลข: เดิมเลข+งบยาวเกินคอลัมน์ ปุ่มตกบรรทัดลงไปลอยใต้เลขเหมือนตัวอักษรเกิน
+   ให้ "/ งบ" ตัดลงบรรทัดใหม่ทั้งก้อนแทน (inline-block = ตัดก่อนก้อนได้ ไม่ตัดกลางจำนวนเงิน) ปุ่มอยู่ข้างเลขเสมอ */
+.ads-chan-num { display:flex; align-items:center; gap:6px; }
+.ads-chan-num .aw-metric-num { white-space:normal; }
+.ads-chan-num .aw-metric-num small { display:inline-block; white-space:nowrap; }
+/* ข้อมูลไฟล์ค้าง — บอกตรงหัวการ์ด ก่อนคนอ่านจังหวะงบ */
+.ads-chan-stale { margin:6px 0 0; color:var(--warn-text); font-size:12px; line-height:1.5; }
+.aw-file-stale { margin:8px 0 0; color:var(--warn-text); font-size:12px; line-height:1.5; }

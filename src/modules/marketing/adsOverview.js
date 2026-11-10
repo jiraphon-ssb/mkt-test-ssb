@@ -216,9 +216,14 @@ function adsChannelBreakdown(cards, range) {
     if (!ch) continue;
     let row = acc.get(ch);
     if (!row) {
-      row = { key: ch, spend: 0, leads: 0, revenue: 0, impressions: 0, clicks: 0, reach: 0, camp: new Map() };
+      row = { key: ch, spend: 0, leads: 0, revenue: 0, impressions: 0, clicks: 0, reach: 0, camp: new Map(), fileThrough: null, hasLiveRows: false };
       acc.set(ch, row);
     }
+    /* วันสุดท้ายที่ไฟล์มี — นับเฉพาะช่องทางที่ข้อมูลมาจากไฟล์ล้วน (ช่องทางที่ดึงทุกเช้า วันที่ไม่มีแถว = ไม่ได้ใช้เงินจริง) */
+    if (r.card.file_import) {
+      const day = String(r.card.fact_date ?? "").slice(0, 10);
+      if (day && (row.fileThrough == null || day > row.fileThrough)) row.fileThrough = day;
+    } else row.hasLiveRows = true;
     const m = r.card.metrics ?? {};
     row.spend += r.spend;
     row.leads += r.leads;
@@ -234,8 +239,9 @@ function adsChannelBreakdown(cards, range) {
     cur.revenue = cur.revenue == null || m.revenue == null ? null : cur.revenue + m.revenue;
     row.camp.set(name, cur);
   }
-  return [...acc.values()].map(({ camp, ...row }) => ({
+  return [...acc.values()].map(({ camp, fileThrough, hasLiveRows, ...row }) => ({
     ...row,
+    fileThrough: hasLiveRows ? null : fileThrough,
     resultLabel: resultLabelOf(row.key),
     campaigns: [...camp.values()]
       .map((c) => ({ ...c, cpl: c.leads > 0 ? c.spend / c.leads : null, roas: roasOf(c.revenue, c.spend) }))
@@ -373,8 +379,18 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
         .map((c) => {
           const budget = budgetOf(b.id, c.key, month, adBudgets);
           const revTarget = salesTargetOf(b.id, month, salesTargets, c.key);
+          /* ไฟล์ค้าง (ตรวจ 10 พ.ย.: Google / ChatGPT มีถึงวันที่ 5 แต่คิดจังหวะถึงวันที่ 9) → คิดจังหวะถึงวันที่ไฟล์มี
+             ไม่งั้นวันที่ยังไม่อัปโหลดถูกนับเป็นวันที่ไม่ได้ใช้เงิน · เหลือเวลา/ต้องใช้ต่อวัน ยังนับจากวันจริง */
+          const dataThrough = c.fileThrough && c.fileThrough >= `${month}-01` && c.fileThrough < asOf ? c.fileThrough : null;
+          const { fileThrough: _fileThrough, ...row } = c;
+          let pace = budgetPace(c.spend, budget, dataThrough ?? asOf);
+          if (dataThrough) {
+            const { daysLeft } = budgetPace(c.spend, budget, asOf);
+            pace = { ...pace, daysLeft, requiredDaily: pace.remaining != null && daysLeft > 0 ? Math.max(0, pace.remaining) / daysLeft : null };
+          }
           return {
-            ...c,
+            ...row,
+            dataThrough,
             revTarget,
             revPct: share(c.revenue, revTarget),
             cpl: c.leads > 0 ? c.spend / c.leads : null,
@@ -383,7 +399,7 @@ export function adsByBrandChannel(cards, monthRange, brands, adBudgets = [], tod
             delivery: deliveryOf(c),
             cplSeries: adsDailySeries(filterByChannel(mine, c.key), monthRange).map((d) => d.cpl),
             budget,
-            pace: budgetPace(c.spend, budget, asOf),
+            pace,
           };
         })
         .sort((x, y) => y.spend - x.spend);

@@ -35,6 +35,8 @@ LOGOS["Meta Ads"] = LOGOS.Facebook;
 LOGOS["TikTok Ads"] = LOGOS.TikTok;
 LOGOS["Google Ads"] = { color: "#4285F4", path: null, glyph: "G" };
 LOGOS["Shopee Ads"] = { color: "#EE4D2D", path: null, glyph: "S" };
+// ChatGPT Ads — ตัวอักษรบนสีเขียวของ OpenAI (แบบเดียวกับ Google) · เดิมตกเป็นช่องทางที่ไม่รู้จัก ขึ้นสี่เหลี่ยมเทาเปล่า (ตรวจ 10 พ.ย.)
+LOGOS["ChatGPT Ads"] = { color: "#10A37F", path: null, glyph: "C" };
 
 /** ข้อมูลช่องทาง — { color, path } · ไม่รู้จัก = สีเทา ไม่มี path */
 export function platformMeta(channel) {
