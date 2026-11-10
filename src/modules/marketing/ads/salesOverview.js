@@ -60,17 +60,29 @@ export function combineGoalTargets(all = []) {
   return out;
 }
 
-/** งบ Meta และเป้ายอดของเดือน จากเป้าระบบขาย — รูปเดียวกับ plansFromTargets เดิม เพื่อให้ตัวคำนวณ pace ใช้ต่อได้
-    งบ Meta = งบแพลตฟอร์ม meta ที่ตั้งในหน้าเป้าหมาย (ไม่หารเฉลี่ยอีกแล้ว) · ไม่มี = ยังไม่ตั้งเป้า */
+/* คีย์แพลตฟอร์มในเป้าระบบขาย → ชื่อช่องทางที่การ์ดและ budgetOf ใช้
+   (ระบบขายเรียก ChatGPT ว่า chatgpt · ฝั่งเราเก็บ provider เป็น openai — รับทั้งสองชื่อ) */
+const GOAL_PLATFORMS = [["meta", "Meta Ads"], ["google", "Google Ads"], ["tiktok", "TikTok Ads"], ["chatgpt", "ChatGPT Ads"], ["openai", "ChatGPT Ads"]];
+
+/** งบรายแพลตฟอร์มและเป้ายอดของเดือน จากเป้าระบบขาย — รูปเดียวกับ plansFromTargets เดิม เพื่อให้ตัวคำนวณ pace ใช้ต่อได้
+    งบแพลตฟอร์ม = งบที่ตั้งไว้ของแพลตฟอร์มนั้นในหน้าเป้าหมาย (ไม่หารเฉลี่ย) · ไม่มีก็คิดจากงบรวม × % ของแพลตฟอร์ม
+    งบ 0 หรือไม่มี = ไม่ได้วางงบช่องทางนั้น (การ์ดขึ้น "ยังไม่ตั้งงบ")
+    10 พ.ย. 69: เดิมสร้างงบให้ Meta อย่างเดียว — งบ Google/ChatGPT ที่ตั้งไว้ถูกทิ้ง และงบรวมของแบรนด์คิดไม่ได้ */
 export function plansFromSalesGoals({ goals = [], month, basis = "total" } = {}) {
   const adBudgets = [];
   const salesTargets = [];
   for (const goal of goals ?? []) {
     if (!goal?.brand_id || String(goal.month ?? "").slice(0, 7) !== month) continue;
-    const pct = num(goal.platform_pct?.meta);
-    const metaBudget = positive(goal.platform_budgets?.meta)
-      ?? (positive(goal.ad_budget) != null && pct != null ? goal.ad_budget * pct / 100 : null);   // ไม่ปัด
-    if (metaBudget != null) adBudgets.push({ brand_id: goal.brand_id, channel: "Meta Ads", month, amount: metaBudget });
+    const done = new Set();
+    for (const [key, channel] of GOAL_PLATFORMS) {
+      if (done.has(channel)) continue;
+      const pct = num(goal.platform_pct?.[key]);
+      const amount = positive(goal.platform_budgets?.[key])
+        ?? (positive(goal.ad_budget) != null && pct != null ? positive(goal.ad_budget * pct / 100) : null);   // ไม่ปัด
+      if (amount == null) continue;
+      done.add(channel);
+      adBudgets.push({ brand_id: goal.brand_id, channel, month, amount });
+    }
     const target = basis === "new" ? positive(goal.sales_new_target) : positive(goal.sales_target);
     if (target != null) salesTargets.push({ brand_id: goal.brand_id, month, amount: target });
   }

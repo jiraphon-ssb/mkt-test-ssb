@@ -41,10 +41,13 @@ describe("combineGoalTargets — เป้าภาพรวม", () => {
   });
 });
 
-describe("plansFromSalesGoals — งบ Meta จริงจากเป้า (ไม่หารเฉลี่ย) · เป้ายอดตามฐานที่เลือก", () => {
-  it("งบ Meta = งบแพลตฟอร์ม meta ในเป้า · เป้ายอดรวม/ยอดใหม่ตามฐาน", () => {
+describe("plansFromSalesGoals — งบจริงจากเป้า (ไม่หารเฉลี่ย) · เป้ายอดตามฐานที่เลือก", () => {
+  it("งบแพลตฟอร์ม = งบที่ตั้งในเป้า (fixture มีทั้ง meta และ google) · เป้ายอดรวม/ยอดใหม่ตามฐาน", () => {
     const total = plansFromSalesGoals({ goals: [goal("b_td")], month: "2026-09", basis: "total" });
-    expect(total.adBudgets).toEqual([{ brand_id: "b_td", channel: "Meta Ads", month: "2026-09", amount: 80000 }]);
+    expect(total.adBudgets).toEqual([
+      { brand_id: "b_td", channel: "Meta Ads", month: "2026-09", amount: 80000 },
+      { brand_id: "b_td", channel: "Google Ads", month: "2026-09", amount: 20000 },
+    ]);
     expect(total.salesTargets).toEqual([{ brand_id: "b_td", month: "2026-09", amount: 1000000 }]);
     expect(plansFromSalesGoals({ goals: [goal("b_td")], month: "2026-09", basis: "new" }).salesTargets[0].amount).toBe(600000);
   });
@@ -374,4 +377,39 @@ it("เงินจริง: วันนี้ยังไม่กรอก �
 it("salesFactsByBrand: เมื่อวานที่ยังไม่กรอก ไม่นับเป็นวันขาด · สองวันก่อนนับ", () => {
   const rows = [fact("b_td", "2026-09-25", { inquiry_filled: false, cash_received: null }), fact("b_td", "2026-09-26", { inquiry_filled: true, cash_received: 100 }), fact("b_td", "2026-09-27", { inquiry_filled: false, cash_received: null })];
   expect(salesFactsByBrand(rows, { from: "2026-09-01", to: "2026-09-27", today: "2026-09-28" }).get("b_td")).toMatchObject({ inquiryFilledDays: 1, days: 2, cashDays: 1, cashDaysTotal: 2 });
+});
+
+/* 10 พ.ย. 69 (เจอบนหน้าจริง): เป้า พ.ย. ของ TEAMDEE ตั้งงบไว้ครบ meta 170,100 · google 27,300 · chatgpt 12,600
+   แต่การ์ด Google / ChatGPT ขึ้น "ยังไม่ตั้งงบช่องทางนี้" เพราะตัวแปลงสร้างงบให้ Meta อย่างเดียว
+   ผลต่อเนื่อง: งบรวมของแบรนด์คิดได้ต่อเมื่อทุกช่องทางมีงบ → งบรวม TEAMDEE คิดไม่ได้ทั้งที่ตั้งไว้ ฿210,000 */
+describe("plansFromSalesGoals — งบทุกแพลตฟอร์ม ไม่ใช่แค่ Meta", () => {
+  const nov = (patch = {}) => ({
+    brand_id: "b_td", month: "2026-11-01", ad_budget: 210000, sales_target: 4000000,
+    platform_budgets: { meta: 170100, google: 27300, tiktok: 0, chatgpt: 12600 },
+    platform_pct: { meta: 81, google: 13, tiktok: 0, chatgpt: 6 }, ...patch,
+  });
+
+  it("แปลงงบของทุกแพลตฟอร์มที่ตั้งไว้ เป็นชื่อช่องทางเดียวกับที่การ์ดใช้", () => {
+    expect(plansFromSalesGoals({ goals: [nov()], month: "2026-11" }).adBudgets).toEqual([
+      { brand_id: "b_td", channel: "Meta Ads", month: "2026-11", amount: 170100 },
+      { brand_id: "b_td", channel: "Google Ads", month: "2026-11", amount: 27300 },
+      { brand_id: "b_td", channel: "ChatGPT Ads", month: "2026-11", amount: 12600 },
+    ]);
+  });
+
+  it("งบ 0 = ไม่ได้วางงบช่องทางนั้น ไม่สร้างแถวงบ 0 บาท", () => {
+    const channels = plansFromSalesGoals({ goals: [nov()], month: "2026-11" }).adBudgets.map((b) => b.channel);
+    expect(channels).not.toContain("TikTok Ads");
+  });
+
+  it("ไม่มีงบรายแพลตฟอร์ม = คิดจากงบรวม × % ของแต่ละแพลตฟอร์ม", () => {
+    const out = plansFromSalesGoals({ goals: [nov({ platform_budgets: {} })], month: "2026-11" }).adBudgets;
+    expect(out.find((b) => b.channel === "Google Ads").amount).toBeCloseTo(27300, 6);
+    expect(out.find((b) => b.channel === "ChatGPT Ads").amount).toBeCloseTo(12600, 6);
+  });
+
+  it("งบรายแพลตฟอร์มรวมกันได้เท่างบรวมของแบรนด์", () => {
+    const total = plansFromSalesGoals({ goals: [nov()], month: "2026-11" }).adBudgets.reduce((n, b) => n + b.amount, 0);
+    expect(total).toBe(210000);
+  });
 });
