@@ -251,7 +251,7 @@ Deno.serve(async (request) => {
   };
 
   /* เป้าเดือนของ JUNTAKARN — หน้าตั้งค่าเป้าของระบบ TMK (tmk_monthly_history)
-     เป้ายอด = ช่อง Facebook · งบแอด = Facebook + Instagram (RPC คัดให้แล้ว) · ROAS คิดจากสองตัวนี้
+     เป้ายอด = ช่อง Facebook + LINE (10 พ.ย. 69) · งบแอด = Facebook + Instagram (RPC คัดให้แล้ว) · ROAS คิดจากสองตัวนี้
      เดือนที่ทีมยังไม่ตั้งเป้า = ไม่เขียนอะไร ไม่ใช่ error (ห้ามเขียนศูนย์ทับเป้าที่คนตั้งเอง)
      ล้มที่นี่ต้องไม่ทำให้ยอดหรือเป้าของแบรนด์อื่นพัง */
   const runJkGoals = async (months: string[]): Promise<{ read: number; written: number; error: string | null; skipped?: string }> => {

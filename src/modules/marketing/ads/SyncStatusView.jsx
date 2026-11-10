@@ -554,7 +554,7 @@ export function SyncStatusView() {
           key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, icon: "sales",
           /* นิยามที่ต่างจากแบรนด์อื่นอยู่ใต้ชื่อแหล่ง (คำเต็มเป็น tooltip) ไม่ใช่ไปเบียดคอลัมน์ "ครบแค่ไหน"
              ซึ่งอีก 3 แถวใช้บอกความครบของข้อมูล */
-          sub: "ระบบ TMK · เฉพาะ Facebook", subTitle: jk.detail,
+          sub: "ระบบ TMK · Facebook + LINE", subTitle: jk.detail,
           state: jk.state === "ok" ? "ok" : jk.state === "stale" ? "warn" : jk.state === "error" ? "bad" : "waiting",
           stateLabel: jk.state === "ok" ? "ปกติ" : jk.state === "stale" ? "ล่าช้า" : jk.state === "error" ? "ดึงไม่สำเร็จ" : "รอเชื่อมแหล่งข้อมูล",
           // "สดแค่ไหน" = รอบดึงทำงานเมื่อไร หน่วยเดียวกับแถวอื่น (เดิมใส่วันที่ของข้อมูล = คนละเรื่อง)
@@ -566,7 +566,7 @@ export function SyncStatusView() {
               ? { text: `ข้อมูลถึง ${dayLabel(jk.fresh)}`, sub: `คนทักทีมกรอก ${jk.filled}/${jk.days} วัน` }
               : null,
           hint: "ค่าแอด Meta ยังดึงตามปกติ",
-        }) : { key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, sub: "ระบบ TMK · เฉพาะ Facebook", subTitle: jk.detail, icon: "sales",
+        }) : { key: jkBrand.id, name: `ยอดขาย ${jkBrand.name}`, sub: "ระบบ TMK · Facebook + LINE", subTitle: jk.detail, icon: "sales",
           // ระหว่างโหลดห้ามสรุปว่า "ยังไม่เคยดึง" — กติกาเดียวกับอีก 3 แถว (บั๊กบน production 17 ก.ย.)
           state: "loading", stateLabel: "กำลังตรวจ…", fresh: null, complete: null }} />}
         {waitingBrands.map((brand) => <SourceRow key={brand.id} row={{ key: brand.id, name: `ยอดขาย ${brand.name}`, icon: "sales", state: "waiting", stateLabel: "รอเชื่อมแหล่งข้อมูล", fresh: null, complete: null, hint: "ค่าแอด Meta ยังดึงตามปกติ" }} />)}

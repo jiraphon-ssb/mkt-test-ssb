@@ -116,3 +116,25 @@
 - **ก่อนให้ provider ใดเขียนเฉพาะระดับ `campaign` หรือ `ad_group` ต้องแจ้งฝั่ง platform ก่อน** ไม่งั้นค่าแอดของ provider นั้นหายฝั่งเขาโดยไม่ error — มีเทสกันไว้ที่ `tests/adsLevelContract.test.js`
 - แมปแบรนด์ฝั่ง platform: `b_td` = TD · `b_jk` = JD (JK Design) · `b_ta` = TA · `b_jt` = JK (JUNTAKARN) — รหัส `JK` ฝั่งเขาคือ JUNTAKARN ไม่ใช่ `b_jk`
 - view `ad_spend_daily` ใช้กติกากันซ้ำเดียวกัน (account > campaign > ad_group > ad) สำหรับผู้ใช้ที่ไม่ต้องการรายบัญชี
+
+## ข้อตกลงกับ SSB PLATFORM: ยอดขาย JUNTAKARN (10 พ.ย. 2569)
+
+อาร์ตเคาะ 10 พ.ย.: นับเฉพาะออเดอร์ช่อง **Facebook + LINE** · ยอดลงวันออเดอร์ · ใช้ฐานเดียวกันทั้งหน้า ads ของ pipeline และ SSB PLATFORM · ฝั่ง platform ดึงผ่านท่อ `ads-sync` เดิม (ไม่เรียกระบบ TMK ตรง)
+
+ท่อ `ads-sync` ฝั่ง platform อ่าน `business_daily_facts` ตรงด้วยกุญแจชุดเดิม (`PIPELINE_SERVICE_KEY`) กรอง `brand_id = 'b_jt'` และ `source = 'tmk'`
+
+| คอลัมน์ | ความหมาย |
+|---|---|
+| `fact_date` | วันออเดอร์ (order_date ของ TMK) ไม่ใช่วันโอนงวดแรกแบบ OEM |
+| `inquiries` · `inquiry_filled` | คนทักช่อง Facebook + LINE · `inquiry_filled = false` = วันนั้นยังไม่ได้กรอกคนทัก ค่า 0 แปลว่าไม่รู้ ไม่ใช่ไม่มีคนทัก |
+| `orders` · `orders_new` | ออเดอร์ Facebook + LINE ที่ไม่ยกเลิก · ของลูกค้าใหม่ |
+| `gross_revenue` · `revenue_new` | ยอดขายออเดอร์ Facebook + LINE ที่ไม่ยกเลิก · ของลูกค้าใหม่ (บาท) |
+| `cancelled` · `cancelled_value` | ออเดอร์ที่ยกเลิก แยกไว้ ไม่อยู่ในยอดขาย |
+| `source_updated_at` | เวลาที่รอบดึงเขียนแถวนี้ล่าสุด ใช้ดูว่าข้อมูลสดไหม |
+
+- นับเฉพาะ `source = 'shipnity'` และ `channel in ('Facebook','LINE')` (RPC `jk_ads_daily_facts` ฝั่ง TMK ไฟล์ `20261110-jk-facebook-line.sql` · เดิม 21 ก.ย. Facebook ช่องเดียว)
+- เป้ายอดของ JK = เป้าช่อง Facebook + LINE · งบแอดยังเป็น Facebook + Instagram = ค่าแอด Meta
+- รอบดึงยอด JK อยู่ใน `ads-cron` 07:30–08:20 ดึงถึงวันนี้ → **แถววันนี้ยังไม่ครบวัน ฝั่ง platform ต้องอ่านถึงเมื่อวานเท่านั้น**
+- รอบที่ดึงสำเร็จเขียนครบทุกวันในช่วง (วันไม่มีออเดอร์ = 0) · รอบที่ล้มไม่เขียนอะไร แถวเดิมค้างไว้ → ไม่มีแถวของเมื่อวาน หรือ `source_updated_at` เก่ากว่าเช้าวันนี้ = ข้อมูลไม่สด
+- `qualified_leads` · `leads_new` · `deposits` · `deposit_value` · `cash_received` · `refunds` ของ JK เป็น 0 ที่ใส่ไว้แทนที่ว่าง ระบบ TMK ไม่มีขั้นเหล่านี้ **ห้ามอ่านเป็นศูนย์** ต้องขึ้น "—"
+- คอลัมน์ชุดนี้ล็อกด้วย `tests/jkSalesContract.test.js` · จะเปลี่ยนชื่อหรือความหมาย ต้องแจ้งฝั่ง platform ก่อน

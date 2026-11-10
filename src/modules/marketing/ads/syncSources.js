@@ -13,7 +13,8 @@ export const SALES_BRAND_IDS = SALES_SOURCE_BRAND_IDS;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const time = (value) => { const t = Date.parse(String(value ?? "")); return Number.isFinite(t) ? t : null; };
 export const JK_BRAND_ID = "b_jt";
-const JK_SOURCE_DETAIL = "นับเฉพาะออเดอร์ช่องทาง Facebook (ไม่รวม LINE · โทร · Shopee · Lazada · หน้าร้าน) · ยอดลงตามวันที่ออเดอร์ · ไม่มีขั้น Lead และมัดจำ";
+/* ฐาน Facebook + LINE — อาร์ตเคาะ 10 พ.ย. 69 (เดิม 21 ก.ย. Facebook ช่องเดียว) · RPC ฝั่ง TMK: 20261110-jk-facebook-line.sql · SSB PLATFORM ใช้ยอดชุดเดียวกัน */
+const JK_SOURCE_DETAIL = "นับเฉพาะออเดอร์ช่องทาง Facebook + LINE (ไม่รวม Instagram · โทร · TikTok · Shopee · Lazada · หน้าร้าน) · ยอดลงตามวันที่ออเดอร์ · ไม่มีขั้น Lead และมัดจำ";
 const JK_STALE_DAYS = 2;
 
 /** runs = ประวัติรอบ pipeline (เฟส JK อยู่ใน summary.jk ของรอบ "sales") — รอบล่าสุดพังต้องขึ้นบนแถวนี้

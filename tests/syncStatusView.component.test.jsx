@@ -155,7 +155,7 @@ describe("SyncStatusView — สมาชิกที่ไม่ใช่หั
     expect(within(jk).getByText("ดึงวันละครั้ง · พร้อมยอดขาย")).toBeTruthy();
     expect(within(jk).getByText(/ข้อมูลถึง 17 ก\.ย\./)).toBeTruthy();
     expect(within(jk).getByText("คนทักทีมกรอก 1/1 วัน")).toBeTruthy();
-    expect(within(jk).getByText("ระบบ TMK · เฉพาะ Facebook").title).toContain("นับเฉพาะออเดอร์ช่องทาง Facebook");
+    expect(within(jk).getByText("ระบบ TMK · Facebook + LINE").title).toContain("นับเฉพาะออเดอร์ช่องทาง Facebook + LINE");
     expect(within(jk).getByRole("button", { name: /ดูรายละเอียด/ })).toBeTruthy();
   });
 });

@@ -179,7 +179,8 @@ describe("แหล่งข้อมูลยอดขาย JUNTAKARN (ระ�
     const row = jkSourceRow([jkFact("2026-09-16"), jkFact("2026-09-17")], { today: "2026-09-18" });
     expect(row.state).toBe("ok");
     expect(row.fresh).toBe("2026-09-17");
-    expect(row.detail).toContain("นับเฉพาะออเดอร์ช่องทาง Facebook");
+    expect(row.detail).toContain("นับเฉพาะออเดอร์ช่องทาง Facebook + LINE");
+    expect(row.detail).not.toContain("ไม่รวม LINE");   // อาร์ตเคาะ 10 พ.ย.: ยอด JK = Facebook + LINE
     expect(row.detail).toContain("วันที่ออเดอร์");
   });
   /* คอลัมน์ "สดแค่ไหน" ของอีก 3 แถวคือ "รอบดึงทำงานเมื่อไร" แต่แถวนี้เคยโชว์ "วันที่ของข้อมูล"
