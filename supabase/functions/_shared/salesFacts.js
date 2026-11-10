@@ -128,7 +128,9 @@ const sumOrNull = (...values) => {
 };
 
 /** เป้าจากระบบพี่ทัช → แถว ad_sales_goals · ลำดับเดียวกับหน้าประวัติเป้าของพี่ทัช: sale_goal (ใหม่ มีเวอร์ชัน) ก่อน
-    ไม่มีค่อยใช้ sale_target (แบบเก่า 6 ตัว ไม่มีงบแอด/CPL/ROAS) · version 0 = มาจากแบบเก่า */
+    ไม่มีค่อยใช้ sale_target (แบบเก่า 6 ตัว ไม่มีงบแอด/CPL/ROAS) · version 0 = มาจากแบบเก่า
+    @param {{ goals?: Record<string, any>[], targets?: Record<string, any>[], brands?: string[] }} [input]
+    (บอกชนิดให้ deno check — เดิม default [] ทำให้ TS อนุมานเป็น never[] แล้ว sales-sync เช็กชนิดไม่ผ่าน) */
 export function goalRowsToSalesGoals({ goals = [], targets = [], brands = SALES_SOURCE_BRANDS } = {}) {
   const out = new Map();
   for (const row of goals ?? []) {
