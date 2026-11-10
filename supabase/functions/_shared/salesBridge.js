@@ -172,6 +172,26 @@ export function monthsToSync(today) {
   return [`${prevYear}-${pad(prevMonth)}-01`, `${year}-${pad(month)}-01`];
 }
 
+/** เดือนของเป้าที่ต้อง sync = เดือนก่อน + เดือนนี้ + ทุกเดือนในช่วงที่ดึงยอด (from–to)
+    ดึงยอดย้อนหลังแล้วเป้าของเดือนนั้นต้องตามมาด้วย (อาร์ตขอ 10 พ.ย. 69 — เดิมดึงย้อนหลังแล้วเป้ายังเป็นชุดเก่า)
+    ช่วงเสีย = เดือนก่อน + เดือนนี้ตามเดิม · ความยาวช่วงถูกจำกัดที่ตัวเรียกแล้ว (MAX_DAYS) */
+export function goalMonthsFor(today, from, to) {
+  const base = monthsToSync(today);
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(String(from ?? "")) || !iso.test(String(to ?? "")) || from > to) return base;
+  const months = new Set(base);
+  let year = Number(from.slice(0, 4)), month = Number(from.slice(5, 7));
+  const last = to.slice(0, 7);
+  for (;;) {
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    if (key > last) break;
+    months.add(`${key}-01`);
+    month += 1;
+    if (month > 12) { month = 1; year += 1; }
+  }
+  return [...months].sort();
+}
+
 /* วันเริ่มต้นของช่วงดึงยอดขาย — ต้องครอบ "ตั้งแต่ต้นเดือนของวันสุดท้าย" เสมอ (22 ก.ย. 69)
    เดิมตายตัว 14 วัน: ทีมขายแก้ยอดวันที่ 1-2 หลังผ่านไปครึ่งเดือน ระบบไม่เห็นการแก้นั้นอีกเลย
    → ตัวเลขเดือนนั้นค้างผิดถาวรแบบเงียบ จนกว่าจะมีคนสังเกตแล้วสั่ง backfill มือ

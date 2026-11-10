@@ -1,7 +1,7 @@
 /* ตรวจค่าที่ใช้ต่อระบบขาย — บอกได้ว่าใส่ URL/KEY ถูกไหมโดยไม่ต้องเห็นค่าจริง
    ของจริงที่เจอ: sales-sync ตอบ read:0 ได้ทั้งตอนใส่ถูกแต่ประตูยังไม่เปิด และตอนใส่ URL ผิด (404 เหมือนกัน) แยกไม่ออก */
 import { describe, it, expect } from "vitest";
-import { describeSalesKey, describeSalesUrl, doorState, projectRef, FACT_COLUMNS, factsProbeUrl, goalProbeUrl, summarizeFacts, summarizeGoals, probeVerdict, goalsUrl, targetsUrl, monthsToSync, PAGE_LIMIT, salesLookbackFrom } from "../supabase/functions/_shared/salesBridge.js";
+import { describeSalesKey, describeSalesUrl, doorState, projectRef, FACT_COLUMNS, factsProbeUrl, goalProbeUrl, summarizeFacts, summarizeGoals, probeVerdict, goalsUrl, targetsUrl, monthsToSync, goalMonthsFor, PAGE_LIMIT, salesLookbackFrom } from "../supabase/functions/_shared/salesBridge.js";
 
 const jwt = (claims) => ["e30", Buffer.from(JSON.stringify(claims)).toString("base64url"), "sig"].join(".");
 const OWN = "https://lzvftqhffqefqupwulus.supabase.co";
@@ -224,5 +224,23 @@ describe("salesLookbackFrom", () => {
   });
   it("วันที่อ่านไม่ออก = null (ผู้เรียกไปจัดการต่อ ไม่เดาเอง)", () => {
     expect(salesLookbackFrom({ to: "oops" })).toBeNull();
+  });
+});
+
+/* อาร์ตขอ 10 พ.ย.: ดึงยอดย้อนหลังแล้วเป้าต้องตามมาด้วย — เดิมเป้าดึงแค่เดือนก่อน + เดือนนี้เสมอ
+   ดึงย้อนหลัง ส.ค. → เป้า ส.ค. ยังเป็นชุดเก่า (ฐาน Facebook ช่องเดียวของ JK) */
+describe("goalMonthsFor — เดือนของเป้าที่ต้องดึง = เดือนก่อน + เดือนนี้ + ทุกเดือนในช่วงที่ดึงยอด", () => {
+  it("ดึงย้อนหลังเดือน ส.ค. → ได้เป้า ส.ค. ด้วย", () => {
+    expect(goalMonthsFor("2026-11-10", "2026-08-01", "2026-08-31")).toEqual(["2026-08-01", "2026-10-01", "2026-11-01"]);
+  });
+  it("รอบปกติ (ช่วงอยู่ในเดือนก่อน + เดือนนี้) = เหมือนเดิม ไม่ซ้ำ", () => {
+    expect(goalMonthsFor("2026-11-10", "2026-10-28", "2026-11-10")).toEqual(["2026-10-01", "2026-11-01"]);
+  });
+  it("ช่วงข้ามปีหลายเดือน เรียงเดือนจากเก่าไปใหม่", () => {
+    expect(goalMonthsFor("2027-01-05", "2026-11-15", "2027-01-05")).toEqual(["2026-11-01", "2026-12-01", "2027-01-01"]);
+  });
+  it("ช่วงเสีย = ใช้เดือนก่อน + เดือนนี้ตามเดิม", () => {
+    expect(goalMonthsFor("2026-11-10", "bad", "2026-11-10")).toEqual(["2026-10-01", "2026-11-01"]);
+    expect(goalMonthsFor("2026-11-10", "2026-11-10", "2026-08-01")).toEqual(["2026-10-01", "2026-11-01"]);
   });
 });

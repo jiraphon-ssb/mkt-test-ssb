@@ -14,7 +14,7 @@ import { jkFactsUrl, jkGoalUrl, jkWindows } from "../_shared/jkBridge.js";
 import { jkGoalExtraColumns, jkGoalRows } from "../_shared/jkGoals.js";
 import {
   PAGE_LIMIT, describeSalesKey, describeSalesUrl, doorState, factsProbeUrl, goalProbeUrl,
-  goalsUrl, monthsToSync, probeVerdict, salesLookbackFrom, summarizeFacts, summarizeGoals, targetsUrl,
+  goalsUrl, goalMonthsFor, probeVerdict, salesLookbackFrom, summarizeFacts, summarizeGoals, targetsUrl,
 } from "../_shared/salesBridge.js";
 import { todayInTimeZone } from "../_shared/metaInsights.js";
 import {
@@ -285,7 +285,9 @@ Deno.serve(async (request) => {
 
   try {
     jk = await runJk();
-    jkGoals = await runJkGoals(monthsToSync(today));
+    // เป้าตามช่วงที่ดึงยอด — ดึงย้อนหลังแล้วเป้าเดือนนั้นมาด้วย (10 พ.ย. 69)
+    const goalMonths = goalMonthsFor(today, from, to);
+    jkGoals = await runJkGoals(goalMonths);
     const facts: Record<string, unknown>[] = [];
     try {
       for (const range of factWindows(from, to, WINDOW_DAYS)) facts.push(...await factsFor(range));
@@ -312,7 +314,7 @@ Deno.serve(async (request) => {
     }
 
     /* เป้า — พังได้โดยไม่ทำให้ยอดขายที่เขียนสำเร็จแล้วพังตาม แต่ต้องบอกในผลลัพธ์ ไม่เงียบ */
-    const months = monthsToSync(today);
+    const months = goalMonths;
     let goals: { written: number; bySource: Record<string, number>; error: string | null } = { written: 0, bySource: {}, error: null };
     try {
       const [goalRows, targetRows] = await Promise.all([call(goalsUrl(url, months)), call(targetsUrl(url, months))]);
