@@ -181,6 +181,7 @@ describe("แหล่งข้อมูลยอดขาย JUNTAKARN (ระ�
     expect(row.fresh).toBe("2026-09-17");
     expect(row.detail).toContain("นับเฉพาะออเดอร์ช่องทาง Facebook + LINE");
     expect(row.detail).not.toContain("ไม่รวม LINE");   // อาร์ตเคาะ 10 พ.ย.: ยอด JK = Facebook + LINE
+    expect(row.detail).toContain("เป้ายอด = เป้าช่อง Facebook");   // ไม่ได้ตั้งเป้า LINE (อาร์ตเคาะ 10 พ.ย.)
     expect(row.detail).toContain("วันที่ออเดอร์");
   });
   /* คอลัมน์ "สดแค่ไหน" ของอีก 3 แถวคือ "รอบดึงทำงานเมื่อไร" แต่แถวนี้เคยโชว์ "วันที่ของข้อมูล"

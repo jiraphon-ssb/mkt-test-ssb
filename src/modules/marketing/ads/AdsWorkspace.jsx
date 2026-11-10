@@ -463,6 +463,8 @@ export function AdsWorkspace({ v, ads, controls, ChannelCard, SalePipeline, sett
         <li>CTR ทั้งหมด = ทุกคลิก ÷ การแสดงผล · หน้าแคมเปญและ Creative ใช้ CTR ลิงก์ = คลิกลิงก์ ÷ การแสดงผล</li>
         {real && s.excludedWaiting?.length > 0 && <li>ยอดรวมไม่รวม {s.excludedWaiting.join(' · ')} (รอเชื่อมแหล่งข้อมูลยอดขาย)</li>}
         {real && s.targetExcluded?.length > 0 && <li>เป้ารวมยังไม่รวม {s.targetExcluded.join(' · ')} (ยังไม่ตั้งเป้าเดือนนี้ในหน้าเป้าหมายของระบบขาย)</li>}
+        {/* อาร์ตเคาะ 10 พ.ย.: ไม่ตั้งเป้าช่อง LINE — ยอดนับ FB + LINE แต่เป้าเป็นของ FB · RPC รวมเป้า LINE ให้เองถ้าวันหน้ามีคนตั้ง (แก้ประโยคนี้ตอนนั้น) */}
+        {real && v.brands.some((b) => b.id === 'b_jt') && <li>JUNTAKARN: ยอดขาย · คนทัก นับออเดอร์ช่อง Facebook + LINE · เป้ายอดใช้เป้าช่อง Facebook ในระบบ TMK (ไม่ได้ตั้งเป้าช่อง LINE)</li>}
         {real && v.overallPipeline?.excluded?.length > 0 && <li>funnel ภาพรวมไม่รวม {v.overallPipeline.excluded.join(' · ')} — ระบบขายของแบรนด์นี้มี 2 ขั้น (คนทัก → ยืนยันออเดอร์) ถ้านับรวมอัตราผ่าน Lead จะต่ำกว่าความจริง · ยอดขายและ ROAS ภาพรวมรวมแบรนด์นี้แล้ว</li>}
         {real && v.cash?.overall?.excluded?.length > 0 && <li>เงินจริงไม่รวม {v.cash.overall.excluded.join(' · ')} — ระบบขายของแบรนด์เหล่านี้ยังไม่ส่งข้อมูลเงินเข้าและมัดจำ</li>}
       </ul></details>

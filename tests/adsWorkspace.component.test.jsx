@@ -511,3 +511,17 @@ it("ไม่มีช่องทางที่ไฟล์ค้าง = ไ�
     ChannelCard={() => null} SalePipeline={() => null} settings={{}} updateAdsControl={() => {}} toast={() => {}} /></MemoryRouter>);
   expect(container.querySelector(".aw-file-stale")).toBeNull();
 });
+
+/* อาร์ตเคาะ 10 พ.ย.: ไม่ตั้งเป้าช่อง LINE — เป้า JK = เป้าช่อง Facebook อย่างเดียว ขณะที่ยอดขายนับ Facebook + LINE ต้องบอกไว้ */
+describe("เชิงอรรถฐานยอด/เป้าของ JUNTAKARN", () => {
+  const jk = brand("b_jt", "JUNTAKARN", 174764.5, 350000, 30000, 87500);
+  it("มี JUNTAKARN ในหน้า = บอกว่ายอดนับ Facebook + LINE แต่เป้าเป็นของ Facebook", () => {
+    const { container } = show(model({ brands: [...brands, jk] }));
+    const note = [...container.querySelectorAll(".aw-notes li")].map((li) => li.textContent).find((t) => t.startsWith("JUNTAKARN"));
+    expect(note).toBe("JUNTAKARN: ยอดขาย · คนทัก นับออเดอร์ช่อง Facebook + LINE · เป้ายอดใช้เป้าช่อง Facebook ในระบบ TMK (ไม่ได้ตั้งเป้าช่อง LINE)");
+  });
+  it("ไม่มี JUNTAKARN = ไม่มีเชิงอรรถนี้", () => {
+    const { container } = show(model());
+    expect([...container.querySelectorAll(".aw-notes li")].some((li) => li.textContent.startsWith("JUNTAKARN"))).toBe(false);
+  });
+});
